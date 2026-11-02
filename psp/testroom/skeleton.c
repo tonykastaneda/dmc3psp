@@ -159,7 +159,8 @@ void anim_reset(AnimState *anim) {
 }
 
 int anim_weapon_in_hand(const AnimState *anim, const Player *player, const Combat *combat) {
-    if (anim->viewer) return strncmp(motion_get(anim->viewer_motion)->name, "rb-", 3) == 0;
+    /* Viewer: base motions are named "<chunk>-NN"; anything else is a weapon set. */
+    if (anim->viewer) return motion_get(anim->viewer_motion)->name[1] != '-';
     return combat->move != MOVE_NONE || (combat->sword_out > 0.0f && player->speed < 1.0f);
 }
 

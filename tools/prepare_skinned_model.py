@@ -25,6 +25,7 @@ COAT_CHUNK = 12            # pl000_02: coat-tail MOD with its own 33-bone rig
 CLOTH_CHUNK = 13           # pl000_02.clt: cloth parameters for the coat rig
 REBELLION_SLOT = 97        # PNST: [0] TIM2 set, [1] MOD (rigid, bone 1), [2] effects, [3] SHW, [4] MOT
 REBELLION_MOTION_SLOT = 23 # PAC of 21 MOTs: Dante's Rebellion moveset (first of slots 23-27)
+STUDY_MOTION_SLOTS = (33, 34, 35, 36, 37)  # candidate style movesets, exported as sNN- for the viewer
 
 
 def pnst_entries(data: bytes):
@@ -249,6 +250,7 @@ def main() -> None:
             return iso.read_file("GDATA.AFS", entry["offset"], entry["size"])
         rebellion = pnst_entries(read_slot(REBELLION_SLOT))
         rebellion_moves = read_slot(REBELLION_MOTION_SLOT)
+        study_moves = {slot: read_slot(slot) for slot in STUDY_MOTION_SLOTS}
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
     model_data = chunks[1]
@@ -340,6 +342,8 @@ def main() -> None:
         motions.extend(mots_in_pac(read_chunk(chunk_index), f"{chunk_index}-"))
     # Rebellion moveset follows Dante's base motions ("rb-NN" = PAC slot NN).
     motions.extend(mots_in_pac(rebellion_moves, "rb-"))
+    for slot, data in study_moves.items():
+        motions.extend(mots_in_pac(data, f"s{slot}-"))
     mlines = [
         "#ifndef DMC3_MOTION_RUNTIME_H",
         "#define DMC3_MOTION_RUNTIME_H",

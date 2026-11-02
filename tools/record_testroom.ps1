@@ -4,7 +4,7 @@ param(
     [string]$Ffmpeg = "C:\ffmpeg\bin\ffmpeg.exe",
     [string]$Output = "analysis\testroom\testroom.mp4",
     [int]$TimeoutSeconds = 600,
-    [ValidateSet("demo", "motions", "rebellion")][string]$Mode = "demo"
+    [ValidateSet("demo", "motions", "rebellion", "study", "swordmaster")][string]$Mode = "demo"
 )
 
 # Runs the test room's RECORD.TXT demo in PPSSPP (the PSP saves every other

@@ -616,6 +616,13 @@ static void scripted_combat(int frame, PlayerInput *input) {
     if (frame >= 515 && frame < 560) input->lock_on = 1;
     if (frame >= 515 && frame < 520) input->stick_y = 1.0f;
     if (frame == 517) input->melee = 1;
+    /* Swordmaster: switch style (d-pad left), Prop with mashing, then Drive. */
+    if (frame == 610) input->style = STYLE_SWORDMASTER;
+    /* (Stinger ends at ~640.) */
+    if (frame >= 660 && frame < 780 && (frame - 660) % 8 == 0) input->style_action = 1;
+    if (frame >= 900 && frame < 940) input->lock_on = 1;
+    if (frame >= 900 && frame < 906) input->stick_y = -1.0f;
+    if (frame == 903) input->style_action = 1;
 }
 
 /* Demo for RECORD.TXT: run, then the Rebellion set -- Combo I, Combo II
@@ -657,6 +664,27 @@ static int tour_step(void) {
     return 1;
 }
 
+/* Swordmaster demo for RECORD.TXT "swordmaster". */
+#define SM_RECORD_FRAMES 1100
+static void sm_record_pad(int frame, PlayerInput *input) {
+    memset(input, 0, sizeof(*input));
+    input->style = frame == 5 ? STYLE_SWORDMASTER : -1;
+    if (frame >= 30 && frame < 150 && (frame - 30) % 8 == 0) input->style_action = 1;  /* Prop -> Shredder */
+    if (frame >= 255 && frame < 300) input->lock_on = 1;                                /* Dance Macabre */
+    if (frame >= 255 && frame < 261) input->stick_y = 1.0f;
+    if (frame == 258) input->style_action = 1;
+    if (frame >= 300 && frame < 470 && (frame - 300) % 10 == 0) input->style_action = 1; /* -> Crazy Dance */
+    if (frame >= 640 && frame < 680) input->lock_on = 1;                                /* Drive */
+    if (frame >= 640 && frame < 646) input->stick_y = -1.0f;
+    if (frame == 643) input->style_action = 1;
+    if (frame == 790) input->melee = 1;                                                 /* combo hit ... */
+    if (frame == 800) input->style_action = 1;                                          /* ... Quick Drive */
+    if (frame == 930) input->jump = 1;                                                  /* Helm Breaker */
+    if (frame >= 940 && frame < 960) input->lock_on = 1;
+    if (frame >= 940 && frame < 946) input->stick_y = 1.0f;
+    if (frame == 945) input->melee = 1;
+}
+
 /* ---- Main --------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
@@ -668,8 +696,8 @@ int main(int argc, char *argv[]) {
     unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0, skin_us_max = 0;
     unsigned int rest_error;
     int frames = 0;
-    int autotest, recording, show_bones, tour = 0, tour_done = 0, motions_loaded, combat_ready = 0;
-    int combo_moves_seen = 0, stinger_seen = 0, style_before_reset = -1;
+    int autotest, recording, show_bones, tour = 0, sm_demo = 0, tour_done = 0, motions_loaded, combat_ready = 0;
+    int combo_moves_seen = 0, stinger_seen = 0, style_before_reset = -1, prop_frames = 0, drive_seen = 0;
     float moved_before_reset = 0.0f;
     float attack_start_x = 0.0f, attack_start_z = 0.0f, attack_travel = 0.0f;
     int style_switched = 0, snapped = 0;
@@ -710,11 +738,14 @@ int main(int argc, char *argv[]) {
         path_in_game_dir(path, sizeof(path), "RECORD.TXT");
         f = fopen(path, "r");
         if (f) { fread(text, 1, sizeof(text) - 1, f); fclose(f); }
-        tour = (strncmp(text, "motions", 7) == 0 || strncmp(text, "rebellion", 9) == 0) && motions_loaded > 0;
+        sm_demo = strncmp(text, "swordmaster", 11) == 0;
+        tour = (strncmp(text, "motions", 7) == 0 || strncmp(text, "rebellion", 9) == 0 ||
+                strncmp(text, "study", 5) == 0) && motions_loaded > 0;
         if (tour) {
+            const char *prefix = text[0] == 'r' ? "rb-" : text[0] == 's' ? "s3" : 0;
             tour_motion = 0;
-            if (text[0] == 'r') {  /* Rebellion moves only */
-                while (tour_motion < motion_count() && strncmp(motion_get(tour_motion)->name, "rb-", 3) != 0) ++tour_motion;
+            if (prefix) {  /* start at the first motion of that set */
+                while (tour_motion < motion_count() && strncmp(motion_get(tour_motion)->name, prefix, strlen(prefix)) != 0) ++tour_motion;
             }
             anim.viewer = 1; anim.viewer_motion = tour_motion; anim.viewer_frame = 0.0f;
         }
@@ -750,7 +781,8 @@ int main(int argc, char *argv[]) {
             input.style = -1;
         } else if (recording) {
             dt = 1.0f / 60.0f;
-            record_pad(frames, &input);
+            if (sm_demo) sm_record_pad(frames, &input);
+            else record_pad(frames, &input);
         } else if (autotest) {
             dt = 1.0f / 60.0f;
             scripted_pad(frames, &input);
@@ -844,7 +876,7 @@ int main(int argc, char *argv[]) {
                 snprintf(name, sizeof(name), "REC%04d.BMP", frames / 2);
                 capture_frame(draw_buffer, name);
             }
-            if ((!tour && frames + 1 >= RECORD_FRAMES) || tour_done) {
+            if ((!tour && frames + 1 >= (sm_demo ? SM_RECORD_FRAMES : RECORD_FRAMES)) || tour_done) {
                 char path[320];
                 FILE *done;
                 path_in_game_dir(path, sizeof(path), "RECORD_DONE.TXT");
@@ -867,12 +899,15 @@ int main(int argc, char *argv[]) {
         }
         if (autotest && frames == 285) capture_frame(draw_buffer, "SHOT_COMBO.BMP");
         if (autotest && frames == 535) capture_frame(draw_buffer, "SHOT_STINGER.BMP");
-        if (autotest && frames == 600) {
+        if (autotest && combat.move == MOVE_SM_PROP) prop_frames++;
+        if (autotest && combat.move == MOVE_SM_DRIVE) drive_seen = 1;
+        if (autotest && frames == 700) capture_frame(draw_buffer, "SHOT_PROP.BMP");
+        if (autotest && frames == 990) {
             char path[320];
             FILE *report;
             float moved = moved_before_reset;
             int ok = motions_loaded == motion_count() && combat_ready && combo_moves_seen == 3 &&
-                     stinger_seen && attack_travel > 150.0f && moved > 500.0f && frame_us_max < 33333u && rest_error < 1000u &&
+                     stinger_seen && attack_travel > 150.0f && prop_frames > 85 && drive_seen && moved > 500.0f && frame_us_max < 33333u && rest_error < 1000u &&
                      max_height > 50.0f && style_switched && style_before_reset == STYLE_GUNSLINGER && snapped;
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
@@ -881,13 +916,14 @@ int main(int argc, char *argv[]) {
                         "%s\nframes=%d\nmoved=%d\nstart=%d,%d\nend=%d,%d\nyaw_mdeg=%d\ncamera_yaw_mdeg=%d\n"
                         "camera_snapped=%d\njump_max_height=%d\nstyle=%s\nrest_pose_error_um=%u\n"
                         "avg_frame_us=%u\nmax_frame_us=%u\nmax_skin_us=%u\nmotions_loaded=%d\n"
-                        "combat_ready=%d\ncombo_moves=%d\nstinger=%d\nstinger_travel=%d\n",
+                        "combat_ready=%d\ncombo_moves=%d\nstinger=%d\nstinger_travel=%d\n"
+                        "prop_frames=%d\ndrive=%d\n",
                         ok ? "DMC3PSP_TESTROOM_OK" : "DMC3PSP_TESTROOM_FAIL", frames + 1, (int)moved,
                         (int)start_x, (int)start_z, (int)player.x, (int)player.z,
                         (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f), snapped,
                         (int)max_height, player_style_name((Style)style_before_reset), rest_error,
                         frame_us_total / (unsigned int)(frames + 1), frame_us_max, skin_us_max, motions_loaded,
-                        combat_ready, combo_moves_seen, stinger_seen, (int)attack_travel);
+                        combat_ready, combo_moves_seen, stinger_seen, (int)attack_travel, prop_frames, drive_seen);
                 fclose(report);
             }
             running = 0;

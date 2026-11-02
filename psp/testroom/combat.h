@@ -21,6 +21,14 @@ typedef enum {
     MOVE_STINGER_DASH, MOVE_STINGER_HOLD, MOVE_STINGER_THRUST, /* rb-14, rb-15, rb-16 */
     MOVE_HIGH_TIME,                               /* rb-10 */
     MOVE_AERIAL_RAVE,                             /* rb-32 */
+    MOVE_HELM_BREAKER,                            /* rb-29: air, R + forward + triangle */
+    /* Swordmaster (circle, only in Swordmaster style). Identification of
+     * these from the data is a best reading; see combat.c. */
+    MOVE_SM_PROP,                                 /* rb-18: mash for Shredder */
+    MOVE_SM_DANCE_START, MOVE_SM_DANCE,           /* rb-17 -> rb-19: Dance Macabre */
+    MOVE_SM_CRAZY_DANCE,                          /* rb-31: mash circle in Dance Macabre */
+    MOVE_SM_DRIVE,                                /* rb-01: R + back + circle */
+    MOVE_SM_QUICK_DRIVE,                          /* rb-11: circle during a combo hit */
     MOVE_COUNT
 } MoveId;
 
@@ -30,8 +38,9 @@ typedef struct {
     float frame;
     MoveId queued;         /* follow-up requested inside the input window */
     float last_root[3];    /* root translation sampled last frame (for deltas) */
-    int mash_presses;      /* triangle presses during the current move */
-    float since_press;     /* seconds since the last triangle press */
+    int mash_presses;      /* presses of the move's button during the current move */
+    float since_melee;     /* seconds since the last triangle press */
+    float since_style;     /* seconds since the last (Swordmaster) circle press */
     float sword_out;       /* seconds left holding the drawn sword after attacking */
     /* Cross-fade from the previous pose source (locomotion or prior move). */
     int fade_motion;       /* -1 = locomotion */

@@ -77,7 +77,8 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         set_action(player, ACTION_STYLE_SWITCH);
     }
     if (input->gun) set_action(player, ACTION_GUN);
-    if (input->style_action) set_action(player, ACTION_STYLE);
+    /* Swordmaster's circle moves are handled by combat; other styles still placeholder. */
+    if (input->style_action && player->style != STYLE_SWORDMASTER) set_action(player, ACTION_STYLE);
 
     /* SELECT: swing the camera behind Dante's current facing. */
     if (input->snap_camera) {
