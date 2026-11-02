@@ -6,6 +6,16 @@
 #define PI_F 3.14159265f
 #define TWO_PI_F 6.28318531f
 #define STRIDE_LENGTH 165.0f /* cm covered per full run cycle */
+#define STEP_HEIGHT 45.0f    /* curbs and steps Dante walks up without jumping */
+
+float player_spawn[4] = {0.0f, 0.0f, -300.0f, 0.0f};
+float player_room_limit = ROOM_HALF_SIZE - PLAYER_RADIUS;
+int (*player_floor_fn)(float x, float y, float z, float step, float *out) = 0;
+
+static int floor_at(float x, float y, float z, float *out) {
+    if (!player_floor_fn) { *out = 0.0f; return 1; }
+    return player_floor_fn(x, y, z, STEP_HEIGHT, out);
+}
 
 static float wrap_angle(float angle) {
     while (angle > PI_F) angle -= TWO_PI_F;
@@ -20,7 +30,7 @@ static float clampf(float value, float lo, float hi) {
 static void camera_goal(const Player *player, const FollowCamera *camera,
                         float *ex, float *ey, float *ez) {
     *ex = player->x - sinf(camera->yaw) * CAMERA_DISTANCE;
-    *ey = CAMERA_HEIGHT;
+    *ey = player->y + CAMERA_HEIGHT;
     *ez = player->z - cosf(camera->yaw) * CAMERA_DISTANCE;
 }
 
@@ -49,13 +59,17 @@ static void set_action(Player *player, Action action) {
 
 void player_reset(Player *player, FollowCamera *camera) {
     memset(player, 0, sizeof(*player));
-    player->z = -300.0f;
+    player->x = player_spawn[0];
+    player->y = player_spawn[1];
+    player->z = player_spawn[2];
+    player->yaw = player_spawn[3];
     player->on_ground = 1;
     player->style = STYLE_TRICKSTER;
     memset(camera, 0, sizeof(*camera));
+    camera->yaw = camera->target_yaw = player->yaw;
     camera_goal(player, camera, &camera->x, &camera->y, &camera->z);
     camera->tx = player->x;
-    camera->ty = CAMERA_TARGET_HEIGHT;
+    camera->ty = player->y + CAMERA_TARGET_HEIGHT;
     camera->tz = player->z;
 }
 
@@ -105,7 +119,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         float move_x = forward_x * input->stick_y + right_x * input->stick_x;
         float move_z = forward_z * input->stick_y + right_z * input->stick_x;
         float length = sqrtf(move_x * move_x + move_z * move_z);
-        float limit = ROOM_HALF_SIZE - PLAYER_RADIUS;
+        float limit = player_room_limit;
         move_x /= length;
         move_z /= length;
         /* Lock-on holds the facing (strafe); otherwise turn toward travel. */
@@ -132,12 +146,24 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             set_action(player, ACTION_JUMP);
         }
     }
-    if (!player->on_ground && player->attacking) {
-        player->vy = 0.0f;  /* aerial attacks hang in the air, as in DMC */
-    } else if (!player->on_ground) {
-        player->vy -= PLAYER_GRAVITY * dt;
-        player->y += player->vy * dt;
-        if (player->y <= 0.0f) { player->y = 0.0f; player->vy = 0.0f; player->on_ground = 1; }
+    {
+        float ground;
+        int has_ground = floor_at(player->x, player->y, player->z, &ground);
+        if (player->on_ground) {
+            /* Follow the floor (curbs, slopes); walk off an edge -> fall. */
+            if (has_ground && ground >= player->y - STEP_HEIGHT) player->y = ground;
+            else { player->on_ground = 0; player->vy = 0.0f; }
+        }
+        if (!player->on_ground && player->attacking) {
+            player->vy = 0.0f;  /* aerial attacks hang in the air, as in DMC */
+        } else if (!player->on_ground) {
+            player->vy -= PLAYER_GRAVITY * dt;
+            player->y += player->vy * dt;
+            if (has_ground && player->y <= ground && player->vy <= 0.0f) {
+                player->y = ground; player->vy = 0.0f; player->on_ground = 1;
+            }
+            if (player->y < -5000.0f) player_reset(player, camera);  /* fell out of the world */
+        }
     }
 
     /* Frame-rate independent exponential follow of position. */
@@ -147,6 +173,6 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     camera->y += (ey - camera->y) * follow;
     camera->z += (ez - camera->z) * follow;
     camera->tx += (player->x - camera->tx) * follow;
-    camera->ty += (CAMERA_TARGET_HEIGHT + player->y * 0.5f - camera->ty) * follow;
+    camera->ty += (player->y + CAMERA_TARGET_HEIGHT - camera->ty) * follow;
     camera->tz += (player->z - camera->tz) * follow;
 }

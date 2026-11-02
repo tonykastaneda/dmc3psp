@@ -26,6 +26,8 @@ function Write-Log([string]$Message) {
 if (-not (Test-Path -LiteralPath $Eboot)) { throw "Build the test room first: $Eboot" }
 New-Item -ItemType Directory -Force -Path $GameDir, $Evidence | Out-Null
 Copy-Item -LiteralPath $Eboot -Destination (Join-Path $GameDir "EBOOT.PBP") -Force
+$StageBin = Join-Path (Split-Path -Parent $Eboot) "STAGE.BIN"
+if (Test-Path -LiteralPath $StageBin) { Copy-Item -LiteralPath $StageBin -Destination (Join-Path $GameDir "STAGE.BIN") -Force }
 Set-Content -LiteralPath (Join-Path $GameDir "AUTOEXIT.TXT") -Value "automated" -Encoding ascii
 foreach ($name in $Outputs) {
     $path = Join-Path $GameDir $name

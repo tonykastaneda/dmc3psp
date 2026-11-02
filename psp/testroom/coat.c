@@ -45,6 +45,7 @@ static float attach_pos[3];
 static M3 bone_rot[DMC3_COAT_BONE_COUNT];   /* world */
 static float bone_pos[DMC3_COAT_BONE_COUNT][3];
 static float player_yaw, player_pos[3];
+static float floor_y;  /* ground under Dante, for the hem */
 
 static void m_mul(M3 *o, const M3 *a, const M3 *b) {
     M3 r;
@@ -211,7 +212,7 @@ static void step(const Pose *pose) {
                 }
                 for (l = 0; l < 4; ++l) push_capsule(b, capsule[l][0], capsule[l][1], LEG_RADIUS);
                 push_capsule(b, hip_a, hip_b, HIP_RADIUS);
-                if (b[1] < 1.0f) b[1] = 1.0f; /* floor */
+                if (b[1] < floor_y) b[1] = floor_y; /* floor */
             }
         }
     }
@@ -222,6 +223,7 @@ void coat_update(const Pose *pose, const Player *player, float dt) {
     float local_attach[3];
     int s, i;
     player_yaw = player->yaw;
+    floor_y = (player->on_ground ? player->y : player->y - 250.0f) + 1.0f;
     player_pos[0] = player->x; player_pos[1] = player->y; player_pos[2] = player->z;
     m_yaw(&yaw, player_yaw);
     m_mul(&attach_rot, &yaw, (const M3 *)&pose->world_rot[ATTACH_BONE]);

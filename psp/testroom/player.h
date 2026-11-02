@@ -67,6 +67,12 @@ typedef struct {
     int melee, gun, style_action, jump, snap_camera, reset, toggle_viewer; /* pressed this frame */
 } PlayerInput;
 
+/* World hooks (set by main when a stage is loaded). */
+extern float player_spawn[4];       /* x, y, z, yaw used by player_reset */
+extern float player_room_limit;     /* |x|,|z| clamp; huge on a stage */
+/* Floor height under (x, z) no higher than y + step; 0 if none. NULL = flat floor at 0. */
+extern int (*player_floor_fn)(float x, float y, float z, float step, float *out);
+
 void player_reset(Player *player, FollowCamera *camera);
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt);
 const char *player_style_name(Style style);

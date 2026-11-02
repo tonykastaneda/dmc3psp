@@ -210,7 +210,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     {
         float dx = root[0] - c->last_root[0], dz = root[2] - c->last_root[2];
         float s = sinf(player->yaw), co = cosf(player->yaw);
-        float limit = ROOM_HALF_SIZE - PLAYER_RADIUS;
+        float limit = player_room_limit;
         player->x += co * dx + s * dz;
         player->z += -s * dx + co * dz;
         if (player->x > limit) player->x = limit;

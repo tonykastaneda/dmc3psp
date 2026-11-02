@@ -41,12 +41,19 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $Header)) {
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_skinned_model.py"), $Iso.FullName, "--output", $Generated)
 }
 
+$StageBin = Join-Path $Build "STAGE.BIN"
+if ($Regenerate -or -not (Test-Path -LiteralPath $StageBin)) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    $Python = (Get-Command python -ErrorAction Stop).Source
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $StageBin)
+}
+
 $CFlags = @(
     "-O2", "-G0", "-Wall", "-Wextra", "-fno-strict-aliasing", "-D_PSP_FW_VERSION=600",
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

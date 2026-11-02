@@ -27,6 +27,7 @@
 #include "motion.h"
 #include "coat.h"
 #include "combat.h"
+#include "stage.h"
 #include "rebellion_runtime.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
@@ -450,7 +451,10 @@ static void render_scene(const Player *player, const FollowCamera *camera,
 
     sceGumMatrixMode(GU_PROJECTION);
     sceGumLoadIdentity();
-    sceGumPerspective(60.0f, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
+    /* Near/far chosen for 16-bit depth precision: on the stage the near
+     * plane sits at 25 cm (camera is 3 m back) and far covers the backdrop. */
+    if (stage_loaded()) sceGumPerspective(60.0f, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
+    else sceGumPerspective(60.0f, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
     sceGumMatrixMode(GU_VIEW);
     sceGumLoadIdentity();
     {
@@ -467,10 +471,15 @@ static void render_scene(const Player *player, const FollowCamera *camera,
     sceGuDisable(GU_TEXTURE_2D);
     sceGuDisable(GU_LIGHTING);
     sceGuDisable(GU_ALPHA_TEST);
-    sceGuDepthMask(GU_TRUE);
-    sceGumDrawArray(GU_TRIANGLES, COLOR_VTYPE, FLOOR_VERTEX_COUNT, 0, floor_vertices);
-    sceGumDrawArray(GU_LINES, COLOR_VTYPE, GRID_VERTEX_COUNT, 0, grid_vertices);
-    sceGuDepthMask(GU_FALSE);
+    if (stage_loaded()) {
+        stage_draw();
+        sceGuDisable(GU_TEXTURE_2D);
+    } else {
+        sceGuDepthMask(GU_TRUE);
+        sceGumDrawArray(GU_TRIANGLES, COLOR_VTYPE, FLOOR_VERTEX_COUNT, 0, floor_vertices);
+        sceGumDrawArray(GU_LINES, COLOR_VTYPE, GRID_VERTEX_COUNT, 0, grid_vertices);
+        sceGuDepthMask(GU_FALSE);
+    }
 
     sceGumLoadIdentity();
     {
@@ -729,6 +738,20 @@ int main(int argc, char *argv[]) {
     combat_reset(&combat);
     combat_ready = motions_loaded > 0 && combat_init();
 
+    {
+        /* The Mission 2 street (st001) if STAGE.BIN is next to the EBOOT. */
+        char path[320];
+        path_in_game_dir(path, sizeof(path), "STAGE.BIN");
+        if (stage_load(path)) {
+            const StageInfo *si = stage_info();
+            player_spawn[0] = si->spawn[0];
+            player_spawn[1] = si->spawn[1];
+            player_spawn[2] = si->spawn[2];
+            player_spawn[3] = si->spawn_yaw;
+            player_room_limit = 1.0e9f;
+            player_floor_fn = stage_floor;
+        }
+    }
     autotest = game_file_exists("AUTOEXIT.TXT");
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
@@ -754,7 +777,7 @@ int main(int argc, char *argv[]) {
     if (autotest || recording) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
     if (tour) camera.yaw = 2.5f;  /* front three-quarter view of Dante for the tour */
-    else if (recording) {
+    else if (recording && !stage_loaded()) {
         /* Start in a corner facing the far one: the combos travel ~5 m. */
         player.x = player.z = -750.0f;
         player.yaw = camera.yaw = 0.785f;
