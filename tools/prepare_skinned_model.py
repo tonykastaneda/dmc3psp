@@ -62,17 +62,13 @@ def mots_in_pac(pac: bytes, prefix: str):
 
 
 def build_mesh(model_data: bytes, bone_count: int):
-    """Skinnable (flag 0x0001) objects of a MOD as flat runtime arrays.
-
-    Flag 0x0002 objects use a different skin encoding (zero-weight vertices)
-    that is not recovered yet; they are reported and skipped."""
-    objects, _ = parse_mod(model_data)
+    """Every object of a MOD as flat runtime arrays, one draw entry per
+    sub-mesh (flag low byte = sub-mesh count; e.g. Dante's object 8 and two
+    coat pieces have two)."""
+    objects, _ = parse_mod(model_data, split_submeshes=True)
     mesh = {"positions": [], "normals": [], "uvs": [], "bones": [], "weights": [],
-            "indices": [], "objects": [], "old_triangles": 0,
-            "skipped": [o["index"] for o in objects if o["flags"] & 0x0002]}
+            "indices": [], "objects": [], "old_triangles": 0, "skipped": []}
     for item in objects:
-        if item["flags"] & 0x0002:
-            continue
         vc = item["vertex_count"]
         b, w, adc = parse_skin(model_data, item["bone_offset"], item["weight_offset"], vc, bone_count)
         base, start = len(mesh["positions"]), len(mesh["indices"])

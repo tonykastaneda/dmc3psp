@@ -433,8 +433,22 @@ static void draw_bones(void) {
     sceGumDrawArray(GU_LINES, COLOR_VTYPE, n, 0, v);
 }
 
-static void render_scene(const Player *player, const FollowCamera *camera,
+static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
+    FollowCamera camera_copy = *camera_state;
+    const FollowCamera *camera = &camera_copy;
+    if (stage_loaded()) {
+        /* Keep the follow camera on Dante's side of walls: pull the eye in to
+         * just before the first collision hit along target -> eye. */
+        float a[3] = {camera_copy.tx, camera_copy.ty, camera_copy.tz};
+        float b[3] = {camera_copy.x, camera_copy.y, camera_copy.z}, t;
+        if (stage_raycast(a, b, &t)) {
+            float k = t - 0.08f < 0.15f ? 0.15f : t - 0.08f;
+            camera_copy.x = a[0] + (b[0] - a[0]) * k;
+            camera_copy.y = a[1] + (b[1] - a[1]) * k;
+            camera_copy.z = a[2] + (b[2] - a[2]) * k;
+        }
+    }
     int i;
     int bound_texture = -1;
 
@@ -851,6 +865,7 @@ int main(int argc, char *argv[]) {
             }
         }
         player_update(&player, &camera, &input, dt);
+        if (stage_loaded()) stage_collide(&player.x, &player.z, player.y, PLAYER_RADIUS);
         if (input.style >= 0) style_switched = 1;
         if (player.y > max_height) max_height = player.y;
 

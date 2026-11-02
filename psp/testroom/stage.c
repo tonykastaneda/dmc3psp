@@ -6,6 +6,7 @@
 #include <psputils.h>
 
 #include <malloc.h>
+#include <math.h>
 #include <string.h>
 
 typedef struct {
@@ -30,8 +31,11 @@ typedef struct { unsigned int first, count; } Cell;
  * the camera just enough to win against their base surface. */
 #define DECAL_DEPTH_OFFSET 64
 
+typedef struct { unsigned int offset, walls, floors, wall_grid, floor_grid; } HitsHeader;
+
 static unsigned char *blob;
 static const Header *header;
+static const HitsHeader *hits;
 static StageInfo info;
 
 int stage_load(const char *path) {
@@ -45,13 +49,14 @@ int stage_load(const char *path) {
     got = sceIoRead(fd, blob, (unsigned int)size);
     sceIoClose(fd);
     header = (const Header *)blob;
-    if (got != size || memcmp(header->magic, "STG1", 4) != 0 || header->version != 1) {
+    if (got != size || memcmp(header->magic, "STG1", 4) != 0 || header->version != 2) {
         free(blob);
         blob = 0;
         header = 0;
         return 0;
     }
     sceKernelDcacheWritebackAll();
+    hits = (const HitsHeader *)(blob + 0x80);
     memcpy(info.spawn, header->spawn, sizeof(info.spawn));
     info.spawn_yaw = header->spawn_yaw;
     memcpy(info.min, header->min, sizeof(info.min));
@@ -137,6 +142,154 @@ void stage_draw(void) {
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
 }
 
+/* ---- collision (the stage's HITS triangles) ---- */
+
+#define HIT_FLOATS 13  /* v0 v1 v2 (9), normal (3), d */
+
+static const Cell *grid_cell(unsigned int grid_offset, float x, float z) {
+    int cx = (int)((x - header->grid_x0) / (float)header->grid_cell);
+    int cz = (int)((z - header->grid_z0) / (float)header->grid_cell);
+    if (cx < 0 || cz < 0 || cx >= (int)header->grid_w || cz >= (int)header->grid_h) return 0;
+    return (const Cell *)(blob + grid_offset) + cz * header->grid_w + cx;
+}
+
+static const unsigned int *grid_indices(unsigned int grid_offset) {
+    return (const unsigned int *)(blob + grid_offset + 8 * header->grid_w * header->grid_h);
+}
+
+static const float *hit_tri(unsigned int index) {
+    return (const float *)(blob + hits->offset) + HIT_FLOATS * index;
+}
+
+static float dot3(const float *a, const float *b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+
+/* Closest point on triangle abc to p (Ericson, Real-Time Collision Detection 5.1.5). */
+static void closest_on_triangle(const float *p, const float *a, const float *b, const float *c, float *out) {
+    float ab[3], ac[3], ap[3], bp[3], cp[3], d1, d2, d3, d4, d5, d6, va, vb, vc, v, w, denom;
+    int k;
+    for (k = 0; k < 3; ++k) { ab[k] = b[k] - a[k]; ac[k] = c[k] - a[k]; ap[k] = p[k] - a[k]; }
+    d1 = dot3(ab, ap); d2 = dot3(ac, ap);
+    if (d1 <= 0.0f && d2 <= 0.0f) { memcpy(out, a, 12); return; }
+    for (k = 0; k < 3; ++k) bp[k] = p[k] - b[k];
+    d3 = dot3(ab, bp); d4 = dot3(ac, bp);
+    if (d3 >= 0.0f && d4 <= d3) { memcpy(out, b, 12); return; }
+    vc = d1 * d4 - d3 * d2;
+    if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f) {
+        v = d1 / (d1 - d3);
+        for (k = 0; k < 3; ++k) out[k] = a[k] + v * ab[k];
+        return;
+    }
+    for (k = 0; k < 3; ++k) cp[k] = p[k] - c[k];
+    d5 = dot3(ab, cp); d6 = dot3(ac, cp);
+    if (d6 >= 0.0f && d5 <= d6) { memcpy(out, c, 12); return; }
+    vb = d5 * d2 - d1 * d6;
+    if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f) {
+        w = d2 / (d2 - d6);
+        for (k = 0; k < 3; ++k) out[k] = a[k] + w * ac[k];
+        return;
+    }
+    va = d3 * d6 - d5 * d4;
+    if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f) {
+        w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        for (k = 0; k < 3; ++k) out[k] = b[k] + w * (c[k] - b[k]);
+        return;
+    }
+    denom = 1.0f / (va + vb + vc);
+    v = vb * denom; w = vc * denom;
+    for (k = 0; k < 3; ++k) out[k] = a[k] + ab[k] * v + ac[k] * w;
+}
+
+int stage_collide(float *x, float *z, float y, float radius) {
+    static const float heights[3] = {45.0f, 105.0f, 160.0f};
+    int moved = 0, iteration, h;
+    unsigned int k;
+    if (!header) return 0;
+    for (iteration = 0; iteration < 3; ++iteration) {
+        const Cell *cell = grid_cell(hits->wall_grid, *x, *z);
+        const unsigned int *indices = grid_indices(hits->wall_grid);
+        int pushed = 0;
+        if (!cell) break;
+        for (k = 0; k < cell->count; ++k) {
+            const float *t = hit_tri(indices[cell->first + k]);
+            for (h = 0; h < 3; ++h) {
+                float p[3] = {*x, y + heights[h], *z}, q[3], dx, dz, dy, dist2;
+                closest_on_triangle(p, t, t + 3, t + 6, q);
+                dx = p[0] - q[0]; dy = p[1] - q[1]; dz = p[2] - q[2];
+                if (dy * dy > radius * radius) continue;       /* not at this height */
+                dist2 = dx * dx + dz * dz;
+                if (dist2 >= radius * radius) continue;
+                if (dist2 < 1e-4f) {                            /* centre on the wall: use its normal */
+                    dx = t[9]; dz = t[11];
+                    dist2 = dx * dx + dz * dz;
+                    if (dist2 < 1e-6f) continue;
+                    {
+                        float l = sqrtf(dist2);
+                        *x += dx / l * radius; *z += dz / l * radius;
+                    }
+                } else {
+                    float l = sqrtf(dist2), push = radius - l;
+                    *x += dx / l * push; *z += dz / l * push;
+                }
+                pushed = moved = 1;
+                break;
+            }
+        }
+        if (!pushed) break;
+    }
+    return moved;
+}
+
+static int ray_triangle(const float *o, const float *d, const float *t, float *hit) {
+    /* Moller-Trumbore, two-sided. */
+    float e1[3], e2[3], pv[3], tv[3], qv[3], det, inv, u, v, s;
+    int k;
+    for (k = 0; k < 3; ++k) { e1[k] = t[3 + k] - t[k]; e2[k] = t[6 + k] - t[k]; }
+    pv[0] = d[1] * e2[2] - d[2] * e2[1]; pv[1] = d[2] * e2[0] - d[0] * e2[2]; pv[2] = d[0] * e2[1] - d[1] * e2[0];
+    det = dot3(e1, pv);
+    if (det > -1e-6f && det < 1e-6f) return 0;
+    inv = 1.0f / det;
+    for (k = 0; k < 3; ++k) tv[k] = o[k] - t[k];
+    u = dot3(tv, pv) * inv;
+    if (u < 0.0f || u > 1.0f) return 0;
+    qv[0] = tv[1] * e1[2] - tv[2] * e1[1]; qv[1] = tv[2] * e1[0] - tv[0] * e1[2]; qv[2] = tv[0] * e1[1] - tv[1] * e1[0];
+    v = dot3(d, qv) * inv;
+    if (v < 0.0f || u + v > 1.0f) return 0;
+    s = dot3(e2, qv) * inv;
+    if (s < 0.0f || s > 1.0f) return 0;
+    *hit = s;
+    return 1;
+}
+
+int stage_raycast(const float a[3], const float b[3], float *t) {
+    float d[3] = {b[0] - a[0], b[1] - a[1], b[2] - a[2]}, best = 2.0f;
+    float x0 = a[0] < b[0] ? a[0] : b[0], x1 = a[0] < b[0] ? b[0] : a[0];
+    float z0 = a[2] < b[2] ? a[2] : b[2], z1 = a[2] < b[2] ? b[2] : a[2];
+    float cell = (float)header->grid_cell, x, z;
+    int grid;
+    if (!header) return 0;
+    /* The segment is short (camera boom): scan every cell its box covers in
+     * both grids; a triangle in several cells is just tested twice. */
+    for (grid = 0; grid < 2; ++grid) {
+        unsigned int offset = grid ? hits->floor_grid : hits->wall_grid;
+        unsigned int base = grid ? hits->walls : 0;
+        const unsigned int *indices = grid_indices(offset);
+        for (z = z0; z <= z1 + cell; z += cell) {
+            for (x = x0; x <= x1 + cell; x += cell) {
+                const Cell *c = grid_cell(offset, x > x1 ? x1 : x, z > z1 ? z1 : z);
+                unsigned int k;
+                if (!c) continue;
+                for (k = 0; k < c->count; ++k) {
+                    float h;
+                    if (ray_triangle(a, d, hit_tri(base + indices[c->first + k]), &h) && h < best) best = h;
+                }
+            }
+        }
+    }
+    if (best > 1.0f) return 0;
+    *t = best;
+    return 1;
+}
+
 int stage_floor(float x, float y, float z, float step, float *out) {
     const float *tris;
     const Cell *cells;
@@ -145,6 +298,26 @@ int stage_floor(float x, float y, float z, float step, float *out) {
     unsigned int k;
     float best = -1.0e30f;
     if (!header) return 0;
+    {
+        /* Collision floors first (the game's own walkable surfaces). */
+        const Cell *cell = grid_cell(hits->floor_grid, x, z);
+        const unsigned int *idx = grid_indices(hits->floor_grid);
+        if (cell) {
+            for (k = 0; k < cell->count; ++k) {
+                const float *t = hit_tri(hits->walls + idx[cell->first + k]);
+                float x0 = t[0], z0 = t[2], x1 = t[3], z1 = t[5], x2 = t[6], z2 = t[8];
+                float d = (z1 - z2) * (x0 - x2) + (x2 - x1) * (z0 - z2), a, b, c, h;
+                if (d > -1e-6f && d < 1e-6f) continue;
+                a = ((z1 - z2) * (x - x2) + (x2 - x1) * (z - z2)) / d;
+                b = ((z2 - z0) * (x - x2) + (x0 - x2) * (z - z2)) / d;
+                c = 1.0f - a - b;
+                if (a < 0.0f || b < 0.0f || c < 0.0f) continue;
+                h = a * t[1] + b * t[4] + c * t[7];
+                if (h <= y + step && h > best) { best = h; found = 1; }
+            }
+        }
+        if (found) { *out = best; return 1; }
+    }
     cx = (int)((x - header->grid_x0) / (float)header->grid_cell);
     cz = (int)((z - header->grid_z0) / (float)header->grid_cell);
     if (cx < 0 || cz < 0 || cx >= (int)header->grid_w || cz >= (int)header->grid_h) return 0;

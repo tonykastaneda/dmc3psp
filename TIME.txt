@@ -611,3 +611,6 @@
 [2026-11-02 15:00:40.162 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,928,620 bytes)
 [2026-11-02 15:00:40.253 -08:00] Launching PPSSPP test-room autotest.
 [2026-11-02 15:01:02.828 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
+[2026-11-02 15:34:27.522 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,945,532 bytes)
+[2026-11-02 15:34:28.064 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 15:34:50.653 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.

@@ -18,5 +18,10 @@ void stage_draw(void);
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
  * leaves *out untouched if there is no floor below. */
 int stage_floor(float x, float y, float z, float step, float *out);
+/* Push a vertical capsule (feet at y, height ~180) out of the stage's
+ * collision walls; returns 1 if it moved. */
+int stage_collide(float *x, float *z, float y, float radius);
+/* First hit of segment a->b against collision walls/floors: *t in [0, 1]. */
+int stage_raycast(const float a[3], const float b[3], float *t);
 
 #endif

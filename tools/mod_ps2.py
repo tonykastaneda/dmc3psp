@@ -15,7 +15,12 @@ def finite(values):
     return all(math.isfinite(value) for value in values)
 
 
-def parse_mod(data: bytes):
+def parse_mod(data: bytes, split_submeshes: bool = False):
+    """Parse a MOD. With split_submeshes, objects whose flag low byte is > 1
+    are returned as one entry per sub-mesh: each sub-mesh has its own 0x30-byte
+    header (u16 vertex count, u16 texture, pointers) at mesh_offset + 0x30*k,
+    and the object record's vertex count is their sum. (Without it, the legacy
+    behaviour reads such objects as one mesh, which is wrong for k > 1.)"""
     if len(data) < 0x30 or data[:4] != b"MOD ":
         raise ValueError("Not a PS2 DMC3 MOD file")
     version = struct.unpack_from("<f", data, 4)[0]
@@ -27,10 +32,22 @@ def parse_mod(data: bytes):
         raise ValueError("MOD skeleton offset exceeds file")
     objects = []
     all_positions = []
+    pieces = []
     for index in range(object_count):
         record = 0x30 + index * 48
         flags = struct.unpack_from("<H", data, record)[0]
         vertex_count, mesh_offset = struct.unpack_from("<HI", data, record + 2)
+        if split_submeshes and (flags & 0xFF) > 1:
+            total = 0
+            for k in range(flags & 0xFF):
+                svc = struct.unpack_from("<H", data, mesh_offset + 0x30 * k)[0]
+                pieces.append((index, flags, svc, mesh_offset + 0x30 * k, record, k))
+                total += svc
+            if total != vertex_count:
+                raise ValueError(f"Object {index}: sub-mesh vertices {total} != {vertex_count}")
+        else:
+            pieces.append((index, flags, vertex_count, mesh_offset, record, 0))
+    for index, flags, vertex_count, mesh_offset, record, submesh in pieces:
         center = struct.unpack_from("<3f", data, record + 36)
         if not 3 <= vertex_count <= 1000000 or mesh_offset + 36 > len(data):
             raise ValueError(f"Invalid mesh record for object {index}")
@@ -54,6 +71,7 @@ def parse_mod(data: bytes):
                 faces.append(face)
         objects.append({
             "index": index,
+            "submesh": submesh,
             "flags": flags,
             "vertex_count": vertex_count,
             "header_count": header_count,

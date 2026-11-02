@@ -20,6 +20,15 @@ Blob layout (little-endian, every section 16-byte aligned):
   batches: {texture, first vertex, vertex count, flags (1 = alpha test, 2 = decal, 4 = alpha blend)}
   vertices: {float u, v; u32 ABGR colour; float x, y, z} (GU_TEXTURE_32BITF|GU_COLOR_8888|GU_VERTEX_32BITF)
   floor: walkable triangles (9 floats) + uniform XZ grid of triangle indices
+  hits:  the stage's own collision (HITS chunk): triangles {9 floats vertices,
+         3 floats normal, 1 float plane d} + XZ grids for walls and floors
+
+HITS layout (st001 entry 3): 'HITS', u32 size-12, float3 min, float3 max,
+u32[3] cell size, u32[3] grid dims, u32 triangle count, u32 (unknown),
+u32 triangle-data offset, u32[cells] per-cell list offsets (all offsets
+relative to +8); cell list = u32 byte offsets into the triangle data ending
+in 0xFFFFFFFF; triangle record = 56 bytes {u16 type, u8, u8, float3 v[3],
+float3 normal, float d} with n.p + d = 0.
 """
 
 import argparse
@@ -103,6 +112,43 @@ def face_normal(t):
     return tuple(c / length for c in n)
 
 
+def parse_hits(data: bytes):
+    if data[:4] != b"HITS":
+        raise ValueError("Not a HITS chunk")
+    count = struct.unpack_from("<I", data, 0x38)[0]
+    base = struct.unpack_from("<I", data, 0x40)[0] + 8
+    tris = []
+    for i in range(count):
+        r = base + 56 * i
+        v = struct.unpack_from("<9f", data, r + 4)
+        n = struct.unpack_from("<4f", data, r + 40)
+        tris.append(v + n)
+    return tris
+
+
+def build_grid(tris, x0, z0, cell, w, h):
+    cells = [[] for _ in range(w * h)]
+    for ti, t in enumerate(tris):
+        cx0 = max(0, int((min(t[0:9:3]) - x0) // cell)); cx1 = min(w - 1, int((max(t[0:9:3]) - x0) // cell))
+        cz0 = max(0, int((min(t[2:9:3]) - z0) // cell)); cz1 = min(h - 1, int((max(t[2:9:3]) - z0) // cell))
+        for cz in range(cz0, cz1 + 1):
+            for cx in range(cx0, cx1 + 1):
+                cells[cz * w + cx].append(ti)
+    return cells
+
+
+def write_grid(blob, cells):
+    offset = align(blob)
+    cursor = 0
+    for c in cells:
+        blob += struct.pack("<II", cursor, len(c))
+        cursor += len(c)
+    for c in cells:
+        for ti in c:
+            blob += struct.pack("<I", ti)
+    return offset
+
+
 def align(blob: bytearray):
     while len(blob) % 16:
         blob.append(0)
@@ -123,6 +169,9 @@ def main() -> None:
     name = stage[0][:16].split(b"\0")[0].decode("ascii", "replace")
     textures = decode_textures(stage[1])
     scm = parse_scm(stage[2])
+    hits = parse_hits(stage[3])
+    hit_walls = [t for t in hits if abs(t[10]) < 0.5]
+    hit_floors = [t for t in hits if t[10] >= 0.5]
 
     # Player start: first POS record (x, y, z at +4, yaw in degrees at +16).
     pos = next(c for c in stage_data if c[:4] == b"POS\0")
@@ -228,11 +277,20 @@ def main() -> None:
         for ti in c:
             blob += struct.pack("<I", ti)
     align(blob)
+    # Collision: walls and floors in their own XZ grids over the same extent.
+    hits_offset = align(blob)
+    for t in hit_walls + hit_floors:
+        blob += struct.pack("<13f", *t)
+    wall_grid = write_grid(blob, build_grid(hit_walls, gx0, gz0, GRID_CELL, gw, gh))
+    hfloor_grid = write_grid(blob, build_grid(hit_floors, gx0, gz0, GRID_CELL, gw, gh))
+    align(blob)
 
     all_x = [v[0] for _, _, tris, _ in batches for t in tris for v in t]
     all_y = [v[1] for _, _, tris, _ in batches for t in tris for v in t]
     all_z = [v[2] for _, _, tris, _ in batches for t in tris for v in t]
-    struct.pack_into("<4s7I4f6f6I2f2I", blob, 0, b"STG1", 1,
+    struct.pack_into("<4I", blob, 0x80, hits_offset, len(hit_walls), len(hit_floors), wall_grid)
+    struct.pack_into("<I", blob, 0x90, hfloor_grid)
+    struct.pack_into("<4s7I4f6f6I2f2I", blob, 0, b"STG1", 2,
                      len(textures), len(batches), first, len(floor), gw, gh,
                      sx, sy, sz, math.radians(syaw),
                      min(all_x), min(all_y), min(all_z), max(all_x), max(all_y), max(all_z),
@@ -244,6 +302,7 @@ def main() -> None:
     print(f"{args.output}: {name}, {len(textures)} textures (mipmapped), {len(batches)} batches, "
           f"{tri_count} triangles after subdividing to {MAX_EDGE:.0f} cm, {len(floor)} floor triangles "
           f"({gw}x{gh} grid), {len(shared)} shared planes -> {decal_batches} decal batches, "
+          f"collision {len(hit_walls)} walls / {len(hit_floors)} floors, "
           f"cut-out textures {sorted(alpha_textures)}, translucent {sorted(blend_textures)}, "
           f"spawn ({sx:.0f}, {sy:.1f}, {sz:.0f}) yaw {syaw:.0f}, {len(blob):,} bytes")
 

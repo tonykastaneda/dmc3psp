@@ -20,11 +20,11 @@
 #define SIM_HZ 60.0f
 #define SIM_GRAVITY (-980.0f / (SIM_HZ * SIM_HZ))  /* cm per frame^2 */
 #define SIM_DAMPING 0.90f
-#define SIM_PULL_ROOT 0.10f   /* pull toward the rigid pose near the waist ... */
-#define SIM_PULL_TIP 0.025f   /* ... tapering to the hem */
+#define SIM_PULL_ROOT 0.16f   /* pull toward the rigid pose near the waist ... */
+#define SIM_PULL_TIP 0.05f    /* ... tapering to the hem (toned down: less flare) */
 #define SIM_MAX_STEP 25.0f    /* cm per frame */
 #define SIM_ITERATIONS 3
-#define SIM_DRAG_TIP 0.20f    /* air drag vs. the waist's motion, scaled up toward the hem */
+#define SIM_DRAG_TIP 0.10f    /* air drag vs. the waist's motion, scaled up toward the hem */
 #define LEG_RADIUS 12.0f
 #define HIP_RADIUS 15.0f
 
