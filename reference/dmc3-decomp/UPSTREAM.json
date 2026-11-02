@@ -1,0 +1,6 @@
+{
+  "upstream": "https://github.com/WadeWinningWilson/dmc3-decomp",
+  "commit": "f8d03f05bef4f98598d9154b81044a0353b7927a",
+  "archive_sha256": "763d359c6791d1888a6f8bbaeae1d075a83cc648558020d16ab74f1622a9bbaa",
+  "license": "CC0-1.0"
+}

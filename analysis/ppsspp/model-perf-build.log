@@ -1,0 +1,161 @@
+[2026-11-02 13:01:32.631 -08:00] RUN: C:\Users\tonyk\scoop\apps\mingw-mstorsjo-llvm-msvcrt\current\bin\clang.exe -std=c99 -O2 -D_CRT_SECURE_NO_WARNINGS -IC:\Users\tonyk\Documents\GitHub\dmc3psp\tools\pspsdk -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\tools C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\tools\psp-fixup-imports.c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\tools\getopt_long.c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\tools\sha1.c -o C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\bin\psp-fixup-imports.exe
+[2026-11-02 13:01:32.979 -08:00] RUN: C:\Users\tonyk\scoop\apps\python\current\python.exe C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\prepare_boot_texture.py C:\Users\tonyk\Documents\GitHub\dmc3psp\Devil May Cry 3 - Dante's Awakening (USA) (En,Ja) (Special Edition).iso --output C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated
+[0] 256x128 IDTEX8 -> C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated\converted\slot_02832_p000.png
+Generated C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated\boot_texture.h from GDATA slot 2832: 256x128, 131072 RGBA bytes
+[2026-11-02 13:01:33.102 -08:00] RUN: C:\Users\tonyk\scoop\apps\python\current\python.exe C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\prepare_model_runtime.py C:\Users\tonyk\Documents\GitHub\dmc3psp\Devil May Cry 3 - Dante's Awakening (USA) (En,Ja) (Special Edition).iso --output C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated
+Generated C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated\model_runtime.h: 5103 vertices, 5071 triangles, 3 textures
+[2026-11-02 13:01:33.322 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -c C:\Users\tonyk\Documents\GitHub\dmc3psp\psp\startup.c -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\startup.o
+[2026-11-02 13:01:33.392 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -c C:\Users\tonyk\Documents\GitHub\dmc3psp\psp\main.c -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\main.o
+C:\Users\tonyk\Documents\GitHub\dmc3psp\psp\main.c:75:13: warning: 'draw_boot_texture' defined but not used [-Wunused-function]
+   75 | static void draw_boot_texture(int x0, int y0) {
+      |             ^~~~~~~~~~~~~~~~~
+[2026-11-02 13:01:33.546 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -c C:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay\difficulty.c -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\difficulty.o
+[2026-11-02 13:01:33.656 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -c C:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render\model.c -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\model.o
+[2026-11-02 13:01:34.043 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\debug\font.c -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\font.o
+[2026-11-02 13:01:34.120 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\modinfo\modinfo.S -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\modinfo.o
+[2026-11-02 13:01:34.182 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -DF_sceDisplay_0000 -DF_sceDisplay_0001 -DF_sceDisplay_0006 -DF_sceDisplay_0014 -c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\display\sceDisplay.S -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\display.o
+[2026-11-02 13:01:34.274 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -DF_sceCtrl_0000 -DF_sceCtrl_0001 -DF_sceCtrl_0003 -DF_sceCtrl_0007 -c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\ctrl\sceCtrl.S -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\ctrl.o
+[2026-11-02 13:01:34.353 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -DF_IoFileMgrForUser_0000 -DF_IoFileMgrForUser_0007 -DF_IoFileMgrForUser_0009 -DF_IoFileMgrForUser_0013 -c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user\IoFileMgrForUser.S -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\io.o
+[2026-11-02 13:01:34.445 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -DF_LoadExecForUser_0000 -DF_LoadExecForUser_0003 -c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user\LoadExecForUser.S -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\loadexec.o
+[2026-11-02 13:01:34.507 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-gcc.exe -G0 -mno-abicalls -ffreestanding -fno-builtin -fno-strict-aliasing -fno-stack-protector -fno-pic -O2 -Wall -Wextra -IC:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\generated -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\gameplay -IC:\Users\tonyk\Documents\GitHub\dmc3psp\engine\render -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\base -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user -IC:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\kernel -DF_ThreadManForUser_0000 -DF_ThreadManForUser_0082 -c C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\src\pspsdk-1ecee3d9c521c660d008f8c6adb5dd97243b2cd4\src\user\ThreadManForUser.S -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\threadman.o
+[2026-11-02 13:01:34.588 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\pspdev\bin\psp-ld.exe -m elf_mipsallegrexel_psp -z max-page-size=128 -T C:\Users\tonyk\Documents\GitHub\dmc3psp\psp\linker.ld -o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\dmc3psp.elf C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\startup.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\main.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\difficulty.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\model.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\font.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\modinfo.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\display.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\ctrl.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\io.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\loadexec.o C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\obj\threadman.o
+[2026-11-02 13:01:34.631 -08:00] RUN: C:\Users\tonyk\Documents\GitHub\dmc3psp\.tools\bin\psp-fixup-imports.exe -v C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\dmc3psp.elf
+Loading C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\dmc3psp.elf, outputting to C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\dmc3psp.elf
+Magic 464c457f, Class 01, Data 01, Idver 01
+Type 0002, Machine 0008, Version 00000001, Entry 08804000
+Phoff 00000034, Shoff 000a2080, Flags 10a23001, Ehsize 00000034
+Phentsize 0020, Phnum 0002
+Shentsize 0028, Shnum 00000015, Shstrndx 0014
+
+Section 0: 
+Name 00000000, Type 00000000, Flags 00000000, Addr 00000000
+Offset 00000000, Size 00000000, Link 00000000, Info 00000000
+Addralign 00000000, Entsize 00000000 pData 0000000000000000
+
+Section 1: .text
+Name 00000023, Type 00000001, Flags 00000006, Addr 08804000
+Offset 00000080, Size 00001078, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d00100
+
+Section 2: .sceStub.text
+Name 0000001b, Type 00000001, Flags 00000006, Addr 08805078
+Offset 000010f8, Size 00000058, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d01178
+
+Section 3: .lib.ent.top
+Name 00000029, Type 00000001, Flags 00000002, Addr 088050d0
+Offset 00001150, Size 00000004, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d011d0
+
+Section 4: .lib.ent
+Name 00000036, Type 00000001, Flags 00000002, Addr 088050d4
+Offset 00001154, Size 00000010, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d011d4
+
+Section 5: .lib.ent.btm
+Name 0000003f, Type 00000001, Flags 00000002, Addr 088050e4
+Offset 00001164, Size 00000004, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d011e4
+
+Section 6: .lib.stub.top
+Name 0000004c, Type 00000001, Flags 00000002, Addr 088050e8
+Offset 00001168, Size 00000004, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d011e8
+
+Section 7: .lib.stub
+Name 0000005a, Type 00000001, Flags 00000002, Addr 088050ec
+Offset 0000116c, Size 00000064, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d011ec
+
+Section 8: .lib.stub.btm
+Name 00000064, Type 00000001, Flags 00000002, Addr 08805150
+Offset 000011d0, Size 00000004, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d01250
+
+Section 9: .rodata.sceModuleInfo
+Name 00000072, Type 00000001, Flags 00000002, Addr 08805160
+Offset 000011e0, Size 00000034, Link 00000000, Info 00000000
+Addralign 00000010, Entsize 00000000 pData 000001eaa1d01260
+
+Section 10: .rodata.sceResident
+Name 00000088, Type 00000001, Flags 00000002, Addr 08805194
+Offset 00001214, Size 00000070, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d01294
+
+Section 11: .rodata.sceNid
+Name 0000009c, Type 00000001, Flags 00000002, Addr 08805204
+Offset 00001284, Size 0000002c, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d01304
+
+Section 12: .rodata
+Name 000000ab, Type 00000001, Flags 00000002, Addr 08805230
+Offset 000012b0, Size 0009f80c, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1d01330
+
+Section 13: .MIPS.abiflags
+Name 000000b3, Type 7000002a, Flags 00000002, Addr 088a4a40
+Offset 000a0ac0, Size 00000018, Link 00000000, Info 00000000
+Addralign 00000008, Entsize 00000018 pData 000001eaa1da0b40
+
+Section 14: .data
+Name 000000c2, Type 00000001, Flags 00000003, Addr 088a4a60
+Offset 000a0ae0, Size 00000800, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1da0b60
+
+Section 15: .bss
+Name 000000c8, Type 00000008, Flags 00000003, Addr 088a5260
+Offset 000a12e0, Size 00053af0, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000000 pData 000001eaa1da1360
+
+Section 16: .reginfo
+Name 000000cd, Type 70000006, Flags 00000000, Addr 00000000
+Offset 000a12e0, Size 00000018, Link 00000000, Info 00000000
+Addralign 00000004, Entsize 00000001 pData 000001eaa1da1360
+
+Section 17: .gnu.attributes
+Name 000000d6, Type 6ffffff5, Flags 00000000, Addr 00000000
+Offset 000a12f8, Size 00000010, Link 00000000, Info 00000000
+Addralign 00000001, Entsize 00000000 pData 000001eaa1da1378
+
+Section 18: .symtab
+Name 00000001, Type 00000002, Flags 00000000, Addr 00000000
+Offset 000a1308, Size 000005a0, Link 00000013, Info 00000012
+Addralign 00000004, Entsize 00000010 pData 000001eaa1da1388
+
+Section 19: .strtab
+Name 00000009, Type 00000003, Flags 00000000, Addr 00000000
+Offset 000a18a8, Size 000006f0, Link 00000000, Info 00000000
+Addralign 00000001, Entsize 00000000 pData 000001eaa1da1928
+
+Section 20: .shstrtab
+Name 00000011, Type 00000003, Flags 00000000, Addr 00000000
+Offset 000a1f98, Size 000000e6, Link 00000000, Info 00000000
+Addralign 00000001, Entsize 00000000 pData 000001eaa1da2018
+ELF Load Base address 08804000
+Import count 11
+Found import to fixup. pStub 088050ec (), Nid 0e20f177, NidInSect 0e20f177
+Import Stub 000001eaa1d011ec, 088051a8 (__stub_modulestr_sceDisplay), 40090000, 05, 00, 0000, 08804000, 08804000
+Found import to fixup. pStub 088050ec (), Nid 289d82fe, NidInSect 289d82fe
+Import Stub 000001eaa1d011ec, 088051a8 (__stub_modulestr_sceDisplay), 40090000, 05, 00, 0001, 08805204, 08805078
+Found import to fixup. pStub 088050ec (), Nid 984c27e7, NidInSect 984c27e7
+Import Stub 000001eaa1d011ec, 088051a8 (__stub_modulestr_sceDisplay), 40090000, 05, 00, 0002, 08805204, 08805078
+Found import to fixup. pStub 08805100 (__stub_module_sceCtrl), Nid 6a2774f3, NidInSect 6a2774f3
+Import Stub 000001eaa1d01200, 088051b8 (__stub_modulestr_sceCtrl), 40090000, 05, 00, 0000, 08804000, 08804000
+Found import to fixup. pStub 08805100 (__stub_module_sceCtrl), Nid 1f4011e6, NidInSect 1f4011e6
+Import Stub 000001eaa1d01200, 088051b8 (__stub_modulestr_sceCtrl), 40090000, 05, 00, 0001, 08805210, 08805090
+Found import to fixup. pStub 08805100 (__stub_module_sceCtrl), Nid 1f803938, NidInSect 1f803938
+Import Stub 000001eaa1d01200, 088051b8 (__stub_modulestr_sceCtrl), 40090000, 05, 00, 0002, 08805210, 08805090
+Found import to fixup. pStub 08805114 (__stub_module_IoFileMgrForUser), Nid 810c4bc3, NidInSect 810c4bc3
+Import Stub 000001eaa1d01214, 088051c4 (__stub_modulestr_IoFileMgrForUser), 40090000, 05, 00, 0000, 08804000, 08804000
+Found import to fixup. pStub 08805114 (__stub_module_IoFileMgrForUser), Nid 109f50bc, NidInSect 109f50bc
+Import Stub 000001eaa1d01214, 088051c4 (__stub_modulestr_IoFileMgrForUser), 40090000, 05, 00, 0001, 0880521c, 088050a8
+Found import to fixup. pStub 08805114 (__stub_module_IoFileMgrForUser), Nid 42ec03ac, NidInSect 42ec03ac
+Import Stub 000001eaa1d01214, 088051c4 (__stub_modulestr_IoFileMgrForUser), 40090000, 05, 00, 0002, 0880521c, 088050a8
+Found import to fixup. pStub 08805128 (__stub_module_LoadExecForUser), Nid 05572a5f, NidInSect 05572a5f
+Import Stub 000001eaa1d01228, 088051dc (__stub_modulestr_LoadExecForUser), 40090000, 05, 00, 0000, 08804000, 08804000
+Found import to fixup. pStub 0880513c (__stub_module_ThreadManForUser), Nid 369ed59d, NidInSect 369ed59d
+Import Stub 000001eaa1d0123c, 088051f0 (__stub_modulestr_ThreadManForUser), 40090000, 05, 00, 0000, 08804000, 08804000
+No libraries to fixup
+[2026-11-02 13:01:34.709 -08:00] RUN: C:\Users\tonyk\scoop\apps\python\current\python.exe C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\pack_pbp.py --elf C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\dmc3psp.elf --output C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\EBOOT.PBP
+Created C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\EBOOT.PBP (664888 bytes)
+[2026-11-02 13:01:34.765 -08:00] PSP bootstrap build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\psp\EBOOT.PBP

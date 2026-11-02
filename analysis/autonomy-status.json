@@ -1,0 +1,40 @@
+{
+  "started": "2026-11-02T13:05:31.8588875-08:00",
+  "completed": true,
+  "result": "passed",
+  "steps": {
+    "verify-disc": {
+      "started": "2026-11-02T13:05:31.8944978-08:00",
+      "seconds": 4.3,
+      "result": "passed",
+      "finished": "2026-11-02T13:05:36.1939246-08:00"
+    },
+    "extract-boot": {
+      "started": "2026-11-02T13:05:36.2109184-08:00",
+      "seconds": 0.071,
+      "result": "passed",
+      "finished": "2026-11-02T13:05:36.2818958-08:00"
+    },
+    "inventory-afs": {
+      "started": "2026-11-02T13:05:36.2941429-08:00",
+      "seconds": 0.064,
+      "result": "passed",
+      "finished": "2026-11-02T13:05:36.3584320-08:00"
+    },
+    "build-psp": {
+      "started": "2026-11-02T13:05:36.3699872-08:00",
+      "seconds": 2.068,
+      "result": "passed",
+      "finished": "2026-11-02T13:05:38.4374717-08:00"
+    },
+    "ppsspp-runtime": {
+      "started": "2026-11-02T13:05:38.4491210-08:00",
+      "seconds": 10.758,
+      "result": "passed",
+      "finished": "2026-11-02T13:05:49.2072146-08:00"
+    }
+  },
+  "iso": "C:\\Users\\tonyk\\Documents\\GitHub\\dmc3psp\\Devil May Cry 3 - Dante's Awakening (USA) (En,Ja) (Special Edition).iso",
+  "iso_sha256": "78ad0f94c04f3632b7d8bb45a8db5ece90113c600c5e5e624a55c443745e41b0",
+  "finished": "2026-11-02T13:05:49.2199715-08:00"
+}

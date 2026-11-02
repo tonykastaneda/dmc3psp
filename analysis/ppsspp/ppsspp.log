@@ -1,0 +1,8 @@
+05:39:025 Core\System.cpp:433 N[BOOT]: PPSSPP v1.17.1 Windows 64 bit
+05:39:026 Core\Compatibility.cpp:151 N[G3D]: UnitsPerMeter for DMC30001: 0.000000
+05:39:077 root         N[G3D]: Vulkan\ShaderManagerVulkan.cpp:626 ShaderCache: Loaded 0 vertex, 0 fragment shaders and 0 geometry shaders (failed 0)
+05:39:077 root         N[G3D]: Vulkan\PipelineManagerVulkan.cpp:780 Creating 0 pipelines from cache (1x MSAA)...
+05:39:077 root         N[G3D]: Vulkan\PipelineManagerVulkan.cpp:831 Recreated Vulkan pipeline cache (0 pipelines, 0 failed).
+05:39:077 root         N[BOOT]: UI\EmuScreen.cpp:389 Booted E:/SYSTEMS/PPSSPP/memstick/PSP/GAME/DMC3PSP/EBOOT.PBP...
+05:41:958 Vulkan\ShaderManagerVulkan.cpp:654 N[G3D]: Saved 0 vertex and 0 fragment shaders
+05:41:963 Vulkan\PipelineManagerVulkan.cpp:718 N[G3D]: Saved Vulkan pipeline ID cache (0 unique pipelines/0).

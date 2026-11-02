@@ -1,0 +1,128 @@
+{
+  "generated_utc": "2026-11-02T21:05:36.351277+00:00",
+  "source_iso": "Devil May Cry 3 - Dante's Awakening (USA) (En,Ja) (Special Edition).iso",
+  "archive": "MDATA1.AFS",
+  "archive_offset": 6340608,
+  "archive_size": 927674368,
+  "entry_count": 19,
+  "name_table": {
+    "offset": 927672320,
+    "size": 912
+  },
+  "entries": [
+    {
+      "index": 0,
+      "name": "Title.sfd",
+      "offset": 2048,
+      "size": 5312512
+    },
+    {
+      "index": 1,
+      "name": "Dolby.sfd",
+      "offset": 5314560,
+      "size": 2850816
+    },
+    {
+      "index": 2,
+      "name": "GameOver.sfd",
+      "offset": 8165376,
+      "size": 5699584
+    },
+    {
+      "index": 3,
+      "name": "GameOverF.sfd",
+      "offset": 13864960,
+      "size": 5726208
+    },
+    {
+      "index": 4,
+      "name": "GameOverG.sfd",
+      "offset": 19591168,
+      "size": 5728256
+    },
+    {
+      "index": 5,
+      "name": "GameOverI.sfd",
+      "offset": 25319424,
+      "size": 5715968
+    },
+    {
+      "index": 6,
+      "name": "GameOverS.sfd",
+      "offset": 31035392,
+      "size": 5724160
+    },
+    {
+      "index": 7,
+      "name": "GuroE.sfd",
+      "offset": 36759552,
+      "size": 9383936
+    },
+    {
+      "index": 8,
+      "name": "GuroJ.sfd",
+      "offset": 46143488,
+      "size": 9377792
+    },
+    {
+      "index": 9,
+      "name": "GuroK.sfd",
+      "offset": 55521280,
+      "size": 9412608
+    },
+    {
+      "index": 10,
+      "name": "GuroP.sfd",
+      "offset": 64933888,
+      "size": 9428992
+    },
+    {
+      "index": 11,
+      "name": "LoopDemo.sfd",
+      "offset": 74362880,
+      "size": 172603392
+    },
+    {
+      "index": 12,
+      "name": "new_loop.sfd",
+      "offset": 246966272,
+      "size": 134184960
+    },
+    {
+      "index": 13,
+      "name": "Omake0.sfd",
+      "offset": 381151232,
+      "size": 59979776
+    },
+    {
+      "index": 14,
+      "name": "Omake1.sfd",
+      "offset": 441131008,
+      "size": 157601792
+    },
+    {
+      "index": 15,
+      "name": "Omake2.sfd",
+      "offset": 598732800,
+      "size": 133627904
+    },
+    {
+      "index": 16,
+      "name": "Omake3.sfd",
+      "offset": 732360704,
+      "size": 145453056
+    },
+    {
+      "index": 17,
+      "name": "dmc3_jump.sfd",
+      "offset": 877813760,
+      "size": 49856512
+    },
+    {
+      "index": 18,
+      "name": "ZZZ.sfd",
+      "offset": 927670272,
+      "size": 5
+    }
+  ]
+}

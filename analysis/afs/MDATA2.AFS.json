@@ -1,0 +1,92 @@
+{
+  "generated_utc": "2026-11-02T21:05:36.351808+00:00",
+  "source_iso": "Devil May Cry 3 - Dante's Awakening (USA) (En,Ja) (Special Edition).iso",
+  "archive": "MDATA2.AFS",
+  "archive_offset": 934014976,
+  "archive_size": 1335275520,
+  "entry_count": 13,
+  "name_table": {
+    "offset": 1335273472,
+    "size": 624
+  },
+  "entries": [
+    {
+      "index": 0,
+      "name": "m99_s00.sfd",
+      "offset": 2048,
+      "size": 91860992
+    },
+    {
+      "index": 1,
+      "name": "m01_s00.sfd",
+      "offset": 91863040,
+      "size": 164491264
+    },
+    {
+      "index": 2,
+      "name": "m02_c00.sfd",
+      "offset": 256354304,
+      "size": 34242560
+    },
+    {
+      "index": 3,
+      "name": "m06_s00.sfd",
+      "offset": 290596864,
+      "size": 66789376
+    },
+    {
+      "index": 4,
+      "name": "m07_c00.sfd",
+      "offset": 357386240,
+      "size": 175040512
+    },
+    {
+      "index": 5,
+      "name": "m08_s00.sfd",
+      "offset": 532426752,
+      "size": 112402432
+    },
+    {
+      "index": 6,
+      "name": "m09_s00.sfd",
+      "offset": 644829184,
+      "size": 97513472
+    },
+    {
+      "index": 7,
+      "name": "m13_c00.sfd",
+      "offset": 742342656,
+      "size": 234967040
+    },
+    {
+      "index": 8,
+      "name": "m14_c00.sfd",
+      "offset": 977309696,
+      "size": 75368448
+    },
+    {
+      "index": 9,
+      "name": "m14_s00.sfd",
+      "offset": 1052678144,
+      "size": 74964992
+    },
+    {
+      "index": 10,
+      "name": "m19_c00.sfd",
+      "offset": 1127643136,
+      "size": 89284608
+    },
+    {
+      "index": 11,
+      "name": "m01_v01.sfd",
+      "offset": 1216927744,
+      "size": 118343680
+    },
+    {
+      "index": 12,
+      "name": "ZZZ2.sfd",
+      "offset": 1335271424,
+      "size": 5
+    }
+  ]
+}

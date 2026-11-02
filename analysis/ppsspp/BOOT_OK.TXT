@@ -1,0 +1,2 @@
+DMC3PSP_BOOT_OK
+PSP execution, original TIM2 textures, gameplay self-test, textured model render, and 30fps target passed.

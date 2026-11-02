@@ -1,0 +1,938 @@
+{
+  "generated_utc": "2026-11-02T21:05:36.352272+00:00",
+  "source_iso": "Devil May Cry 3 - Dante's Awakening (USA) (En,Ja) (Special Edition).iso",
+  "archive": "SDATA.AFS",
+  "archive_offset": 2269290496,
+  "archive_size": 874715136,
+  "entry_count": 154,
+  "name_table": {
+    "offset": 874706944,
+    "size": 7392
+  },
+  "entries": [
+    {
+      "index": 0,
+      "name": "Battle_00.adx",
+      "offset": 2048,
+      "size": 2945024
+    },
+    {
+      "index": 1,
+      "name": "Battle_0a.adx",
+      "offset": 2947072,
+      "size": 2897920
+    },
+    {
+      "index": 2,
+      "name": "Battle_01.adx",
+      "offset": 5844992,
+      "size": 6365184
+    },
+    {
+      "index": 3,
+      "name": "Battle_01b.adx",
+      "offset": 12210176,
+      "size": 8937472
+    },
+    {
+      "index": 4,
+      "name": "Battle_02.adx",
+      "offset": 21147648,
+      "size": 4958208
+    },
+    {
+      "index": 5,
+      "name": "Battle_03.adx",
+      "offset": 26105856,
+      "size": 5683200
+    },
+    {
+      "index": 6,
+      "name": "Battle_04.adx",
+      "offset": 31789056,
+      "size": 7671808
+    },
+    {
+      "index": 7,
+      "name": "Battle_05.adx",
+      "offset": 39460864,
+      "size": 6113280
+    },
+    {
+      "index": 8,
+      "name": "Battle_06.adx",
+      "offset": 45574144,
+      "size": 4636672
+    },
+    {
+      "index": 9,
+      "name": "Battle_07.adx",
+      "offset": 50210816,
+      "size": 5738496
+    },
+    {
+      "index": 10,
+      "name": "Battle_08.adx",
+      "offset": 55949312,
+      "size": 4153344
+    },
+    {
+      "index": 11,
+      "name": "Boss_01.adx",
+      "offset": 60102656,
+      "size": 5210112
+    },
+    {
+      "index": 12,
+      "name": "Boss_01b.adx",
+      "offset": 65312768,
+      "size": 6629376
+    },
+    {
+      "index": 13,
+      "name": "Boss_02.adx",
+      "offset": 71942144,
+      "size": 6383616
+    },
+    {
+      "index": 14,
+      "name": "Boss_02b.adx",
+      "offset": 78325760,
+      "size": 8065024
+    },
+    {
+      "index": 15,
+      "name": "Boss_03.adx",
+      "offset": 86390784,
+      "size": 6457344
+    },
+    {
+      "index": 16,
+      "name": "Boss_03b.adx",
+      "offset": 92848128,
+      "size": 9103360
+    },
+    {
+      "index": 17,
+      "name": "Boss_04.adx",
+      "offset": 101951488,
+      "size": 5007360
+    },
+    {
+      "index": 18,
+      "name": "Boss_04b.adx",
+      "offset": 106958848,
+      "size": 5988352
+    },
+    {
+      "index": 19,
+      "name": "Boss_05.adx",
+      "offset": 112947200,
+      "size": 5783552
+    },
+    {
+      "index": 20,
+      "name": "Boss_05b.adx",
+      "offset": 118730752,
+      "size": 6350848
+    },
+    {
+      "index": 21,
+      "name": "Boss_06.adx",
+      "offset": 125081600,
+      "size": 8581120
+    },
+    {
+      "index": 22,
+      "name": "Boss_06b.adx",
+      "offset": 133662720,
+      "size": 12230656
+    },
+    {
+      "index": 23,
+      "name": "Boss_07.adx",
+      "offset": 145893376,
+      "size": 5402624
+    },
+    {
+      "index": 24,
+      "name": "Boss_08.adx",
+      "offset": 151296000,
+      "size": 5185536
+    },
+    {
+      "index": 25,
+      "name": "Boss_08b.adx",
+      "offset": 156481536,
+      "size": 8249344
+    },
+    {
+      "index": 26,
+      "name": "Boss_09.adx",
+      "offset": 164730880,
+      "size": 5185536
+    },
+    {
+      "index": 27,
+      "name": "Continue.adx",
+      "offset": 169916416,
+      "size": 2181120
+    },
+    {
+      "index": 28,
+      "name": "dummy.adx",
+      "offset": 172097536,
+      "size": 27094
+    },
+    {
+      "index": 29,
+      "name": "Hine_01.adx",
+      "offset": 172126208,
+      "size": 6903808
+    },
+    {
+      "index": 30,
+      "name": "Hine_02.adx",
+      "offset": 179030016,
+      "size": 12873728
+    },
+    {
+      "index": 31,
+      "name": "Jester.adx",
+      "offset": 191903744,
+      "size": 6078464
+    },
+    {
+      "index": 32,
+      "name": "Jikushinzou.adx",
+      "offset": 197982208,
+      "size": 7473152
+    },
+    {
+      "index": 33,
+      "name": "Kaze_01.adx",
+      "offset": 205455360,
+      "size": 3256320
+    },
+    {
+      "index": 34,
+      "name": "Kaze_02.adx",
+      "offset": 208711680,
+      "size": 4872192
+    },
+    {
+      "index": 35,
+      "name": "Kaze_03.adx",
+      "offset": 213583872,
+      "size": 4866048
+    },
+    {
+      "index": 36,
+      "name": "Kaze_04.adx",
+      "offset": 218449920,
+      "size": 5085184
+    },
+    {
+      "index": 37,
+      "name": "Kaze_05.adx",
+      "offset": 223535104,
+      "size": 4970496
+    },
+    {
+      "index": 38,
+      "name": "Kaze_06.adx",
+      "offset": 228505600,
+      "size": 4968448
+    },
+    {
+      "index": 39,
+      "name": "Lady.adx",
+      "offset": 233474048,
+      "size": 5638144
+    },
+    {
+      "index": 40,
+      "name": "m01_c00.adx",
+      "offset": 239112192,
+      "size": 2554942
+    },
+    {
+      "index": 41,
+      "name": "m01_v00.adx",
+      "offset": 241668096,
+      "size": 5157742
+    },
+    {
+      "index": 42,
+      "name": "m01_v01.adx",
+      "offset": 246827008,
+      "size": 5160766
+    },
+    {
+      "index": 43,
+      "name": "m01_v02.adx",
+      "offset": 251987968,
+      "size": 5160766
+    },
+    {
+      "index": 44,
+      "name": "m01_v03.adx",
+      "offset": 257148928,
+      "size": 5160766
+    },
+    {
+      "index": 45,
+      "name": "m01_v04.adx",
+      "offset": 262309888,
+      "size": 5160766
+    },
+    {
+      "index": 46,
+      "name": "m01_v05.adx",
+      "offset": 267470848,
+      "size": 5160766
+    },
+    {
+      "index": 47,
+      "name": "m01_v06.adx",
+      "offset": 272631808,
+      "size": 5160766
+    },
+    {
+      "index": 48,
+      "name": "m01_v07.adx",
+      "offset": 277792768,
+      "size": 5160766
+    },
+    {
+      "index": 49,
+      "name": "m01_v08.adx",
+      "offset": 282953728,
+      "size": 5160766
+    },
+    {
+      "index": 50,
+      "name": "m01_v09.adx",
+      "offset": 288114688,
+      "size": 5160766
+    },
+    {
+      "index": 51,
+      "name": "m02_c01.adx",
+      "offset": 293275648,
+      "size": 3017398
+    },
+    {
+      "index": 52,
+      "name": "m02_s00.adx",
+      "offset": 296294400,
+      "size": 8923136
+    },
+    {
+      "index": 53,
+      "name": "m03_b00.adx",
+      "offset": 305217536,
+      "size": 9238528
+    },
+    {
+      "index": 54,
+      "name": "m03_b01.adx",
+      "offset": 314456064,
+      "size": 3045262
+    },
+    {
+      "index": 55,
+      "name": "m03_c00.adx",
+      "offset": 317501440,
+      "size": 3931006
+    },
+    {
+      "index": 56,
+      "name": "m03_s00.adx",
+      "offset": 321433600,
+      "size": 5681398
+    },
+    {
+      "index": 57,
+      "name": "m03_s01.adx",
+      "offset": 327116800,
+      "size": 1645006
+    },
+    {
+      "index": 58,
+      "name": "m04_c00.adx",
+      "offset": 328763392,
+      "size": 7647250
+    },
+    {
+      "index": 59,
+      "name": "m04_s00.adx",
+      "offset": 336412672,
+      "size": 3229042
+    },
+    {
+      "index": 60,
+      "name": "m05_b00.adx",
+      "offset": 339642368,
+      "size": 8488960
+    },
+    {
+      "index": 61,
+      "name": "m05_c00.adx",
+      "offset": 348131328,
+      "size": 3715546
+    },
+    {
+      "index": 62,
+      "name": "m05_s00.adx",
+      "offset": 351848448,
+      "size": 8585216
+    },
+    {
+      "index": 63,
+      "name": "m06_c00.adx",
+      "offset": 360433664,
+      "size": 3759394
+    },
+    {
+      "index": 64,
+      "name": "m07_b00.adx",
+      "offset": 364193792,
+      "size": 7559168
+    },
+    {
+      "index": 65,
+      "name": "m07_s00.adx",
+      "offset": 371752960,
+      "size": 3817210
+    },
+    {
+      "index": 66,
+      "name": "m08_c00.adx",
+      "offset": 375570432,
+      "size": 3951598
+    },
+    {
+      "index": 67,
+      "name": "m09_b00.adx",
+      "offset": 379523072,
+      "size": 8261632
+    },
+    {
+      "index": 68,
+      "name": "m09_b01.adx",
+      "offset": 387784704,
+      "size": 4925110
+    },
+    {
+      "index": 69,
+      "name": "m09_c00.adx",
+      "offset": 392710144,
+      "size": 2415406
+    },
+    {
+      "index": 70,
+      "name": "m10_c00.adx",
+      "offset": 395126784,
+      "size": 7282138
+    },
+    {
+      "index": 71,
+      "name": "m10_s00.adx",
+      "offset": 402409472,
+      "size": 7332610
+    },
+    {
+      "index": 72,
+      "name": "m11_b00.adx",
+      "offset": 409743360,
+      "size": 7276544
+    },
+    {
+      "index": 73,
+      "name": "m11_b01.adx",
+      "offset": 417019904,
+      "size": 2131438
+    },
+    {
+      "index": 74,
+      "name": "m11_c00.adx",
+      "offset": 419151872,
+      "size": 651658
+    },
+    {
+      "index": 75,
+      "name": "m11_s00.adx",
+      "offset": 419805184,
+      "size": 8336182
+    },
+    {
+      "index": 76,
+      "name": "m12_b00.adx",
+      "offset": 428142592,
+      "size": 8071168
+    },
+    {
+      "index": 77,
+      "name": "m12_b01.adx",
+      "offset": 436213760,
+      "size": 6615040
+    },
+    {
+      "index": 78,
+      "name": "m12_b02.adx",
+      "offset": 442828800,
+      "size": 3301510
+    },
+    {
+      "index": 79,
+      "name": "m12_c00.adx",
+      "offset": 446132224,
+      "size": 5006254
+    },
+    {
+      "index": 80,
+      "name": "m12_s00.adx",
+      "offset": 451139584,
+      "size": 8549230
+    },
+    {
+      "index": 81,
+      "name": "m13_b00.adx",
+      "offset": 459689984,
+      "size": 12429312
+    },
+    {
+      "index": 82,
+      "name": "m13_s00.adx",
+      "offset": 472119296,
+      "size": 3358894
+    },
+    {
+      "index": 83,
+      "name": "m14_s01.adx",
+      "offset": 475480064,
+      "size": 4055674
+    },
+    {
+      "index": 84,
+      "name": "m15_c00.adx",
+      "offset": 479537152,
+      "size": 6829186
+    },
+    {
+      "index": 85,
+      "name": "m15_s00.adx",
+      "offset": 486367232,
+      "size": 1541650
+    },
+    {
+      "index": 86,
+      "name": "m16_b00.adx",
+      "offset": 487909376,
+      "size": 9977856
+    },
+    {
+      "index": 87,
+      "name": "m16_c00.adx",
+      "offset": 497887232,
+      "size": 7202578
+    },
+    {
+      "index": 88,
+      "name": "m16_s00.adx",
+      "offset": 505090048,
+      "size": 1573222
+    },
+    {
+      "index": 89,
+      "name": "m17_b00.adx",
+      "offset": 506664960,
+      "size": 11276288
+    },
+    {
+      "index": 90,
+      "name": "m17_c00.adx",
+      "offset": 517941248,
+      "size": 2049214
+    },
+    {
+      "index": 91,
+      "name": "m17_s00.adx",
+      "offset": 519991296,
+      "size": 4437094
+    },
+    {
+      "index": 92,
+      "name": "m18_c00.adx",
+      "offset": 524429312,
+      "size": 2917066
+    },
+    {
+      "index": 93,
+      "name": "m18_s00.adx",
+      "offset": 527347712,
+      "size": 1260490
+    },
+    {
+      "index": 94,
+      "name": "m19_b00.adx",
+      "offset": 528609280,
+      "size": 11587584
+    },
+    {
+      "index": 95,
+      "name": "m19_b01.adx",
+      "offset": 540196864,
+      "size": 10911744
+    },
+    {
+      "index": 96,
+      "name": "m19_s00.adx",
+      "offset": 551108608,
+      "size": 1779970
+    },
+    {
+      "index": 97,
+      "name": "m20_b00.adx",
+      "offset": 552890368,
+      "size": 14747648
+    },
+    {
+      "index": 98,
+      "name": "m20_c00.adx",
+      "offset": 567638016,
+      "size": 7823866
+    },
+    {
+      "index": 99,
+      "name": "m20_s00.adx",
+      "offset": 575463424,
+      "size": 10842646
+    },
+    {
+      "index": 100,
+      "name": "m99_c00.adx",
+      "offset": 586307584,
+      "size": 19028326
+    },
+    {
+      "index": 101,
+      "name": "m99_c01.adx",
+      "offset": 605337600,
+      "size": 3631522
+    },
+    {
+      "index": 102,
+      "name": "m99_c03.adx",
+      "offset": 608970752,
+      "size": 2573230
+    },
+    {
+      "index": 103,
+      "name": "M_clear.adx",
+      "offset": 611545088,
+      "size": 1656832
+    },
+    {
+      "index": 104,
+      "name": "m_demo_02_001.adx",
+      "offset": 613201920,
+      "size": 5083136
+    },
+    {
+      "index": 105,
+      "name": "m_demo_04_004.adx",
+      "offset": 618285056,
+      "size": 7096320
+    },
+    {
+      "index": 106,
+      "name": "m_demo_04_004v.adx",
+      "offset": 625381376,
+      "size": 7147520
+    },
+    {
+      "index": 107,
+      "name": "m_demo_04_014.adx",
+      "offset": 632528896,
+      "size": 5074944
+    },
+    {
+      "index": 108,
+      "name": "m_demo_06_007.adx",
+      "offset": 637603840,
+      "size": 326218
+    },
+    {
+      "index": 109,
+      "name": "m_demo_06_011.adx",
+      "offset": 637931520,
+      "size": 466654
+    },
+    {
+      "index": 110,
+      "name": "m_demo_06_012.adx",
+      "offset": 638398464,
+      "size": 268510
+    },
+    {
+      "index": 111,
+      "name": "m_demo_09_003.adx",
+      "offset": 638668800,
+      "size": 7008256
+    },
+    {
+      "index": 112,
+      "name": "m_demo_09_003v.adx",
+      "offset": 645677056,
+      "size": 6944768
+    },
+    {
+      "index": 113,
+      "name": "m_demo_10_002.adx",
+      "offset": 652621824,
+      "size": 6232064
+    },
+    {
+      "index": 114,
+      "name": "m_demo_10_002v.adx",
+      "offset": 658853888,
+      "size": 6088704
+    },
+    {
+      "index": 115,
+      "name": "m_demo_10_004.adx",
+      "offset": 664942592,
+      "size": 1178446
+    },
+    {
+      "index": 116,
+      "name": "m_demo_10_005.adx",
+      "offset": 666122240,
+      "size": 619798
+    },
+    {
+      "index": 117,
+      "name": "m_demo_12_004.adx",
+      "offset": 666742784,
+      "size": 376690
+    },
+    {
+      "index": 118,
+      "name": "m_demo_12_005.adx",
+      "offset": 667119616,
+      "size": 647086
+    },
+    {
+      "index": 119,
+      "name": "m_demo_15_001.adx",
+      "offset": 667766784,
+      "size": 5167104
+    },
+    {
+      "index": 120,
+      "name": "m_demo_15_001v.adx",
+      "offset": 672933888,
+      "size": 5218304
+    },
+    {
+      "index": 121,
+      "name": "m_demo_19_001.adx",
+      "offset": 678152192,
+      "size": 845194
+    },
+    {
+      "index": 122,
+      "name": "m_demo_19_016.adx",
+      "offset": 678998016,
+      "size": 529726
+    },
+    {
+      "index": 123,
+      "name": "M_start2.adx",
+      "offset": 679528448,
+      "size": 4636672
+    },
+    {
+      "index": 124,
+      "name": "M_start.adx",
+      "offset": 684165120,
+      "size": 4837376
+    },
+    {
+      "index": 125,
+      "name": "Maguma.adx",
+      "offset": 689002496,
+      "size": 3401728
+    },
+    {
+      "index": 126,
+      "name": "Mizu_01.adx",
+      "offset": 692404224,
+      "size": 6461440
+    },
+    {
+      "index": 127,
+      "name": "Mizu_02.adx",
+      "offset": 698865664,
+      "size": 3450880
+    },
+    {
+      "index": 128,
+      "name": "Nausica.adx",
+      "offset": 702316544,
+      "size": 4509696
+    },
+    {
+      "index": 129,
+      "name": "Option.adx",
+      "offset": 706826240,
+      "size": 7473152
+    },
+    {
+      "index": 130,
+      "name": "Result.adx",
+      "offset": 714299392,
+      "size": 9017950
+    },
+    {
+      "index": 131,
+      "name": "Room_01.adx",
+      "offset": 723318784,
+      "size": 391168
+    },
+    {
+      "index": 132,
+      "name": "Sm_clear.adx",
+      "offset": 723709952,
+      "size": 141754
+    },
+    {
+      "index": 133,
+      "name": "Sm_failure.adx",
+      "offset": 723853312,
+      "size": 122458
+    },
+    {
+      "index": 134,
+      "name": "Staffroll.adx",
+      "offset": 723976192,
+      "size": 12596494
+    },
+    {
+      "index": 135,
+      "name": "Stage_01.adx",
+      "offset": 736573440,
+      "size": 8753152
+    },
+    {
+      "index": 136,
+      "name": "Stage_02.adx",
+      "offset": 745326592,
+      "size": 11177984
+    },
+    {
+      "index": 137,
+      "name": "Stage_02b.adx",
+      "offset": 756504576,
+      "size": 6989824
+    },
+    {
+      "index": 138,
+      "name": "Stage_03.adx",
+      "offset": 763494400,
+      "size": 8325120
+    },
+    {
+      "index": 139,
+      "name": "Stage_04.adx",
+      "offset": 771819520,
+      "size": 7151616
+    },
+    {
+      "index": 140,
+      "name": "Stage_04b.adx",
+      "offset": 778971136,
+      "size": 6326272
+    },
+    {
+      "index": 141,
+      "name": "Stage_05.adx",
+      "offset": 785297408,
+      "size": 6094848
+    },
+    {
+      "index": 142,
+      "name": "Stage_05b.adx",
+      "offset": 791392256,
+      "size": 7157760
+    },
+    {
+      "index": 143,
+      "name": "Stage_06.adx",
+      "offset": 798550016,
+      "size": 16361472
+    },
+    {
+      "index": 144,
+      "name": "Stage_07.adx",
+      "offset": 814911488,
+      "size": 3584000
+    },
+    {
+      "index": 145,
+      "name": "Stage_08.adx",
+      "offset": 818495488,
+      "size": 10878976
+    },
+    {
+      "index": 146,
+      "name": "Stage_09.adx",
+      "offset": 829374464,
+      "size": 6197248
+    },
+    {
+      "index": 147,
+      "name": "T_boss.adx",
+      "offset": 835571712,
+      "size": 4751360
+    },
+    {
+      "index": 148,
+      "name": "T_bossb.adx",
+      "offset": 840323072,
+      "size": 8359936
+    },
+    {
+      "index": 149,
+      "name": "Torocco.adx",
+      "offset": 848683008,
+      "size": 929792
+    },
+    {
+      "index": 150,
+      "name": "Versil_01.adx",
+      "offset": 849612800,
+      "size": 3821568
+    },
+    {
+      "index": 151,
+      "name": "Versil_02.adx",
+      "offset": 853434368,
+      "size": 10489856
+    },
+    {
+      "index": 152,
+      "name": "Versil_03.adx",
+      "offset": 863924224,
+      "size": 10754048
+    },
+    {
+      "index": 153,
+      "name": "ZZZ.adx",
+      "offset": 874678272,
+      "size": 27094
+    }
+  ]
+}

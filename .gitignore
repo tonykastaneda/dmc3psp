@@ -1,0 +1,12 @@
+.tools/
+analysis/disc/
+analysis/assets/
+analysis/ghidra/*.rep/
+analysis/ghidra/*.gpr
+analysis/ghidra/*.log
+build/
+*.iso
+*.zip
+localsend-cli.exe
+__pycache__/
+*.pyc
