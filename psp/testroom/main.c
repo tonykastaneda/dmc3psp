@@ -1,12 +1,11 @@
-/* DMC3 PSP test room: hardware-rendered (sceGu) Dante on a grey floor with a
- * white grid, driven by the analog stick with a follow camera.
+/* DMC3 PSP test room: hardware-rendered (sceGu) skinned Dante on a grey floor
+ * with a white grid. Controls are listed in player.h; HOME quits.
  *
- * Controls: analog stick / d-pad = run (camera-relative), L/R = orbit camera,
- * START = reset position, HOME = quit.
- *
- * If AUTOEXIT.TXT exists next to the EBOOT, the room runs a scripted input
- * sequence, saves two BMP screenshots, writes TESTROOM_OK.TXT (or
- * TESTROOM_FAIL.TXT) and exits. tools/test_testroom.ps1 relies on this. */
+ * Dev flags (files next to the EBOOT):
+ *   AUTOEXIT.TXT  scripted autotest: screenshots + TESTROOM_OK.TXT / _FAIL.TXT
+ *   RECORD.TXT    scripted demo, every other frame saved as REC####.BMP
+ *   BONES.TXT     draw the skeleton overlay
+ */
 
 #include <pspkernel.h>
 #include <pspdisplay.h>
@@ -23,6 +22,7 @@
 
 #include "model_runtime.h"
 #include "player.h"
+#include "skeleton.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -33,8 +33,8 @@ PSP_HEAP_SIZE_KB(-1024);
 #define SCR_HEIGHT 272
 #define FRAMEBUFFER_BYTES (BUF_WIDTH * SCR_HEIGHT * 4)
 
-/* Rotation applied on top of the player yaw so the model's front matches the
- * direction of travel. Verified in PPSSPP screenshots: the MOD front is +Z. */
+/* Verified in PPSSPP screenshots and by the skeleton (toes at z=+9.9): the
+ * MOD front is +Z, so no extra rotation is needed. */
 #define MODEL_YAW_OFFSET 0.0f
 
 /* HUD font: the PSPSDK debug font (8x8, MSB = leftmost pixel) baked into a
@@ -48,6 +48,7 @@ extern u8 msx[];
 #define FLOOR_COLOR 0xff6e6e6eu
 #define GRID_COLOR 0xffffffffu
 #define CLEAR_COLOR 0xff2a2420u
+#define BONE_COLOR 0xff00e0ffu  /* yellow (ABGR) */
 
 typedef struct { float u, v; float nx, ny, nz; float x, y, z; } ModelVertex;
 typedef struct { unsigned int color; float x, y, z; } ColorVertex;
@@ -62,11 +63,12 @@ typedef struct { float u, v; float x, y, z; } TextVertex;
 static unsigned int __attribute__((aligned(16))) display_list[65536];
 static ColorVertex __attribute__((aligned(16))) floor_vertices[FLOOR_VERTEX_COUNT];
 static ColorVertex __attribute__((aligned(16))) grid_vertices[GRID_VERTEX_COUNT];
-static ModelVertex *model_vertices;
+static ModelVertex *model_vertices;   /* skinned every frame */
 static unsigned short *model_indices;
 static void *model_textures[DMC3_MODEL_TEXTURE_COUNT];
 static unsigned int __attribute__((aligned(16))) font_texture[FONT_TEX_SIZE * FONT_TEX_SIZE];
 static unsigned int *capture_buffer;
+static Pose pose;
 
 static volatile int running = 1;
 static char game_dir[256] = "ms0:/PSP/GAME/DMC3TESTROOM/";
@@ -108,12 +110,13 @@ static int game_file_exists(const char *name) {
     return 1;
 }
 
-static void save_bmp(const char *name, const unsigned int *vram) {
+static void save_bmp(const char *name, const unsigned int *pixels) {
     char path[320];
     unsigned char header[54];
     static unsigned char row[SCR_WIDTH * 3];
     unsigned int data_size = SCR_WIDTH * 3 * SCR_HEIGHT;
     unsigned int file_size = 54 + data_size;
+    int w = SCR_WIDTH, h = SCR_HEIGHT;
     FILE *file;
     int y;
 
@@ -125,13 +128,14 @@ static void save_bmp(const char *name, const unsigned int *vram) {
     memcpy(&header[2], &file_size, 4);
     header[10] = 54;
     header[14] = 40;
-    { int w = SCR_WIDTH, h = SCR_HEIGHT; memcpy(&header[18], &w, 4); memcpy(&header[22], &h, 4); }
+    memcpy(&header[18], &w, 4);
+    memcpy(&header[22], &h, 4);
     header[26] = 1;
     header[28] = 24;
     memcpy(&header[34], &data_size, 4);
     fwrite(header, 1, sizeof(header), file);
     for (y = SCR_HEIGHT - 1; y >= 0; --y) {
-        const unsigned int *source = vram + y * BUF_WIDTH;
+        const unsigned int *source = pixels + y * BUF_WIDTH;
         int x;
         for (x = 0; x < SCR_WIDTH; ++x) {
             unsigned int pixel = source[x];
@@ -152,15 +156,8 @@ static int init_model(void) {
     model_indices = memalign(16, sizeof(unsigned short) * DMC3_MODEL_INDEX_COUNT);
     if (!model_vertices || !model_indices) return 0;
     for (i = 0; i < DMC3_MODEL_VERTEX_COUNT; ++i) {
-        ModelVertex *v = &model_vertices[i];
-        v->u = dmc3_model_uvs[i].u;
-        v->v = dmc3_model_uvs[i].v;
-        v->nx = dmc3_model_normals[i].x;
-        v->ny = dmc3_model_normals[i].y;
-        v->nz = dmc3_model_normals[i].z;
-        v->x = dmc3_model_positions[i].x;
-        v->y = dmc3_model_positions[i].y;
-        v->z = dmc3_model_positions[i].z;
+        model_vertices[i].u = dmc3_model_uvs[i].u;
+        model_vertices[i].v = dmc3_model_uvs[i].v;
     }
     memcpy(model_indices, dmc3_model_indices, sizeof(unsigned short) * DMC3_MODEL_INDEX_COUNT);
     for (i = 0; i < DMC3_MODEL_TEXTURE_COUNT; ++i) {
@@ -171,6 +168,58 @@ static int init_model(void) {
         memcpy(model_textures[i], t->rgba, bytes);
     }
     return 1;
+}
+
+/* Linear blend skinning: v' = sum_k w_k * (R_k (v - rest_k) + P_k). The rest
+ * pose has identity rotations, so the inverse bind matrix is a translation. */
+static void skin_model(const Pose *p) {
+    int i, k;
+    for (i = 0; i < DMC3_MODEL_VERTEX_COUNT; ++i) {
+        const Dmc3Vec3 *src = &dmc3_model_positions[i];
+        const Dmc3Vec3 *nrm = &dmc3_model_normals[i];
+        float px = 0.0f, py = 0.0f, pz = 0.0f, nx = 0.0f, ny = 0.0f, nz = 0.0f;
+        ModelVertex *dst = &model_vertices[i];
+        for (k = 0; k < 3; ++k) {
+            int weight = dmc3_model_weights[i][k];
+            int bone;
+            float w, dx, dy, dz;
+            const float (*r)[3];
+            if (!weight) continue;
+            bone = dmc3_model_bones[i][k];
+            w = (float)weight * (1.0f / 31.0f);
+            r = p->world_rot[bone].m;
+            dx = src->x - dmc3_bone_rest[bone].x;
+            dy = src->y - dmc3_bone_rest[bone].y;
+            dz = src->z - dmc3_bone_rest[bone].z;
+            px += w * (r[0][0] * dx + r[0][1] * dy + r[0][2] * dz + p->world_pos[bone][0]);
+            py += w * (r[1][0] * dx + r[1][1] * dy + r[1][2] * dz + p->world_pos[bone][1]);
+            pz += w * (r[2][0] * dx + r[2][1] * dy + r[2][2] * dz + p->world_pos[bone][2]);
+            nx += w * (r[0][0] * nrm->x + r[0][1] * nrm->y + r[0][2] * nrm->z);
+            ny += w * (r[1][0] * nrm->x + r[1][1] * nrm->y + r[1][2] * nrm->z);
+            nz += w * (r[2][0] * nrm->x + r[2][1] * nrm->y + r[2][2] * nrm->z);
+        }
+        dst->x = px; dst->y = py; dst->z = pz;
+        dst->nx = nx; dst->ny = ny; dst->nz = nz;
+    }
+    sceKernelDcacheWritebackRange(model_vertices, sizeof(ModelVertex) * DMC3_MODEL_VERTEX_COUNT);
+}
+
+/* Skins the rest pose and returns the largest deviation from the source
+ * vertices in micro-units; proves the skeleton and weights are consistent. */
+static unsigned int rest_pose_error_um(void) {
+    float worst = 0.0f;
+    int i;
+    pose_identity(&pose);
+    pose_evaluate(&pose);
+    skin_model(&pose);
+    for (i = 0; i < DMC3_MODEL_VERTEX_COUNT; ++i) {
+        float dx = model_vertices[i].x - dmc3_model_positions[i].x;
+        float dy = model_vertices[i].y - dmc3_model_positions[i].y;
+        float dz = model_vertices[i].z - dmc3_model_positions[i].z;
+        float d = sqrtf(dx * dx + dy * dy + dz * dz);
+        if (d > worst) worst = d;
+    }
+    return (unsigned int)(worst * 1000000.0f);
 }
 
 static void init_room(void) {
@@ -221,58 +270,6 @@ static void init_font(void) {
 
 /* ---- Rendering ---------------------------------------------------------- */
 
-/* Call inside a display list with the font texture bound. */
-static void draw_text(int x, int y, const char *text) {
-    int count = (int)strlen(text);
-    TextVertex *v;
-    int i;
-    if (count <= 0) return;
-    v = sceGuGetMemory(sizeof(TextVertex) * 2 * count);
-    for (i = 0; i < count; ++i) {
-        unsigned char c = (unsigned char)text[i];
-        float u = (float)((c % 16) * 8), t = (float)((c / 16) * 8);
-        float px = (float)(x + i * 8);
-        v[i * 2 + 0] = (TextVertex){u, t, px, (float)y, 0.0f};
-        v[i * 2 + 1] = (TextVertex){u + 8.0f, t + 8.0f, px + 8.0f, (float)y + 8.0f, 0.0f};
-    }
-    sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, count * 2, 0, v);
-}
-
-static void draw_hud(const char *top, const char *bottom) {
-    sceGuDisable(GU_DEPTH_TEST);
-    sceGuDisable(GU_LIGHTING);
-    sceGuEnable(GU_TEXTURE_2D);
-    sceGuEnable(GU_ALPHA_TEST);
-    sceGuTexImage(0, FONT_TEX_SIZE, FONT_TEX_SIZE, FONT_TEX_SIZE, font_texture);
-    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
-    sceGuTexFlush();
-    /* Shadow, then text. sceGuColor is the unlit material color. */
-    sceGuColor(0xff000000);
-    draw_text(9, 9, top);
-    draw_text(9, SCR_HEIGHT - 15, bottom);
-    sceGuColor(0xffffffff);
-    draw_text(8, 8, top);
-    draw_text(8, SCR_HEIGHT - 16, bottom);
-}
-
-/* Copies the finished draw buffer into RAM with a GE block transfer (PPSSPP
- * reads the real GPU framebuffer back for this; plain CPU reads of VRAM see
- * stale memory under its hardware renderer) and saves it as a BMP. */
-static void capture_frame(void *draw_buffer, const char *name) {
-    const unsigned int bytes = FRAMEBUFFER_BYTES;
-    if (!capture_buffer) return;
-    sceKernelDcacheWritebackInvalidateRange(capture_buffer, bytes);
-    sceGuStart(GU_DIRECT, display_list);
-    sceGuCopyImage(GU_PSM_8888, 0, 0, SCR_WIDTH, SCR_HEIGHT, BUF_WIDTH,
-                   (void *)((unsigned int)sceGeEdramGetAddr() + (unsigned int)draw_buffer),
-                   0, 0, BUF_WIDTH, capture_buffer);
-    sceGuTexSync();
-    sceGuFinish();
-    sceGuSync(0, 0);
-    sceKernelDcacheInvalidateRange(capture_buffer, bytes);
-    save_bmp(name, capture_buffer);
-}
-
 static void init_gu(void) {
     sceGuInit();
     sceGuStart(GU_DIRECT, display_list);
@@ -292,7 +289,6 @@ static void init_gu(void) {
     sceGuAlphaFunc(GU_GREATER, 0x7f, 0xff);
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
-    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     sceGuTexScale(1.0f, 1.0f);
     sceGuTexOffset(0.0f, 0.0f);
@@ -308,9 +304,6 @@ static void init_gu(void) {
         sceGuLightColor(1, GU_DIFFUSE, 0xff505050);
         sceGuAmbient(0xff909090);
         sceGuModelColor(0, 0xffffffff, 0xffffffff, 0);
-        /* Material alpha: without this the lit vertex alpha is 0 and the
-         * alpha test discards every Dante pixel. */
-        sceGuAmbientColor(0xffffffff);
         sceGuEnable(GU_LIGHT0);
         sceGuEnable(GU_LIGHT1);
     }
@@ -320,8 +313,62 @@ static void init_gu(void) {
     sceGuDisplay(GU_TRUE);
 }
 
+/* Call inside a display list with the font texture bound. */
+static void draw_text(int x, int y, const char *text) {
+    int count = (int)strlen(text);
+    TextVertex *v;
+    int i;
+    if (count <= 0) return;
+    v = sceGuGetMemory(sizeof(TextVertex) * 2 * count);
+    for (i = 0; i < count; ++i) {
+        unsigned char c = (unsigned char)text[i];
+        float u = (float)((c % 16) * 8), t = (float)((c / 16) * 8);
+        float px = (float)(x + i * 8);
+        v[i * 2 + 0] = (TextVertex){u, t, px, (float)y, 0.0f};
+        v[i * 2 + 1] = (TextVertex){u + 8.0f, t + 8.0f, px + 8.0f, (float)y + 8.0f, 0.0f};
+    }
+    sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, count * 2, 0, v);
+}
+
+#define HUD_LINES 4
+static void draw_hud(const char *lines[HUD_LINES]) {
+    static const int ys[HUD_LINES] = {8, 18, SCR_HEIGHT - 26, SCR_HEIGHT - 16};
+    int pass, i;
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_LIGHTING);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuTexImage(0, FONT_TEX_SIZE, FONT_TEX_SIZE, FONT_TEX_SIZE, font_texture);
+    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+    sceGuTexFlush();
+    /* Shadow, then text. sceGuColor is the unlit material color. */
+    for (pass = 0; pass < 2; ++pass) {
+        sceGuColor(pass ? 0xffffffff : 0xff000000);
+        for (i = 0; i < HUD_LINES; ++i) {
+            if (lines[i]) draw_text(8 + (pass ? 0 : 1), ys[i] + (pass ? 0 : 1), lines[i]);
+        }
+    }
+}
+
+/* Skeleton overlay: a line from each bone to its parent, drawn over Dante. */
+static void draw_bones(void) {
+    ColorVertex *v = sceGuGetMemory(sizeof(ColorVertex) * 2 * DMC3_BONE_COUNT);
+    int n = 0, i;
+    for (i = 0; i < DMC3_BONE_COUNT; ++i) {
+        int parent = dmc3_bone_parent[i];
+        if (parent < 0) continue;
+        v[n++] = (ColorVertex){BONE_COLOR, pose.world_pos[parent][0], pose.world_pos[parent][1], pose.world_pos[parent][2]};
+        v[n++] = (ColorVertex){BONE_COLOR, pose.world_pos[i][0], pose.world_pos[i][1], pose.world_pos[i][2]};
+    }
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_ALPHA_TEST);
+    sceGumDrawArray(GU_LINES, COLOR_VTYPE, n, 0, v);
+}
+
 static void render_scene(const Player *player, const FollowCamera *camera,
-                         const char *hud_top, const char *hud_bottom) {
+                         const char *hud[HUD_LINES], int show_bones) {
     int i;
     int bound_texture = -1;
 
@@ -329,6 +376,9 @@ static void render_scene(const Player *player, const FollowCamera *camera,
     sceGuEnable(GU_DEPTH_TEST);
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuColor(0xffffffff);
+    /* Material alpha: without this the lit vertex alpha is 0 and the alpha
+     * test discards every Dante pixel. */
+    sceGuAmbientColor(0xffffffff);
     sceGuClearColor(CLEAR_COLOR);
     sceGuClearDepth(0);
     sceGuClear(GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT);
@@ -359,7 +409,7 @@ static void render_scene(const Player *player, const FollowCamera *camera,
 
     sceGumLoadIdentity();
     {
-        ScePspFVector3 position = {player->x, 0.0f, player->z};
+        ScePspFVector3 position = {player->x, player->y, player->z};
         sceGumTranslate(&position);
         sceGumRotateY(player->yaw + MODEL_YAW_OFFSET);
     }
@@ -377,10 +427,29 @@ static void render_scene(const Player *player, const FollowCamera *camera,
         sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)object->index_count,
                         model_indices + object->index_start, model_vertices);
     }
+    if (show_bones) draw_bones();
 
-    draw_hud(hud_top, hud_bottom);
+    draw_hud(hud);
     sceGuFinish();
     sceGuSync(0, 0);
+}
+
+/* Copies the finished draw buffer into RAM with a GE block transfer (PPSSPP
+ * reads the real GPU framebuffer back for this; plain CPU reads of VRAM see
+ * stale memory under its hardware renderer) and saves it as a BMP. */
+static void capture_frame(void *draw_buffer, const char *name) {
+    const unsigned int bytes = FRAMEBUFFER_BYTES;
+    if (!capture_buffer) return;
+    sceKernelDcacheWritebackInvalidateRange(capture_buffer, bytes);
+    sceGuStart(GU_DIRECT, display_list);
+    sceGuCopyImage(GU_PSM_8888, 0, 0, SCR_WIDTH, SCR_HEIGHT, BUF_WIDTH,
+                   (void *)((unsigned int)sceGeEdramGetAddr() + (unsigned int)draw_buffer),
+                   0, 0, BUF_WIDTH, capture_buffer);
+    sceGuTexSync();
+    sceGuFinish();
+    sceGuSync(0, 0);
+    sceKernelDcacheInvalidateRange(capture_buffer, bytes);
+    save_bmp(name, capture_buffer);
 }
 
 /* ---- Input -------------------------------------------------------------- */
@@ -394,40 +463,59 @@ static float stick_axis(unsigned char raw) {
     return value > 0.0f ? (value - dead) / (1.0f - dead) : (value + dead) / (1.0f - dead);
 }
 
-static void read_pad(PlayerInput *input) {
+static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
     SceCtrlData pad;
+    unsigned int pressed;
     sceCtrlPeekBufferPositive(&pad, 1);
+    pressed = pad.Buttons & ~*previous_buttons;
+    *previous_buttons = pad.Buttons;
+    memset(input, 0, sizeof(*input));
     input->stick_x = stick_axis(pad.Lx);
     input->stick_y = -stick_axis(pad.Ly);
-    if (pad.Buttons & PSP_CTRL_UP) input->stick_y = 1.0f;
-    if (pad.Buttons & PSP_CTRL_DOWN) input->stick_y = -1.0f;
-    if (pad.Buttons & PSP_CTRL_RIGHT) input->stick_x = 1.0f;
-    if (pad.Buttons & PSP_CTRL_LEFT) input->stick_x = -1.0f;
-    input->orbit = ((pad.Buttons & PSP_CTRL_RTRIGGER) ? 1 : 0) - ((pad.Buttons & PSP_CTRL_LTRIGGER) ? 1 : 0);
-    input->reset = (pad.Buttons & PSP_CTRL_START) != 0;
+    input->style = -1;
+    if (pressed & PSP_CTRL_UP) input->style = STYLE_TRICKSTER;
+    if (pressed & PSP_CTRL_DOWN) input->style = STYLE_ROYALGUARD;
+    if (pressed & PSP_CTRL_LEFT) input->style = STYLE_SWORDMASTER;
+    if (pressed & PSP_CTRL_RIGHT) input->style = STYLE_GUNSLINGER;
+    input->lock_on = (pad.Buttons & PSP_CTRL_RTRIGGER) != 0;
+    input->weapon_wheel = (pad.Buttons & PSP_CTRL_LTRIGGER) != 0;
+    input->melee = (pressed & PSP_CTRL_TRIANGLE) != 0;
+    input->gun = (pressed & PSP_CTRL_SQUARE) != 0;
+    input->style_action = (pressed & PSP_CTRL_CIRCLE) != 0;
+    input->jump = (pressed & PSP_CTRL_CROSS) != 0;
+    input->snap_camera = (pressed & PSP_CTRL_SELECT) != 0;
+    input->reset = (pressed & PSP_CTRL_START) != 0;
 }
 
-/* Scripted input for the automated test: idle, run away from the camera,
- * run right, then run while orbiting. */
+/* Scripted input for the automated test (240 frames). */
 static void scripted_pad(int frame, PlayerInput *input) {
     memset(input, 0, sizeof(*input));
-    if (frame >= 30 && frame < 120) input->stick_y = 1.0f;
-    else if (frame >= 120 && frame < 180) input->stick_x = 1.0f;
-    else if (frame >= 180 && frame < 240) { input->stick_y = 1.0f; input->orbit = 1; }
+    input->style = -1;
+    if (frame >= 30 && frame < 120) input->stick_y = 1.0f;          /* run away */
+    else if (frame >= 120 && frame < 200) input->stick_x = 1.0f;    /* run right */
+    else if (frame >= 200 && frame < 240) input->stick_y = 1.0f;
+    if (frame == 50) input->style = STYLE_GUNSLINGER;
+    if (frame == 180) input->snap_camera = 1;                       /* SELECT */
+    if (frame == 205) input->jump = 1;
 }
 
-/* Longer demo for RECORD.TXT: run forward, strafe right, a full circle,
- * run while orbiting the camera, then stand. */
-#define RECORD_FRAMES 480
+/* Longer demo for RECORD.TXT. */
+#define RECORD_FRAMES 600
 static void record_pad(int frame, PlayerInput *input) {
     memset(input, 0, sizeof(*input));
-    if (frame >= 20 && frame < 110) input->stick_y = 1.0f;
-    else if (frame >= 110 && frame < 180) input->stick_x = 1.0f;
-    else if (frame >= 180 && frame < 330) {
-        float t = (float)(frame - 180) / 150.0f * 6.2831853f;
+    input->style = -1;
+    if (frame >= 30 && frame < 120) input->stick_y = 1.0f;
+    else if (frame >= 120 && frame < 190) input->stick_x = 1.0f;
+    else if (frame >= 190 && frame < 340) {
+        float t = (float)(frame - 190) / 150.0f * 6.2831853f;
         input->stick_x = sinf(t);
         input->stick_y = cosf(t);
-    } else if (frame >= 330 && frame < 440) { input->stick_y = 0.8f; input->orbit = 1; }
+    } else if (frame >= 340 && frame < 420) input->stick_y = 0.45f;   /* jog */
+    else if (frame >= 440 && frame < 540) input->stick_y = -1.0f;     /* toward camera */
+    if (frame == 200) input->style = STYLE_SWORDMASTER;
+    if (frame == 345 || frame == 395) input->jump = 1;
+    if (frame == 425) input->snap_camera = 1;
+    if (frame == 560) input->jump = 1;
 }
 
 /* ---- Main --------------------------------------------------------------- */
@@ -437,11 +525,13 @@ int main(int argc, char *argv[]) {
     FollowCamera camera;
     PlayerInput input;
     void *draw_buffer = (void *)0;
-    unsigned int last_time;
-    unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0;
+    unsigned int last_time, previous_buttons = 0;
+    unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0, skin_us_max = 0;
+    unsigned int rest_error;
     int frames = 0;
-    int autotest, recording;
-    float start_x, start_z;
+    int autotest, recording, show_bones;
+    int style_switched = 0, snapped = 0;
+    float start_x, start_z, max_height = 0.0f, time = 0.0f;
 
     if (argc > 0 && argv[0]) {
         const char *slash = strrchr(argv[0], '/');
@@ -463,9 +553,11 @@ int main(int argc, char *argv[]) {
     init_font();
     sceKernelDcacheWritebackAll();
     init_gu();
+    rest_error = rest_pose_error_um();
 
     autotest = game_file_exists("AUTOEXIT.TXT");
     recording = game_file_exists("RECORD.TXT");
+    show_bones = game_file_exists("BONES.TXT");
     if (recording) autotest = 0;
     if (autotest || recording) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
@@ -475,9 +567,11 @@ int main(int argc, char *argv[]) {
 
     while (running) {
         unsigned int frame_start = sceKernelGetSystemTimeLow();
-        unsigned int frame_us;
+        unsigned int frame_us, skin_start;
         float dt;
-        char hud_top[64];
+        char line0[64], line1[64];
+        const char *hud[HUD_LINES];
+        int bones_now = show_bones || (autotest && frames == 26);
 
         if (recording) {
             dt = 1.0f / 60.0f;
@@ -488,15 +582,33 @@ int main(int argc, char *argv[]) {
         } else {
             dt = (float)(frame_start - last_time) / 1000000.0f;
             if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
-            read_pad(&input);
+            read_pad(&input, &previous_buttons);
         }
         last_time = frame_start;
+        time += dt;
 
         player_update(&player, &camera, &input, dt);
-        /* HUD shows the previous frame's cost (this one isn't measured yet). */
-        snprintf(hud_top, sizeof(hud_top), "DMC3 TEST ROOM  frame %2u.%u ms  pos %5d %5d",
-                 last_frame_us / 1000, (last_frame_us % 1000) / 100, (int)player.x, (int)player.z);
-        render_scene(&player, &camera, hud_top, "stick: run  L/R: camera  START: reset");
+        if (input.style >= 0) style_switched = 1;
+        if (player.y > max_height) max_height = player.y;
+
+        skin_start = sceKernelGetSystemTimeLow();
+        pose_procedural(&pose, &player, time);
+        pose_evaluate(&pose);
+        skin_model(&pose);
+        if (sceKernelGetSystemTimeLow() - skin_start > skin_us_max) skin_us_max = sceKernelGetSystemTimeLow() - skin_start;
+
+        snprintf(line0, sizeof(line0), "%-11s  frame %2u.%u ms  pos %5d %5d",
+                 player_style_name(player.style), last_frame_us / 1000, (last_frame_us % 1000) / 100,
+                 (int)player.x, (int)player.z);
+        snprintf(line1, sizeof(line1), "%s%s%s",
+                 player.locked_on ? "[LOCK-ON: no target] " : "",
+                 player.weapon_wheel ? "[WEAPON WHEEL] " : "",
+                 player.action_timer > 0.0f ? player_action_name(player.last_action) : "");
+        hud[0] = line0;
+        hud[1] = line1;
+        hud[2] = "stick move  dpad style  R lock  L weapons";
+        hud[3] = "X jump  /\\ melee  [] guns  O style  SELECT cam";
+        render_scene(&player, &camera, hud, bones_now);
 
         frame_us = sceKernelGetSystemTimeLow() - frame_start;
         last_frame_us = frame_us;
@@ -520,23 +632,30 @@ int main(int argc, char *argv[]) {
             }
         }
         if (autotest && frames == 25) capture_frame(draw_buffer, "SHOT_IDLE.BMP");
+        if (autotest && frames == 26) capture_frame(draw_buffer, "SHOT_BONES.BMP");
+        if (autotest && frames == 100) capture_frame(draw_buffer, "SHOT_RUN.BMP");
         if (autotest && frames == 150) capture_frame(draw_buffer, "SHOT_SIDE.BMP");
+        if (autotest && frames == 215) snapped = fabsf(camera.yaw - camera.target_yaw) < 0.02f;
+        if (autotest && frames == 222) capture_frame(draw_buffer, "SHOT_JUMP.BMP");
         if (autotest && frames == 240) {
             char path[320];
             FILE *report;
             float dx = player.x - start_x, dz = player.z - start_z;
             float moved = sqrtf(dx * dx + dz * dz);
-            int ok = moved > 500.0f && frame_us_max < 33333u;
-            capture_frame(draw_buffer, "SHOT_RUN.BMP");
+            int ok = moved > 500.0f && frame_us_max < 33333u && rest_error < 1000u &&
+                     max_height > 50.0f && style_switched && player.style == STYLE_GUNSLINGER && snapped;
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
             if (report) {
-                fprintf(report, "%s\nframes=%d\nmoved=%d\nstart=%d,%d\nend=%d,%d\nyaw_mdeg=%d\ncamera_yaw_mdeg=%d\n"
-                                "avg_frame_us=%u\nmax_frame_us=%u\n",
+                fprintf(report,
+                        "%s\nframes=%d\nmoved=%d\nstart=%d,%d\nend=%d,%d\nyaw_mdeg=%d\ncamera_yaw_mdeg=%d\n"
+                        "camera_snapped=%d\njump_max_height=%d\nstyle=%s\nrest_pose_error_um=%u\n"
+                        "avg_frame_us=%u\nmax_frame_us=%u\nmax_skin_us=%u\n",
                         ok ? "DMC3PSP_TESTROOM_OK" : "DMC3PSP_TESTROOM_FAIL", frames + 1, (int)moved,
                         (int)start_x, (int)start_z, (int)player.x, (int)player.z,
-                        (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f),
-                        frame_us_total / (unsigned int)(frames + 1), frame_us_max);
+                        (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f), snapped,
+                        (int)max_height, player_style_name(player.style), rest_error,
+                        frame_us_total / (unsigned int)(frames + 1), frame_us_max, skin_us_max);
                 fclose(report);
             }
             running = 0;

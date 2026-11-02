@@ -38,7 +38,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $Header)) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     if (-not $Iso) { throw "The source ISO is required to generate the Dante model data" }
     $Python = (Get-Command python -ErrorAction Stop).Source
-    Invoke-Native $Python @((Join-Path $Root "tools\prepare_model_runtime.py"), $Iso.FullName, "--output", $Generated)
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_skinned_model.py"), $Iso.FullName, "--output", $Generated)
 }
 
 $CFlags = @(
@@ -46,7 +46,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player")) {
+foreach ($name in @("main", "player", "skeleton")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

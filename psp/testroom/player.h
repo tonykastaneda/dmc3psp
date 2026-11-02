@@ -1,38 +1,72 @@
 #ifndef DMC3PSP_TESTROOM_PLAYER_H
 #define DMC3PSP_TESTROOM_PLAYER_H
 
-/* Test-room player controller and follow camera. Pure C, no PSP calls, so it
- * can also be compiled on the host for quick checks. */
+/* Test-room player controller and follow camera. Pure C, no PSP calls.
+ *
+ * Control scheme (PSP):
+ *   analog stick  move (camera-relative)
+ *   d-pad         style switch: up Trickster, down Royalguard,
+ *                 left Swordmaster, right Gunslinger
+ *   R             lock-on (no enemies yet: holds Dante's facing, strafe)
+ *   L             weapon wheel (placeholder)
+ *   triangle      melee (placeholder)   square  guns (placeholder)
+ *   circle        style action (placeholder)
+ *   cross         jump (implemented)
+ *   SELECT        snap the camera behind Dante
+ */
 
 #define ROOM_HALF_SIZE 1000.0f   /* room spans -1000..1000 on X and Z */
 #define PLAYER_RADIUS 40.0f
 #define PLAYER_RUN_SPEED 450.0f  /* units (cm) per second at full stick */
 #define PLAYER_TURN_RATE 12.0f   /* radians per second */
+#define PLAYER_JUMP_SPEED 620.0f
+#define PLAYER_GRAVITY 1900.0f
 #define CAMERA_DISTANCE 300.0f
 #define CAMERA_HEIGHT 190.0f
 #define CAMERA_TARGET_HEIGHT 95.0f
-#define CAMERA_ORBIT_RATE 2.2f   /* radians per second while L/R is held */
+#define CAMERA_SNAP_RATE 10.0f   /* exponential rate of the SELECT snap */
+
+typedef enum { STYLE_TRICKSTER, STYLE_SWORDMASTER, STYLE_GUNSLINGER, STYLE_ROYALGUARD, STYLE_COUNT } Style;
+
+typedef enum {
+    ACTION_NONE, ACTION_MELEE, ACTION_GUN, ACTION_STYLE, ACTION_JUMP, ACTION_ROLL,
+    ACTION_STYLE_SWITCH, ACTION_CAMERA_SNAP
+} Action;
 
 typedef struct {
-    float x, z;        /* position on the floor */
+    float x, y, z;     /* y is height above the floor */
+    float vy;
+    int on_ground;
     float yaw;         /* facing; 0 faces +Z, positive turns toward +X */
-    float speed;       /* current ground speed, for the HUD */
+    float speed;       /* current ground speed */
+    float run_phase;   /* radians, advanced by distance covered */
+    Style style;
+    int locked_on;
+    int weapon_wheel;
+    Action last_action;
+    float action_timer; /* seconds the HUD keeps showing last_action */
 } Player;
 
 typedef struct {
-    float yaw;         /* orbit angle around the player; camera sits behind -forward */
+    float yaw;         /* camera sits behind -forward(yaw) */
+    float target_yaw;
+    int snapping;
     float x, y, z;     /* smoothed eye position */
     float tx, ty, tz;  /* smoothed look-at target */
 } FollowCamera;
 
 typedef struct {
     float stick_x;     /* -1..1, right is positive */
-    float stick_y;     /* -1..1, up (away from the player) is positive */
-    int orbit;         /* -1 = L held, +1 = R held, 0 = neither */
-    int reset;
+    float stick_y;     /* -1..1, up (away from the camera) is positive */
+    int style;         /* Style pressed this frame, or -1 */
+    int lock_on;       /* R held */
+    int weapon_wheel;  /* L held */
+    int melee, gun, style_action, jump, snap_camera, reset; /* pressed this frame */
 } PlayerInput;
 
 void player_reset(Player *player, FollowCamera *camera);
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt);
+const char *player_style_name(Style style);
+const char *player_action_name(Action action);
 
 #endif

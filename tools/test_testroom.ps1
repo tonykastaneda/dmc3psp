@@ -14,7 +14,8 @@ $Eboot = Join-Path $Root "build\testroom\EBOOT.PBP"
 $EmuDir = Split-Path -Parent $Emulator
 $GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM"
 $Evidence = Join-Path $Root "analysis\testroom"
-$Outputs = @("TESTROOM_OK.TXT", "TESTROOM_FAIL.TXT", "SHOT_IDLE.BMP", "SHOT_SIDE.BMP", "SHOT_RUN.BMP")
+$Shots = @("SHOT_IDLE", "SHOT_BONES", "SHOT_RUN", "SHOT_SIDE", "SHOT_JUMP")
+$Outputs = @("TESTROOM_OK.TXT", "TESTROOM_FAIL.TXT") + ($Shots | ForEach-Object { "$_.BMP" })
 
 function Write-Log([string]$Message) {
     $line = "[{0}] {1}" -f (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff zzz"), $Message
@@ -60,7 +61,7 @@ foreach ($name in $Outputs) {
     if (Test-Path -LiteralPath $path) { Copy-Item -LiteralPath $path -Destination $Evidence -Force }
 }
 Add-Type -AssemblyName System.Drawing
-foreach ($name in @("SHOT_IDLE", "SHOT_SIDE", "SHOT_RUN")) {
+foreach ($name in $Shots) {
     $bmp = Join-Path $Evidence "$name.BMP"
     if (Test-Path -LiteralPath $bmp) {
         $image = [System.Drawing.Image]::FromFile($bmp)
