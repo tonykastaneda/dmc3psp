@@ -45,6 +45,9 @@ typedef struct {
     int locked_on;
     int weapon_wheel;
     int attacking;      /* set by combat: movement and turning are suspended */
+    int free_fall;      /* combat move that keeps gravity (Air Hike, Wall Hike) */
+    int air_hiked;      /* Air Hike used this airtime */
+    int wall_contact;   /* collision pushed Dante out of a wall this frame */
     float camera_yaw;   /* input reference yaw: latched while the stick is held (combat aims with it) */
     int stick_held;     /* stick out of neutral last frame */
     Action last_action;
@@ -63,6 +66,7 @@ typedef struct {
     float stick_x;     /* -1..1, right is positive */
     float stick_y;     /* -1..1, up (away from the camera) is positive */
     int style;         /* Style pressed this frame, or -1 */
+    int style_held;    /* circle held (Royalguard block) */
     int lock_on;       /* R held */
     int weapon_wheel;  /* L held */
     int melee, gun, style_action, jump, snap_camera, reset, toggle_viewer; /* pressed this frame */

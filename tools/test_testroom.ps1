@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Emulator = "E:\SYSTEMS\PPSSPP\PPSSPPWindows64.exe",
-    [int]$TimeoutSeconds = 40
+    [int]$TimeoutSeconds = 90
 )
 
 # Deploys build\testroom\EBOOT.PBP to PSP\GAME\DMC3TESTROOM, runs the scripted
@@ -14,7 +14,7 @@ $Eboot = Join-Path $Root "build\testroom\EBOOT.PBP"
 $EmuDir = Split-Path -Parent $Emulator
 $GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM"
 $Evidence = Join-Path $Root "analysis\testroom"
-$Shots = @("SHOT_IDLE", "SHOT_BONES", "SHOT_RUN", "SHOT_SIDE", "SHOT_JUMP", "SHOT_COMBO", "SHOT_STINGER", "SHOT_PROP")
+$Shots = @("SHOT_IDLE", "SHOT_BONES", "SHOT_RUN", "SHOT_SIDE", "SHOT_JUMP", "SHOT_COMBO", "SHOT_STINGER", "SHOT_PROP", "SHOT_DASH", "SHOT_BLOCK")
 $Outputs = @("TESTROOM_OK.TXT", "TESTROOM_FAIL.TXT") + ($Shots | ForEach-Object { "$_.BMP" })
 
 function Write-Log([string]$Message) {

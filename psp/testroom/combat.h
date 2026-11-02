@@ -29,6 +29,14 @@ typedef enum {
     MOVE_SM_CRAZY_DANCE,                          /* rb-31: mash circle in Dance Macabre */
     MOVE_SM_DRIVE,                                /* rb-01: R + back + circle */
     MOVE_SM_QUICK_DRIVE,                          /* rb-11: circle during a combo hit */
+    /* Trickster (shared set, GDATA slot 33, "s33-NN"). */
+    MOVE_TR_DASH,                                 /* s33-17: crouch, then a 4 m burst */
+    MOVE_TR_SKY_STAR,                             /* s33-18: air dash */
+    MOVE_TR_AIR_HIKE,                             /* s33-07: double jump (cross in the air) */
+    MOVE_TR_WALL_HIKE,                            /* s33-08: circle into a wall */
+    /* Royalguard (slot 34, "s34-NN"): hold circle. */
+    MOVE_RG_BLOCK,                                /* s34-06: guard, loops while held */
+    MOVE_RG_AIR_BLOCK,                            /* s34-08 */
     MOVE_COUNT
 } MoveId;
 

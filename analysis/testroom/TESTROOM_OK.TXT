@@ -1,15 +1,15 @@
 DMC3PSP_TESTROOM_OK
-frames=991
+frames=1361
 moved=1134
 start=2441,3143
-end=2441,2716
+end=2441,2743
 yaw_mdeg=180000
 camera_yaw_mdeg=180000
 camera_snapped=1
-jump_max_height=109
+jump_max_height=161
 style=GUNSLINGER
 rest_pose_error_um=15
-avg_frame_us=5448
+avg_frame_us=5439
 max_frame_us=5665
 max_skin_us=3958
 motions_loaded=115
@@ -19,3 +19,7 @@ stinger=1
 stinger_travel=188
 prop_frames=168
 drive=1
+dash_travel=400
+air_hike=1
+hike_height=149
+block_frames=100

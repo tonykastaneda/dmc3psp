@@ -94,7 +94,8 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     }
     if (input->gun) set_action(player, ACTION_GUN);
     /* Swordmaster's circle moves are handled by combat; other styles still placeholder. */
-    if (input->style_action && player->style != STYLE_SWORDMASTER) set_action(player, ACTION_STYLE);
+    /* Gunslinger's circle needs the guns (not in yet); the other styles are in combat.c. */
+    if (input->style_action && player->style == STYLE_GUNSLINGER) set_action(player, ACTION_STYLE);
 
     /* SELECT: swing the camera behind Dante's current facing. */
     if (input->snap_camera) {
@@ -171,13 +172,13 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             if (has_ground && ground >= player->y - STEP_HEIGHT) player->y = ground;
             else { player->on_ground = 0; player->vy = 0.0f; }
         }
-        if (!player->on_ground && player->attacking) {
+        if (!player->on_ground && player->attacking && !player->free_fall) {
             player->vy = 0.0f;  /* aerial attacks hang in the air, as in DMC */
         } else if (!player->on_ground) {
             player->vy -= PLAYER_GRAVITY * dt;
             player->y += player->vy * dt;
             if (has_ground && player->y <= ground && player->vy <= 0.0f) {
-                player->y = ground; player->vy = 0.0f; player->on_ground = 1;
+                player->y = ground; player->vy = 0.0f; player->on_ground = 1; player->air_hiked = 0;
             }
             if (player->y < -5000.0f) player_reset(player, camera);  /* fell out of the world */
         }

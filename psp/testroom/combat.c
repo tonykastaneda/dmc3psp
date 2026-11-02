@@ -28,6 +28,10 @@ typedef struct {
     /* Without input: continue into auto_next at auto_switch (or end at -1). */
     float auto_switch;
     MoveId auto_next;
+    /* Appended (rows that omit them get 0): */
+    int physics;           /* 0 = hover in the air while active, 1 = keep gravity */
+    float start_vy;        /* vertical launch when the move starts (cm/s), 0 = none */
+    int hold_loop;         /* loop [loop_start, end) while circle is held; release ends */
 } MoveDef;
 
 #define M BTN_MELEE
@@ -59,6 +63,16 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_SM_CRAZY_DANCE] = {"rb-31", "CRAZY DANCE",    S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE},
     [MOVE_SM_DRIVE] = {"rb-01", "DRIVE",                S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE},
     [MOVE_SM_QUICK_DRIVE] = {"rb-11", "QUICK DRIVE",    S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE},
+    /* Trickster (slot 33). Read from root motion: s33-17 crouches (hips 53)
+     * then bursts 400 cm in ~15 frames; s33-18 is an airborne pose with 120 cm
+     * of travel; s33-07 an in-air pose; s33-08 climbs (root y up 35). */
+    [MOVE_TR_DASH] = {"s33-17", "DASH",                 S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE},
+    [MOVE_TR_SKY_STAR] = {"s33-18", "SKY STAR",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE},
+    [MOVE_TR_AIR_HIKE] = {"s33-07", "AIR HIKE",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 1, 560.0f},
+    [MOVE_TR_WALL_HIKE] = {"s33-08", "WALL HIKE",       S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 1, 760.0f},
+    /* Royalguard (slot 34): s34-06 holds the guard (210 frames, loop from 131). */
+    [MOVE_RG_BLOCK] = {"s34-06", "ROYAL BLOCK",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 1},
+    [MOVE_RG_AIR_BLOCK] = {"s34-08", "AIR ROYAL BLOCK", S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 1},
 };
 #undef M
 #undef S
@@ -95,6 +109,18 @@ void combat_reset(Combat *c) {
     c->queued = MOVE_NONE;
     c->motion = -1;
     c->fade_motion = -1;
+}
+
+static void start_move(Combat *c, MoveId move, float frame);
+
+static void end_move(Combat *c, Player *player) {
+    c->fade_motion = c->motion;
+    c->fade_frame = c->frame;
+    c->fade_weight = 1.0f;
+    c->move = MOVE_NONE;
+    c->motion = -1;
+    player->attacking = 0;
+    player->free_fall = 0;
 }
 
 static void start_move(Combat *c, MoveId move, float frame) {
@@ -137,6 +163,10 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     int tri = input->melee;
     /* Circle is Swordmaster's button; other styles' actions are not in yet. */
     int circ = input->style_action && player->style == STYLE_SWORDMASTER;
+    int trick = input->style_action && player->style == STYLE_TRICKSTER;
+    int guard = input->style_action && player->style == STYLE_ROYALGUARD;
+    /* Trickster Air Hike: cross in the air, once per airtime. */
+    int hike = input->jump && !player->on_ground && player->style == STYLE_TRICKSTER && !player->air_hiked;
 
     if (c->fade_weight > 0.0f) c->fade_weight -= dt / FADE_SECONDS;
     if (c->fade_weight < 0.0f) c->fade_weight = 0.0f;
@@ -161,8 +191,23 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         } else if (circ && player->on_ground) {
             if (!player->locked_on) face_stick(player, input, player->camera_yaw);
             start_move(c, dir > 0 ? MOVE_SM_DANCE_START : dir < 0 ? MOVE_SM_DRIVE : MOVE_SM_PROP, 0.0f);
+        } else if (trick) {
+            int pushing = input->stick_x * input->stick_x + input->stick_y * input->stick_y > 0.25f;
+            face_stick(player, input, player->camera_yaw);
+            if (player->on_ground && player->wall_contact && pushing) start_move(c, MOVE_TR_WALL_HIKE, 0.0f);
+            else start_move(c, player->on_ground ? MOVE_TR_DASH : MOVE_TR_SKY_STAR, 0.0f);
+        } else if (hike) {
+            player->air_hiked = 1;
+            start_move(c, MOVE_TR_AIR_HIKE, 0.0f);
+        } else if (guard) {
+            start_move(c, player->on_ground ? MOVE_RG_BLOCK : MOVE_RG_AIR_BLOCK, 0.0f);
         } else {
             return;
+        }
+        /* Launches (Air Hike, Wall Hike) happen as the move starts. */
+        if (moves[c->move].start_vy > 0.0f) {
+            player->vy = moves[c->move].start_vy;
+            player->on_ground = 0;
         }
     } else {
         const MoveDef *d = &moves[c->move];
@@ -179,7 +224,12 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
 
     player->attacking = 1;
-    c->sword_out = SWORD_OUT_SECONDS;
+    player->free_fall = moves[c->move].physics == 1;
+    /* Free-fall moves end on landing; guards end when circle is released. */
+    if (player->free_fall && player->on_ground && c->frame > 2.0f) { end_move(c, player); return; }
+    if (moves[c->move].hold_loop && !input->style_held) { end_move(c, player); return; }
+    /* Trickster and Royalguard moves don't draw the sword. */
+    if (c->move < MOVE_TR_DASH) c->sword_out = SWORD_OUT_SECONDS;
     m = motion_get(c->motion);
     c->frame += dt * MOTION_FPS;
 
@@ -189,6 +239,10 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         float since = d->button == BTN_STYLE ? c->since_style : c->since_melee;
         if (d->mash_loop_end > 0.0f && since < MASH_WINDOW && c->frame >= d->mash_loop_end &&
             m->loop_start < d->mash_loop_end) {
+            c->frame = m->loop_start;
+            motion_root(m, c->frame, c->last_root);
+        }
+        if (d->hold_loop && c->frame >= m->end_frame - 1.0f && m->loop_start < m->end_frame) {
             c->frame = m->loop_start;
             motion_root(m, c->frame, c->last_root);
         }
@@ -234,12 +288,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             if (d->auto_next != MOVE_NONE && d->auto_switch < 0.0f) {
                 start_move(c, d->auto_next, 0.0f);
             } else {
-                c->fade_motion = c->motion;
-                c->fade_frame = m->end_frame;
-                c->fade_weight = 1.0f;
-                c->move = MOVE_NONE;
-                c->motion = -1;
-                player->attacking = 0;
+                end_move(c, player);
             }
         }
     }
