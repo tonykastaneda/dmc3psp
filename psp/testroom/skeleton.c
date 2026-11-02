@@ -150,8 +150,17 @@ static void set_motion_euler(Mat3 *out, float x, float y, float z) {
 }
 
 void anim_reset(AnimState *anim) {
+    int i;
     memset(anim, 0, sizeof(*anim));
     anim->viewer_motion = MOTION_RUN;
+    for (i = 0; i < motion_count(); ++i) {
+        if (strncmp(motion_get(i)->name, "rb-", 3) == 0) { anim->viewer_motion = i; break; }
+    }
+}
+
+int anim_weapon_in_hand(const AnimState *anim, const Player *player, const Combat *combat) {
+    if (anim->viewer) return strncmp(motion_get(anim->viewer_motion)->name, "rb-", 3) == 0;
+    return combat->move != MOVE_NONE || (combat->sword_out > 0.0f && player->speed < 1.0f);
 }
 
 void anim_update(AnimState *anim, const Player *player, float dt) {
@@ -191,19 +200,66 @@ static void apply_sample(Pose *pose, const MotionSample *a, const MotionSample *
     if (!keep_root) pose->local_t[0][0] = pose->local_t[0][1] = pose->local_t[0][2] = 0.0f;
 }
 
-void anim_pose(const AnimState *anim, const Player *player, Pose *pose, float time) {
-    static MotionSample sa, sb;
-    if (!anim->viewer && !player->on_ground) {
+/* out = a + (b - a) * w per channel; a channel missing on one side takes the
+ * other side's value (rotation) or the rest offset (translation). */
+static void blend_samples(MotionSample *out, const MotionSample *a, const MotionSample *b, float w) {
+    int bone, k;
+    for (bone = 0; bone < DMC3_BONE_COUNT; ++bone) {
+        for (k = 0; k < 3; ++k) {
+            float ra = a->has_rot[bone][k] ? a->rot[bone][k] : (b->has_rot[bone][k] ? b->rot[bone][k] : 0.0f);
+            float rb = b->has_rot[bone][k] ? b->rot[bone][k] : ra;
+            float rest = (&dmc3_bone_local[bone].x)[k];
+            float ta = a->has_trans[bone][k] ? a->trans[bone][k] : rest;
+            float tb = b->has_trans[bone][k] ? b->trans[bone][k] : rest;
+            out->rot[bone][k] = ra + (rb - ra) * w;
+            out->trans[bone][k] = ta + (tb - ta) * w;
+            out->has_rot[bone][k] = a->has_rot[bone][k] | b->has_rot[bone][k];
+            out->has_trans[bone][k] = a->has_trans[bone][k] | b->has_trans[bone][k];
+        }
+    }
+}
+
+static void locomotion_sample(const AnimState *anim, const Combat *combat, MotionSample *out) {
+    static MotionSample idle, run;
+    int idle_motion = MOTION_IDLE;
+    /* Standing with the sword still drawn: Rebellion's ready stance. */
+    if (combat && combat->sword_out > 0.0f && combat_idle_motion() >= 0) idle_motion = combat_idle_motion();
+    motion_sample(motion_get(idle_motion), motion_wrap(motion_get(idle_motion), anim->idle_frame), &idle);
+    motion_sample(motion_get(MOTION_RUN), anim->run_frame, &run);
+    blend_samples(out, &idle, &run, anim->run_blend);
+}
+
+void anim_pose(const AnimState *anim, const Player *player, const Combat *combat, Pose *pose, float time) {
+    static MotionSample sa, sb, sc;
+    int attacking = combat && combat->move != MOVE_NONE;
+    if (!anim->viewer && !player->on_ground && !attacking) {
         pose_procedural(pose, player, time);
+        return;
+    }
+    if (!anim->viewer && combat && (attacking || combat->fade_weight > 0.0f)) {
+        reset_offsets(pose);
+        /* Target: the current move (or locomotion once the move ended). */
+        if (attacking) motion_sample(motion_get(combat->motion), combat->frame, &sa);
+        else locomotion_sample(anim, combat, &sa);
+        if (combat->fade_weight > 0.0f) {
+            if (combat->fade_motion >= 0) motion_sample(motion_get(combat->fade_motion), combat->fade_frame, &sb);
+            else locomotion_sample(anim, combat, &sb);
+            blend_samples(&sc, &sa, &sb, combat->fade_weight);
+            apply_sample(pose, &sc, 0, 0.0f, 0);
+        } else {
+            apply_sample(pose, &sa, 0, 0.0f, 0);
+        }
         return;
     }
     reset_offsets(pose);
     if (anim->viewer) {
         motion_sample(motion_get(anim->viewer_motion), anim->viewer_frame, &sa);
-        apply_sample(pose, &sa, 0, 0.0f, 1);  /* keep root motion so moves travel */
+        apply_sample(pose, &sa, 0, 0.0f, 1);
+        /* Keep vertical root motion (jumps) but stay in place horizontally so
+         * lunges stay in frame. */
+        pose->local_t[0][0] = pose->local_t[0][2] = 0.0f;
         return;
     }
-    motion_sample(motion_get(MOTION_IDLE), anim->idle_frame, &sa);
-    motion_sample(motion_get(MOTION_RUN), anim->run_frame, &sb);
-    apply_sample(pose, &sa, &sb, anim->run_blend, 0);
+    locomotion_sample(anim, combat, &sa);
+    apply_sample(pose, &sa, 0, 0.0f, 0);
 }

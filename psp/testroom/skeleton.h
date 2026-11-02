@@ -2,6 +2,7 @@
 #define DMC3PSP_TESTROOM_SKELETON_H
 
 #include "player.h"
+#include "combat.h"
 
 /* Dante's 24-bone skeleton (record indices from the MOD skeleton block). */
 enum {
@@ -43,6 +44,9 @@ typedef struct {
 
 void anim_reset(AnimState *anim);
 void anim_update(AnimState *anim, const Player *player, float dt);
-void anim_pose(const AnimState *anim, const Player *player, Pose *pose, float time);
+void anim_pose(const AnimState *anim, const Player *player, const Combat *combat, Pose *pose, float time);
+/* True while Rebellion is drawn: viewer on an rb-* motion, attacking, or
+ * standing just after an attack. */
+int anim_weapon_in_hand(const AnimState *anim, const Player *player, const Combat *combat);
 
 #endif

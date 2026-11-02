@@ -44,6 +44,8 @@ typedef struct {
     Style style;
     int locked_on;
     int weapon_wheel;
+    int attacking;      /* set by combat: movement and turning are suspended */
+    float camera_yaw;   /* copied from the camera each update (combat aims with it) */
     Action last_action;
     float action_timer; /* seconds the HUD keeps showing last_action */
 } Player;

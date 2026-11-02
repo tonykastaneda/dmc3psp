@@ -568,3 +568,27 @@
 [2026-11-02 14:00:25.126 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,248,988 bytes)
 [2026-11-02 14:00:25.180 -08:00] Launching PPSSPP test-room autotest.
 [2026-11-02 14:00:34.847 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
+[2026-11-02 14:07:45.318 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,500,828 bytes)
+[2026-11-02 14:07:45.371 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:07:55.042 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
+[2026-11-02 14:10:34.514 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,500,828 bytes)
+[2026-11-02 14:10:34.563 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:10:44.231 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
+[2026-11-02 14:13:43.515 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,500,828 bytes)
+[2026-11-02 14:13:43.565 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:13:53.235 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
+[2026-11-02 14:19:20.856 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,506,060 bytes)
+[2026-11-02 14:19:20.921 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:19:36.919 -08:00] Test room autotest FAILED.
+[2026-11-02 14:19:49.059 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,506,092 bytes)
+[2026-11-02 14:19:49.109 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:20:05.138 -08:00] Test room autotest FAILED.
+[2026-11-02 14:20:18.643 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,506,188 bytes)
+[2026-11-02 14:20:18.697 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:20:34.693 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
+[2026-11-02 14:21:05.832 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,506,252 bytes)
+[2026-11-02 14:21:05.886 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:21:21.913 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
+[2026-11-02 14:23:07.357 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (1,506,620 bytes)
+[2026-11-02 14:23:07.411 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 14:23:23.374 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.

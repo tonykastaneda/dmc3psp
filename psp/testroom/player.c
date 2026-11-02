@@ -76,7 +76,6 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         player->style = (Style)input->style;
         set_action(player, ACTION_STYLE_SWITCH);
     }
-    if (input->melee) set_action(player, ACTION_MELEE);
     if (input->gun) set_action(player, ACTION_GUN);
     if (input->style_action) set_action(player, ACTION_STYLE);
 
@@ -95,6 +94,8 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     magnitude = sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y);
     if (magnitude > 1.0f) magnitude = 1.0f;
     player->speed = 0.0f;
+    player->camera_yaw = camera->yaw;
+    if (player->attacking) magnitude = 0.0f;  /* root motion drives Dante instead */
     if (magnitude > 0.0f) {
         /* Camera-relative: stick up runs away from the camera. Right-handed
          * view (gumLookAt), so right = forward x up. */
@@ -121,7 +122,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         }
     }
 
-    if (input->jump && player->on_ground) {
+    if (input->jump && player->on_ground && !player->attacking) {
         if (player->locked_on && magnitude > 0.0f) {
             set_action(player, ACTION_ROLL);
         } else {
@@ -130,7 +131,9 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             set_action(player, ACTION_JUMP);
         }
     }
-    if (!player->on_ground) {
+    if (!player->on_ground && player->attacking) {
+        player->vy = 0.0f;  /* aerial attacks hang in the air, as in DMC */
+    } else if (!player->on_ground) {
         player->vy -= PLAYER_GRAVITY * dt;
         player->y += player->vy * dt;
         if (player->y <= 0.0f) { player->y = 0.0f; player->vy = 0.0f; player->on_ground = 1; }
