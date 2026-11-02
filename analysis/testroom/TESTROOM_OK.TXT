@@ -1,0 +1,9 @@
+DMC3PSP_TESTROOM_OK
+frames=241
+moved=843
+start=0,-300
+end=-122,534
+yaw_mdeg=126050
+camera_yaw_mdeg=126050
+avg_frame_us=126
+max_frame_us=130

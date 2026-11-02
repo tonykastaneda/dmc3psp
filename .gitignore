@@ -10,3 +10,6 @@ build/
 localsend-cli.exe
 __pycache__/
 *.pyc
+analysis/testroom/*.png
+analysis/testroom/*.mp4
+analysis/testroom/*.log
