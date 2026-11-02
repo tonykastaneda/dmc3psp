@@ -3,7 +3,8 @@
  *
  * Dev flags (files next to the EBOOT):
  *   AUTOEXIT.TXT  scripted autotest: screenshots + TESTROOM_OK.TXT / _FAIL.TXT
- *   RECORD.TXT    scripted demo, every other frame saved as REC####.BMP
+ *   RECORD.TXT    scripted demo, every other frame saved as REC####.BMP;
+ *                 if it contains "motions", a tour of every MOT instead
  *   BONES.TXT     draw the skeleton overlay
  */
 
@@ -23,6 +24,7 @@
 #include "model_runtime.h"
 #include "player.h"
 #include "skeleton.h"
+#include "motion.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -69,6 +71,7 @@ static void *model_textures[DMC3_MODEL_TEXTURE_COUNT];
 static unsigned int __attribute__((aligned(16))) font_texture[FONT_TEX_SIZE * FONT_TEX_SIZE];
 static unsigned int *capture_buffer;
 static Pose pose;
+static AnimState anim;
 
 static volatile int running = 1;
 static char game_dir[256] = "ms0:/PSP/GAME/DMC3TESTROOM/";
@@ -484,7 +487,7 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
     input->style_action = (pressed & PSP_CTRL_CIRCLE) != 0;
     input->jump = (pressed & PSP_CTRL_CROSS) != 0;
     input->snap_camera = (pressed & PSP_CTRL_SELECT) != 0;
-    input->reset = (pressed & PSP_CTRL_START) != 0;
+    input->toggle_viewer = (pressed & PSP_CTRL_START) != 0;
 }
 
 /* Scripted input for the automated test (240 frames). */
@@ -518,6 +521,24 @@ static void record_pad(int frame, PlayerInput *input) {
     if (frame == 560) input->jump = 1;
 }
 
+/* Motion tour for RECORD.TXT "motions": every MOT played once in the viewer
+ * (capped at 150 frames each, 20-frame minimum). Returns 0 when done. */
+#define TOUR_MAX_FRAMES 150
+static int tour_motion = 0, tour_frame = 0;
+static int tour_step(void) {
+    const Motion *m = motion_get(tour_motion);
+    int length = (int)(m->end_frame + 1.0f);
+    if (length > TOUR_MAX_FRAMES) length = TOUR_MAX_FRAMES;
+    if (length < 20) length = 20;
+    if (++tour_frame >= length) {
+        tour_frame = 0;
+        if (++tour_motion >= motion_count()) return 0;
+        anim.viewer_motion = tour_motion;
+        anim.viewer_frame = 0.0f;
+    }
+    return 1;
+}
+
 /* ---- Main --------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
@@ -529,7 +550,7 @@ int main(int argc, char *argv[]) {
     unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0, skin_us_max = 0;
     unsigned int rest_error;
     int frames = 0;
-    int autotest, recording, show_bones;
+    int autotest, recording, show_bones, tour = 0, tour_done = 0, motions_loaded;
     int style_switched = 0, snapped = 0;
     float start_x, start_z, max_height = 0.0f, time = 0.0f;
 
@@ -554,10 +575,21 @@ int main(int argc, char *argv[]) {
     sceKernelDcacheWritebackAll();
     init_gu();
     rest_error = rest_pose_error_um();
+    motions_loaded = motion_init();
+    anim_reset(&anim);
 
     autotest = game_file_exists("AUTOEXIT.TXT");
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
+    if (recording) {
+        char path[320], text[16] = {0};
+        FILE *f;
+        path_in_game_dir(path, sizeof(path), "RECORD.TXT");
+        f = fopen(path, "r");
+        if (f) { fread(text, 1, sizeof(text) - 1, f); fclose(f); }
+        tour = strncmp(text, "motions", 7) == 0 && motions_loaded > 0;
+        if (tour) { anim.viewer = 1; anim.viewer_motion = 0; anim.viewer_frame = 0.0f; }
+    }
     if (recording) autotest = 0;
     if (autotest || recording) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
@@ -573,7 +605,11 @@ int main(int argc, char *argv[]) {
         const char *hud[HUD_LINES];
         int bones_now = show_bones || (autotest && frames == 26);
 
-        if (recording) {
+        if (tour) {
+            dt = 1.0f / 60.0f;
+            memset(&input, 0, sizeof(input));
+            input.style = -1;
+        } else if (recording) {
             dt = 1.0f / 60.0f;
             record_pad(frames, &input);
         } else if (autotest) {
@@ -587,12 +623,32 @@ int main(int argc, char *argv[]) {
         last_time = frame_start;
         time += dt;
 
+        if (input.toggle_viewer && motions_loaded > 0) {
+            anim.viewer = !anim.viewer;
+            anim.viewer_frame = 0.0f;
+        }
+        if (anim.viewer) {
+            /* Viewer: d-pad left/right steps through motions; Dante stands still. */
+            if (input.style == STYLE_SWORDMASTER || input.style == STYLE_GUNSLINGER) {
+                int n = motion_count();
+                anim.viewer_motion = (anim.viewer_motion + (input.style == STYLE_GUNSLINGER ? 1 : n - 1)) % n;
+                anim.viewer_frame = 0.0f;
+            }
+            input.stick_x = input.stick_y = 0.0f;
+            input.style = -1;
+            input.jump = 0;
+        }
         player_update(&player, &camera, &input, dt);
         if (input.style >= 0) style_switched = 1;
         if (player.y > max_height) max_height = player.y;
 
         skin_start = sceKernelGetSystemTimeLow();
-        pose_procedural(&pose, &player, time);
+        if (motions_loaded > 0) {
+            anim_update(&anim, &player, dt);
+            anim_pose(&anim, &player, &pose, time);
+        } else {
+            pose_procedural(&pose, &player, time);
+        }
         pose_evaluate(&pose);
         skin_model(&pose);
         if (sceKernelGetSystemTimeLow() - skin_start > skin_us_max) skin_us_max = sceKernelGetSystemTimeLow() - skin_start;
@@ -600,14 +656,19 @@ int main(int argc, char *argv[]) {
         snprintf(line0, sizeof(line0), "%-11s  frame %2u.%u ms  pos %5d %5d",
                  player_style_name(player.style), last_frame_us / 1000, (last_frame_us % 1000) / 100,
                  (int)player.x, (int)player.z);
+        if (anim.viewer) {
+            const Motion *m = motion_get(anim.viewer_motion);
+            snprintf(line0, sizeof(line0), "MOTION VIEWER  #%-2d  %s   frame %3d / %d",
+                     anim.viewer_motion, m->name, (int)anim.viewer_frame, (int)m->end_frame);
+        }
         snprintf(line1, sizeof(line1), "%s%s%s",
                  player.locked_on ? "[LOCK-ON: no target] " : "",
                  player.weapon_wheel ? "[WEAPON WHEEL] " : "",
                  player.action_timer > 0.0f ? player_action_name(player.last_action) : "");
         hud[0] = line0;
         hud[1] = line1;
-        hud[2] = "stick move  dpad style  R lock  L weapons";
-        hud[3] = "X jump  /\\ melee  [] guns  O style  SELECT cam";
+        hud[2] = anim.viewer ? "dpad left/right: previous/next motion" : "stick move  dpad style  R lock  L weapons";
+        hud[3] = anim.viewer ? "START: back to play" : "X jump /\\ melee [] guns O style SELECT cam";
         render_scene(&player, &camera, hud, bones_now);
 
         frame_us = sceKernelGetSystemTimeLow() - frame_start;
@@ -615,6 +676,7 @@ int main(int argc, char *argv[]) {
         frame_us_total += frame_us;
         if (frame_us > frame_us_max) frame_us_max = frame_us;
 
+        if (tour && !tour_step()) tour_done = 1;
         if (recording) {
             /* Every other frame -> 30 fps video. */
             if ((frames & 1) == 0) {
@@ -622,12 +684,12 @@ int main(int argc, char *argv[]) {
                 snprintf(name, sizeof(name), "REC%04d.BMP", frames / 2);
                 capture_frame(draw_buffer, name);
             }
-            if (frames + 1 >= RECORD_FRAMES) {
+            if ((!tour && frames + 1 >= RECORD_FRAMES) || tour_done) {
                 char path[320];
                 FILE *done;
                 path_in_game_dir(path, sizeof(path), "RECORD_DONE.TXT");
                 done = fopen(path, "w");
-                if (done) { fprintf(done, "frames=%d\n", RECORD_FRAMES / 2); fclose(done); }
+                if (done) { fprintf(done, "frames=%d\n", frames / 2); fclose(done); }
                 running = 0;
             }
         }
@@ -642,7 +704,7 @@ int main(int argc, char *argv[]) {
             FILE *report;
             float dx = player.x - start_x, dz = player.z - start_z;
             float moved = sqrtf(dx * dx + dz * dz);
-            int ok = moved > 500.0f && frame_us_max < 33333u && rest_error < 1000u &&
+            int ok = motions_loaded == motion_count() && moved > 500.0f && frame_us_max < 33333u && rest_error < 1000u &&
                      max_height > 50.0f && style_switched && player.style == STYLE_GUNSLINGER && snapped;
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
@@ -650,12 +712,12 @@ int main(int argc, char *argv[]) {
                 fprintf(report,
                         "%s\nframes=%d\nmoved=%d\nstart=%d,%d\nend=%d,%d\nyaw_mdeg=%d\ncamera_yaw_mdeg=%d\n"
                         "camera_snapped=%d\njump_max_height=%d\nstyle=%s\nrest_pose_error_um=%u\n"
-                        "avg_frame_us=%u\nmax_frame_us=%u\nmax_skin_us=%u\n",
+                        "avg_frame_us=%u\nmax_frame_us=%u\nmax_skin_us=%u\nmotions_loaded=%d\n",
                         ok ? "DMC3PSP_TESTROOM_OK" : "DMC3PSP_TESTROOM_FAIL", frames + 1, (int)moved,
                         (int)start_x, (int)start_z, (int)player.x, (int)player.z,
                         (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f), snapped,
                         (int)max_height, player_style_name(player.style), rest_error,
-                        frame_us_total / (unsigned int)(frames + 1), frame_us_max, skin_us_max);
+                        frame_us_total / (unsigned int)(frames + 1), frame_us_max, skin_us_max, motions_loaded);
                 fclose(report);
             }
             running = 0;

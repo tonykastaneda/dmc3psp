@@ -7,6 +7,7 @@
  * static and discarded by the compiler. */
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "model_runtime.h"
+#include "motion.h"
 
 #define DEG 0.0174532925f
 
@@ -42,29 +43,37 @@ static void set_euler(Pose *pose, int bone, float x, float y, float z) {
     mat_mul(&pose->local[bone], &rx, &t);
 }
 
+static void reset_offsets(Pose *pose) {
+    int i;
+    for (i = 0; i < DMC3_BONE_COUNT; ++i) {
+        pose->local_t[i][0] = dmc3_bone_local[i].x;
+        pose->local_t[i][1] = dmc3_bone_local[i].y;
+        pose->local_t[i][2] = dmc3_bone_local[i].z;
+    }
+    pose->root_offset[0] = pose->root_offset[1] = pose->root_offset[2] = 0.0f;
+}
+
 void pose_identity(Pose *pose) {
     int i;
     for (i = 0; i < DMC3_BONE_COUNT; ++i) mat_identity(&pose->local[i]);
-    pose->root_offset[0] = pose->root_offset[1] = pose->root_offset[2] = 0.0f;
+    reset_offsets(pose);
 }
 
 void pose_evaluate(Pose *pose) {
     int i, k;
     for (i = 0; i < DMC3_BONE_COUNT; ++i) {
         int parent = dmc3_bone_parent[i];
-        const Dmc3Vec3 *offset = &dmc3_bone_local[i];
+        const float *offset = pose->local_t[i];
         if (parent < 0) {
             pose->world_rot[i] = pose->local[i];
-            pose->world_pos[i][0] = offset->x;
-            pose->world_pos[i][1] = offset->y;
-            pose->world_pos[i][2] = offset->z;
+            for (k = 0; k < 3; ++k) pose->world_pos[i][k] = offset[k];
             continue;
         }
         mat_mul(&pose->world_rot[i], &pose->world_rot[parent], &pose->local[i]);
         for (k = 0; k < 3; ++k) {
             const float *row = pose->world_rot[parent].m[k];
             pose->world_pos[i][k] = pose->world_pos[parent][k] +
-                row[0] * offset->x + row[1] * offset->y + row[2] * offset->z;
+                row[0] * offset[0] + row[1] * offset[1] + row[2] * offset[2];
         }
         if (i == BONE_HIPS) {
             for (k = 0; k < 3; ++k) pose->world_pos[i][k] += pose->root_offset[k];
@@ -83,7 +92,7 @@ void pose_procedural(Pose *pose, const Player *player, float time) {
     int b;
 
     for (b = 0; b < DMC3_BONE_COUNT; ++b) set_euler(pose, b, 0.0f, 0.0f, 0.0f);
-    pose->root_offset[0] = pose->root_offset[1] = pose->root_offset[2] = 0.0f;
+    reset_offsets(pose);
 
     if (!player->on_ground) {
         /* Airborne tuck: knees up, arms out a little. */
@@ -121,4 +130,80 @@ void pose_procedural(Pose *pose, const Player *player, float time) {
     set_euler(pose, BONE_SPINE1, 14.0f * DEG * run + breathe, 9.0f * DEG * run * s, 0.0f);
     set_euler(pose, BONE_NECK, -8.0f * DEG * run, -6.0f * DEG * run * s, 0.0f);
     pose->root_offset[1] = -4.0f * run + 3.0f * run * fabsf(cosf(phase));
+}
+
+/* ---- Motion-driven animation ------------------------------------------- */
+
+#define RUN_BLEND_RATE 10.0f
+/* The run motion covers 408 cm in 48 frames at 60 fps = 510 cm/s, which is
+ * PLAYER_RUN_SPEED; playback is scaled by actual speed so feet don't slide. */
+
+/* MOT rotation order: X applied first, R = Rz * Ry * Rx (verified on the
+ * idle: ankles stay exactly planted only with this order). */
+static void set_motion_euler(Mat3 *out, float x, float y, float z) {
+    Mat3 rx, ry, rz, t;
+    mat_rot(&rx, 0, x);
+    mat_rot(&ry, 1, y);
+    mat_rot(&rz, 2, z);
+    mat_mul(&t, &ry, &rx);
+    mat_mul(out, &rz, &t);
+}
+
+void anim_reset(AnimState *anim) {
+    memset(anim, 0, sizeof(*anim));
+    anim->viewer_motion = MOTION_RUN;
+}
+
+void anim_update(AnimState *anim, const Player *player, float dt) {
+    const Motion *idle = motion_get(MOTION_IDLE), *run = motion_get(MOTION_RUN);
+    float target = player->speed > 1.0f ? 1.0f : 0.0f;
+    float rate;
+    if (anim->viewer) {
+        const Motion *m = motion_get(anim->viewer_motion);
+        anim->viewer_frame = motion_wrap(m, anim->viewer_frame + dt * MOTION_FPS);
+        return;
+    }
+    anim->run_blend += (target - anim->run_blend) * (1.0f - expf(-RUN_BLEND_RATE * dt));
+    anim->idle_frame = motion_wrap(idle, anim->idle_frame + dt * MOTION_FPS);
+    rate = player->speed / PLAYER_RUN_SPEED;
+    if (rate < 0.35f && target > 0.0f) rate = 0.35f;
+    anim->run_frame = motion_wrap(run, anim->run_frame + dt * MOTION_FPS * rate);
+    if (anim->run_blend < 0.01f) anim->run_frame = 0.0f; /* restart the stride from the motion start */
+}
+
+static void apply_sample(Pose *pose, const MotionSample *a, const MotionSample *b, float w, int keep_root) {
+    int bone, k;
+    for (bone = 0; bone < DMC3_BONE_COUNT; ++bone) {
+        float r[3];
+        for (k = 0; k < 3; ++k) {
+            float ra = a->has_rot[bone][k] ? a->rot[bone][k] : 0.0f;
+            float rb = b && b->has_rot[bone][k] ? b->rot[bone][k] : ra;
+            r[k] = ra + (rb - ra) * w;
+            if (a->has_trans[bone][k] || (b && b->has_trans[bone][k])) {
+                float rest = pose->local_t[bone][k];
+                float ta = a->has_trans[bone][k] ? a->trans[bone][k] : rest;
+                float tb = b && b->has_trans[bone][k] ? b->trans[bone][k] : ta;
+                pose->local_t[bone][k] = ta + (tb - ta) * w;
+            }
+        }
+        set_motion_euler(&pose->local[bone], r[0], r[1], r[2]);
+    }
+    if (!keep_root) pose->local_t[0][0] = pose->local_t[0][1] = pose->local_t[0][2] = 0.0f;
+}
+
+void anim_pose(const AnimState *anim, const Player *player, Pose *pose, float time) {
+    static MotionSample sa, sb;
+    if (!anim->viewer && !player->on_ground) {
+        pose_procedural(pose, player, time);
+        return;
+    }
+    reset_offsets(pose);
+    if (anim->viewer) {
+        motion_sample(motion_get(anim->viewer_motion), anim->viewer_frame, &sa);
+        apply_sample(pose, &sa, 0, 0.0f, 1);  /* keep root motion so moves travel */
+        return;
+    }
+    motion_sample(motion_get(MOTION_IDLE), anim->idle_frame, &sa);
+    motion_sample(motion_get(MOTION_RUN), anim->run_frame, &sb);
+    apply_sample(pose, &sa, &sb, anim->run_blend, 0);
 }

@@ -20,6 +20,7 @@ typedef struct { float m[3][3]; } Mat3;
 
 typedef struct {
     Mat3 local[32];        /* local rotation per bone (identity = rest pose) */
+    float local_t[32][3];  /* offset from the parent (rest offset unless a motion overrides it) */
     Mat3 world_rot[32];    /* model-space rotation */
     float world_pos[32][3];/* model-space joint position */
     float root_offset[3];  /* extra translation of the hips (bob) */
@@ -27,7 +28,21 @@ typedef struct {
 
 void pose_identity(Pose *pose);
 void pose_evaluate(Pose *pose);
-/* Procedural placeholder animation: idle, run cycle, airborne. */
+/* Procedural placeholder pose (used while airborne until jump motions are mapped). */
 void pose_procedural(Pose *pose, const Player *player, float time);
+
+/* Motion-driven animation: idle/run blend on the ground, viewer mode for
+ * browsing every MOT. */
+typedef struct {
+    float idle_frame, run_frame;
+    float run_blend;       /* 0 = idle, 1 = run */
+    int viewer;            /* motion viewer active */
+    int viewer_motion;
+    float viewer_frame;
+} AnimState;
+
+void anim_reset(AnimState *anim);
+void anim_update(AnimState *anim, const Player *player, float dt);
+void anim_pose(const AnimState *anim, const Player *player, Pose *pose, float time);
 
 #endif

@@ -3,7 +3,8 @@ param(
     [string]$Emulator = "E:\SYSTEMS\PPSSPP\PPSSPPWindows64.exe",
     [string]$Ffmpeg = "C:\ffmpeg\bin\ffmpeg.exe",
     [string]$Output = "analysis\testroom\testroom.mp4",
-    [int]$TimeoutSeconds = 180
+    [int]$TimeoutSeconds = 600,
+    [ValidateSet("demo", "motions")][string]$Mode = "demo"
 )
 
 # Runs the test room's RECORD.TXT demo in PPSSPP (the PSP saves every other
@@ -23,7 +24,7 @@ New-Item -ItemType Directory -Force -Path $GameDir, (Split-Path -Parent $Output)
 Copy-Item -LiteralPath $Eboot -Destination (Join-Path $GameDir "EBOOT.PBP") -Force
 Get-ChildItem -LiteralPath $GameDir -Filter "REC*.BMP" | Remove-Item -Force
 Remove-Item -LiteralPath $Done, (Join-Path $GameDir "AUTOEXIT.TXT") -Force -ErrorAction SilentlyContinue
-Set-Content -LiteralPath (Join-Path $GameDir "RECORD.TXT") -Value "record" -Encoding ascii
+Set-Content -LiteralPath (Join-Path $GameDir "RECORD.TXT") -Value $Mode -Encoding ascii
 
 $process = Start-Process -FilePath $Emulator -ArgumentList ('--escape-exit "{0}"' -f (Join-Path $GameDir "EBOOT.PBP")) -WorkingDirectory $EmuDir -PassThru
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -43,7 +44,7 @@ finally {
 if (-not (Test-Path -LiteralPath $Done)) { throw "Recording did not finish within $TimeoutSeconds seconds" }
 
 $frames = (Get-ChildItem -LiteralPath $GameDir -Filter "REC*.BMP").Count
-& $Ffmpeg -y -loglevel error -framerate 30 -i (Join-Path $GameDir "REC%04d.BMP") `
+& $Ffmpeg -y -loglevel error -framerate 30 -start_number 0 -i (Join-Path $GameDir "REC%04d.BMP") `
     -vf "scale=960:544:flags=neighbor" -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 18 `
     -movflags +faststart $Output
 if ($LASTEXITCODE -ne 0) { throw "ffmpeg failed with exit code $LASTEXITCODE" }

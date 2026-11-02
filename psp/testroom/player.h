@@ -13,11 +13,12 @@
  *   circle        style action (placeholder)
  *   cross         jump (implemented)
  *   SELECT        snap the camera behind Dante
+ *   START         motion viewer (d-pad left/right picks a motion)
  */
 
 #define ROOM_HALF_SIZE 1000.0f   /* room spans -1000..1000 on X and Z */
 #define PLAYER_RADIUS 40.0f
-#define PLAYER_RUN_SPEED 450.0f  /* units (cm) per second at full stick */
+#define PLAYER_RUN_SPEED 510.0f  /* cm/s at full stick; matches the run motion (408 cm / 48 frames) */
 #define PLAYER_TURN_RATE 12.0f   /* radians per second */
 #define PLAYER_JUMP_SPEED 620.0f
 #define PLAYER_GRAVITY 1900.0f
@@ -61,7 +62,7 @@ typedef struct {
     int style;         /* Style pressed this frame, or -1 */
     int lock_on;       /* R held */
     int weapon_wheel;  /* L held */
-    int melee, gun, style_action, jump, snap_camera, reset; /* pressed this frame */
+    int melee, gun, style_action, jump, snap_camera, reset, toggle_viewer; /* pressed this frame */
 } PlayerInput;
 
 void player_reset(Player *player, FollowCamera *camera);
