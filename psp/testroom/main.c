@@ -25,6 +25,7 @@
 #include "player.h"
 #include "skeleton.h"
 #include "motion.h"
+#include "coat.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -51,6 +52,7 @@ extern u8 msx[];
 #define GRID_COLOR 0xffffffffu
 #define CLEAR_COLOR 0xff2a2420u
 #define BONE_COLOR 0xff00e0ffu  /* yellow (ABGR) */
+#define COAT_BONE_COLOR 0xffff8040u  /* light blue */
 
 typedef struct { float u, v; float nx, ny, nz; float x, y, z; } ModelVertex;
 typedef struct { unsigned int color; float x, y, z; } ColorVertex;
@@ -355,13 +357,22 @@ static void draw_hud(const char *lines[HUD_LINES]) {
 
 /* Skeleton overlay: a line from each bone to its parent, drawn over Dante. */
 static void draw_bones(void) {
-    ColorVertex *v = sceGuGetMemory(sizeof(ColorVertex) * 2 * DMC3_BONE_COUNT);
+    ColorVertex *v = sceGuGetMemory(sizeof(ColorVertex) * 2 * (DMC3_BONE_COUNT + coat_joint_count()));
     int n = 0, i;
     for (i = 0; i < DMC3_BONE_COUNT; ++i) {
         int parent = dmc3_bone_parent[i];
         if (parent < 0) continue;
         v[n++] = (ColorVertex){BONE_COLOR, pose.world_pos[parent][0], pose.world_pos[parent][1], pose.world_pos[parent][2]};
         v[n++] = (ColorVertex){BONE_COLOR, pose.world_pos[i][0], pose.world_pos[i][1], pose.world_pos[i][2]};
+    }
+    for (i = 0; i < coat_joint_count(); ++i) {
+        float a[3], b[3];
+        int parent, unused;
+        coat_joint(i, b, &parent);
+        if (parent < 0) continue;
+        coat_joint(parent, a, &unused);
+        v[n++] = (ColorVertex){COAT_BONE_COLOR, a[0], a[1], a[2]};
+        v[n++] = (ColorVertex){COAT_BONE_COLOR, b[0], b[1], b[2]};
     }
     sceGuDisable(GU_DEPTH_TEST);
     sceGuDisable(GU_TEXTURE_2D);
@@ -429,6 +440,21 @@ static void render_scene(const Player *player, const FollowCamera *camera,
         }
         sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)object->index_count,
                         model_indices + object->index_start, model_vertices);
+    }
+    {
+        const CoatVertex *coat = coat_skin(player);
+        const unsigned short *coat_idx = coat_indices();
+        for (i = 0; i < coat_object_count(); ++i) {
+            unsigned int start, count, texture;
+            coat_object(i, &start, &count, &texture);
+            if ((int)texture != bound_texture) {
+                const Dmc3Texture *t = &dmc3_model_textures[texture];
+                bound_texture = (int)texture;
+                sceGuTexImage(0, t->width, t->height, t->width, model_textures[bound_texture]);
+                sceGuTexFlush();
+            }
+            sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)count, coat_idx + start, coat);
+        }
     }
     if (show_bones) draw_bones();
 
@@ -565,7 +591,7 @@ int main(int argc, char *argv[]) {
     setup_callbacks();
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
-    if (!init_model()) {
+    if (!init_model() || !coat_init()) {
         pspDebugScreenInit();
         pspDebugScreenPrintf("Out of memory loading the Dante model.\n");
         sceKernelSleepThread();
@@ -626,6 +652,7 @@ int main(int argc, char *argv[]) {
         if (input.toggle_viewer && motions_loaded > 0) {
             anim.viewer = !anim.viewer;
             anim.viewer_frame = 0.0f;
+            coat_reset();
         }
         if (anim.viewer) {
             /* Viewer: d-pad left/right steps through motions; Dante stands still. */
@@ -651,6 +678,7 @@ int main(int argc, char *argv[]) {
         }
         pose_evaluate(&pose);
         skin_model(&pose);
+        coat_update(&pose, &player, dt);
         if (sceKernelGetSystemTimeLow() - skin_start > skin_us_max) skin_us_max = sceKernelGetSystemTimeLow() - skin_start;
 
         snprintf(line0, sizeof(line0), "%-11s  frame %2u.%u ms  pos %5d %5d",
