@@ -11,6 +11,8 @@
 float player_spawn[4] = {0.0f, 0.0f, -300.0f, 0.0f};
 float player_room_limit = ROOM_HALF_SIZE - PLAYER_RADIUS;
 int (*player_floor_fn)(float x, float y, float z, float step, float *out) = 0;
+int camera_auto_follow = 0;
+#define CAMERA_FOLLOW_RATE 1.6f  /* rad/s toward Dante's heading at full run speed */
 
 static int floor_at(float x, float y, float z, float *out) {
     if (!player_floor_fn) { *out = 0.0f; return 1; }
@@ -100,6 +102,17 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         camera->snapping = 1;
         set_action(player, ACTION_CAMERA_SNAP);
     }
+    /* DMC3-style auto follow: drift behind the running direction (not while
+     * locked on or attacking, and never while a SELECT snap is running). */
+    if (camera_auto_follow && !camera->snapping && !player->locked_on && !player->attacking &&
+        player->speed > 1.0f && player->on_ground) {
+        float delta = wrap_angle(player->yaw - camera->yaw);
+        /* Running straight at the camera: leave it (DMC keeps the shot). */
+        if (fabsf(delta) < 2.4f) {
+            float rate = CAMERA_FOLLOW_RATE * (player->speed / PLAYER_RUN_SPEED) * dt;
+            camera->yaw = wrap_angle(camera->yaw + clampf(delta, -rate, rate));
+        }
+    }
     if (camera->snapping) {
         float delta = wrap_angle(camera->target_yaw - camera->yaw);
         camera->yaw = wrap_angle(camera->yaw + delta * (1.0f - expf(-CAMERA_SNAP_RATE * dt)));
@@ -109,13 +122,17 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     magnitude = sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y);
     if (magnitude > 1.0f) magnitude = 1.0f;
     player->speed = 0.0f;
-    player->camera_yaw = camera->yaw;
+    /* Input reference: latched when the stick leaves neutral and kept while it
+     * is held, so a moving camera (auto follow, snap) doesn't bend Dante's path
+     * into circles -- the DMC behaviour across camera changes. */
+    if (magnitude <= 0.0f || !player->stick_held) player->camera_yaw = camera->yaw;
+    player->stick_held = magnitude > 0.0f;
     if (player->attacking) magnitude = 0.0f;  /* root motion drives Dante instead */
     if (magnitude > 0.0f) {
         /* Camera-relative: stick up runs away from the camera. Right-handed
          * view (gumLookAt), so right = forward x up. */
-        float forward_x = sinf(camera->yaw), forward_z = cosf(camera->yaw);
-        float right_x = -cosf(camera->yaw), right_z = sinf(camera->yaw);
+        float forward_x = sinf(player->camera_yaw), forward_z = cosf(player->camera_yaw);
+        float right_x = -cosf(player->camera_yaw), right_z = sinf(player->camera_yaw);
         float move_x = forward_x * input->stick_y + right_x * input->stick_x;
         float move_z = forward_z * input->stick_y + right_z * input->stick_x;
         float length = sqrtf(move_x * move_x + move_z * move_z);

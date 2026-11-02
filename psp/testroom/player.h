@@ -45,7 +45,8 @@ typedef struct {
     int locked_on;
     int weapon_wheel;
     int attacking;      /* set by combat: movement and turning are suspended */
-    float camera_yaw;   /* copied from the camera each update (combat aims with it) */
+    float camera_yaw;   /* input reference yaw: latched while the stick is held (combat aims with it) */
+    int stick_held;     /* stick out of neutral last frame */
     Action last_action;
     float action_timer; /* seconds the HUD keeps showing last_action */
 } Player;
@@ -72,6 +73,9 @@ extern float player_spawn[4];       /* x, y, z, yaw used by player_reset */
 extern float player_room_limit;     /* |x|,|z| clamp; huge on a stage */
 /* Floor height under (x, z) no higher than y + step; 0 if none. NULL = flat floor at 0. */
 extern int (*player_floor_fn)(float x, float y, float z, float step, float *out);
+/* Stage camera zone says "follow" (st001's single CAM zone, type 0x400):
+ * the camera swings behind Dante's direction of travel while he runs. */
+extern int camera_auto_follow;
 
 void player_reset(Player *player, FollowCamera *camera);
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt);

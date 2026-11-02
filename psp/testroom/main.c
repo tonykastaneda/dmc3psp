@@ -443,10 +443,21 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         float a[3] = {camera_copy.tx, camera_copy.ty, camera_copy.tz};
         float b[3] = {camera_copy.x, camera_copy.y, camera_copy.z}, t;
         if (stage_raycast(a, b, &t)) {
+            /* Blocked: first try the boom raised over Dante (looking down),
+             * which keeps the shot instead of shoving the lens into his back. */
+            float high[3] = {a[0] + (b[0] - a[0]) * 0.55f, b[1] + 170.0f, a[2] + (b[2] - a[2]) * 0.55f}, th = 1.0f;
             float k = t - 0.08f < 0.15f ? 0.15f : t - 0.08f;
-            camera_copy.x = a[0] + (b[0] - a[0]) * k;
-            camera_copy.y = a[1] + (b[1] - a[1]) * k;
-            camera_copy.z = a[2] + (b[2] - a[2]) * k;
+            int high_hit = stage_raycast(a, high, &th);
+            if (!high_hit || th > k) {
+                float kh = high_hit ? th - 0.08f : 1.0f;
+                camera_copy.x = a[0] + (high[0] - a[0]) * kh;
+                camera_copy.y = a[1] + (high[1] - a[1]) * kh;
+                camera_copy.z = a[2] + (high[2] - a[2]) * kh;
+            } else {
+                camera_copy.x = a[0] + (b[0] - a[0]) * k;
+                camera_copy.y = a[1] + (b[1] - a[1]) * k;
+                camera_copy.z = a[2] + (b[2] - a[2]) * k;
+            }
         }
     }
     int i;
@@ -764,6 +775,7 @@ int main(int argc, char *argv[]) {
             player_spawn[3] = si->spawn_yaw;
             player_room_limit = 1.0e9f;
             player_floor_fn = stage_floor;
+            camera_auto_follow = 1;  /* st001's only camera zone is a follow zone */
         }
     }
     autotest = game_file_exists("AUTOEXIT.TXT");
@@ -790,6 +802,28 @@ int main(int argc, char *argv[]) {
     if (recording) autotest = 0;
     if (autotest || recording) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
+    if (stage_loaded()) {
+        /* Starting camera: behind Dante if that's clear, otherwise the
+         * clearest nearby angle (st001 spawns in the office doorway, where
+         * "behind" is inside the building). */
+        float best_yaw = camera.yaw, best_score = -1.0f, offset;
+        for (offset = 0.0f; offset < 6.28f; offset += 0.3927f) {
+            int side;
+            for (side = -1; side <= 1; side += 2) {
+                float yaw = player.yaw + offset * (float)side, t = 1.0f, score;
+                float a[3] = {player.x, player.y + CAMERA_TARGET_HEIGHT, player.z};
+                float b[3] = {player.x - sinf(yaw) * CAMERA_DISTANCE, player.y + CAMERA_HEIGHT,
+                              player.z - cosf(yaw) * CAMERA_DISTANCE};
+                if (!stage_raycast(a, b, &t)) t = 1.0f;
+                score = t - offset * 0.04f;  /* prefer angles near "behind" */
+                if (score > best_score) { best_score = score; best_yaw = yaw; }
+            }
+        }
+        camera.yaw = camera.target_yaw = best_yaw;
+        camera.x = player.x - sinf(best_yaw) * CAMERA_DISTANCE;
+        camera.y = player.y + CAMERA_HEIGHT;
+        camera.z = player.z - cosf(best_yaw) * CAMERA_DISTANCE;
+    }
     if (tour) camera.yaw = 2.5f;  /* front three-quarter view of Dante for the tour */
     else if (recording && !stage_loaded()) {
         /* Start in a corner facing the far one: the combos travel ~5 m. */
@@ -927,7 +961,10 @@ int main(int argc, char *argv[]) {
         if (autotest && frames == 26) capture_frame(draw_buffer, "SHOT_BONES.BMP");
         if (autotest && frames == 100) capture_frame(draw_buffer, "SHOT_RUN.BMP");
         if (autotest && frames == 150) capture_frame(draw_buffer, "SHOT_SIDE.BMP");
-        if (autotest && frames == 215) snapped = fabsf(camera.yaw - camera.target_yaw) < 0.02f;
+        /* The SELECT snap (frame 180) must land on its target; auto follow may
+         * keep turning the camera afterwards, so record the landing itself. */
+        if (autotest && frames > 180 && frames <= 240 && !camera.snapping &&
+            fabsf(camera.yaw - camera.target_yaw) < 0.02f) snapped = 1;
         if (autotest && frames == 222) capture_frame(draw_buffer, "SHOT_JUMP.BMP");
         if (autotest && frames == 249) {
             /* Locomotion checks are taken before the combat section resets Dante. */
