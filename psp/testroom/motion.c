@@ -54,6 +54,13 @@ int motion_init(void) {
 
 int motion_count(void) { return DMC3_MOTION_COUNT; }
 
+int motion_find(const char *name) {
+    int i;
+    for (i = 0; i < DMC3_MOTION_COUNT; ++i)
+        if (strcmp(motions[i].name, name) == 0) return i;
+    return -1;
+}
+
 const Motion *motion_get(int index) {
     if (index < 0 || index >= DMC3_MOTION_COUNT) return 0;
     return &motions[index];

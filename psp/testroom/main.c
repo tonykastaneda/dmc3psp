@@ -749,6 +749,18 @@ static void styles_record_pad(int frame, PlayerInput *input) {
     if (frame >= 785 && frame < 850) input->style_held = 1;
 }
 
+/* Jump demo for RECORD.TXT "jumps": standing jump, running jump, jump + Air Hike. */
+#define JUMPS_RECORD_FRAMES 520
+static void jumps_record_pad(int frame, PlayerInput *input) {
+    memset(input, 0, sizeof(*input));
+    input->style = -1;
+    if (frame == 30) input->jump = 1;                              /* standing jump */
+    if (frame >= 150 && frame < 260) input->stick_y = 1.0f;        /* run ... */
+    if (frame == 185) input->jump = 1;                             /* ... running jump */
+    if (frame == 330) input->jump = 1;                             /* jump ... */
+    if (frame == 352) input->jump = 1;                             /* ... Air Hike (Trickster) */
+}
+
 /* ---- Main --------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
@@ -760,7 +772,7 @@ int main(int argc, char *argv[]) {
     unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0, skin_us_max = 0;
     unsigned int rest_error;
     int frames = 0;
-    int autotest, recording, show_bones, tour = 0, sm_demo = 0, styles_demo = 0, tour_done = 0, motions_loaded, combat_ready = 0;
+    int autotest, recording, show_bones, tour = 0, sm_demo = 0, styles_demo = 0, jumps_demo = 0, tour_done = 0, motions_loaded, combat_ready = 0;
     int dash_seen = 0, hike_seen = 0, block_frames = 0;
     float dash_x = 0.0f, dash_z = 0.0f, dash_travel = 0.0f, hike_height = 0.0f;
     int combo_moves_seen = 0, stinger_seen = 0, style_before_reset = -1, prop_frames = 0, drive_seen = 0;
@@ -821,6 +833,7 @@ int main(int argc, char *argv[]) {
         if (f) { fread(text, 1, sizeof(text) - 1, f); fclose(f); }
         sm_demo = strncmp(text, "swordmaster", 11) == 0;
         styles_demo = strncmp(text, "styles", 6) == 0;
+        jumps_demo = strncmp(text, "jumps", 5) == 0;
         tour = (strncmp(text, "motions", 7) == 0 || strncmp(text, "rebellion", 9) == 0 ||
                 strncmp(text, "study", 5) == 0) && motions_loaded > 0;
         if (tour) {
@@ -885,7 +898,8 @@ int main(int argc, char *argv[]) {
             input.style = -1;
         } else if (recording) {
             dt = 1.0f / 60.0f;
-            if (styles_demo) styles_record_pad(frames, &input);
+            if (jumps_demo) jumps_record_pad(frames, &input);
+            else if (styles_demo) styles_record_pad(frames, &input);
             else if (sm_demo) sm_record_pad(frames, &input);
             else record_pad(frames, &input);
         } else if (autotest) {
@@ -982,7 +996,7 @@ int main(int argc, char *argv[]) {
                 snprintf(name, sizeof(name), "REC%04d.BMP", frames / 2);
                 capture_frame(draw_buffer, name);
             }
-            if ((!tour && frames + 1 >= (styles_demo ? STYLES_RECORD_FRAMES : sm_demo ? SM_RECORD_FRAMES : RECORD_FRAMES)) || tour_done) {
+            if ((!tour && frames + 1 >= (jumps_demo ? JUMPS_RECORD_FRAMES : styles_demo ? STYLES_RECORD_FRAMES : sm_demo ? SM_RECORD_FRAMES : RECORD_FRAMES)) || tour_done) {
                 char path[320];
                 FILE *done;
                 path_in_game_dir(path, sizeof(path), "RECORD_DONE.TXT");
@@ -999,7 +1013,7 @@ int main(int argc, char *argv[]) {
          * keep turning the camera afterwards, so record the landing itself. */
         if (autotest && frames > 180 && frames <= 240 && !camera.snapping &&
             fabsf(camera.yaw - camera.target_yaw) < 0.02f) snapped = 1;
-        if (autotest && frames == 222) capture_frame(draw_buffer, "SHOT_JUMP.BMP");
+        if (autotest && frames == 227) capture_frame(draw_buffer, "SHOT_JUMP.BMP");
         if (autotest && frames == 249) {
             /* Locomotion checks are taken before the combat section resets Dante. */
             float bx = player.x - start_x, bz = player.z - start_z;
@@ -1027,8 +1041,8 @@ int main(int argc, char *argv[]) {
             float moved = moved_before_reset;
             int ok = motions_loaded == motion_count() && combat_ready && combo_moves_seen == 3 &&
                      stinger_seen && attack_travel > 150.0f && prop_frames > 85 && drive_seen && moved > 500.0f &&
-                     dash_seen && dash_travel > 150.0f && hike_seen && hike_height > 110.0f && block_frames > 90 && frame_us_max < 33333u && rest_error < 1000u &&
-                     max_height > 50.0f && style_switched && style_before_reset == STYLE_GUNSLINGER && snapped;
+                     dash_seen && dash_travel > 150.0f && hike_seen && hike_height > 300.0f && block_frames > 90 && frame_us_max < 33333u && rest_error < 1000u &&
+                     max_height > 200.0f && style_switched && style_before_reset == STYLE_GUNSLINGER && snapped;
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
             if (report) {

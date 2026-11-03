@@ -68,8 +68,8 @@ static const MoveDef moves[MOVE_COUNT] = {
      * of travel; s33-07 an in-air pose; s33-08 climbs (root y up 35). */
     [MOVE_TR_DASH] = {"s33-17", "DASH",                 S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE},
     [MOVE_TR_SKY_STAR] = {"s33-18", "SKY STAR",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE},
-    [MOVE_TR_AIR_HIKE] = {"s33-07", "AIR HIKE",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 1, 560.0f},
-    [MOVE_TR_WALL_HIKE] = {"s33-08", "WALL HIKE",       S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 1, 760.0f},
+    [MOVE_TR_AIR_HIKE] = {"s33-07", "AIR HIKE",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 1, 1150.0f},
+    [MOVE_TR_WALL_HIKE] = {"s33-08", "WALL HIKE",       S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 1, 1450.0f},
     /* Royalguard (slot 34): s34-06 holds the guard (210 frames, loop from 131). */
     [MOVE_RG_BLOCK] = {"s34-06", "ROYAL BLOCK",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 1},
     [MOVE_RG_AIR_BLOCK] = {"s34-08", "AIR ROYAL BLOCK", S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 1},

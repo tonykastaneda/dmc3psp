@@ -3,6 +3,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "motion.h"
+
 #define PI_F 3.14159265f
 #define TWO_PI_F 6.28318531f
 #define STRIDE_LENGTH 165.0f /* cm covered per full run cycle */
@@ -61,6 +63,7 @@ static void set_action(Player *player, Action action) {
 
 void player_reset(Player *player, FollowCamera *camera) {
     memset(player, 0, sizeof(*player));
+    player->jump_motion = -1;
     player->x = player_spawn[0];
     player->y = player_spawn[1];
     player->z = player_spawn[2];
@@ -155,30 +158,76 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         }
     }
 
-    if (input->jump && player->on_ground && !player->attacking) {
+    if (input->jump && player->on_ground && !player->attacking &&
+        (player->jump_motion < 0 || player->jump_frame >= JUMP_LAND_FRAME)) {
         if (player->locked_on && magnitude > 0.0f) {
             set_action(player, ACTION_ROLL);
         } else {
-            player->vy = PLAYER_JUMP_SPEED;
+            /* Standing or running jump: the MOT's root Y drives the arc. */
+            int m = motion_find(player->speed > 50.0f ? "2-05" : "2-04");
+            if (m >= 0) {
+                player->jump_motion = m;
+                player->jump_frame = 0.0f;
+                player->jump_base_y = player->y;
+            } else {
+                player->vy = PLAYER_JUMP_SPEED;
+            }
             player->on_ground = 0;
             set_action(player, ACTION_JUMP);
         }
     }
+    /* Air moves (Air Hike, Sky Star, aerial attacks) take over from the jump arc. */
+    if (player->attacking && player->jump_motion >= 0 && !player->on_ground) player->jump_motion = -1;
     {
         float ground;
-        int has_ground = floor_at(player->x, player->y, player->z, &ground);
-        if (player->on_ground) {
+        int has_ground;
+        if (player->jump_motion >= 0) {
+            const Motion *jm = motion_get(player->jump_motion);
+            player->jump_frame += dt * MOTION_FPS;
+            if (!player->on_ground) {
+                float root[3], prev_y = player->y;
+                motion_root(jm, player->jump_frame < JUMP_LAND_FRAME ? player->jump_frame : JUMP_LAND_FRAME, root);
+                player->y = player->jump_base_y + root[1];
+                player->vy = (player->y - prev_y) / (dt > 0.0f ? dt : 1.0f / 60.0f);
+                has_ground = floor_at(player->x, player->y, player->z, &ground);
+                /* Only on the way down (apex at frame 27): the crouch frames 0-7 sit at root Y 0. */
+                if (player->jump_frame > 27.0f && has_ground && player->y <= ground) {
+                    /* Touchdown (possibly on something higher): landing frames. */
+                    player->y = ground;
+                    player->vy = 0.0f;
+                    player->on_ground = 1;
+                    player->air_hiked = 0;
+                    if (player->jump_frame < JUMP_LAND_FRAME) player->jump_frame = JUMP_LAND_FRAME;
+                } else if (player->jump_frame >= JUMP_LAND_FRAME) {
+                    /* Arc finished in mid-air (jumped off a ledge): free fall. */
+                    player->jump_motion = -1;
+                }
+            }
+            if (player->on_ground && (player->jump_frame >= JUMP_END_FRAME || player->speed > 1.0f))
+                player->jump_motion = -1;  /* landing done, or cancelled by moving */
+        }
+        has_ground = floor_at(player->x, player->y, player->z, &ground);
+        if (player->jump_motion >= 0 && !player->on_ground) {
+            /* the motion owns the height this frame */
+        } else if (player->on_ground) {
             /* Follow the floor (curbs, slopes); walk off an edge -> fall. */
             if (has_ground && ground >= player->y - STEP_HEIGHT) player->y = ground;
             else { player->on_ground = 0; player->vy = 0.0f; }
         }
-        if (!player->on_ground && player->attacking && !player->free_fall) {
+        if (player->jump_motion >= 0 && !player->on_ground) {
+            /* height comes from the jump motion: no gravity this frame */
+        } else if (!player->on_ground && player->attacking && !player->free_fall) {
             player->vy = 0.0f;  /* aerial attacks hang in the air, as in DMC */
         } else if (!player->on_ground) {
             player->vy -= PLAYER_GRAVITY * dt;
             player->y += player->vy * dt;
             if (has_ground && player->y <= ground && player->vy <= 0.0f) {
                 player->y = ground; player->vy = 0.0f; player->on_ground = 1; player->air_hiked = 0;
+                /* Every landing uses the jump motion's landing frames. */
+                if (!player->attacking) {
+                    int m = motion_find("2-04");
+                    if (m >= 0) { player->jump_motion = m; player->jump_frame = JUMP_LAND_FRAME; }
+                }
             }
             if (player->y < -5000.0f) player_reset(player, camera);  /* fell out of the world */
         }

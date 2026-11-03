@@ -36,6 +36,7 @@ typedef struct {
 
 int motion_init(void);           /* parses every embedded MOT; returns count, <0 on error */
 int motion_count(void);
+int motion_find(const char *name);  /* index by name, -1 if absent */
 const Motion *motion_get(int index);
 /* Frame with looping: past end_frame wraps into [loop_start, end_frame). */
 float motion_wrap(const Motion *motion, float frame);

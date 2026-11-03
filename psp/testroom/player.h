@@ -20,8 +20,13 @@
 #define PLAYER_RADIUS 40.0f
 #define PLAYER_RUN_SPEED 510.0f  /* cm/s at full stick; matches the run motion (408 cm / 48 frames) */
 #define PLAYER_TURN_RATE 12.0f   /* radians per second */
-#define PLAYER_JUMP_SPEED 620.0f
-#define PLAYER_GRAVITY 1900.0f
+/* Jumps follow the MOT root curve (2-04 standing / 2-05 running: 265 cm apex
+ * at frame 27, airborne frames 7-52, landing 52-69). Free falls use the
+ * gravity implied by that descent (265 cm in 25 frames at 60 fps). */
+#define PLAYER_JUMP_SPEED 1590.0f   /* only for jumps without the motion */
+#define PLAYER_GRAVITY 3050.0f
+#define JUMP_LAND_FRAME 52.0f
+#define JUMP_END_FRAME 69.0f
 #define CAMERA_DISTANCE 300.0f
 #define CAMERA_HEIGHT 190.0f
 #define CAMERA_TARGET_HEIGHT 95.0f
@@ -48,6 +53,9 @@ typedef struct {
     int free_fall;      /* combat move that keeps gravity (Air Hike, Wall Hike) */
     int air_hiked;      /* Air Hike used this airtime */
     int wall_contact;   /* collision pushed Dante out of a wall this frame */
+    int jump_motion;    /* motion driving the current jump/landing, -1 = none */
+    float jump_frame;   /* frame in that motion */
+    float jump_base_y;  /* floor height at takeoff */
     float camera_yaw;   /* input reference yaw: latched while the stick is held (combat aims with it) */
     int stick_held;     /* stick out of neutral last frame */
     Action last_action;

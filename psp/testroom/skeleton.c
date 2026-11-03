@@ -231,11 +231,44 @@ static void locomotion_sample(const AnimState *anim, const Combat *combat, Motio
     blend_samples(out, &idle, &run, anim->run_blend);
 }
 
+#define AIR_BLEND_RATE 14.0f
+
 void anim_pose(const AnimState *anim, const Player *player, const Combat *combat, Pose *pose, float time) {
-    static MotionSample sa, sb, sc;
+    static MotionSample sa, sb, sc, sj;
+    static int fall_motion = -2;
+    static float air_weight = 0.0f, fall_frame = 0.0f, last_time = 0.0f;
     int attacking = combat && combat->move != MOVE_NONE;
-    if (!anim->viewer && !player->on_ground && !attacking) {
-        pose_procedural(pose, player, time);
+    float dt = time - last_time, target;
+    int air_source = -1;
+    float air_frame = 0.0f;
+    last_time = time;
+    if (dt < 0.0f || dt > 0.2f) dt = 1.0f / 60.0f;
+    if (fall_motion == -2) fall_motion = motion_find("2-16");  /* in-air loop (6 frames, loops at 5) */
+    (void)pose_procedural;
+
+    /* Jump / landing / fall pose source, blended over locomotion. */
+    if (!anim->viewer && !attacking) {
+        if (player->jump_motion >= 0) {
+            air_source = player->jump_motion;
+            air_frame = player->jump_frame;
+        } else if (!player->on_ground && fall_motion >= 0) {
+            fall_frame = motion_wrap(motion_get(fall_motion), fall_frame + dt * MOTION_FPS);
+            air_source = fall_motion;
+            air_frame = fall_frame;
+        }
+    }
+    target = air_source >= 0 ? 1.0f : 0.0f;
+    air_weight += (target - air_weight) * (1.0f - expf(-AIR_BLEND_RATE * dt));
+    if (air_source >= 0) {
+        reset_offsets(pose);
+        motion_sample(motion_get(air_source), air_frame, &sj);
+        if (air_weight < 0.98f) {
+            locomotion_sample(anim, combat, &sa);
+            blend_samples(&sc, &sa, &sj, air_weight);
+            apply_sample(pose, &sc, 0, 0.0f, 0);
+        } else {
+            apply_sample(pose, &sj, 0, 0.0f, 0);
+        }
         return;
     }
     if (!anim->viewer && combat && (attacking || combat->fade_weight > 0.0f)) {
