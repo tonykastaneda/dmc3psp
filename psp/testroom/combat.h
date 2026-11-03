@@ -37,6 +37,9 @@ typedef enum {
     /* Royalguard (slot 34, "s34-NN"): hold circle. */
     MOVE_RG_BLOCK,                                /* s34-06: guard, loops while held */
     MOVE_RG_AIR_BLOCK,                            /* s34-08 */
+    /* Lock-on + direction + cross (base motions). */
+    MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT,              /* 2-07 (+X = Dante's left), 2-08 */
+    MOVE_BACKFLIP,                                /* 2-09: 394 cm back, root Y arc */
     MOVE_COUNT
 } MoveId;
 
@@ -53,6 +56,9 @@ typedef struct {
     /* Cross-fade from the previous pose source (locomotion or prior move). */
     int fade_motion;       /* -1 = locomotion */
     float fade_frame, fade_weight;
+    float next_hit;        /* frame of the move's next hit (-1 = done) */
+    float base_y;          /* height at the start of a root-Y move */
+    int hits_dealt;
 } Combat;
 
 int combat_init(void);     /* resolves rb-NN names; 0 if the moveset is missing */

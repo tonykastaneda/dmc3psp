@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "motion.h"
+#include "enemy.h"
 
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
@@ -32,10 +33,16 @@ typedef struct {
     int physics;           /* 0 = hover in the air while active, 1 = keep gravity */
     float start_vy;        /* vertical launch when the move starts (cm/s), 0 = none */
     int hold_loop;         /* loop [loop_start, end) while circle is held; release ends */
+    /* Hit data (training dummy): first hit frame, repeat interval (0 = once),
+     * reach in cm, reaction. Hit frames are set by eye from the swings. */
+    float hit_frame, hit_repeat, reach;
+    int hit_kind;          /* HitKind, or -1 for no hit */
+    int root_y;            /* drive Dante's height from the motion's root Y */
 } MoveDef;
 
 #define M BTN_MELEE
 #define S BTN_STYLE
+#define NOHIT 0, 0, 0, -1
 static const MoveDef moves[MOVE_COUNT] = {
     /*                   motion   label                 btn mash slam  tap: until switch next     late: from until next     auto: at next */
     [MOVE_COMBO1_1] = {"rb-03", "COMBO I - 1",          M, 0, 0, 18, 18, MOVE_COMBO1_2, 18, 55, MOVE_COMBO2_2, -1, MOVE_NONE},
@@ -73,7 +80,32 @@ static const MoveDef moves[MOVE_COUNT] = {
     /* Royalguard (slot 34): s34-06 holds the guard (210 frames, loop from 131). */
     [MOVE_RG_BLOCK] = {"s34-06", "ROYAL BLOCK",         S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 1},
     [MOVE_RG_AIR_BLOCK] = {"s34-08", "AIR ROYAL BLOCK", S, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 1},
+    /* 2-07 / 2-08 move 350 cm along +X / -X with the hips down to ~10 cm
+     * (rolls); 2-09 moves 394 cm back with a 273 cm root-Y arc (backflip). */
+    [MOVE_ROLL_LEFT] = {"2-07", "ROLL",                M, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 0, NOHIT, 0},
+    [MOVE_ROLL_RIGHT] = {"2-08", "ROLL",               M, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 0, NOHIT, 0},
+    [MOVE_BACKFLIP] = {"2-09", "BACKFLIP",             M, 0, 0, 0, 0, MOVE_NONE, 0, 0, MOVE_NONE, -1, MOVE_NONE, 0, 0, 0, NOHIT, 1},
 };
+
+/* Hit data per move (kept apart from the long table rows above):
+ * {move, first hit frame, repeat interval, reach cm, HitKind}. */
+static const struct { MoveId move; float frame, repeat, reach; int kind; } hit_table[] = {
+    {MOVE_COMBO1_1, 12, 0, 230, HIT_LIGHT}, {MOVE_COMBO1_2, 12, 0, 230, HIT_LIGHT},
+    {MOVE_COMBO1_3, 15, 0, 240, HIT_HEAVY}, {MOVE_COMBO2_2, 15, 0, 230, HIT_LIGHT},
+    {MOVE_COMBO2_3, 20, 0, 230, HIT_LIGHT}, {MOVE_MILLION_STAB, 2, 5, 240, HIT_LIGHT},
+    {MOVE_COMBO2_FINISH, 30, 0, 260, HIT_HEAVY}, {MOVE_STINGER_THRUST, 2, 0, 280, HIT_HEAVY},
+    {MOVE_HIGH_TIME, 14, 0, 230, HIT_LAUNCH}, {MOVE_AERIAL_RAVE, 10, 18, 240, HIT_AIR},
+    {MOVE_HELM_BREAKER, 30, 0, 260, HIT_SLAM}, {MOVE_SM_PROP, 6, 8, 230, HIT_LIGHT},
+    {MOVE_SM_DANCE, 10, 12, 240, HIT_LIGHT}, {MOVE_SM_CRAZY_DANCE, 10, 10, 260, HIT_LIGHT},
+    {MOVE_SM_DRIVE, 40, 0, 800, HIT_HEAVY}, {MOVE_SM_QUICK_DRIVE, 18, 0, 500, HIT_HEAVY},
+};
+
+static int hit_index(MoveId move) {
+    unsigned int i;
+    for (i = 0; i < sizeof(hit_table) / sizeof(hit_table[0]); ++i)
+        if (hit_table[i].move == move) return (int)i;
+    return -1;
+}
 #undef M
 #undef S
 
@@ -133,6 +165,10 @@ static void start_move(Combat *c, MoveId move, float frame) {
     c->frame = frame;
     c->queued = MOVE_NONE;
     c->mash_presses = 0;
+    {
+        int h = hit_index(move);
+        c->next_hit = h >= 0 ? hit_table[h].frame : -1.0f;
+    }
     motion_root(motion_get(c->motion), frame, c->last_root);
 }
 
@@ -176,6 +212,20 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     if (tri) c->since_melee = 0.0f;
     if (circ) c->since_style = 0.0f;
 
+    if (c->move == MOVE_NONE && input->jump && player->locked_on && player->on_ground) {
+        /* Lock-on + direction + cross: roll left/right, backflip. */
+        float fx = sinf(player->camera_yaw), fz = cosf(player->camera_yaw), rx = -cosf(player->camera_yaw), rz = sinf(player->camera_yaw);
+        float mx = fx * input->stick_y + rx * input->stick_x, mz = fz * input->stick_y + rz * input->stick_x;
+        float len = sqrtf(mx * mx + mz * mz);
+        if (len > 0.5f) {
+            float fwd = (mx * sinf(player->yaw) + mz * cosf(player->yaw)) / len;
+            float side = (mx * -cosf(player->yaw) + mz * sinf(player->yaw)) / len;  /* + = Dante's right */
+            if (fwd < -0.6f) start_move(c, MOVE_BACKFLIP, 0.0f);
+            else if (side > 0.5f) start_move(c, MOVE_ROLL_RIGHT, 0.0f);
+            else if (side < -0.5f) start_move(c, MOVE_ROLL_LEFT, 0.0f);
+            if (c->move != MOVE_NONE) c->base_y = player->y;
+        }
+    }
     if (c->move == MOVE_NONE) {
         int dir = player->locked_on ? stick_relative(player, input, player->camera_yaw) : 0;
         player->attacking = 0;
@@ -223,6 +273,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         }
     }
 
+    /* High Time can be jump-cancelled once the launch has landed (DMC). */
+    if (c->move == MOVE_HIGH_TIME && input->jump && c->frame > 20.0f && player->on_ground) {
+        end_move(c, player);
+        return;
+    }
     player->attacking = 1;
     player->free_fall = moves[c->move].physics == 1;
     /* Free-fall moves end on landing; guards end when circle is released. */
@@ -272,6 +327,25 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         if (player->z > limit) player->z = limit;
         if (player->z < -limit) player->z = -limit;
         memcpy(c->last_root, root, sizeof(root));
+        if (moves[c->move].root_y) {
+            player->y = c->base_y + (root[1] > 0.0f ? root[1] : 0.0f);
+            player->on_ground = root[1] <= 0.5f && c->frame > 5.0f;
+        }
+    }
+    /* Hits on the training dummy: in reach, in front of Dante, at the right height. */
+    if (c->next_hit >= 0.0f && c->frame >= c->next_hit && enemy_active()) {
+        int h = hit_index(c->move);
+        float e[3], dx, dz, dist, facing, dy;
+        enemy_position(e);
+        dx = e[0] - player->x; dz = e[2] - player->z;
+        dist = sqrtf(dx * dx + dz * dz);
+        facing = dist > 1.0f ? (dx * sinf(player->yaw) + dz * cosf(player->yaw)) / dist : 1.0f;
+        dy = e[1] - player->y;
+        if (h >= 0 && dist < hit_table[h].reach && facing > 0.2f && dy > -150.0f && dy < 200.0f) {
+            enemy_hit((HitKind)hit_table[h].kind, player->x, player->z);
+            ++c->hits_dealt;
+        }
+        c->next_hit = (h >= 0 && hit_table[h].repeat > 0.0f) ? c->next_hit + hit_table[h].repeat : -1.0f;
     }
 
     /* Hand-offs: queued follow-up, automatic continuation, or the end. */

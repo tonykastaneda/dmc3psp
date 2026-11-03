@@ -13,6 +13,7 @@ static float rdf(const unsigned char *p) { unsigned int u = rd32(p); float f; me
 static int parse(const Dmc3MotionBlob *blob, Motion *m) {
     const unsigned char *d = blob->data;
     unsigned int offset = 0x54, bone, bit;
+    int skipped = 0;
     int bones;
     if (blob->size < 0x54 || rd32(d) != 0x50 || memcmp(d + 4, "MOT", 4) != 0) return 0;
     m->name = blob->name;
@@ -27,21 +28,33 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
             MotionChannel *c;
             unsigned int size, count, k;
             if (!(mask >> bit & 1)) continue;
-            if (m->channel_count >= MOTION_MAX_CHANNELS || offset + 32 > blob->size) return 0;
+            if (offset + 16 > blob->size) return 0;
+            unsigned int kind, header, stride;
             size = rd16(d + offset);
             count = rd16(d + offset + 2);
-            if (rd32(d + offset + 4) != 3 || size != 32 + count * 8 || offset + size > blob->size || !count) return 0;
-            if (bit < 3 || bit > 8) return 0; /* only rotation/translation are understood */
+            kind = rd32(d + offset + 4);
+            if (kind == 3) { header = 32; stride = 8; }
+            else if (kind == 2) { header = 16; stride = 4; }  /* linear (enemy motions) */
+            else return 0;
+            if (size != header + count * stride || offset + size > blob->size || !count) return 0;
+            if (bit < 3 || bit > 8) {
+                /* Bits 0-2 (scale, seen on one bone of hl-38): not applied; skip the record. */
+                ++skipped;
+                offset += size;
+                continue;
+            }
+            if (m->channel_count >= MOTION_MAX_CHANNELS) return 0;
             c = &m->channels[m->channel_count++];
             c->bone = (unsigned short)bone;
             c->channel = (unsigned short)bit;
             c->key_count = (unsigned short)count;
-            for (k = 0; k < 6; ++k) c->params[k] = rdf(d + offset + 8 + k * 4);
-            c->keys = (const unsigned short *)(d + offset + 32); /* blob is 4-byte aligned */
+            c->kind = (unsigned short)kind;
+            for (k = 0; k < 6; ++k) c->params[k] = k < (kind == 3 ? 6u : 2u) ? rdf(d + offset + 8 + k * 4) : 0.0f;
+            c->keys = (const unsigned short *)(d + offset + header); /* blob is 4-byte aligned */
             offset += size;
         }
     }
-    return m->channel_count == (int)rd32(d + 0x50);
+    return m->channel_count + skipped == (int)rd32(d + 0x50);
 }
 
 int motion_init(void) {
@@ -74,8 +87,9 @@ float motion_wrap(const Motion *m, float frame) {
     return frame;
 }
 
-#define KEY_FRAME(c, k) ((float)((c)->keys[(k) * 4] & 0x7FFF))
-#define KEY_Q(c, k, n) ((float)(c)->keys[(k) * 4 + (n)] * (1.0f / 65535.0f))
+#define KEY_STRIDE(c) ((c)->kind == 3 ? 4 : 2)
+#define KEY_FRAME(c, k) ((float)((c)->keys[(k) * KEY_STRIDE(c)] & 0x7FFF))
+#define KEY_Q(c, k, n) ((float)(c)->keys[(k) * KEY_STRIDE(c) + (n)] * (1.0f / 65535.0f))
 
 /* Quantized Hermite: value/tangent = base + scale * q; tangents per frame. */
 static float evaluate(const MotionChannel *c, float frame) {
@@ -89,8 +103,10 @@ static float evaluate(const MotionChannel *c, float frame) {
             float t = (frame - f0) / span, t2 = t * t, t3 = t2 * t;
             float v0 = c->params[0] + c->params[1] * KEY_Q(c, k - 1, 1);
             float v1 = c->params[0] + c->params[1] * KEY_Q(c, k, 1);
-            float out0 = c->params[4] + c->params[5] * KEY_Q(c, k - 1, 3);
-            float in1 = c->params[2] + c->params[3] * KEY_Q(c, k, 2);
+            float out0, in1;
+            if (c->kind == 2) return v0 + (v1 - v0) * t;  /* linear */
+            out0 = c->params[4] + c->params[5] * KEY_Q(c, k - 1, 3);
+            in1 = c->params[2] + c->params[3] * KEY_Q(c, k, 2);
             return (2.0f * t3 - 3.0f * t2 + 1.0f) * v0 + (t3 - 2.0f * t2 + t) * span * out0 +
                    (-2.0f * t3 + 3.0f * t2) * v1 + (t3 - t2) * span * in1;
         }

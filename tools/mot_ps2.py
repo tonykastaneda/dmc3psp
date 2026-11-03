@@ -15,12 +15,13 @@ Header (0x50 bytes):
 Channel records follow from +0x54, ordered by bone then by channel bit:
   u16 record size (bytes, including this header)
   u16 key count
-  u32 interpolation type (3 = quantized Hermite)
-  f32[6] value base, value scale, in-tangent base, in-tangent scale,
-         out-tangent base, out-tangent scale
-  key[count], 8 bytes each:
-         u16 frame | 0x8000, u16 value, u16 in-tangent, u16 out-tangent
-         (each u16 maps to base + scale * q / 65535)
+  u32 interpolation type:
+    3 = quantized Hermite: f32[6] value/in/out-tangent base+scale, then
+        key[count] x 8 bytes {u16 frame (bit 15 usually set), u16 value,
+        u16 in-tangent, u16 out-tangent}
+    2 = quantized linear (enemies): f32[2] value base+scale, then
+        key[count] x 4 bytes {u16 frame, u16 value}
+  (each u16 q maps to base + scale * q / 65535; tangents per frame)
 """
 
 import struct
@@ -50,26 +51,32 @@ def parse_mot(data: bytes):
         if offset + 32 > len(data):
             raise ValueError(f"Truncated before channel {len(channels)}")
         size, key_count, kind = struct.unpack_from("<HHI", data, offset)
-        if kind != 3:
+        if kind == 3:
+            header, stride = 32, 8
+        elif kind == 2:
+            header, stride = 16, 4
+        else:
             raise ValueError(f"Channel {len(channels)} has interpolation type {kind}")
-        if size != 32 + key_count * 8:
-            raise ValueError(f"Channel {len(channels)} size {size} != 32 + 8 * {key_count}")
-        params = struct.unpack_from("<6f", data, offset + 8)
+        if size != header + key_count * stride:
+            raise ValueError(f"Channel {len(channels)} size {size} != {header} + {stride} * {key_count}")
+        params = struct.unpack_from("<6f" if kind == 3 else "<2f", data, offset + 8)
         keys = []
         last_frame = -1
         for k in range(key_count):
-            raw_frame, qv, qi, qo = struct.unpack_from("<4H", data, offset + 32 + k * 8)
-            if not raw_frame & 0x8000:
-                raise ValueError(f"Channel {len(channels)} key {k} lacks the 0x8000 frame flag")
+            if kind == 3:
+                raw_frame, qv, qi, qo = struct.unpack_from("<4H", data, offset + header + k * 8)
+            else:
+                raw_frame, qv = struct.unpack_from("<2H", data, offset + header + k * 4)
             frame = raw_frame & 0x7FFF
             if frame <= last_frame:
                 raise ValueError(f"Channel {len(channels)} key frames not increasing")
             last_frame = frame
-            keys.append((frame,
-                         params[0] + params[1] * qv / 65535.0,
-                         params[2] + params[3] * qi / 65535.0,
-                         params[4] + params[5] * qo / 65535.0))
-        channels.append({"bone": bone, "channel": bit, "keys": keys})
+            value = params[0] + params[1] * qv / 65535.0
+            if kind == 3:
+                keys.append((frame, value, params[2] + params[3] * qi / 65535.0, params[4] + params[5] * qo / 65535.0))
+            else:
+                keys.append((frame, value, None, None))
+        channels.append({"bone": bone, "channel": bit, "kind": kind, "keys": keys})
         offset += size
     return {
         "loop_start": loop_start,
@@ -92,6 +99,8 @@ def hermite(keys, frame: float) -> float:
         if frame <= f1:
             span = f1 - f0
             t = (frame - f0) / span
+            if out0 is None or in1 is None:          # linear (type 2)
+                return v0 + (v1 - v0) * t
             t2, t3 = t * t, t * t * t
             return ((2 * t3 - 3 * t2 + 1) * v0 + (t3 - 2 * t2 + t) * span * out0 +
                     (-2 * t3 + 3 * t2) * v1 + (t3 - t2) * span * in1)

@@ -28,6 +28,7 @@
 #include "coat.h"
 #include "combat.h"
 #include "stage.h"
+#include "enemy.h"
 #include "rebellion_runtime.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
@@ -569,6 +570,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         sceGumPopMatrix();
         bound_texture = -1;
     }
+    enemy_draw();
     if (show_bones) draw_bones();
 
     draw_hud(hud);
@@ -668,6 +670,14 @@ static void scripted_combat(int frame, PlayerInput *input) {
     if (frame == 1220) input->style = STYLE_ROYALGUARD;
     if (frame == 1230) input->style_action = 1;
     if (frame >= 1230 && frame < 1330) input->style_held = 1;
+    /* Training dummy (placed 180 cm ahead at 1340): lock on, combo I, High
+     * Time, then a roll. */
+    if (frame >= 1345 && frame < 1790) input->lock_on = 1;
+    if (frame == 1350 || frame == 1360 || frame == 1388) input->melee = 1;   /* (combo I ends ~1560) */
+    if (frame >= 1590 && frame < 1596) input->stick_y = -1.0f;
+    if (frame == 1593) input->melee = 1;                    /* High Time */
+    if (frame >= 1730 && frame < 1736) input->stick_x = 1.0f;
+    if (frame == 1733) input->jump = 1;                     /* roll */
 }
 
 /* Demo for RECORD.TXT: run, then the Rebellion set -- Combo I, Combo II
@@ -761,6 +771,29 @@ static void jumps_record_pad(int frame, PlayerInput *input) {
     if (frame == 352) input->jump = 1;                             /* ... Air Hike (Trickster) */
 }
 
+/* Training-dummy demo for RECORD.TXT "dummy" (Dante starts 2 m from it). */
+#define DUMMY_RECORD_FRAMES 1300
+static void dummy_record_pad(int frame, PlayerInput *input) {
+    memset(input, 0, sizeof(*input));
+    input->style = -1;
+    input->lock_on = frame >= 10 && frame < 1250;
+    if (frame == 20 || frame == 30 || frame == 58) input->melee = 1;          /* Combo I */
+    if (frame >= 247 && frame < 253) input->stick_y = -1.0f;
+    if (frame == 250) input->melee = 1;                                       /* High Time */
+    if (frame == 274) input->jump = 1;                                        /* jump-cancel, follow it up */
+    if (frame == 290 || frame == 308 || frame == 326) input->melee = 1;       /* Aerial Rave juggle */
+    if (frame >= 467 && frame < 473) input->stick_y = 1.0f;
+    if (frame == 470) input->melee = 1;                                       /* Stinger */
+    if (frame >= 597 && frame < 603) input->stick_x = 1.0f;
+    if (frame == 600) input->jump = 1;                                        /* roll right */
+    if (frame >= 677 && frame < 683) input->stick_x = -1.0f;
+    if (frame == 680) input->jump = 1;                                        /* roll left */
+    if (frame >= 757 && frame < 763) input->stick_y = -1.0f;
+    if (frame == 760) input->jump = 1;                                        /* backflip */
+    if (frame == 880 || frame == 905 || frame == 935) input->melee = 1;       /* Combo II */
+    if (frame >= 980 && frame < 1110 && (frame - 980) % 6 == 0) input->melee = 1; /* Million Stab */
+}
+
 /* ---- Main --------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
@@ -772,7 +805,9 @@ int main(int argc, char *argv[]) {
     unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0, skin_us_max = 0;
     unsigned int rest_error;
     int frames = 0;
-    int autotest, recording, show_bones, tour = 0, sm_demo = 0, styles_demo = 0, jumps_demo = 0, tour_done = 0, motions_loaded, combat_ready = 0;
+    int dummy_ready = 0, dummy_hits_combo = 0, roll_seen = 0;
+    float dummy_max_height = 0.0f, roll_travel = 0.0f, roll_x = 0.0f, roll_z = 0.0f;
+    int autotest, recording, show_bones, tour = 0, sm_demo = 0, styles_demo = 0, jumps_demo = 0, dummy_demo = 0, tour_done = 0, motions_loaded, combat_ready = 0;
     int dash_seen = 0, hike_seen = 0, block_frames = 0;
     float dash_x = 0.0f, dash_z = 0.0f, dash_travel = 0.0f, hike_height = 0.0f;
     int combo_moves_seen = 0, stinger_seen = 0, style_before_reset = -1, prop_frames = 0, drive_seen = 0;
@@ -806,6 +841,7 @@ int main(int argc, char *argv[]) {
     anim_reset(&anim);
     combat_reset(&combat);
     combat_ready = motions_loaded > 0 && combat_init();
+    dummy_ready = motions_loaded > 0 && enemy_init();
 
     {
         /* The Mission 2 street (st001) if STAGE.BIN is next to the EBOOT. */
@@ -834,6 +870,7 @@ int main(int argc, char *argv[]) {
         sm_demo = strncmp(text, "swordmaster", 11) == 0;
         styles_demo = strncmp(text, "styles", 6) == 0;
         jumps_demo = strncmp(text, "jumps", 5) == 0;
+        dummy_demo = strncmp(text, "dummy", 5) == 0;
         tour = (strncmp(text, "motions", 7) == 0 || strncmp(text, "rebellion", 9) == 0 ||
                 strncmp(text, "study", 5) == 0) && motions_loaded > 0;
         if (tour) {
@@ -848,6 +885,11 @@ int main(int argc, char *argv[]) {
     if (recording) autotest = 0;
     if (autotest || recording) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
+    /* Training dummy in the middle of the street (or ahead of Dante in the grid room). */
+    if (dummy_ready) {
+        if (stage_loaded()) enemy_spawn(2750.0f, 2450.0f);
+        else enemy_spawn(0.0f, 200.0f);
+    }
     if (stage_loaded()) {
         /* Starting camera: behind Dante if that's clear, otherwise the
          * clearest nearby angle (st001 spawns in the office doorway, where
@@ -869,6 +911,22 @@ int main(int argc, char *argv[]) {
         camera.x = player.x - sinf(best_yaw) * CAMERA_DISTANCE;
         camera.y = player.y + CAMERA_HEIGHT;
         camera.z = player.z - cosf(best_yaw) * CAMERA_DISTANCE;
+    }
+    if (dummy_demo && dummy_ready) {
+        /* Start 2 m from the dummy, facing it, camera at a three-quarter angle. */
+        float e[3];
+        enemy_position(e);
+        player.x = e[0] + 150.0f; player.z = e[2] + 140.0f;
+        player.yaw = atan2f(e[0] - player.x, e[2] - player.z);
+        {
+            float gy;
+            if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy;
+        }
+        camera.yaw = camera.target_yaw = player.yaw - 0.6f;
+        camera.x = player.x - sinf(camera.yaw) * CAMERA_DISTANCE;
+        camera.y = player.y + CAMERA_HEIGHT;
+        camera.z = player.z - cosf(camera.yaw) * CAMERA_DISTANCE;
+        camera.tx = player.x; camera.ty = player.y + CAMERA_TARGET_HEIGHT; camera.tz = player.z;
     }
     if (tour) camera.yaw = 2.5f;  /* front three-quarter view of Dante for the tour */
     else if (recording && !stage_loaded()) {
@@ -898,7 +956,8 @@ int main(int argc, char *argv[]) {
             input.style = -1;
         } else if (recording) {
             dt = 1.0f / 60.0f;
-            if (jumps_demo) jumps_record_pad(frames, &input);
+            if (dummy_demo) dummy_record_pad(frames, &input);
+            else if (jumps_demo) jumps_record_pad(frames, &input);
             else if (styles_demo) styles_record_pad(frames, &input);
             else if (sm_demo) sm_record_pad(frames, &input);
             else record_pad(frames, &input);
@@ -930,6 +989,18 @@ int main(int argc, char *argv[]) {
             input.style = -1;
             input.jump = 0;
         }
+        /* Lock-on target: the dummy, if it's within 25 m. */
+        player.has_target = 0;
+        if (dummy_ready && enemy_active()) {
+            float e[3], dx, dz;
+            enemy_position(e);
+            dx = e[0] - player.x; dz = e[2] - player.z;
+            if (dx * dx + dz * dz < 2500.0f * 2500.0f) {
+                player.has_target = 1;
+                player.target_x = e[0];
+                player.target_z = e[2];
+            }
+        }
         if (combat_ready && !anim.viewer) {
             MoveId before = combat.move;
             combat_update(&combat, &player, &input, dt);
@@ -948,6 +1019,10 @@ int main(int argc, char *argv[]) {
         }
         player_update(&player, &camera, &input, dt);
         player.wall_contact = stage_loaded() && stage_collide(&player.x, &player.z, player.y, PLAYER_RADIUS);
+        if (dummy_ready) {
+            enemy_update(dt);
+            enemy_push_out(&player.x, &player.z, PLAYER_RADIUS);
+        }
         if (input.style >= 0) style_switched = 1;
         if (player.y > max_height) max_height = player.y;
 
@@ -974,11 +1049,16 @@ int main(int argc, char *argv[]) {
         snprintf(line1, sizeof(line1), "%s%s%s%s%s",
                  combat.move != MOVE_NONE ? combat_move_name(combat.move) : "",
                  combat.move != MOVE_NONE && player.action_timer > 0.0f ? "  " : "",
-                 player.locked_on ? " [LOCK-ON: no target] " : "",
+                 player.locked_on ? (player.has_target ? " [LOCK-ON: DUMMY] " : " [LOCK-ON: no target] ") : "",
                  player.weapon_wheel ? "[WEAPON WHEEL] " : "",
                  player.action_timer > 0.0f ? player_action_name(player.last_action) : "");
         hud[0] = line0;
         hud[1] = line1;
+        if (dummy_ready && !anim.viewer) {
+            static char line2[64];
+            snprintf(line2, sizeof(line2), "DUMMY %-9s hits %d", enemy_state_name(), enemy_hits_taken());
+            hud[2] = line2;
+        } else
         hud[2] = anim.viewer ? "dpad left/right: previous/next motion" : "stick move  dpad style  R lock  L weapons";
         hud[3] = anim.viewer ? "START: back to play" : "X jump /\\ melee [] guns O style SELECT cam";
         render_scene(&player, &camera, hud, bones_now);
@@ -996,7 +1076,7 @@ int main(int argc, char *argv[]) {
                 snprintf(name, sizeof(name), "REC%04d.BMP", frames / 2);
                 capture_frame(draw_buffer, name);
             }
-            if ((!tour && frames + 1 >= (jumps_demo ? JUMPS_RECORD_FRAMES : styles_demo ? STYLES_RECORD_FRAMES : sm_demo ? SM_RECORD_FRAMES : RECORD_FRAMES)) || tour_done) {
+            if ((!tour && frames + 1 >= (dummy_demo ? DUMMY_RECORD_FRAMES : jumps_demo ? JUMPS_RECORD_FRAMES : styles_demo ? STYLES_RECORD_FRAMES : sm_demo ? SM_RECORD_FRAMES : RECORD_FRAMES)) || tour_done) {
                 char path[320];
                 FILE *done;
                 path_in_game_dir(path, sizeof(path), "RECORD_DONE.TXT");
@@ -1034,14 +1114,27 @@ int main(int argc, char *argv[]) {
         if (autotest && combat.move == MOVE_TR_AIR_HIKE) hike_seen = 1;
         if (autotest && combat.move == MOVE_RG_BLOCK) block_frames++;
         if (autotest && frames == 1290) capture_frame(draw_buffer, "SHOT_BLOCK.BMP");
+        if (autotest && frames == 1338) { input.reset = 1; player_reset(&player, &camera); }
+        if (autotest && frames == 1340 && dummy_ready)
+            enemy_spawn(player.x + sinf(player.yaw) * 180.0f, player.z + cosf(player.yaw) * 180.0f);
+        if (autotest && frames == 1585) dummy_hits_combo = enemy_hits_taken();
+        if (autotest && frames > 1593 && frames < 1730 && enemy_height() > dummy_max_height) dummy_max_height = enemy_height();
+        if (autotest && frames == 1375) capture_frame(draw_buffer, "SHOT_DUMMY_HIT.BMP");
+        if (autotest && frames == 1640) capture_frame(draw_buffer, "SHOT_DUMMY_AIR.BMP");
+        if (autotest && (combat.move == MOVE_ROLL_LEFT || combat.move == MOVE_ROLL_RIGHT)) {
+            if (!roll_seen) { roll_x = player.x; roll_z = player.z; }
+            roll_seen = 1;
+            roll_travel = sqrtf((player.x - roll_x) * (player.x - roll_x) + (player.z - roll_z) * (player.z - roll_z));
+        }
         if (autotest && frames == 1050) capture_frame(draw_buffer, "SHOT_DASH.BMP");
-        if (autotest && frames == 1360) {
+        if (autotest && frames == 1800) {
             char path[320];
             FILE *report;
             float moved = moved_before_reset;
-            int ok = motions_loaded == motion_count() && combat_ready && combo_moves_seen == 3 &&
+            int ok = motions_loaded == motion_count() && combat_ready && combo_moves_seen >= 3 &&
                      stinger_seen && attack_travel > 150.0f && prop_frames > 85 && drive_seen && moved > 500.0f &&
-                     dash_seen && dash_travel > 150.0f && hike_seen && hike_height > 300.0f && block_frames > 90 && frame_us_max < 33333u && rest_error < 1000u &&
+                     dash_seen && dash_travel > 150.0f && hike_seen && hike_height > 300.0f && block_frames > 90 &&
+                     dummy_ready && dummy_hits_combo >= 3 && dummy_max_height > 150.0f && roll_seen && roll_travel > 150.0f && frame_us_max < 33333u && rest_error < 1000u &&
                      max_height > 200.0f && style_switched && style_before_reset == STYLE_GUNSLINGER && snapped;
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
@@ -1051,14 +1144,16 @@ int main(int argc, char *argv[]) {
                         "camera_snapped=%d\njump_max_height=%d\nstyle=%s\nrest_pose_error_um=%u\n"
                         "avg_frame_us=%u\nmax_frame_us=%u\nmax_skin_us=%u\nmotions_loaded=%d\n"
                         "combat_ready=%d\ncombo_moves=%d\nstinger=%d\nstinger_travel=%d\n"
-                        "prop_frames=%d\ndrive=%d\ndash_travel=%d\nair_hike=%d\nhike_height=%d\nblock_frames=%d\n",
+                        "prop_frames=%d\ndrive=%d\ndash_travel=%d\nair_hike=%d\nhike_height=%d\nblock_frames=%d\n"
+                        "dummy=%d\ndummy_combo_hits=%d\ndummy_launch_height=%d\nroll_travel=%d\n",
                         ok ? "DMC3PSP_TESTROOM_OK" : "DMC3PSP_TESTROOM_FAIL", frames + 1, (int)moved,
                         (int)start_x, (int)start_z, (int)player.x, (int)player.z,
                         (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f), snapped,
                         (int)max_height, player_style_name((Style)style_before_reset), rest_error,
                         frame_us_total / (unsigned int)(frames + 1), frame_us_max, skin_us_max, motions_loaded,
                         combat_ready, combo_moves_seen, stinger_seen, (int)attack_travel, prop_frames, drive_seen,
-                        (int)dash_travel, hike_seen, (int)hike_height, block_frames);
+                        (int)dash_travel, hike_seen, (int)hike_height, block_frames,
+                        dummy_ready, dummy_hits_combo, (int)dummy_max_height, (int)roll_travel);
                 fclose(report);
             }
             running = 0;

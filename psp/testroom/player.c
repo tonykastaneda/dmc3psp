@@ -126,6 +126,11 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     magnitude = sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y);
     if (magnitude > 1.0f) magnitude = 1.0f;
     player->speed = 0.0f;
+    if (player->locked_on && player->has_target && !player->attacking) {
+        float delta = wrap_angle(atan2f(player->target_x - player->x, player->target_z - player->z) - player->yaw);
+        float max_turn = PLAYER_TURN_RATE * dt;
+        player->yaw = wrap_angle(player->yaw + clampf(delta, -max_turn, max_turn));
+    }
     /* Input reference: latched when the stick leaves neutral and kept while it
      * is held, so a moving camera (auto follow, snap) doesn't bend Dante's path
      * into circles -- the DMC behaviour across camera changes. */
@@ -143,7 +148,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         float limit = player_room_limit;
         move_x /= length;
         move_z /= length;
-        /* Lock-on holds the facing (strafe); otherwise turn toward travel. */
+        /* Lock-on faces the target (or holds the facing with none); otherwise turn toward travel. */
         if (!player->locked_on) {
             float delta = wrap_angle(atan2f(move_x, move_z) - player->yaw);
             float max_turn = PLAYER_TURN_RATE * dt;
@@ -161,7 +166,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     if (input->jump && player->on_ground && !player->attacking &&
         (player->jump_motion < 0 || player->jump_frame >= JUMP_LAND_FRAME)) {
         if (player->locked_on && magnitude > 0.0f) {
-            set_action(player, ACTION_ROLL);
+            /* lock-on + direction + cross: combat.c rolls / backflips */
         } else {
             /* Standing or running jump: the MOT's root Y drives the arc. */
             int m = motion_find(player->speed > 50.0f ? "2-05" : "2-04");

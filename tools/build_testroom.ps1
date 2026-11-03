@@ -53,7 +53,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

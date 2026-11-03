@@ -53,6 +53,8 @@ typedef struct {
     int free_fall;      /* combat move that keeps gravity (Air Hike, Wall Hike) */
     int air_hiked;      /* Air Hike used this airtime */
     int wall_contact;   /* collision pushed Dante out of a wall this frame */
+    int has_target;     /* lock-on has something to face (the training dummy) */
+    float target_x, target_z;
     int jump_motion;    /* motion driving the current jump/landing, -1 = none */
     float jump_frame;   /* frame in that motion */
     float jump_base_y;  /* floor height at takeoff */
