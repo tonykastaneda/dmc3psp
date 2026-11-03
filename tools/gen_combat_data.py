@@ -35,7 +35,7 @@ SCRIPTS = ["3:3", "3:4", "3:5", "3:6", "3:7", "3:8", "3:9", "3:10", "3:11",
            "23:0", "23:1", "23:2", "23:3", "23:24", "23:25", "23:26", "23:27", "23:17",
            "23:11", "23:15", "23:16", "23:5", "23:6",
            # Royalguard block states' first scripts (FUN_00224850, FUN_00225a00).
-           "24:0", "24:4"]
+           "24:0", "24:4", "2:0", "25:0", "26:0"]
 
 INPUTS = {  # command_table.csv input_text -> C enum
     "press TRI": "IN_TRI", "press CIR": "IN_CIR",
@@ -221,14 +221,20 @@ def main():
             rot = struct.unpack_from("<3f", b, 0x20)
             L.append(f"        {{{b[0]},{b[2]},{b[3]},{{{pos[0]:.4f}f,{pos[1]:.4f}f,{pos[2]:.4f}f}},{{{rot[0]:.4f}f,{rot[1]:.4f}f,{rot[2]:.4f}f}}}},")
         L.append("    },")
-    L += ["};", "", "/* Ivory: Ebony's table, second model. */",
-          "static const WeaponPlace ivory_places[WEAPON_PLACE_STATES] = {"]
-    for state in range(56):
-        b = elf[seg_off + u32(0x597C60 + state * 4) - seg_va:][:0x60]
-        pos = struct.unpack_from("<3f", b, 0x40)
-        rot = struct.unpack_from("<3f", b, 0x50)
-        L.append(f"    {{{b[0]},{b[0x30]},{b[0x31]},{{{pos[0]:.4f}f,{pos[1]:.4f}f,{pos[2]:.4f}f}},{{{rot[0]:.4f}f,{rot[1]:.4f}f,{rot[2]:.4f}f}}}},")
     L += ["};", ""]
+    # Two-model weapons keep the second's record at +0x30 of the same entry.
+    for name, table in (("ivory_places", 0x597C60), ("rudra_places", 0x596930)):
+        L += [f"static const WeaponPlace {name}[WEAPON_PLACE_STATES] = {{"]
+        for state in range(56):
+            p = u32(table + state * 4)
+            if not (0x590000 <= p < 0x5B0000):
+                L.append("    {255,0,0,{0,0,0},{0,0,0}},")
+                continue
+            b = elf[seg_off + p - seg_va:][:0x60]
+            pos = struct.unpack_from("<3f", b, 0x40)
+            rot = struct.unpack_from("<3f", b, 0x50)
+            L.append(f"    {{{b[0]},{b[0x30]},{b[0x31]},{{{pos[0]:.4f}f,{pos[1]:.4f}f,{pos[2]:.4f}f}},{{{rot[0]:.4f}f,{rot[1]:.4f}f,{rot[2]:.4f}f}}}},")
+        L += ["};", ""]
     L += ["typedef enum { IN_TRI, IN_CIR, IN_LOCK_FWD_TRI, IN_LOCK_BACK_TRI, IN_LOCK_FWD_CIR,",
           "               IN_LOCK_BACK_CIR, IN_CHARGE_TRI, IN_MASH_TRI, IN_MASH_CIR,",
           "               IN_LOCK_TARGET_CIR, IN_SQ, IN_CHARGE_SQ, IN_MASH_SQ, IN_MASH_CIR_SHORT,",

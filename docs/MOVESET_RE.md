@@ -33,6 +33,43 @@ Implemented in `psp/testroom/player.c` (`locomotion_step`).
   once and blends over 10 frames. Its camera follow (rate and angle limit) is
   its own tuning, not taken from the game's camera code.
 
+## Measured on the real game
+
+`tools/pcsx2_ref.py` drives a private PCSX2 with PINE memory access; `tools/ref_compare.py`
+runs one input script on it and on the port. Real-game addresses: player 0x17E0A40 (+0x50
+position, +0x84 yaw, +0x2AD4 health, +0x3C6C style, +0x3C74 style level, +0x24C6 motion,
++0x2848 state); camera eye 0xEC6F60, aim 0xEC6F70. Numbers per 60 fps frame:
+
+- **Jump** (all kinds): 7 frames grounded and still, then 35.5 cm losing 2.5 a frame for 10
+  frames, then 3.0 losing 1.5 a frame until the floor; peak 247 cm. A landing with the stick
+  held stops him 6 frames, then the walk start runs again.
+- **In the air** the facing never changes. A running jump or lock-on flip carries about 5.45
+  cm, plus 2.0 from the stick (so 7.4 with it held, 3.5 against it). From a standing jump the
+  stick gives a flat 4.25. Late in the arc the carry fades.
+- **Lock-on + cross**: forward is the running jump's motion (0:5), back the backflip (0:9), both
+  on the jump's arc; left and right are the rolls (0:7, 0:8). These are relative to his facing.
+- **Camera**: eye 255 cm above him on a slack 470 cm leash (240 to 565 seen), never swinging
+  behind him by itself. Aim 140 cm up, leading by 14 frames of travel (120 cm at a run).
+- **Matches already**: run 8.5, walk start 3.5, turn 0x800, melee root motion, strafe 3.5, dash
+  21.33 then 3.64, roll speeds.
+- **Air Hike** didn't fire with Trickster written to the style field in Mission 2, so its gate
+  and arc are unverified. Effect look: a spiked flash and lingering smoke per shot with no
+  visible bullet, a pale fan behind the blade, a streak behind a dash, no landing dust.
+
+## Weapon motions
+
+Each weapon pack has a PAC of MOTs (headers 0x30 / 0x40 for few bones). A placement record's
+first byte picks the motion. The grip bone carries all six channels the other way round from
+Dante's: 3-5 position in his model space in cm, 6-8 rotation; bones with only 3-5 rotate as
+usual. They run on Dante's timeline, hanging from his bone 0. Agni & Rudra's two swords are
+bones 1 and 2 of one model with records at +0 and +0x30 of the entry, like Ebony & Ivory.
+
+## Devil Trigger
+
+pl005-009 are bodies on Dante's 24-bone skeleton, one per melee weapon (order inferred from
+the names, and not compared with the real game: it isn't unlocked in Mission 2).
+`player+0x28A0` is the flag. Their extra MODs (wings) aren't used yet.
+
 ## Coat (CCnsChain, FUN_0022f270)
 
 `psp/testroom/coat.c` ports the update, once per 60 fps frame, parents first: predict
@@ -71,9 +108,7 @@ action to its end and feed every neutral command's button through the walker.
 
 Known to differ from the game (each one is still to do):
 
-- **Weapon models**: Rebellion and the guns are drawn, the other melee weapons not.
-  Packs are GDATA 97-106 (order inferred from the data); `+0x24d2` holds each
-  weapon's placement state. Guns sit on the hand bones in their rest pose.
+- **Weapon models**: all drawn from the placement tables. Cerberus's second MOD isn't.
 - **Guns**: the player has separate upper and lower body states (`player+0x2848` /
   `+0x284a`). `FUN_0021e620` with param_4 = 1 changes only the upper one, so Ebony &
   Ivory and the shotgun fire over walking legs: shot tables 0x594420 / 0x5944d0,
@@ -93,8 +128,12 @@ Known to differ from the game (each one is still to do):
   ported); the charge tiers in action 121 / 122 are a best reading.
 - **Agni & Rudra 58-60 and other rows sharing an input**: the first table row wins;
   rows may really be gated by style level or weapon upgrades.
-- **Beowulf 120**, Doppelganger, Quicksilver, Devil Trigger, taunts (209), action
-  96 and effects and sounds are not in. Air-move velocities pair a config offset
+- **Taunt** is SELECT on the real game (script 2:0); timing matches. Its turn of the facing
+  isn't ported.
+- **Quicksilver and Doppelganger** (L + up / down, then CIR) are stand-ins, not compared with
+  the real game: they're locked in Mission 2. Quicksilver runs the enemy at quarter speed under
+  a tint. The shadow is his current pose half a second behind him. Neither uses a gauge.
+- **Beowulf 120**, action 96 and sounds are not in. Effects are hand-built from the game's sheets (`psp/testroom/fx.c`), not its scripts. Air-move velocities pair a config offset
   with the next float, which fits the values read but wasn't traced per move.
 - **Controls**: the PSP has no L2 / R2, so L cycles melee weapons and L + square
   guns. This mapping is the test room's own.

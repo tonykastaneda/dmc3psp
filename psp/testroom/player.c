@@ -1,5 +1,7 @@
 #include "player.h"
 
+#include "stage.h"
+
 #include <math.h>
 #include <string.h>
 
@@ -14,8 +16,6 @@ float player_spawn[4] = {0.0f, 0.0f, -300.0f, 0.0f};
 float player_room_limit = ROOM_HALF_SIZE - PLAYER_RADIUS;
 int (*player_floor_fn)(float x, float y, float z, float step, float *out) = 0;
 int camera_auto_follow = 0;
-#define CAMERA_FOLLOW_RATE 1.6f  /* rad/s toward Dante's heading at full run speed */
-#define CAMERA_FOLLOW_MAX_ANGLE 1.9f  /* rad off the camera; beyond this it holds still */
 
 static int floor_at(float x, float y, float z, float *out) {
     if (!player_floor_fn) { *out = 0.0f; return 1; }
@@ -40,7 +40,7 @@ static void camera_goal(const Player *player, const FollowCamera *camera,
 }
 
 const char *player_style_name(Style style) {
-    static const char *names[STYLE_COUNT] = {"TRICKSTER", "SWORDMASTER", "GUNSLINGER", "ROYALGUARD"};
+    static const char *names[STYLE_COUNT] = {"TRICKSTER", "SWORDMASTER", "GUNSLINGER", "ROYALGUARD", "QUICKSILVER", "DOPPELGANGER"};
     return (unsigned)style < STYLE_COUNT ? names[style] : "?";
 }
 
@@ -87,7 +87,19 @@ void player_reset(Player *player, FollowCamera *camera) {
     camera->tx = player->x;
     camera->ty = player->y + CAMERA_TARGET_HEIGHT;
     camera->tz = player->z;
+    camera->last_x = player->x;
+    camera->last_z = player->z;
     player->camera_yaw = camera->yaw;
+}
+
+/* Height above the take-off after t frames (see JUMP_* in player.h). */
+static float jump_height(float t) {
+    float u = t - JUMP_CROUCH_FRAMES, w;
+    if (u <= 0.0f) return 0.0f;
+    if (u <= JUMP_RISE_FRAMES) return JUMP_RISE_SPEED * u - JUMP_RISE_LOSS * 0.5f * u * (u - 1.0f);
+    w = u - JUMP_RISE_FRAMES;
+    return JUMP_RISE_SPEED * JUMP_RISE_FRAMES - JUMP_RISE_LOSS * 0.5f * JUMP_RISE_FRAMES * (JUMP_RISE_FRAMES - 1.0f)
+         + JUMP_FALL_SPEED * w - JUMP_FALL_LOSS * 0.5f * w * (w - 1.0f);
 }
 
 static void turn_toward(Player *player, float yaw, float max_turn) {
@@ -101,11 +113,10 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
     float frames = dt * MOTION_FPS;
     int full_tilt = magnitude * STICK_TILT_SCALE >= STICK_TILT_RUN;
     if (!player->on_ground) {
-        /* Air steering is the test room's own, not from the game's handlers. */
+        /* Falling without a jump: the drift of a standing jump, facing unchanged. */
         player->loco = LOCO_IDLE;
         player->running = 1;
-        player->speed = PLAYER_RUN_SPEED * magnitude;
-        turn_toward(player, stick_yaw, PLAYER_TURN_RATE * dt);
+        player->speed = JUMP_DRIFT_SPEED * MOTION_FPS * magnitude;
         return stick_yaw;
     }
     if (player->loco == LOCO_IDLE) {
@@ -155,8 +166,8 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
 
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt) {
     float magnitude;
-    float follow;
-    float ex, ey, ez;
+    int wants_flip;
+    float stick_world[2];
 
     if (input->reset) {
         player_reset(player, camera);
@@ -170,6 +181,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         player->style = (Style)input->style;
         set_action(player, ACTION_STYLE_SWITCH);
     }
+    if (input->devil) player->devil = !player->devil;
     if (input->next_melee) player->melee_weapon = (player->melee_weapon + 1) % 5;
     if (input->next_gun) player->gun_weapon = 5 + (player->gun_weapon - 5 + 1) % 5;
 
@@ -179,22 +191,14 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         camera->snapping = 1;
         set_action(player, ACTION_CAMERA_SNAP);
     }
-    /* DMC3-style auto follow: drift behind the running direction (not while
-     * locked on or attacking, and never while a SELECT snap is running). */
-    if (camera_auto_follow && !camera->snapping && !player->locked_on && !player->attacking &&
-        player->speed > 1.0f && player->on_ground) {
-        float delta = wrap_angle(player->yaw - camera->yaw);
-        /* Running toward the camera: leave it, so Dante keeps coming at the
-         * lens instead of the camera circling around behind him. */
-        if (fabsf(delta) < CAMERA_FOLLOW_MAX_ANGLE) {
-            float rate = CAMERA_FOLLOW_RATE * (player->speed / PLAYER_RUN_SPEED) * dt;
-            camera->yaw = wrap_angle(camera->yaw + clampf(delta, -rate, rate));
-        }
-    }
+    /* SELECT's snap swings the eye round him. */
     if (camera->snapping) {
         float delta = wrap_angle(camera->target_yaw - camera->yaw);
-        camera->yaw = wrap_angle(camera->yaw + delta * (1.0f - expf(-CAMERA_SNAP_RATE * dt)));
-        if (fabsf(delta) < 0.002f) { camera->yaw = camera->target_yaw; camera->snapping = 0; }
+        float turn = delta * (1.0f - expf(-CAMERA_SNAP_RATE * dt));
+        float dx = camera->x - player->x, dz = camera->z - player->z, c = cosf(turn), s = sinf(turn);
+        camera->x = player->x + dx * c + dz * s;
+        camera->z = player->z - dx * s + dz * c;
+        if (fabsf(delta) < 0.002f) camera->snapping = 0;
     }
 
     magnitude = sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y);
@@ -203,7 +207,18 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     /* The stick is read against the camera as it is now (FUN_00254670), so it
      * always means the same direction on screen, even while the camera turns. */
     player->camera_yaw = camera->yaw;
+    wants_flip = player->locked_on && magnitude > 0.0f;
+    stick_world[0] = stick_world[1] = 0.0f;
+    if (magnitude > 0.0f) {
+        stick_world[0] = sinf(player->camera_yaw) * input->stick_y - cosf(player->camera_yaw) * input->stick_x;
+        stick_world[1] = cosf(player->camera_yaw) * input->stick_y + sinf(player->camera_yaw) * input->stick_x;
+    }
+    if (!player->on_ground && player->jump_motion >= 0) magnitude = 0.0f;  /* the arc moves him: below */
     if (player->attacking || player->gun_stance) magnitude = 0.0f;  /* combat moves Dante instead */
+    if (player->land_stop > 0.0f) {
+        player->land_stop -= dt * MOTION_FPS;
+        magnitude = 0.0f;
+    }
     if (magnitude > 0.0f) {
         /* Camera-relative: stick up runs away from the camera. Right-handed
          * view (gumLookAt), so right = forward x up. */
@@ -227,15 +242,21 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
 
     if (input->jump && player->on_ground && !player->attacking &&
         (player->jump_motion < 0 || player->jump_frame >= JUMP_LAND_FRAME)) {
-        if (player->locked_on && magnitude > 0.0f) {
-            /* lock-on + direction + cross: combat.c rolls / backflips */
+        if (wants_flip && !player->flip_request) {
+            /* lock-on + left / right + cross: combat.c rolls */
         } else {
-            /* Standing or running jump: the MOT's root Y drives the arc. */
-            int m = motion_find(player->speed > 50.0f ? "2-05" : "2-04");
+            int run_jump = player->speed > 50.0f;
+            int m = motion_find(player->flip_request < 0 ? "2-09" : player->flip_request > 0 || run_jump ? "2-05" : "2-04");
+            player->air_flip = player->flip_request != 0;
+            player->air_yaw = player->flip_request < 0 ? wrap_angle(player->yaw + 3.14159265f) : player->yaw;
+            player->air_carry = player->air_flip || run_jump ? JUMP_CARRY_SPEED : 0.0f;
+            player->flip_request = 0;
             if (m >= 0) {
                 player->jump_motion = m;
                 player->jump_frame = 0.0f;
+                player->jump_time = 0.0f;
                 player->jump_base_y = player->y;
+                player->speed = 0.0f;
             } else {
                 player->vy = PLAYER_JUMP_SPEED;
             }
@@ -249,25 +270,36 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         float ground;
         int has_ground;
         if (player->jump_motion >= 0) {
-            const Motion *jm = motion_get(player->jump_motion);
             player->jump_frame += dt * MOTION_FPS;
             if (!player->on_ground) {
-                float root[3], prev_y = player->y;
-                motion_root(jm, player->jump_frame < JUMP_LAND_FRAME ? player->jump_frame : JUMP_LAND_FRAME, root);
-                player->y = player->jump_base_y + root[1];
+                float prev_y = player->y;
+                player->jump_time += dt * MOTION_FPS;
+                /* The pose holds before the landing frames however long the fall is. */
+                if (player->jump_frame > JUMP_LAND_FRAME - 1.0f) player->jump_frame = JUMP_LAND_FRAME - 1.0f;
+                player->y = player->jump_base_y + jump_height(player->jump_time);
+                {
+                    /* Measured on the real game: see JUMP_CARRY_* in player.h. */
+                    float t = player->jump_time - JUMP_CROUCH_FRAMES, step = dt * MOTION_FPS, limit = player_room_limit;
+                    if (t >= 0.0f) {
+                        float carry = player->air_carry, stick = carry > 0.0f ? JUMP_STICK_SPEED : JUMP_DRIFT_SPEED;
+                        if (!player->air_flip) carry -= JUMP_CARRY_SLOWING * t;
+                        if (t > JUMP_CARRY_FADE_FRAME) carry -= JUMP_CARRY_FADE * (t - JUMP_CARRY_FADE_FRAME);
+                        if (carry < 0.0f || player->air_carry <= 0.0f) carry = 0.0f;
+                        player->x = clampf(player->x + (sinf(player->air_yaw) * carry + stick_world[0] * stick) * step, -limit, limit);
+                        player->z = clampf(player->z + (cosf(player->air_yaw) * carry + stick_world[1] * stick) * step, -limit, limit);
+                    }
+                }
                 player->vy = (player->y - prev_y) / (dt > 0.0f ? dt : 1.0f / 60.0f);
                 has_ground = floor_at(player->x, player->y, player->z, &ground);
-                /* Only on the way down (apex at frame 27): the crouch frames 0-7 sit at root Y 0. */
-                if (player->jump_frame > 27.0f && has_ground && player->y <= ground) {
+                if (player->vy < 0.0f && has_ground && player->y <= ground) {
                     /* Touchdown (possibly on something higher): landing frames. */
                     player->y = ground;
                     player->vy = 0.0f;
                     player->on_ground = 1;
                     player->air_hiked = 0;
-                    if (player->jump_frame < JUMP_LAND_FRAME) player->jump_frame = JUMP_LAND_FRAME;
-                } else if (player->jump_frame >= JUMP_LAND_FRAME) {
-                    /* Arc finished in mid-air (jumped off a ledge): free fall. */
-                    player->jump_motion = -1;
+                    player->land_stop = JUMP_LAND_STOP_FRAMES;
+                    player->speed = 0.0f;
+                    player->jump_frame = JUMP_LAND_FRAME;
                 }
             }
             if (player->on_ground && (player->jump_frame >= JUMP_END_FRAME || player->speed > 1.0f))
@@ -300,13 +332,45 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         }
     }
 
-    /* Frame-rate independent exponential follow of position. */
-    follow = 1.0f - expf(-8.0f * dt);
-    camera_goal(player, camera, &ex, &ey, &ez);
-    camera->x += (ex - camera->x) * follow;
-    camera->y += (ey - camera->y) * follow;
-    camera->z += (ez - camera->z) * follow;
-    camera->tx += (player->x - camera->tx) * follow;
-    camera->ty += (player->y + CAMERA_TARGET_HEIGHT - camera->ty) * follow;
-    camera->tz += (player->z - camera->tz) * follow;
+    {
+        /* The real camera: see CAMERA_* in player.h. */
+        float frames = dt * MOTION_FPS, dx, dz, h, goal_x, goal_z, rate;
+        goal_x = (player->x - camera->last_x) / (frames > 0.0f ? frames : 1.0f) * CAMERA_LEAD_FRAMES;
+        goal_z = (player->z - camera->last_z) / (frames > 0.0f ? frames : 1.0f) * CAMERA_LEAD_FRAMES;
+        camera->last_x = player->x;
+        camera->last_z = player->z;
+        if (goal_x * goal_x + goal_z * goal_z > 400.0f * 400.0f) goal_x = goal_z = 0.0f;  /* a warp */
+        rate = goal_x * goal_x + goal_z * goal_z > camera->lead_x * camera->lead_x + camera->lead_z * camera->lead_z
+             ? CAMERA_LEAD_RISE : CAMERA_LEAD_FALL;
+        camera->lead_x += (goal_x - camera->lead_x) * (1.0f - expf(-rate * dt));
+        camera->lead_z += (goal_z - camera->lead_z) * (1.0f - expf(-rate * dt));
+        camera->tx = player->x + camera->lead_x;
+        camera->tz = player->z + camera->lead_z;
+        camera->ty += (player->y + CAMERA_TARGET_HEIGHT - camera->ty) * (1.0f - expf(-8.0f * dt));
+        dx = camera->x - player->x;
+        dz = camera->z - player->z;
+        h = sqrtf(dx * dx + dz * dz);
+        if (h > 1.0f) {
+            float next = h + (CAMERA_DISTANCE - h) * (1.0f - expf(-CAMERA_LEASH_RATE * dt));
+            camera->x = player->x + dx / h * next;
+            camera->z = player->z + dz / h * next;
+        }
+        camera->y += (player->y + CAMERA_HEIGHT - camera->y) * (1.0f - expf(-8.0f * dt));
+        if (stage_loaded()) {
+            /* Pulled in when a wall comes between them, as on the real game near walls. */
+            float from[3] = {player->x, player->y + CAMERA_TARGET_HEIGHT, player->z};
+            float to[3] = {camera->x, camera->y, camera->z}, t;
+            if (stage_raycast(from, to, &t) && t < 1.0f) {
+                float reach = sqrtf((to[0] - from[0]) * (to[0] - from[0]) + (to[2] - from[2]) * (to[2] - from[2]));
+                t *= 0.92f;
+                /* It never comes closer than this on the real game. */
+                if (reach * t < CAMERA_MIN_DISTANCE && reach > 0.0f) t = CAMERA_MIN_DISTANCE / reach;
+                if (t < 1.0f) {
+                    camera->x = from[0] + (to[0] - from[0]) * t;
+                    camera->z = from[2] + (to[2] - from[2]) * t;
+                }
+            }
+        }
+        camera->yaw = atan2f(camera->tx - camera->x, camera->tz - camera->z);
+    }
 }

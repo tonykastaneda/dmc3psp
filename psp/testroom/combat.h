@@ -55,6 +55,8 @@ typedef enum {
     /* Not decoded yet: hand-made. */
     MOVE_TR_AIR_HIKE,
     MOVE_RG_BLOCK, MOVE_RG_AIR_BLOCK,
+    MOVE_TAUNT,                                   /* SELECT: script 2:0 */
+    MOVE_QUICKSILVER, MOVE_DOPPELGANGER,          /* CIR in those styles: 25:0, 26:0 */
     MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT, MOVE_BACKFLIP,
     /* Every other weapon: phases generated from tools/moveset_phases.py. */
     GEN_MOVE_IDS
@@ -140,7 +142,7 @@ const char *combat_move_name(MoveId move);
 int combat_take_shots(Combat *combat);
 int combat_move_is_gun(MoveId move);
 /* Where a weapon (0-4 melee, 5-9 guns) is now (FUN_002954b0, FUN_00293550): the placement
- * state if it's in use, else sheathed. second: Ivory, the gun's second model. */
+ * state if it's in use, else sheathed. second: the other of a pair: Ivory, or Rudra's record. */
 const WeaponPlace *combat_weapon_place(const Combat *combat, const Player *player, int weapon, int second);
 /* The stance's motions: whichever drives the pose while no move plays. */
 void combat_stance_motion(const Combat *combat, int *upper, float *upper_frame);

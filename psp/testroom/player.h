@@ -35,15 +35,42 @@
  * at frame 27, airborne frames 7-52, landing 52-69). Free falls use the
  * gravity implied by that descent (265 cm in 25 frames at 60 fps). */
 #define PLAYER_JUMP_SPEED 1590.0f   /* only for jumps without the motion */
-#define PLAYER_GRAVITY 3050.0f
+#define PLAYER_GRAVITY 5400.0f      /* 1.5 cm/frame^2, measured on the real game */
+/* Jump arc, measured on the real game (same for standing, running and flips):
+ * 7 frames on the ground, not moving, then 35.5 cm/frame losing 2.5 a frame for 10
+ * frames, then 3.0 losing 1.5 a frame until the floor. */
+#define JUMP_CROUCH_FRAMES 7.0f
+#define JUMP_RISE_FRAMES 10.0f
+#define JUMP_RISE_SPEED 35.5f
+#define JUMP_RISE_LOSS 2.5f
+#define JUMP_FALL_SPEED 3.0f
+#define JUMP_FALL_LOSS 1.5f
+/* In the air the facing doesn't change. A running jump or a lock-on flip carries on in
+ * its direction; the stick adds to that. From a standing jump the stick alone moves him. */
+#define JUMP_CARRY_SPEED 5.45f      /* cm/frame */
+#define JUMP_CARRY_SLOWING 0.03f    /* running jumps only */
+#define JUMP_CARRY_FADE_FRAME 26.0f /* late in the arc it fades */
+#define JUMP_CARRY_FADE 0.27f
+#define JUMP_STICK_SPEED 2.0f       /* stick's part on top of a carry */
+#define JUMP_DRIFT_SPEED 4.25f      /* from a standing jump */
+#define JUMP_LAND_STOP_FRAMES 6.0f  /* landing with the stick held: stopped, then starts again */
 #define JUMP_LAND_FRAME 52.0f
 #define JUMP_END_FRAME 69.0f
-#define CAMERA_DISTANCE 300.0f
-#define CAMERA_HEIGHT 190.0f
-#define CAMERA_TARGET_HEIGHT 95.0f
+/* Measured on the real game (Mission 2 street): the eye hangs on a slack leash at this
+ * distance and height and never swings behind him by itself; the aim point runs ahead of
+ * him by 14 frames of travel (120 cm at a run) and eases back when he stops. */
+#define CAMERA_DISTANCE 470.0f
+#define CAMERA_LEASH_RATE 3.5f
+#define CAMERA_MIN_DISTANCE 240.0f
+#define CAMERA_LEAD_FRAMES 14.0f
+#define CAMERA_LEAD_RISE 3.5f
+#define CAMERA_LEAD_FALL 1.6f
+#define CAMERA_HEIGHT 255.0f
+#define CAMERA_TARGET_HEIGHT 140.0f
 #define CAMERA_SNAP_RATE 10.0f   /* exponential rate of the SELECT snap */
 
-typedef enum { STYLE_TRICKSTER, STYLE_SWORDMASTER, STYLE_GUNSLINGER, STYLE_ROYALGUARD, STYLE_COUNT } Style;
+typedef enum { STYLE_TRICKSTER, STYLE_SWORDMASTER, STYLE_GUNSLINGER, STYLE_ROYALGUARD,
+               STYLE_QUICKSILVER, STYLE_DOPPELGANGER, STYLE_COUNT } Style;
 
 typedef enum {
     ACTION_NONE, ACTION_MELEE, ACTION_GUN, ACTION_STYLE, ACTION_JUMP, ACTION_ROLL,
@@ -74,6 +101,15 @@ typedef struct {
     float target_x, target_y, target_z;
     int jump_motion;    /* motion driving the current jump/landing, -1 = none */
     float jump_frame;   /* frame in that motion */
+    float jump_time;    /* frames since the press */
+    float land_stop;    /* frames left stopped after a landing */
+    float air_yaw;      /* direction a jump carries him */
+    float air_carry;    /* cm/frame of it, 0 from a stand */
+    int air_flip;       /* a lock-on flip: the carry doesn't slow */
+    int flip_request;   /* combat asks for a lock-on flip: 1 forward, -1 back */
+    int devil;          /* in Devil Trigger */
+    int quicksilver;    /* the world runs slow */
+    int doppelganger;   /* his shadow follows him */
     float jump_base_y;  /* floor height at takeoff */
     float camera_yaw;   /* input reference yaw: the camera's, every frame (combat aims with it) */
     LocoState loco;
@@ -92,6 +128,7 @@ typedef struct {
     int snapping;
     float x, y, z;     /* smoothed eye position */
     float tx, ty, tz;  /* smoothed look-at target */
+    float lead_x, lead_z, last_x, last_z;  /* aim point's run ahead of him */
 } FollowCamera;
 
 typedef struct {
@@ -102,6 +139,8 @@ typedef struct {
     int melee_held;    /* triangle held (Round Trip charge) */
     int gun_held;      /* square held */
     int next_melee, next_gun; /* cycle weapons this frame: L tap, L + square */
+    int devil;         /* Devil Trigger toggled this frame: L + R together */
+    int taunt;         /* SELECT, as on the real game */
     int lock_on;       /* R held */
     int weapon_wheel;  /* L held */
     int melee, gun, style_action, jump, snap_camera, reset, toggle_viewer; /* pressed this frame */

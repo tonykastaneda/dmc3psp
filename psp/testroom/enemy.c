@@ -1,5 +1,7 @@
 #include "enemy.h"
 
+#include "fx.h"
+
 #include <pspgu.h>
 #include <pspgum.h>
 #include <psputils.h>
@@ -166,6 +168,13 @@ static void enter(EnemyState s, int m) {
 void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (!active) return;
     ++hits;  /* infinite health: hits only cause reactions */
+    {
+        /* On the side facing the attacker, at chest height. */
+        float d[2] = {from_x - pos[0], from_z - pos[2]}, len = sqrtf(d[0] * d[0] + d[1] * d[1]);
+        float at[3] = {pos[0], pos[1] + 110.0f, pos[2]};
+        if (len > 1.0f) { at[0] += d[0] / len * 40.0f; at[2] += d[1] / len * 40.0f; }
+        fx_hit_spark(at);
+    }
     /* Face the attacker. */
     yaw = atan2f(from_x - pos[0], from_z - pos[2]);
     if (state == ENEMY_LAUNCHED || state == ENEMY_AIRBORNE) kind = kind == HIT_SLAM ? HIT_SLAM : HIT_AIR;

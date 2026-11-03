@@ -1,15 +1,13 @@
 #include "bullets.h"
 
-#include <pspgu.h>
-#include <pspgum.h>
 #include <math.h>
 #include <string.h>
 
 #include "enemy.h"
+#include "fx.h"
 #include "stage.h"
 
 #define MAX_BULLETS 48
-#define TRACER_SECONDS 0.07f
 #define ENEMY_RADIUS 70.0f
 #define ENEMY_HEIGHT 220.0f
 #define PROJECTILE_MAX_SECONDS 2.5f
@@ -23,8 +21,6 @@ typedef struct {
     float life;
     unsigned int color;
 } Bullet;
-
-typedef struct { unsigned int color; float x, y, z; } LineVertex;
 
 static Bullet bullets[MAX_BULLETS];
 static int shots_fired, hits_landed;
@@ -77,7 +73,6 @@ static float enemy_segment_hit(const float a[3], const float b[3]) {
 static int hitscan(int kind, const float from[3], const float to[3]) {
     float end[3], wall = 1.0f, t;
     int hit = 0, k;
-    Bullet *b;
     if (stage_loaded()) {
         float s;
         if (stage_raycast(from, to, &s)) wall = s;
@@ -87,15 +82,10 @@ static int hitscan(int kind, const float from[3], const float to[3]) {
     if (t >= 0.0f) {
         hit = 1;
         for (k = 0; k < 3; ++k) end[k] = from[k] + (end[k] - from[k]) * t;
+    } else if (wall < 1.0f) {
+        fx_wall_spark(end);
     }
-    b = new_bullet();
-    memset(b, 0, sizeof(*b));
-    b->active = 1;
-    b->kind = kind;
-    b->color = guns[kind].color;
-    b->life = TRACER_SECONDS;
-    memcpy(b->a, from, sizeof(b->a));
-    memcpy(b->b, end, sizeof(b->b));
+    if (kind == BULLET_SPIRAL) fx_tracer(from, end, guns[kind].color, 6.0f);
     return hit;
 }
 
@@ -116,6 +106,7 @@ void bullets_fire(int kind, const float muzzle[3], const float yaw, int has_targ
     len = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
     if (len < 1.0f) return;
     for (k = 0; k < 3; ++k) d[k] /= len;
+    fx_muzzle(muzzle, d, guns[kind].color);
     /* Shots run the gun's whole range, past the aim point. */
     for (k = 0; k < 3; ++k) to[k] = muzzle[k] + d[k] * guns[kind].range;
     if (guns[kind].speed > 0.0f) {
@@ -169,32 +160,12 @@ void bullets_update(float dt) {
                 b->a[k] = next[k] - b->velocity[k] * 0.03f;
                 b->b[k] = next[k];
             }
-            if (done) b->active = 0;
+            fx_projectile(b->a, b->b, b->color);
+            if (done) {
+                b->active = 0;
+                if (b->kind == BULLET_KALINA_ANN) fx_explosion(next);
+                else fx_wall_spark(next);
+            }
         }
     }
-}
-
-void bullets_draw(void) {
-    LineVertex *v;
-    int i, n = 0, count = 0;
-    for (i = 0; i < MAX_BULLETS; ++i) if (bullets[i].active) ++count;
-    if (!count) return;
-    v = sceGuGetMemory(sizeof(LineVertex) * count * 6);
-    for (i = 0; i < MAX_BULLETS; ++i) {
-        const Bullet *b = &bullets[i];
-        int k;
-        if (!b->active) continue;
-        /* The GE draws one-pixel lines: three stacked read as a tracer. */
-        for (k = -1; k <= 1; ++k) {
-            float y = (float)k * 1.5f;
-            v[n++] = (LineVertex){b->color, b->a[0], b->a[1] + y, b->a[2]};
-            v[n++] = (LineVertex){b->color, b->b[0], b->b[1] + y, b->b[2]};
-        }
-    }
-    sceGumLoadIdentity();
-    sceGuDisable(GU_TEXTURE_2D);
-    sceGuDisable(GU_LIGHTING);
-    sceGuDisable(GU_ALPHA_TEST);
-    sceGumDrawArray(GU_LINES, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
-    sceGuEnable(GU_TEXTURE_2D);
 }

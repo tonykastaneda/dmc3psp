@@ -20,6 +20,7 @@
 #include <malloc.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "model_runtime.h"
@@ -32,6 +33,7 @@
 #include "swizzle.h"
 #include "enemy.h"
 #include "bullets.h"
+#include "fx.h"
 #include "hud.h"
 #include "rebellion_runtime.h"
 #include "ebony_runtime.h"
@@ -45,6 +47,7 @@
 #include "nevan_runtime.h"
 #include "beowulf_runtime.h"
 #include "beowulf_groups.h"
+#include "devil_runtime.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -233,25 +236,26 @@ static int init_model(void) {
 
 /* Linear blend skinning: v' = sum_k w_k * (R_k (v - rest_k) + P_k). The rest
  * pose has identity rotations, so the inverse bind matrix is a translation. */
-static void skin_model(const Pose *p) {
+static void skin_mesh(const Pose *p, const Dmc3Vec3 *positions, const Dmc3Vec3 *normals, const Dmc3Vec3 *rest,
+                      const unsigned char (*bones)[3], const unsigned char (*weights)[3], int count, ModelVertex *out) {
     int i, k;
-    for (i = 0; i < DMC3_MODEL_VERTEX_COUNT; ++i) {
-        const Dmc3Vec3 *src = &dmc3_model_positions[i];
-        const Dmc3Vec3 *nrm = &dmc3_model_normals[i];
+    for (i = 0; i < count; ++i) {
+        const Dmc3Vec3 *src = &positions[i];
+        const Dmc3Vec3 *nrm = &normals[i];
         float px = 0.0f, py = 0.0f, pz = 0.0f, nx = 0.0f, ny = 0.0f, nz = 0.0f;
-        ModelVertex *dst = &model_vertices[i];
+        ModelVertex *dst = &out[i];
         for (k = 0; k < 3; ++k) {
-            int weight = dmc3_model_weights[i][k];
+            int weight = weights[i][k];
             int bone;
             float w, dx, dy, dz;
             const float (*r)[3];
             if (!weight) continue;
-            bone = dmc3_model_bones[i][k];
+            bone = bones[i][k];
             w = (float)weight * (1.0f / 31.0f);
             r = p->world_rot[bone].m;
-            dx = src->x - dmc3_bone_rest[bone].x;
-            dy = src->y - dmc3_bone_rest[bone].y;
-            dz = src->z - dmc3_bone_rest[bone].z;
+            dx = src->x - rest[bone].x;
+            dy = src->y - rest[bone].y;
+            dz = src->z - rest[bone].z;
             px += w * (r[0][0] * dx + r[0][1] * dy + r[0][2] * dz + p->world_pos[bone][0]);
             py += w * (r[1][0] * dx + r[1][1] * dy + r[1][2] * dz + p->world_pos[bone][1]);
             pz += w * (r[2][0] * dx + r[2][1] * dy + r[2][2] * dz + p->world_pos[bone][2]);
@@ -262,7 +266,36 @@ static void skin_model(const Pose *p) {
         dst->x = px; dst->y = py; dst->z = pz;
         dst->nx = nx; dst->ny = ny; dst->nz = nz;
     }
-    sceKernelDcacheWritebackRange(model_vertices, sizeof(ModelVertex) * DMC3_MODEL_VERTEX_COUNT);
+    sceKernelDcacheWritebackRange(out, sizeof(ModelVertex) * count);
+}
+
+static void skin_model(const Pose *p) {
+    skin_mesh(p, dmc3_model_positions, dmc3_model_normals, dmc3_bone_rest, dmc3_model_bones, dmc3_model_weights,
+              DMC3_MODEL_VERTEX_COUNT, model_vertices);
+}
+
+/* Devil Trigger bodies, set up the first time each is used. */
+typedef struct { ModelVertex *vertices; unsigned short *indices; void *textures[8]; } DevilRuntime;
+static DevilRuntime devil_runtime[DMC3_DEVIL_COUNT];
+
+static const DevilRuntime *devil_ready(int weapon) {
+    const DevilModel *m = &dmc3_devils[weapon];
+    DevilRuntime *r = &devil_runtime[weapon];
+    int i;
+    if (r->vertices) return r;
+    r->vertices = memalign(16, sizeof(ModelVertex) * m->vertex_count);
+    r->indices = memalign(16, sizeof(unsigned short) * m->index_count);
+    if (!r->vertices || !r->indices) return NULL;
+    for (i = 0; i < m->vertex_count; ++i) { r->vertices[i].u = m->uvs[i].u; r->vertices[i].v = m->uvs[i].v; }
+    memcpy(r->indices, m->indices, sizeof(unsigned short) * m->index_count);
+    for (i = 0; i < m->texture_count && i < 8; ++i) {
+        size_t bytes = (size_t)m->textures[i].width * m->textures[i].height * 4;
+        r->textures[i] = memalign(16, bytes);
+        if (!r->textures[i]) return NULL;
+        memcpy(r->textures[i], m->textures[i].rgba, bytes);
+        if (!swizzle_texture32(r->textures[i], m->textures[i].width, m->textures[i].height)) return NULL;
+    }
+    return r;
 }
 
 /* Skins the rest pose and returns the largest deviation from the source
@@ -293,17 +326,27 @@ typedef struct {
     ModelVertex *vertices;
     unsigned short *indices;
     void *texture;
+    const char *motion_prefix;    /* its motions, or NULL */
+    const WeaponGroup *groups;
+    int group_count, bone_count;
+    const short *parents;
+    const float (*rest)[3];
+    /* What's playing: chosen by the placement record's mode. */
+    const WeaponPlace *place;
+    int motion;
+    float frame;
 } GunModel;
 
-#define GUN_MODEL(n, N) {dmc3_##n##_positions, dmc3_##n##_normals, dmc3_##n##_uvs, dmc3_##n##_indices, dmc3_##n##_texture, \
-                          DMC3_##N##_VERTEX_COUNT, DMC3_##N##_INDEX_COUNT, DMC3_##N##_TEXTURE_WIDTH, DMC3_##N##_TEXTURE_HEIGHT, 0, 0, 0}
+#define GUN_MODEL(n, N, prefix) {dmc3_##n##_positions, dmc3_##n##_normals, dmc3_##n##_uvs, dmc3_##n##_indices, dmc3_##n##_texture, \
+                          DMC3_##N##_VERTEX_COUNT, DMC3_##N##_INDEX_COUNT, DMC3_##N##_TEXTURE_WIDTH, DMC3_##N##_TEXTURE_HEIGHT, 0, 0, 0, \
+                          prefix, dmc3_##n##_groups, DMC3_##N##_GROUP_COUNT, DMC3_##N##_BONE_COUNT, dmc3_##n##_parents, dmc3_##n##_rest, 0, -1, 0.0f}
 enum { GUN_REBELLION, GUN_CERBERUS, GUN_AGNI, GUN_NEVAN, GUN_BEOWULF,
        GUN_EBONY, GUN_SHOTGUN, GUN_ARTEMIS, GUN_SPIRAL, GUN_KALINA, GUN_IVORY, GUN_MODEL_COUNT };
 static GunModel gun_models[GUN_MODEL_COUNT] = {
-    GUN_MODEL(rebellion, REBELLION), GUN_MODEL(cerberus, CERBERUS), GUN_MODEL(agni, AGNI),
-    GUN_MODEL(nevan, NEVAN), GUN_MODEL(beowulf, BEOWULF),
-    GUN_MODEL(ebony, EBONY), GUN_MODEL(shotgun, SHOTGUN), GUN_MODEL(artemis, ARTEMIS),
-    GUN_MODEL(spiral, SPIRAL), GUN_MODEL(kalina, KALINA), GUN_MODEL(ivory, IVORY),
+    GUN_MODEL(rebellion, REBELLION, "w0-"), GUN_MODEL(cerberus, CERBERUS, "w1-"), GUN_MODEL(agni, AGNI, "w2-"),
+    GUN_MODEL(nevan, NEVAN, "w3-"), GUN_MODEL(beowulf, BEOWULF, NULL),
+    GUN_MODEL(ebony, EBONY, NULL), GUN_MODEL(shotgun, SHOTGUN, "w6-"), GUN_MODEL(artemis, ARTEMIS, "w7-"),
+    GUN_MODEL(spiral, SPIRAL, NULL), GUN_MODEL(kalina, KALINA, NULL), GUN_MODEL(ivory, IVORY, NULL),
 };
 
 static int init_guns(void) {
@@ -593,14 +636,7 @@ static void draw_bones(void) {
 
 static void to_gu_matrix(ScePspFMatrix4 *out, const float r[3][3], const float t[3]);
 
-/* R = Rz * Ry * Rx, applied X first (FUN_00131760). */
-static void place_rotation(const float e[3], float r[3][3]) {
-    float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
-    r[0][0] = cz * cy; r[0][1] = cz * sy * sx - sz * cx; r[0][2] = cz * sy * cx + sz * sx;
-    r[1][0] = sz * cy; r[1][1] = sz * sy * sx + cz * cx; r[1][2] = sz * sy * cx - cz * sx;
-    r[2][0] = -sy;     r[2][1] = cy * sx;                r[2][2] = cy * cx;
-}
-
+static void place_rotation(const float e[3], float r[3][3]);
 /* Call with Dante's model matrix current. */
 static void draw_weapon_at(const GunModel *m, const float pr[3][3], const float pt[3], const float pos[3], const float rot[3]) {
     ScePspFMatrix4 matrix;
@@ -620,19 +656,142 @@ static void draw_weapon_at(const GunModel *m, const float pr[3][3], const float 
     sceGumPopMatrix();
 }
 
-static void draw_placed(const GunModel *m, const WeaponPlace *place) {
-    float pr[3][3], pt[3];
+/* Starts the motion a new placement asks for, and runs it. */
+static void weapon_motion_update(GunModel *m, const WeaponPlace *place, const Combat *c, float dt) {
+    if (place != m->place) {
+        m->place = place;
+        m->motion = -1;
+        if (m->motion_prefix && place->mode != 0 && place->mode != 255) {
+            char name[16];
+            snprintf(name, sizeof(name), "%s%02d", m->motion_prefix, place->mode);
+            m->motion = motion_find(name);
+            if (m->motion >= 0) m->frame = motion_get(m->motion)->loop_start;
+        }
+        return;
+    }
+    if (m->motion >= 0) {
+        /* Authored against Dante's motion: on his bone 0, on his timeline. */
+        if (c->move != MOVE_NONE && place->bone == 0) m->frame = motion_wrap(motion_get(m->motion), c->frame);
+        else m->frame = motion_wrap(motion_get(m->motion), m->frame + dt * MOTION_FPS);
+    }
+}
+
+/* The weapon's bones in its own space under the motion, each group drawn on its bone. */
+static void draw_weapon_animated(const GunModel *m, const float base_r[3][3], const float base_t[3]) {
+    static MotionSample sample;
+    static float world_r[MOTION_MAX_BONES][3][3], world_t[MOTION_MAX_BONES][3];
+    int bone, g, a, b, k;
+    motion_sample(motion_get(m->motion), m->frame, &sample);
+    for (bone = 0; bone < m->bone_count && bone < MOTION_MAX_BONES; ++bone) {
+        int parent = m->parents[bone];
+        float e[3], local[3][3], offset[3];
+        /* A weapon's grip bone carries all six channels the other way round from Dante's:
+         * 3-5 hold its position in his model space (cm), 6-8 its rotation. Bones with only
+         * 3-5 (a pump, the sticks) rotate as usual. */
+        int swapped = sample.has_rot[bone][0] && sample.has_rot[bone][1] && sample.has_rot[bone][2] &&
+                      sample.has_trans[bone][0] && sample.has_trans[bone][1] && sample.has_trans[bone][2];
+        for (k = 0; k < 3; ++k) {
+            offset[k] = m->rest[bone][k] - (parent >= 0 ? m->rest[parent][k] : 0.0f);
+            if (swapped) {
+                e[k] = sample.trans[bone][k];
+                offset[k] = sample.rot[bone][k];
+            } else {
+                e[k] = sample.has_rot[bone][k] ? sample.rot[bone][k] : 0.0f;
+                /* The root's travel is Dante's own root motion, already in his position. */
+                if (sample.has_trans[bone][k] && parent >= 0) offset[k] = sample.trans[bone][k];
+            }
+        }
+        place_rotation(e, local);
+        if (parent < 0) {
+            memcpy(world_r[bone], local, sizeof(local));
+            memcpy(world_t[bone], offset, sizeof(offset));
+        } else {
+            for (a = 0; a < 3; ++a) {
+                for (b = 0; b < 3; ++b)
+                    world_r[bone][a][b] = world_r[parent][a][0] * local[0][b] + world_r[parent][a][1] * local[1][b] + world_r[parent][a][2] * local[2][b];
+                world_t[bone][a] = world_t[parent][a] + world_r[parent][a][0] * offset[0] + world_r[parent][a][1] * offset[1] + world_r[parent][a][2] * offset[2];
+            }
+        }
+    }
+    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    sceGuTexFlush();
+    for (g = 0; g < m->group_count; ++g) {
+        const WeaponGroup *group = &m->groups[g];
+        ScePspFMatrix4 matrix;
+        float r[3][3], t[3], local_t[3];
+        bone = group->bone;
+        /* v' = base (W (v - rest) + P) */
+        for (a = 0; a < 3; ++a)
+            local_t[a] = world_t[bone][a] - (world_r[bone][a][0] * m->rest[bone][0] + world_r[bone][a][1] * m->rest[bone][1] + world_r[bone][a][2] * m->rest[bone][2]);
+        for (a = 0; a < 3; ++a) {
+            for (b = 0; b < 3; ++b)
+                r[a][b] = base_r[a][0] * world_r[bone][0][b] + base_r[a][1] * world_r[bone][1][b] + base_r[a][2] * world_r[bone][2][b];
+            t[a] = base_t[a] + base_r[a][0] * local_t[0] + base_r[a][1] * local_t[1] + base_r[a][2] * local_t[2];
+        }
+        to_gu_matrix(&matrix, r, t);
+        sceGumPushMatrix();
+        sceGumMultMatrix(&matrix);
+        sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)group->count, m->indices + group->start, m->vertices);
+        sceGumPopMatrix();
+    }
+}
+
+/* The bone a record hangs from, in Dante's model space. */
+static void place_parent(const GunModel *m, const WeaponPlace *place, float pr[3][3], float pt[3]) {
     int a, b, bone = place->bone;
-    if (place->mode == 255) return;
     if (place->owner) {
         coat_bone_matrix(bone, pr, pt);   /* the holsters hang off the coat */
     } else {
-        /* A weapon motion would drive it (not ported): rest pose in the hand. */
-        if (bone >= DMC3_BONE_COUNT || (place->mode && bone == 0)) bone = BONE_L_HAND;
+        /* No motion to drive it: rest pose in the hand. */
+        if (bone >= DMC3_BONE_COUNT || (place->mode && bone == 0 && m->motion < 0)) bone = BONE_L_HAND;
         for (a = 0; a < 3; ++a) {
             for (b = 0; b < 3; ++b) pr[a][b] = pose.world_rot[bone].m[a][b];
             pt[a] = pose.world_pos[bone][a];
         }
+    }
+}
+
+/* Agni & Rudra: each sword is a bone of one model, with its own record. */
+static void draw_two_swords(const GunModel *m, const WeaponPlace *first, const WeaponPlace *second) {
+    int g, a, b;
+    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    sceGuTexFlush();
+    for (g = 0; g < m->group_count; ++g) {
+        const WeaponGroup *group = &m->groups[g];
+        const WeaponPlace *place = group->bone == 2 ? second : first;
+        const float *rest = m->rest[group->bone];
+        ScePspFMatrix4 matrix;
+        float pr[3][3], pt[3], local[3][3], r[3][3], t[3];
+        if (place->mode == 255) continue;
+        place_parent(m, place, pr, pt);
+        place_rotation(place->rot, local);
+        for (a = 0; a < 3; ++a) {
+            for (b = 0; b < 3; ++b) r[a][b] = pr[a][0] * local[0][b] + pr[a][1] * local[1][b] + pr[a][2] * local[2][b];
+            t[a] = pt[a] + pr[a][0] * place->pos[0] + pr[a][1] * place->pos[1] + pr[a][2] * place->pos[2];
+        }
+        for (a = 0; a < 3; ++a) t[a] -= r[a][0] * rest[0] + r[a][1] * rest[1] + r[a][2] * rest[2];
+        to_gu_matrix(&matrix, r, t);
+        sceGumPushMatrix();
+        sceGumMultMatrix(&matrix);
+        sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)group->count, m->indices + group->start, m->vertices);
+        sceGumPopMatrix();
+    }
+}
+
+static void draw_placed(const GunModel *m, const WeaponPlace *place) {
+    float pr[3][3], pt[3];
+    int a, b;
+    if (place->mode == 255) return;
+    place_parent(m, place, pr, pt);
+    if (m->motion >= 0) {
+        float local[3][3], r[3][3], t[3];
+        place_rotation(place->rot, local);
+        for (a = 0; a < 3; ++a) {
+            for (b = 0; b < 3; ++b) r[a][b] = pr[a][0] * local[0][b] + pr[a][1] * local[1][b] + pr[a][2] * local[2][b];
+            t[a] = pt[a] + pr[a][0] * place->pos[0] + pr[a][1] * place->pos[1] + pr[a][2] * place->pos[2];
+        }
+        draw_weapon_animated(m, r, t);
+        return;
     }
     draw_weapon_at(m, pr, pt, place->pos, place->rot);
 }
@@ -644,7 +803,7 @@ static void draw_beowulf(void) {
     sceGuTexImage(0, m->width, m->height, m->width, m->texture);
     sceGuTexFlush();
     for (g = 0; g < DMC3_BEOWULF_GROUP_COUNT; ++g) {
-        const WeaponGroup *group = &dmc3_beowulf_groups[g];
+        const WeaponGroup *group = &dmc3_beowulf_limb_groups[g];
         const Dmc3Vec3 *rest = &dmc3_bone_rest[group->bone];
         const Mat3 *rot = &pose.world_rot[group->bone];
         ScePspFMatrix4 matrix;
@@ -655,7 +814,7 @@ static void draw_beowulf(void) {
         to_gu_matrix(&matrix, rot->m, t);
         sceGumPushMatrix();
         sceGumMultMatrix(&matrix);
-        sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)group->count, dmc3_beowulf_group_indices + group->start, m->vertices);
+        sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)group->count, dmc3_beowulf_limb_indices + group->start, m->vertices);
         sceGumPopMatrix();
     }
 }
@@ -664,6 +823,8 @@ static void draw_beowulf(void) {
 static void draw_weapons(const Player *player) {
     int melee = player->melee_weapon, gun = player->gun_weapon;
     if (melee == 4) draw_beowulf();
+    else if (melee == 2 && gun_models[2].motion < 0)
+        draw_two_swords(&gun_models[2], combat_weapon_place(&combat, player, 2, 0), combat_weapon_place(&combat, player, 2, 1));
     else draw_placed(&gun_models[melee], combat_weapon_place(&combat, player, melee, 0));
     draw_placed(&gun_models[gun], combat_weapon_place(&combat, player, gun, 0));
     if (gun == 5) draw_placed(&gun_models[GUN_IVORY], combat_weapon_place(&combat, player, gun, 1));
@@ -718,34 +879,15 @@ static void draw_lock_on_reticle(const Player *p, const FollowCamera *c) {
                      hud_reticle_scale(dist));
 }
 
+#define DOPPEL_FRAMES 16
+static float doppel_trail[DOPPEL_FRAMES][4];
+static int doppel_head;
+
 static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
     const FollowCamera *camera = &camera_copy;
     perf_render_start = sceKernelGetSystemTimeLow();
-    if (stage_loaded()) {
-        /* Keep the follow camera on Dante's side of walls: pull the eye in to
-         * just before the first collision hit along target -> eye. */
-        float a[3] = {camera_copy.tx, camera_copy.ty, camera_copy.tz};
-        float b[3] = {camera_copy.x, camera_copy.y, camera_copy.z}, t;
-        if (stage_raycast(a, b, &t)) {
-            /* Blocked: first try the boom raised over Dante (looking down),
-             * which keeps the shot instead of shoving the lens into his back. */
-            float high[3] = {a[0] + (b[0] - a[0]) * 0.55f, b[1] + 170.0f, a[2] + (b[2] - a[2]) * 0.55f}, th = 1.0f;
-            float k = t - 0.08f < 0.15f ? 0.15f : t - 0.08f;
-            int high_hit = stage_raycast(a, high, &th);
-            if (!high_hit || th > k) {
-                float kh = high_hit ? th - 0.08f : 1.0f;
-                camera_copy.x = a[0] + (high[0] - a[0]) * kh;
-                camera_copy.y = a[1] + (high[1] - a[1]) * kh;
-                camera_copy.z = a[2] + (high[2] - a[2]) * kh;
-            } else {
-                camera_copy.x = a[0] + (b[0] - a[0]) * k;
-                camera_copy.y = a[1] + (b[1] - a[1]) * k;
-                camera_copy.z = a[2] + (b[2] - a[2]) * k;
-            }
-        }
-    }
     int i;
     int bound_texture = -1;
 
@@ -784,6 +926,14 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuDisable(GU_ALPHA_TEST);
     if (stage_loaded()) {
         stage_draw();
+    {
+        /* The real game's soft shadow: on the floor under him, fading as he rises. */
+        float floor_y;
+        if (stage_loaded() && stage_floor(player->x, player->y + 60.0f, player->z, 0.0f, &floor_y)) {
+            float h = player->y - floor_y, k = 1.0f - h / 500.0f;
+            if (k > 0.0f) fx_draw_shadow(player->x, floor_y, player->z, 42.0f, (unsigned int)(170.0f * k));
+        }
+    }
         sceGuDisable(GU_TEXTURE_2D);
     } else {
         sceGuDepthMask(GU_TRUE);
@@ -802,6 +952,20 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
     sceGuTexMode(GU_PSM_8888, 0, 0, 1);   /* character textures are swizzled at load */
+    if (player->devil && player->melee_weapon < DMC3_DEVIL_COUNT && devil_ready(player->melee_weapon)) {
+        const DevilModel *m = &dmc3_devils[player->melee_weapon];
+        const DevilRuntime *r = devil_ready(player->melee_weapon);
+        for (i = 0; i < m->object_count; ++i) {
+            const Dmc3ModelObject *object = &m->objects[i];
+            if ((int)object->texture != bound_texture) {
+                const Dmc3Texture *t = &m->textures[object->texture];
+                bound_texture = (int)object->texture;
+                sceGuTexImage(0, t->width, t->height, t->width, r->textures[bound_texture]);
+                sceGuTexFlush();
+            }
+            sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)object->index_count, r->indices + object->index_start, r->vertices);
+        }
+    } else {
     for (i = 0; i < DMC3_MODEL_OBJECT_COUNT; ++i) {
         const Dmc3ModelObject *object = &dmc3_model_objects[i];
         if ((int)object->texture != bound_texture) {
@@ -828,13 +992,41 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)count, coat_idx + start, coat);
         }
     }
+    }
+    bound_texture = -1;
+    if (player->doppelganger && !player->devil) {
+        /* His shadow: the same skinned body half a second behind him, dark and see-through.
+         * It costs no CPU; it doesn't play its own delayed moves as the real one does. */
+        ScePspFVector3 at = {doppel_trail[doppel_head][0], doppel_trail[doppel_head][1], doppel_trail[doppel_head][2]};
+        sceGumPushMatrix();
+        sceGumLoadIdentity();
+        sceGumTranslate(&at);
+        sceGumRotateY(doppel_trail[doppel_head][3] + MODEL_YAW_OFFSET);
+        sceGuDisable(GU_LIGHTING);
+        sceGuEnable(GU_BLEND);
+        sceGuBlendFunc(GU_ADD, GU_FIX, GU_FIX, 0x90909090u, 0x70707070u);
+        sceGuColor(0xff301818u);
+        sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGB);
+        sceGuTexImage(0, dmc3_model_textures[0].width, dmc3_model_textures[0].height, dmc3_model_textures[0].width, model_textures[0]);
+        sceGuTexFlush();
+        sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, DMC3_MODEL_INDEX_COUNT, model_indices, model_vertices);
+        sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+        sceGuDisable(GU_BLEND);
+        sceGuEnable(GU_LIGHTING);
+        sceGuColor(0xffffffffu);
+        sceGumPopMatrix();
+    }
     draw_weapons(player);
     bound_texture = -1;
     enemy_draw();
-    bullets_draw();
+    {
+        float eye[3] = {camera->x, camera->y, camera->z};
+        fx_draw(eye);
+    }
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
+    if (player->quicksilver) fx_screen_tint(0x38402810u);
     if (!anim.viewer) {
         hud_draw(player);
         draw_lock_on_reticle(player, camera);
@@ -889,8 +1081,8 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons, int *pr
     if (sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y) * STICK_TILT_SCALE < STICK_TILT_NEUTRAL)
         input->stick_x = input->stick_y = 0.0f;
     input->style = -1;
-    if (pressed & PSP_CTRL_UP) input->style = STYLE_TRICKSTER;
-    if (pressed & PSP_CTRL_DOWN) input->style = STYLE_ROYALGUARD;
+    if (pressed & PSP_CTRL_UP) input->style = (pad.Buttons & PSP_CTRL_LTRIGGER) ? STYLE_QUICKSILVER : STYLE_TRICKSTER;
+    if (pressed & PSP_CTRL_DOWN) input->style = (pad.Buttons & PSP_CTRL_LTRIGGER) ? STYLE_DOPPELGANGER : STYLE_ROYALGUARD;
     if (pressed & PSP_CTRL_LEFT) input->style = STYLE_SWORDMASTER;
     if (pressed & PSP_CTRL_RIGHT) input->style = STYLE_GUNSLINGER;
     input->lock_on = (pad.Buttons & PSP_CTRL_RTRIGGER) != 0;
@@ -903,6 +1095,8 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons, int *pr
         static int l_used;
         if (pad.Buttons & PSP_CTRL_LTRIGGER) {
             if (input->gun) { input->next_gun = 1; input->gun = 0; l_used = 1; }
+            /* L + R together: Devil Trigger. */
+            if (pressed & (PSP_CTRL_LTRIGGER | PSP_CTRL_RTRIGGER) && (pad.Buttons & PSP_CTRL_RTRIGGER)) { input->devil = 1; l_used = 1; }
             input->gun_held = 0;
             if (input->stick_x != 0.0f || input->stick_y != 0.0f) l_used = 1;  /* picked on the wheel */
         } else if (*previous_l) {
@@ -915,7 +1109,7 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons, int *pr
     input->style_held = (pad.Buttons & PSP_CTRL_CIRCLE) != 0;
     input->melee_held = (pad.Buttons & PSP_CTRL_TRIANGLE) != 0;
     input->jump = (pressed & PSP_CTRL_CROSS) != 0;
-    input->snap_camera = (pressed & PSP_CTRL_SELECT) != 0;
+    input->taunt = (pressed & PSP_CTRL_SELECT) != 0;
     input->toggle_viewer = (pressed & PSP_CTRL_START) != 0;
 }
 
@@ -1160,6 +1354,87 @@ static void write_memory_report(unsigned int boot_us, int motions_loaded) {
  * Ebony & Ivory alternate hands; the other guns use the weapon hand. */
 #define GUN_MUZZLE_FORWARD 30.0f   /* hand to muzzle: estimate until guns are drawn */
 #define TARGET_AIM_HEIGHT 100.0f   /* the lock-on point (player+0x3c40) isn't decoded for the dummy */
+/* R = Rz * Ry * Rx, applied X first (FUN_00131760). */
+static void place_rotation(const float e[3], float r[3][3]) {
+    float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
+    r[0][0] = cz * cy; r[0][1] = cz * sy * sx - sz * cx; r[0][2] = cz * sy * cx + sz * sx;
+    r[1][0] = sz * cy; r[1][1] = sz * sy * sx + cz * cx; r[1][2] = sz * sy * cx - cz * sx;
+    r[2][0] = -sy;     r[2][1] = cy * sx;                r[2][2] = cy * cx;
+}
+
+/* Dante's model space to the world, as his model matrix does. */
+static void model_to_world(const Player *p, const float m[3], float out[3]) {
+    float s = sinf(p->yaw), co = cosf(p->yaw);
+    out[0] = p->x + co * m[0] + s * m[2];
+    out[1] = p->y + m[1];
+    out[2] = p->z - s * m[0] + co * m[2];
+}
+
+/* Effects tied to the moves and to the player's state, once a frame. */
+static void update_move_fx(const Combat *c, const Player *p, float dt) {
+    if (p->melee_weapon != 4) weapon_motion_update(&gun_models[p->melee_weapon], combat_weapon_place(c, p, p->melee_weapon, 0), c, dt);
+    weapon_motion_update(&gun_models[p->gun_weapon], combat_weapon_place(c, p, p->gun_weapon, 0), c, dt);
+    static MoveId last_move = MOVE_NONE;
+    static int was_on_ground = 1;
+    static float last_vy;
+    float feet[3] = {p->x, p->y, p->z};
+    if (c->move != last_move) {
+        switch (c->move) {
+        case MOVE_TR_AIR_HIKE: fx_jump_burst(feet); break;
+        default: break;
+        }
+        last_move = c->move;
+    }
+    was_on_ground = p->on_ground;
+    last_vy = p->vy;
+    (void)was_on_ground; (void)last_vy;
+    {
+        /* Fast Trickster moves leave a streak behind him. */
+        static float last_chest[3];
+        float chest[3] = {p->x, p->y + 100.0f, p->z};
+        float dx = chest[0] - last_chest[0], dy = chest[1] - last_chest[1], dz = chest[2] - last_chest[2];
+        float step = dx * dx + dy * dy + dz * dz;
+        switch (c->move) {
+        case MOVE_TR_DASH: case MOVE_TR_DASH_BACK: case MOVE_TR_DASH_LEFT: case MOVE_TR_DASH_RIGHT:
+        case MOVE_TR_DASH2: case MOVE_TR_DASH2_BACK: case MOVE_TR_DASH2_LEFT: case MOVE_TR_DASH2_RIGHT:
+        case MOVE_TR_DASH_CHAIN: case MOVE_TR_SKY_STAR: case MOVE_TR_AIR_TRICK: case MOVE_TR_AIR_TRICK_AIR:
+            if (step > 15.0f * 15.0f && step < 300.0f * 300.0f) fx_streak(last_chest, chest);
+            break;
+        default: break;
+        }
+        memcpy(last_chest, chest, sizeof(chest));
+    }
+
+    /* The blade's streak while the script says the attack is live. */
+    if (c->active && !combat_move_is_gun(c->move) && p->melee_weapon <= 3 && p->melee_weapon != 1) {
+        static const float length[4] = {137.0f, 0.0f, 92.0f, 169.0f};
+        const WeaponPlace *place = combat_weapon_place(c, p, p->melee_weapon, 0);
+        if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
+            /* The blade runs along the model's +Z: the third column of place_rotation. */
+            const float *e = place->rot;
+            float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
+            float axis[3] = {cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx};
+            float base[3], tip[3], wb[3], wt[3], len = length[p->melee_weapon];
+            const float *bp = pose.world_pos[place->bone];
+            const Mat3 *br = &pose.world_rot[place->bone];
+            int k;
+            for (k = 0; k < 3; ++k) {
+                float l[3], t[3];
+                int j;
+                for (j = 0; j < 3; ++j) {
+                    l[j] = place->pos[j] + axis[j] * len * 0.3f;
+                    t[j] = place->pos[j] + axis[j] * len;
+                }
+                base[k] = bp[k] + br->m[k][0] * l[0] + br->m[k][1] * l[1] + br->m[k][2] * l[2];
+                tip[k] = bp[k] + br->m[k][0] * t[0] + br->m[k][1] * t[1] + br->m[k][2] * t[2];
+            }
+            model_to_world(p, base, wb);
+            model_to_world(p, tip, wt);
+            fx_trail_add(wb, wt, 0x38f0f0ffu);
+        }
+    }
+}
+
 static void fire_pending_shots(Combat *c, const Player *p, float dt) {
     int shots = combat_take_shots(c);
     bullets_update(dt);
@@ -1190,6 +1465,54 @@ static const float focus_stick[4][2] = {{1.0f, 0.0f}, {-1.0f, 0.0f}, {0.0f, -1.0
 #define COAT_FRAMES 345
 static int focus_coat;
 static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the street */
+/* "cmp": CMP_SCRIPT.TXT's inputs ("button first last" a line), Dante's position each frame
+ * to CMP_OUT.TXT, to line up with the same script on the real game (tools/ref_compare.py). */
+static int focus_cmp;
+#define CMP_MAX_EVENTS 64
+#define CMP_MAX_FRAMES 1200
+static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
+static int cmp_event_count, cmp_frames;
+static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000;
+static int cmp_melee = -1, cmp_gun = -1;
+static struct { float x, y, z, yaw; short move; } cmp_log[CMP_MAX_FRAMES];
+static void cmp_load(void) {
+    char path[320], line[64];
+    FILE *f;
+    path_in_game_dir(path, sizeof(path), "CMP_SCRIPT.TXT");
+    f = fopen(path, "r");
+    if (!f) return;
+    while (fgets(line, sizeof(line), f) && cmp_event_count < CMP_MAX_EVENTS) {
+        if (strncmp(line, "frames ", 7) == 0) cmp_frames = atoi(line + 7);
+        else if (strncmp(line, "shot ", 5) == 0) { if (cmp_shot_count < 32) cmp_shots[cmp_shot_count++] = atoi(line + 5); }
+        else if (strncmp(line, "enemy ", 6) == 0) cmp_enemy_distance = atoi(line + 6);
+        else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
+        else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
+        else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
+    }
+    fclose(f);
+    if (cmp_frames > CMP_MAX_FRAMES) cmp_frames = CMP_MAX_FRAMES;
+}
+static void cmp_pad(int frame, PlayerInput *input) {
+    int i;
+    for (i = 0; i < cmp_event_count; ++i) {
+        const char *b = cmp_events[i].button;
+        int held = frame >= cmp_events[i].first && frame <= cmp_events[i].last;
+        int pressed = frame == cmp_events[i].first;
+        if (!held) continue;
+        if (!strcmp(b, "lup")) input->stick_y = 1.0f;
+        else if (!strcmp(b, "ldown")) input->stick_y = -1.0f;
+        else if (!strcmp(b, "lleft")) input->stick_x = -1.0f;
+        else if (!strcmp(b, "lright")) input->stick_x = 1.0f;
+        else if (!strcmp(b, "r1")) input->lock_on = 1;
+        else if (!strcmp(b, "devil")) input->devil = pressed;
+        else if (!strcmp(b, "select")) input->taunt = pressed;
+        else if (!strcmp(b, "cross")) input->jump = pressed;
+        else if (!strcmp(b, "triangle")) { input->melee = pressed; input->melee_held = 1; }
+        else if (!strcmp(b, "square")) { input->gun = pressed; input->gun_held = 1; }
+        else if (!strcmp(b, "circle")) { input->style_action = pressed; input->style_held = 1; }
+        else if (!strncmp(b, "style", 5) && pressed) input->style = atoi(b + 5);
+    }
+}
 static int focus_weapons;  /* "weapons": each melee weapon and gun, sheathed, then swung / drawn */
 #define WEAPONS_STEP 100
 #define WEAPONS_FRAMES (WEAPONS_STEP * 5 + 10)
@@ -1258,6 +1581,10 @@ static void focus_pad(int frame, PlayerInput *input) {
         input->lock_on = frame >= 40;
         return;
     }
+    if (focus_cmp) {
+        cmp_pad(frame, input);
+        return;
+    }
     if (focus_weapons) {
         /* Each step: sheathed at frame 10, a melee press at 25, drawn gun from 45. */
         int t = frame % WEAPONS_STEP;
@@ -1299,7 +1626,7 @@ static void focus_hold(const char *name) {
 /* ---- Main --------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
-    Player player;
+    Player player = {.melee_weapon = 0, .gun_weapon = 5};   /* player_reset keeps the weapons */
     FollowCamera camera;
     PlayerInput input;
     void *draw_buffer = (void *)0;
@@ -1388,6 +1715,8 @@ int main(int argc, char *argv[]) {
         focus_plink = strncmp(text, "plink", 5) == 0;
         focus_hud = strncmp(text, "hud", 3) == 0;
         focus_weapons = strncmp(text, "weapons", 7) == 0;
+        focus_cmp = strncmp(text, "cmp", 3) == 0;
+        if (focus_cmp) cmp_load();
     }
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
@@ -1577,7 +1906,7 @@ int main(int argc, char *argv[]) {
         player_update(&player, &camera, &input, dt);
         player.wall_contact = stage_loaded() && stage_collide(&player.x, &player.z, player.y, PLAYER_RADIUS);
         if (dummy_ready) {
-            enemy_update(dt);
+            enemy_update(player.quicksilver ? dt * 0.25f : dt);
             enemy_push_out(&player.x, &player.z, PLAYER_RADIUS);
         }
         if (input.style >= 0) style_switched = 1;
@@ -1611,9 +1940,24 @@ int main(int argc, char *argv[]) {
         }
         pose_evaluate(&pose);
         if (focus && focus_plink) plink_measure(&pose, frames);
+        fx_update(dt);
         fire_pending_shots(&combat, &player, dt);
-        skin_model(&pose);
+        if (player.devil && player.melee_weapon < DMC3_DEVIL_COUNT && devil_ready(player.melee_weapon)) {
+            const DevilModel *dm = &dmc3_devils[player.melee_weapon];
+            skin_mesh(&pose, dm->positions, dm->normals, dm->rest, dm->bones, dm->weights, dm->vertex_count, devil_ready(player.melee_weapon)->vertices);
+        } else {
+            skin_model(&pose);
+        }
         coat_update(&pose, &player, dt);
+        {
+            float chest[3] = {player.x, player.y + 110.0f, player.z};
+            if (input.devil) fx_devil_burst(chest);
+            if (player.devil) fx_devil_aura(chest);
+        }
+        update_move_fx(&combat, &player, dt);
+        doppel_trail[doppel_head][0] = player.x; doppel_trail[doppel_head][1] = player.y;
+        doppel_trail[doppel_head][2] = player.z; doppel_trail[doppel_head][3] = player.yaw;
+        doppel_head = (doppel_head + 1) % DOPPEL_FRAMES;
         skin_us = sceKernelGetSystemTimeLow() - skin_start;
         if (skin_us > skin_us_max) skin_us_max = skin_us;
 
@@ -1695,6 +2039,40 @@ int main(int argc, char *argv[]) {
                 running = 0;
             }
         }
+        if (focus && focus_cmp) {
+            if (frames == 1) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = -2.15f; coat_reset();
+                /* The real game's camera at this spot, so the same stick goes the same way. */
+                camera.x = player.x - 127.0f; camera.z = player.z + 448.0f; camera.y = player.y + 255.0f;
+                camera.tx = player.x; camera.ty = player.y + 140.0f; camera.tz = player.z; camera.last_x = player.x; camera.last_z = player.z; camera.lead_x = camera.lead_z = 0.0f;
+                enemy_spawn(player.x + sinf(player.yaw) * (float)cmp_enemy_distance, player.z + cosf(player.yaw) * (float)cmp_enemy_distance); if (cmp_melee >= 0) player.melee_weapon = cmp_melee; if (cmp_gun >= 0) player.gun_weapon = cmp_gun; }
+            {
+                static char cmp_name[32];
+                int shot;
+                for (shot = 0; shot < cmp_shot_count; ++shot)
+                    if (frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }
+            }
+            if (frames < CMP_MAX_FRAMES) {
+                cmp_log[frames].x = player.x; cmp_log[frames].y = player.y; cmp_log[frames].z = player.z;
+                cmp_log[frames].yaw = player.yaw; cmp_log[frames].move = (short)combat.move;
+            }
+            if (frames >= cmp_frames) {
+                char path[320];
+                FILE *report;
+                int i;
+                path_in_game_dir(path, sizeof(path), "CMP_OUT.TXT");
+                report = fopen(path, "w");
+                if (report) {
+                    for (i = 0; i < cmp_frames; ++i)
+                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw,
+                                cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-");
+                    fclose(report);
+                }
+                path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
+                report = fopen(path, "w");
+                if (report) { fprintf(report, "cmp done, frames=%d\n", cmp_frames); fclose(report); }
+                running = 0;
+            }
+        } else
         if (focus && focus_weapons) {
             static char shot_name[32];
             static const char *views[3] = {"SHEATH", "SWING", "GUN"};

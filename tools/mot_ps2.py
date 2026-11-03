@@ -27,11 +27,11 @@ Channel records follow, ordered by bone then by channel bit:
 
 import struct
 
-HEADER_SIZES = (0x50, 0x60)
+HEADER_SIZES = (0x30, 0x40, 0x50, 0x60)  # by bone count: weapons have few
 
 
 def parse_mot(data: bytes):
-    if len(data) < 0x54 or data[4:8] != b"MOT\0":
+    if len(data) < 0x34 or data[4:8] != b"MOT\0":
         raise ValueError("Not a DMC3 MOT")
     header_size = struct.unpack_from("<I", data, 0)[0]
     if header_size not in HEADER_SIZES or len(data) < header_size + 4:
@@ -50,7 +50,7 @@ def parse_mot(data: bytes):
     channels = []
     offset = header_size + 4
     for bone, bit in expected:
-        if offset + 32 > len(data):
+        if offset + 16 > len(data):
             raise ValueError(f"Truncated before channel {len(channels)}")
         size, key_count, kind = struct.unpack_from("<HHH", data, offset)
         if kind == 3:

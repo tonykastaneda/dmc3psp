@@ -45,7 +45,7 @@ from tim2 import decode_picture
 
 STAGE_SLOT = 276
 STAGE_DATA_SLOT = 277
-MAX_EDGE = 300.0          # cm
+MAX_EDGE = 500.0          # cm
 FLOOR_MIN_NY = 0.55       # walkable if the face normal's Y is at least this
 GRID_CELL = 200.0         # cm
 MIN_MIP = 8               # also keeps every level swizzlable (>= 4 px wide, 8 rows)
@@ -82,6 +82,10 @@ def decode_textures(texture_data: bytes):
         textures.append((picture["width"], picture["height"], bytes(rgba)))
         offset += n * 0x800
     return textures
+
+
+# PS2 doubles vertex colour; the real street then comes out darker than this (material, lights).
+STAGE_BRIGHTNESS = 1.25
 
 
 def mip_chain(w, h, rgba):
@@ -286,7 +290,7 @@ def main() -> None:
             for t in g:
                 for v in t:
                     x, y, z, u, vv, r, g_, b = v
-                    col = 0xFF000000 | (min(255, int(b * 2)) << 16) | (min(255, int(g_ * 2)) << 8) | min(255, int(r * 2))
+                    col = 0xFF000000 | (min(255, int(b * STAGE_BRIGHTNESS)) << 16) | (min(255, int(g_ * STAGE_BRIGHTNESS)) << 8) | min(255, int(r * STAGE_BRIGHTNESS))
                     blob += struct.pack("<2fI3f", u, vv, col, x, y, z)
             pts = [v for t in g for v in t]
             chunks.append((first, len(g) * 3,

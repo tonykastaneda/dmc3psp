@@ -138,6 +138,9 @@ static const MoveDef moves[MOVE_COUNT] = {
     /* The block states' scripts (FUN_00224850 24:0, FUN_00225a00 24:4), not yet their logic. */
     [MOVE_RG_BLOCK] = {S("24:0"), "ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 1},
     [MOVE_RG_AIR_BLOCK] = {S("24:4"), "AIR ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 1},
+    [MOVE_TAUNT] = {S("2:0"), "TAUNT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_DOPPELGANGER] = {S("26:0"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_LEFT] = {H("2-07"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_RIGHT] = {H("2-08"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_BACKFLIP] = {H("2-09"), "BACKFLIP", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 0, 1},
@@ -234,7 +237,8 @@ const WeaponPlace *combat_weapon_place(const Combat *c, const Player *player, in
         state = 2;   /* Rebellion's ready stance */
     }
     if (state < 0 || state >= WEAPON_PLACE_STATES) state = 1;
-    return second ? &ivory_places[state] : &weapon_places[weapon][state];
+    if (second) return weapon == 2 ? &rudra_places[state] : &ivory_places[state];
+    return &weapon_places[weapon][state];
 }
 
 int combat_move_is_gun(MoveId move) { return move >= 0 && move < MOVE_COUNT && moves[move].gun; }
@@ -814,7 +818,15 @@ static int air_trick_update(Combat *c, Player *player, float dt) {
 static void start_handmade(Combat *c, Player *player, const PlayerInput *input) {
     int guard = input->style_action && player->style == STYLE_ROYALGUARD;
     int hike = input->jump && !player->on_ground && player->style == STYLE_TRICKSTER && !player->air_hiked;
-    if (input->jump && player->locked_on && player->on_ground) {
+    if (input->taunt && player->on_ground) {
+        start_move(c, MOVE_TAUNT, 0);
+    } else if (input->style_action && player->on_ground && player->style == STYLE_QUICKSILVER) {
+        player->quicksilver = !player->quicksilver;
+        start_move(c, MOVE_QUICKSILVER, 0);
+    } else if (input->style_action && player->on_ground && player->style == STYLE_DOPPELGANGER) {
+        player->doppelganger = !player->doppelganger;
+        start_move(c, MOVE_DOPPELGANGER, 0);
+    } else if (input->jump && player->locked_on && player->on_ground) {
         float fx = sinf(player->camera_yaw), fz = cosf(player->camera_yaw);
         float rx = -cosf(player->camera_yaw), rz = sinf(player->camera_yaw);
         float mx = fx * input->stick_y + rx * input->stick_x, mz = fz * input->stick_y + rz * input->stick_x;
@@ -825,7 +837,8 @@ static void start_handmade(Combat *c, Player *player, const PlayerInput *input) 
             float ref = player->has_target ? atan2f(player->target_x - player->x, player->target_z - player->z) : player->yaw;
             float fwd = (mx * sinf(ref) + mz * cosf(ref)) / len;
             float side = (mx * -cosf(ref) + mz * sinf(ref)) / len;  /* + = Dante's right */
-            if (fwd < -0.6f) start_move(c, MOVE_BACKFLIP, 0);
+            /* Forward and back are jumps (0:5, 0:9), on the jump's arc: player.c. */
+            if (fwd < -0.6f || fwd > 0.6f) { player->flip_request = fwd > 0.0f ? 1 : -1; player->yaw = ref; }
             else if (side > 0.5f) start_move(c, MOVE_ROLL_RIGHT, 0);
             else if (side < -0.5f) start_move(c, MOVE_ROLL_LEFT, 0);
             if (c->move != MOVE_NONE) { c->base_y = player->y; player->yaw = ref; }

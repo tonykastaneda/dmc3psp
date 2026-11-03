@@ -64,6 +64,8 @@ void hud_draw(const Player *player) {
     static const int emblems[STYLE_COUNT] = {
         [STYLE_TRICKSTER] = HUD_STYLE_GOLD, [STYLE_SWORDMASTER] = HUD_STYLE_RED,
         [STYLE_GUNSLINGER] = HUD_STYLE_BLUE, [STYLE_ROYALGUARD] = HUD_STYLE_GREEN,
+        /* Their own emblems aren't picked out of the pack yet. */
+        [STYLE_QUICKSILVER] = HUD_STYLE_BLUE, [STYLE_DOPPELGANGER] = HUD_STYLE_RED,
     };
     static const int melee[5] = {HUD_MELEE_REBELLION, HUD_MELEE_CERBERUS, HUD_MELEE_AGNI, HUD_MELEE_NEVAN, HUD_MELEE_BEOWULF};
     static const int guns[5] = {HUD_GUN_EBONY_IVORY, HUD_GUN_SHOTGUN, HUD_GUN_ARTEMIS, HUD_GUN_SPIRAL, HUD_GUN_KALINA};
