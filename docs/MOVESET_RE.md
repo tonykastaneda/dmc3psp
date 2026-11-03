@@ -49,36 +49,83 @@ constant (bank, index). Callers by region: 0x21d000-0x22c000 generic player
 
 ### Motion slots are script driven
 
-`FUN_00254e80` (start motion on a layer) stores bank at +0x30, index at
-+0x34, then `FUN_00254f10` runs a **bytecode interpreter** over the byte
-stream at `*(slot + 0x14)`: opcodes 1-8, 0x10-0x1f (`FUN_00256410(slot,
-op - 0x0f)`), 0x20-0x24, terminated by 0. Motion data comes from the source
-object at `slot + 0x44` (vtable +0x28 / +0x38 with `slot + 0x38`).
+`FUN_0024fb90` sets up the two motion layers per weapon slot with
+`FUN_00254d60(slot, script_file, layer, mode 0, motion_list, ...)`, where
+`script_file = FUN_001aef10(0x6c3810, 0, character, 5)` -- **chunk 5 of the
+character archive** -- and layer is 1 for `+0x4240`, 0 for `+0x4170`.
+
+Script file (`tools/motion_scripts.py` disassembles it;
+output in `analysis/moveset/motion_scripts.{csv,json}` and
+`motion_files.csv`):
+
+- Header `u16[3]` = offsets of the *script* part (0x6), the *motion
+  definition* part (0xd740) and an unused third (0xffff). Each part starts
+  `u16 4, u16 0xffff`, then a table of 34 u16 bank offsets (ends at 0xffff,
+  counted by `FUN_002557f0`).
+- `FUN_002557b0`: script = `t + t[bank]` then `+ sub[index]` -- the
+  `(bank, index)` passed to `FUN_002500d0` addresses a script, not a motion.
+  Dante has 769 scripts in 34 banks; unused entries share one dummy script.
+- Interpreter `FUN_00254f10`, terminated by op 0 plus a 6-byte trailer
+  (`FUN_00255790`: u16 at +2 -> slot+0x7a, u8 at +4 -> slot+0x7c). Sizes:
+  `01` play motion def, 8 bytes `01 loop b2 b3 grp sub s16 start_frame`
+  (0x7fff = take from motion); `02 xx s16` jump back (loop);
+  `03/04` +5 bytes copied to slot+0x5d / +0x62 (two 5-byte windows --
+  candidates for cancel/hit windows); `05 xx` clears them; `06/07 n`,
+  `08 xx` effect-manager calls; `10..1f layer xx u16 id + n*u16` attach
+  `n = op-0xf` effects; `20 layer mask xx`, `24 layer s16` kill effects;
+  `21 xx`, `22` (6 bytes), `23 xx`. All 769 scripts decode with no unknown
+  opcode.
+- Motion definition (`FUN_002558a0`, table part 2 indexed by `grp, sub`):
+  `u8 n, pad, n x {u8 layer, u8 loop, u8 rootflag, u8 ?, u16 motion_id}`
+  then `u8 n_events, pad` and timed events (`30-33`: 6 bytes, `34-39`:
+  8 bytes, u16 frame at +4) -- sounds (`FUN_0033e820/ed90/ee10/ef00`) and
+  effects, fired by `FUN_00255d30` when the frame is reached.
+- `motion_id = file * 100 + index` into the 34-entry motion PAC table at
+  `player+0x243c` (bounds checked; out of range plays nothing).
+
+### Bank -> motion file -> GDATA (solved)
+
+Filled by `FUN_00280110` / `FUN_0025bb00` with
+`FUN_001aefc0(0x6c3810, 1, character * 0x22 + file)`; for Dante file *f*
+is **GDATA slot 20 + f** (motion counts match for every file). Script bank
+*b* plays motions from file *b* (bank 32 also uses file 1):
+
+| file / bank | GDATA | contents |
+|---|---|---|
+| 0-2 | 20-22 (= archive chunks 2-4) | base movement |
+| 3+w | 23-32 | weapon *w* moveset: 0 Rebellion, 1 Cerberus, 2 Agni & Rudra, 3 Nevan, 4 Beowulf, 5 Ebony & Ivory, 6 Shotgun, 7 Artemis, 8 Spiral, 9 Kalina Ann |
+| 13-17 | 33-37 | Swordmaster extras, melee weapons 0-4 (loaded when style 0) |
+| 18-22 | 38-42 | Gunslinger extras, guns 5-9 (style 1) |
+| 23-26 | 43-46 | Trickster, Royalguard, Quicksilver, Doppelganger |
+| 27-33 | 47-53 | other (27-31 single motions; 32/33 not yet identified) |
+
+Weapon ids come from the five equipped bytes at `player+0x3d4f`; style is
+`player+0x3c6c`. Bank 0 indices 30-42 (the earlier "empty" mystery) are
+scripts that reuse base motions (e.g. 0:30 plays base motion 12).
+Shotgun scripts reference file 9 indices 40-47, but GDATA 29 holds only 40
+motions -- dead references in the shipped data.
 
 ## Open questions (next steps, in order)
 
-1. **Bank -> file mapping.** Banks are not the motion-only GDATA slots in
-   order: bank 0 requests indices 30-42, which are empty in Dante's base
-   PAC (slot 0 chunk 2 / GDATA 20). Find the loader that fills the banks at
-   `slot + 0x44` (search callers of the AFS/PAC load path with GDATA ids
-   20-60 and the SE remap table at 0x5e5400, which maps original file ids to
-   SE replacements 318-329).
-2. **Action scripts.** Dante's archive chunk 5 (73 KB, starts
-   `06 00 40 d7 ff ff 04 00 ...`, offset table of u16) is the most likely
-   script data for the interpreter above; chunk 6 (252 x 4-byte entries
-   ending in a sequential motion index) and chunk 7 (251 x 80-byte float
-   records -- probably per-motion collision/hit spheres) are per-motion
-   tables. Decode the opcodes (`FUN_00255420`, `00255620`, `00255640`,
-   `00255670`, `00255690`, `002556f0`, `00255740`, `00256410`, `00256590`,
-   `00256730`, `00256760`, `002567f0`, `00256670`) to get hit windows,
-   cancel points and effect/sound cues.
-3. **Move semantics.** For each constant motion request in Dante's region,
-   recover the input/state condition around it (button bits, style id,
-   weapon id at `this+0x28a0`-style fields) and emit
-   `docs/MOVESET.md`: move, weapon, style, input, bank/index, source.
+1. **Script windows.** Decode what consumers read slot+0x5d/+0x62 (the
+   op 03/04 windows) and slot+0x7a/+0x7c (trailer) -- most likely cancel
+   and hit frame ranges -- and confirm chunk 6 (252 x 4 bytes) and chunk 7
+   (251 x 80-byte float records, probably hit spheres) are indexed per
+   script or per motion.
+2. **Move semantics.** For each constant motion request in Dante's region
+   (`analysis/moveset/motion_calls.csv`), recover the input/state condition
+   around it (button bits, style id at `+0x3c6c`, weapon id) and emit
+   `docs/MOVESET.md`: move, weapon, style, input, script bank/index, motion
+   file/index, source function.
+3. Identify files 27-33 (likely Devil Trigger / special states).
 
 ## Corrections already known
 
 - Aerial Rave is Swordmaster (circle in the air, up to four hits); plain
   triangle in the air is Helm Breaker. The test room currently has these
   wrong (see psp/testroom/combat.c) and will be rebuilt from the map above.
+- The test room's "Trickster (slot 33)" moves are from GDATA 33 =
+  Swordmaster-Rebellion, and "Royalguard (slot 34)" from GDATA 34 =
+  Swordmaster-Cerberus. Real Trickster / Royalguard motions are GDATA 43 /
+  44. `STUDY_MOTION_SLOTS` in tools/prepare_skinned_model.py is mislabeled
+  the same way.
