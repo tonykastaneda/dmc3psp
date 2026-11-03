@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """DMC3 PS2 MOT (motion) parser -- format recovered from Dante's motions.
 
-Header (0x50 bytes):
-  +0x00 u32  header size (0x50)
+Header (0x50 bytes, or 0x60 for motions with more than 24 bones):
+  +0x00 u32  header size (0x50 or 0x60)
   +0x04 char "MOT\\0"
   +0x08 f32  loop start frame
   +0x0C f32  end frame
   +0x10 f32  (unknown, usually 0)      +0x14 f32 (usually == end frame)
   +0x18 u16  flag (0/1)  +0x1A u16 (0 or 0x18)
-  +0x1C u16  bone count (24)
-  +0x1E u16[24] channel mask per bone: bits 3-5 rotation, 6-8 translation
-  +0x4E u16  offset of a trailing section (0 = none; not decoded yet)
-  +0x50 u32  channel count (== popcount of all masks)
-Channel records follow from +0x54, ordered by bone then by channel bit:
+  +0x1C u16  bone count (24; 31 on one Ebony & Ivory motion)
+  +0x1E u16[] channel mask per bone: bits 3-5 rotation, 6-8 translation
+  header-2 u16  offset of a trailing section (0 = none; not decoded yet)
+  header+0 u32  channel count (== popcount of all masks)
+Channel records follow, ordered by bone then by channel bit:
   u16 record size (bytes, including this header)
   u16 key count
-  u32 interpolation type:
+  u16 interpolation type, u16 extra (0, except a constant negative value on
+  three Spiral motions; meaning unknown):
     3 = quantized Hermite: f32[6] value/in/out-tangent base+scale, then
         key[count] x 8 bytes {u16 frame (bit 15 usually set), u16 value,
         u16 in-tangent, u16 out-tangent}
@@ -26,31 +27,32 @@ Channel records follow from +0x54, ordered by bone then by channel bit:
 
 import struct
 
-HEADER_SIZE = 0x50
+HEADER_SIZES = (0x50, 0x60)
 
 
 def parse_mot(data: bytes):
-    if len(data) < HEADER_SIZE + 4 or data[4:8] != b"MOT\0":
+    if len(data) < 0x54 or data[4:8] != b"MOT\0":
         raise ValueError("Not a DMC3 MOT")
-    if struct.unpack_from("<I", data, 0)[0] != HEADER_SIZE:
+    header_size = struct.unpack_from("<I", data, 0)[0]
+    if header_size not in HEADER_SIZES or len(data) < header_size + 4:
         raise ValueError("Unexpected MOT header size")
     loop_start, end_frame, unknown_10, unknown_14 = struct.unpack_from("<4f", data, 8)
     flag_18, unknown_1a, bone_count = struct.unpack_from("<3H", data, 0x18)
-    if not 0 < bone_count <= 24:
-        raise ValueError(f"Bone count {bone_count} does not fit the 0x1E..0x4E mask table")
+    if not 0 < bone_count <= (header_size - 0x20) // 2:
+        raise ValueError(f"Bone count {bone_count} does not fit the mask table")
     masks = struct.unpack_from(f"<{bone_count}H", data, 0x1E)
-    trailer_offset = struct.unpack_from("<H", data, 0x4E)[0]
-    channel_count = struct.unpack_from("<I", data, HEADER_SIZE)[0]
+    trailer_offset = struct.unpack_from("<H", data, header_size - 2)[0]
+    channel_count = struct.unpack_from("<I", data, header_size)[0]
     expected = [(bone, bit) for bone, mask in enumerate(masks) for bit in range(16) if mask >> bit & 1]
     if len(expected) != channel_count:
         raise ValueError(f"Masks give {len(expected)} channels, header says {channel_count}")
 
     channels = []
-    offset = HEADER_SIZE + 4
+    offset = header_size + 4
     for bone, bit in expected:
         if offset + 32 > len(data):
             raise ValueError(f"Truncated before channel {len(channels)}")
-        size, key_count, kind = struct.unpack_from("<HHI", data, offset)
+        size, key_count, kind = struct.unpack_from("<HHH", data, offset)
         if kind == 3:
             header, stride = 32, 8
         elif kind == 2:

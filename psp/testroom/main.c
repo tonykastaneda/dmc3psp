@@ -888,6 +888,36 @@ static void dummy_record_pad(int frame, PlayerInput *input) {
     if (frame >= 980 && frame < 1110 && (frame - 980) % 6 == 0) input->melee = 1; /* Million Stab */
 }
 
+/* MEMORY.TXT, written at every boot: what the real hardware has left once
+ * everything is loaded, for sizing the rest of the moveset. The largest block
+ * is found by allocating (and touching) it, not computed. */
+static void write_memory_report(unsigned int boot_us, int motions_loaded) {
+    char path[320];
+    FILE *f;
+    size_t step = 16u * 1024u * 1024u, total = 0, largest = 0;
+    void *blocks[64];
+    int count = 0, i;
+    while (step >= 64u * 1024u && count < 64) {
+        void *p = malloc(step);
+        if (p) {
+            memset(p, 0, 4096);
+            memset((char *)p + step - 4096, 0, 4096);
+            blocks[count++] = p;
+            total += step;
+            if (step > largest) largest = step;
+        } else {
+            step /= 2u;
+        }
+    }
+    for (i = 0; i < count; ++i) free(blocks[i]);
+    path_in_game_dir(path, sizeof(path), "MEMORY.TXT");
+    f = fopen(path, "w");
+    if (!f) return;
+    fprintf(f, "heap_free_kb=%u\nlargest_block_kb=%u\nmotions_loaded=%d\nboot_ms=%u\nstage_loaded=%d\n",
+            (unsigned int)(total / 1024u), (unsigned int)(largest / 1024u), motions_loaded, boot_us / 1000u, stage_loaded());
+    fclose(f);
+}
+
 /* ---- Main --------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
@@ -895,7 +925,7 @@ int main(int argc, char *argv[]) {
     FollowCamera camera;
     PlayerInput input;
     void *draw_buffer = (void *)0;
-    unsigned int last_time, previous_buttons = 0;
+    unsigned int last_time, previous_buttons = 0, boot_start;
     unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0, skin_us_max = 0;
     unsigned int rest_error;
     int frames = 0;
@@ -922,6 +952,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    boot_start = sceKernelGetSystemTimeLow();
     setup_callbacks();
     scePowerSetClockFrequency(333, 333, 166);  /* full speed (homebrew starts at 222 MHz) */
     sceCtrlSetSamplingCycle(0);
@@ -1039,6 +1070,7 @@ int main(int argc, char *argv[]) {
     }
     start_x = player.x;
     start_z = player.z;
+    write_memory_report(sceKernelGetSystemTimeLow() - boot_start, motions_loaded);
     last_time = sceKernelGetSystemTimeLow();
 
     while (running) {

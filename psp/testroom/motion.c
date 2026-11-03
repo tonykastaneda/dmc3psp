@@ -1,5 +1,6 @@
 #include "motion.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "motion_runtime.h"
@@ -12,10 +13,14 @@ static float rdf(const unsigned char *p) { unsigned int u = rd32(p); float f; me
 
 static int parse(const Dmc3MotionBlob *blob, Motion *m) {
     const unsigned char *d = blob->data;
-    unsigned int offset = 0x54, bone, bit;
+    unsigned int header, offset, bone, bit, declared;
     int skipped = 0;
     int bones;
-    if (blob->size < 0x54 || rd32(d) != 0x50 || memcmp(d + 4, "MOT", 4) != 0) return 0;
+    if (blob->size < 0x54 || memcmp(d + 4, "MOT", 4) != 0) return 0;
+    header = rd32(d);   /* 0x50, or 0x60 with room for more than 24 bones */
+    if ((header != 0x50 && header != 0x60) || blob->size < header + 4) return 0;
+    declared = rd32(d + header);
+    offset = header + 4;
     m->name = blob->name;
     m->loop_start = rdf(d + 0x08);
     m->end_frame = rdf(d + 0x0C);
@@ -25,6 +30,8 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
     bones = (int)rd16(d + 0x1C);
     if (bones <= 0 || bones > MOTION_MAX_BONES) return 0;
     m->channel_count = 0;
+    m->channels = malloc(declared * sizeof(MotionChannel));
+    if (!m->channels) return 0;
     for (bone = 0; bone < (unsigned)bones; ++bone) {
         unsigned int mask = rd16(d + 0x1E + bone * 2);
         for (bit = 0; bit < 16; ++bit) {
@@ -32,32 +39,32 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
             unsigned int size, count, k;
             if (!(mask >> bit & 1)) continue;
             if (offset + 16 > blob->size) return 0;
-            unsigned int kind, header, stride;
+            unsigned int kind, record, stride;
             size = rd16(d + offset);
             count = rd16(d + offset + 2);
-            kind = rd32(d + offset + 4);
-            if (kind == 3) { header = 32; stride = 8; }
-            else if (kind == 2) { header = 16; stride = 4; }  /* linear (enemy motions) */
+            kind = rd16(d + offset + 4);  /* the u16 after it is usually 0; see tools/mot_ps2.py */
+            if (kind == 3) { record = 32; stride = 8; }
+            else if (kind == 2) { record = 16; stride = 4; }  /* linear (enemy motions) */
             else return 0;
-            if (size != header + count * stride || offset + size > blob->size || !count) return 0;
+            if (size != record + count * stride || offset + size > blob->size || !count) return 0;
             if (bit < 3 || bit > 8) {
                 /* Bits 0-2 (scale, seen on one bone of hl-38): not applied; skip the record. */
                 ++skipped;
                 offset += size;
                 continue;
             }
-            if (m->channel_count >= MOTION_MAX_CHANNELS) return 0;
+            if ((unsigned)(m->channel_count + skipped) >= declared) return 0;
             c = &m->channels[m->channel_count++];
             c->bone = (unsigned short)bone;
             c->channel = (unsigned short)bit;
             c->key_count = (unsigned short)count;
             c->kind = (unsigned short)kind;
             for (k = 0; k < 6; ++k) c->params[k] = k < (kind == 3 ? 6u : 2u) ? rdf(d + offset + 8 + k * 4) : 0.0f;
-            c->keys = (const unsigned short *)(d + offset + header); /* blob is 4-byte aligned */
+            c->keys = (const unsigned short *)(d + offset + record); /* blob is 4-byte aligned */
             offset += size;
         }
     }
-    return m->channel_count + skipped == (int)rd32(d + 0x50);
+    return m->channel_count + skipped == (int)declared;
 }
 
 int motion_init(void) {

@@ -6,8 +6,7 @@
  * X first (R = Rz * Ry * Rx); channels 6-8 replace the bone's rest offset.
  * Bone 0 translation is root motion. */
 
-#define MOTION_MAX_BONES 24
-#define MOTION_MAX_CHANNELS 80
+#define MOTION_MAX_BONES 32
 #define MOTION_FPS 60.0f
 
 #define MOTION_IDLE 0  /* "2-00" */
@@ -29,7 +28,7 @@ typedef struct {
     float loop_from, loop_to;
     int looping;
     int channel_count;
-    MotionChannel channels[MOTION_MAX_CHANNELS];
+    MotionChannel *channels;
 } Motion;
 
 /* Per-bone sampled values; has_* flags say which channels the motion drives. */

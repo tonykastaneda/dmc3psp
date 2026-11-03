@@ -15,7 +15,7 @@ $EmuDir = Split-Path -Parent $Emulator
 $GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM"
 $Evidence = Join-Path $Root "analysis\testroom"
 $Shots = @("SHOT_IDLE", "SHOT_BONES", "SHOT_RUN", "SHOT_SIDE", "SHOT_JUMP", "SHOT_COMBO", "SHOT_STINGER", "SHOT_PROP", "SHOT_DASH", "SHOT_SKY_STAR", "SHOT_BLOCK", "SHOT_DUMMY_HIT", "SHOT_DUMMY_AIR")
-$Outputs = @("TESTROOM_OK.TXT", "TESTROOM_FAIL.TXT", "COMBAT_TRACE.TXT") + ($Shots | ForEach-Object { "$_.BMP" })
+$Outputs = @("TESTROOM_OK.TXT", "TESTROOM_FAIL.TXT", "COMBAT_TRACE.TXT", "MEMORY.TXT") + ($Shots | ForEach-Object { "$_.BMP" })
 
 function Write-Log([string]$Message) {
     $line = "[{0}] {1}" -f (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff zzz"), $Message

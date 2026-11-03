@@ -25,7 +25,9 @@ COAT_CHUNK = 12            # pl000_02: coat-tail MOD with its own 33-bone rig
 CLOTH_CHUNK = 13           # pl000_02.clt: cloth parameters for the coat rig
 REBELLION_SLOT = 97        # PNST: [0] TIM2 set, [1] MOD (rigid, bone 1), [2] effects, [3] SHW, [4] MOT
 REBELLION_MOTION_SLOT = 23 # PAC of 21 MOTs: Dante's Rebellion moveset (first of slots 23-27)
-STUDY_MOTION_SLOTS = (33, 34, 35, 36, 37, 43, 44)  # Swordmaster movesets + Trickster (43), Royalguard (44); exported as sNN-
+# Every other moveset pack, exported as sNN- (docs/MOVESET_RE.md): 24-32 weapons,
+# 33-37 Swordmaster, 38-42 Gunslinger, 43-46 styles, 47-53 not identified yet.
+STUDY_MOTION_SLOTS = tuple(range(24, 54))
 ENEMY_SLOT = 117           # PNST: Seven Hells pack ([0] TIM2 set, [1] em000 body, [26] scythe, [35] motions)
 ENEMY_BODY = 1             # em000 -- the training dummy (Hell Sloth candidate; confirm with the user)
 ENEMY_WEAPON = 26          # first scythe model
