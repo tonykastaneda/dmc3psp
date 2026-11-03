@@ -65,12 +65,15 @@ output in `analysis/moveset/motion_scripts.{csv,json}` and
 - `FUN_002557b0`: script = `t + t[bank]` then `+ sub[index]` -- the
   `(bank, index)` passed to `FUN_002500d0` addresses a script, not a motion.
   Dante has 769 scripts in 34 banks; unused entries share one dummy script.
-- Interpreter `FUN_00254f10`, terminated by op 0 plus a 6-byte trailer
-  (`FUN_00255790`: u16 at +2 -> slot+0x7a, u8 at +4 -> slot+0x7c). Sizes:
+- Interpreter `FUN_00254f10` runs a *segment* up to op 0, which is a
+  **wait**: `00 xx u16 frame u8 flags xx` (`FUN_00255790`). The per-frame
+  update `FUN_00255160` resumes the script once the motion passes `frame`
+  (0x7fff = motion end); flags bit 0 = hold. So a script is a frame
+  timeline (Combo I-1 has 12 segments). Op sizes:
   `01` play motion def, 8 bytes `01 loop b2 b3 grp sub s16 start_frame`
   (0x7fff = take from motion); `02 xx s16` jump back (loop);
-  `03/04` +5 bytes copied to slot+0x5d / +0x62 (two 5-byte windows --
-  candidates for cancel/hit windows); `05 xx` clears them; `06/07 n`,
+  `03/04` +5 bytes copied to slot+0x5d / +0x62 (window 0 / window 1, see
+  below); `05 xx` clears them; `06/07 n`,
   `08 xx` effect-manager calls; `10..1f layer xx u16 id + n*u16` attach
   `n = op-0xf` effects; `20 layer mask xx`, `24 layer s16` kill effects;
   `21 xx`, `22` (6 bytes), `23 xx`. All 769 scripts decode with no unknown
@@ -105,19 +108,52 @@ scripts that reuse base motions (e.g. 0:30 plays base motion 12).
 Shotgun scripts reference file 9 indices 40-47, but GDATA 29 holds only 40
 motions -- dead references in the shipped data.
 
+### Script windows -> attack state and cancel gates (solved)
+
+`FUN_00250a00` copies the layer-1 windows into the player every time the
+script changes them (read with `FUN_00255af0(slot, window, i)`):
+
+- Window 0 byte 0 -> `+0x24d1` (bit 0 read by `FUN_00274c70`; 0x80 / 0x40
+  toggle through each attack). Byte 1 -> `+0x24d2` (low 6 bits: weapon
+  placement state, read by the weapon objects, e.g. `FUN_002954b0`) and
+  `+0x24ed` (bit 0x80: **attack active** -- Combo I-1 sets it frames 10-17,
+  matching the hand-tuned hit at 12). Byte 2 -> `+0x24d3` (0x20: call
+  `FUN_002e21a0(n)`, 0x10: `FUN_001acdf0(n)`, 0x40 -> `+0x24f1`; layer 0's
+  0x80 -> `+0x24ce`). Byte 3 -> `+0x24d4`, byte 4 -> `+0x24d5` (one-shot;
+  read by ~94 action handlers, values 1/2 select move variants).
+- Window 1 = five commands for the 16 **cancel gates** at `+0x24dd[n]`:
+  `0x3n` -> 1 (buffer), `0x2n` -> 0 (closed), `0x1n` -> 2 (open).
+
+### Command table (solved: format; input bytes still open)
+
+`FUN_002458f0` walks `player+0x2838`, which `FUN_0025bb00` sets to
+**0x5a8e90** for Dante in game (142 commands; 0x5aa4f0 is a one-entry stub
+set by `FUN_00280110`). `tools/command_table.py` dumps it to
+`analysis/moveset/command_table.csv`. A command fires when its posture
+(`[0x10]`: ground / air / both) matches, the weapon (`[0xb]`) and style
+(`[0xd]`, for type 3) are current, and its conditions pass
+(`FUN_0024bc40`: `0x80000000|n` = gate *n* open, bit 0x800000 = optional;
+`0x40000000|id` = current action is *id*, i.e. a follow-up). On success
+`player+0x2998` = action id `[2]` and `FUN_0021e620(player, 0x11, ...)`
+enters the attack state. Types: 0 melee (gate 0), 1 gun (gate 10),
+2 directional melee (gate 4), 3 style move (gate 4 / 7). Flags 0x100 =
+usable from neutral, 0x200 = usable as a cancel.
+
+So Dante's combo/cancel logic is data: scripts open gates on frames, and
+commands name the gate and preceding action they need.
+
 ## Open questions (next steps, in order)
 
-1. **Script windows.** Decode what consumers read slot+0x5d/+0x62 (the
-   op 03/04 windows) and slot+0x7a/+0x7c (trailer) -- most likely cancel
-   and hit frame ranges -- and confirm chunk 6 (252 x 4 bytes) and chunk 7
-   (251 x 80-byte float records, probably hit spheres) are indexed per
-   script or per motion.
-2. **Move semantics.** For each constant motion request in Dante's region
-   (`analysis/moveset/motion_calls.csv`), recover the input/state condition
-   around it (button bits, style id at `+0x3c6c`, weapon id) and emit
-   `docs/MOVESET.md`: move, weapon, style, input, script bank/index, motion
-   file/index, source function.
-3. Identify files 27-33 (likely Devil Trigger / special states).
+1. **Input bytes** `[8..0xa]` of a command (`FUN_0024b2d0`,
+   `FUN_0024b1d0`): direction (forward/back on lock-on) and button.
+2. **Action id -> script.** Find where the action handlers dispatch on
+   `player+0x2998` and which `(bank, index)` each requests
+   (`analysis/moveset/motion_calls.csv`), then emit `docs/MOVESET.md`:
+   move, weapon, style, input, posture, conditions, script, motions,
+   active frames and gate timings.
+3. Chunk 6 (252 x 4 bytes) and chunk 7 (251 x 80-byte floats, likely hit
+   spheres): index and meaning.
+4. Identify motion files 27-33 (likely Devil Trigger / special states).
 
 ## Corrections already known
 

@@ -51,8 +51,17 @@ def disasm(d, p, limit=4096):
     while p < min(end, len(d)):
         op = d[p]
         if op == 0:
-            ops.append({"op": 0, "trailer": d[p:p + 6].hex()})
-            break
+            # Wait (FUN_00255790 / FUN_00255160): resume after the motion passes
+            # `frame` (0x7fff = its end). flags bit 0 = hold (script done).
+            # A wait for the motion end is the last segment we follow: past it
+            # the owner normally starts another script (looping motions never
+            # get there), so the bytes that follow belong to the next script.
+            frame, flags = u16(d, p + 2), d[p + 4]
+            ops.append({"op": 0, "wait": frame, "flags": flags, "trailer": d[p:p + 6].hex()})
+            p += 6
+            if frame == 0x7FFF or flags & 1:
+                break
+            continue
         if 0x10 <= op <= 0x1F:
             size = 4 + 2 * (op - 0xF)
         else:
@@ -67,6 +76,8 @@ def disasm(d, p, limit=4096):
                        frame=struct.unpack_from("<h", raw, 6)[0])
         elif op == 2:
             ins["back"] = struct.unpack_from("<h", raw, 2)[0]
+            ops.append(ins)
+            break
         ops.append(ins)
         p += size
     return ops
