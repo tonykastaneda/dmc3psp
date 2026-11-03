@@ -322,3 +322,18 @@ void coat_joint(int index, float out[3], int *parent_index) {
     m_apply(&inv_yaw, d, out);
     *parent_index = dmc3_coat_bone_parent[index];
 }
+
+void coat_bone_matrix(int bone, float r[3][3], float t[3]) {
+    M3 inv_yaw, rot;
+    float d[3];
+    int a, b;
+    if (bone < 0 || bone >= DMC3_COAT_BONE_COUNT) bone = 0;
+    d[0] = bone_pos[bone][0] - player_pos[0];
+    d[1] = bone_pos[bone][1] - player_pos[1];
+    d[2] = bone_pos[bone][2] - player_pos[2];
+    m_yaw(&inv_yaw, -player_yaw);
+    m_mul(&rot, &inv_yaw, &bone_rot[bone]);
+    m_apply(&inv_yaw, d, t);
+    for (a = 0; a < 3; ++a)
+        for (b = 0; b < 3; ++b) r[a][b] = rot.m[a][b];
+}

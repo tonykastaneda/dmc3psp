@@ -32,6 +32,7 @@
 #include "swizzle.h"
 #include "enemy.h"
 #include "bullets.h"
+#include "hud.h"
 #include "rebellion_runtime.h"
 #include "ebony_runtime.h"
 #include "ivory_runtime.h"
@@ -39,6 +40,11 @@
 #include "artemis_runtime.h"
 #include "spiral_runtime.h"
 #include "kalina_runtime.h"
+#include "cerberus_runtime.h"
+#include "agni_runtime.h"
+#include "nevan_runtime.h"
+#include "beowulf_runtime.h"
+#include "beowulf_groups.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -117,9 +123,6 @@ static void perf_add(unsigned int gap, unsigned int update, unsigned int skin) {
 static Pose pose;
 static AnimState anim;
 static Combat combat;
-static ModelVertex *rebellion_vertices;
-static unsigned short *rebellion_indices;
-static void *rebellion_texture;
 
 /* Rebellion is drawn in Dante's right hand (data bone 9: the -X side, which
  * is anatomically his right because he faces +Z) for rb-* motions, and on
@@ -280,25 +283,6 @@ static unsigned int rest_pose_error_um(void) {
     return (unsigned int)(worst * 1000000.0f);
 }
 
-static int init_rebellion(void) {
-    int i;
-    size_t bytes = (size_t)DMC3_REBELLION_TEXTURE_WIDTH * DMC3_REBELLION_TEXTURE_HEIGHT * 4;
-    rebellion_vertices = memalign(16, sizeof(ModelVertex) * DMC3_REBELLION_VERTEX_COUNT);
-    rebellion_indices = memalign(16, sizeof(unsigned short) * DMC3_REBELLION_INDEX_COUNT);
-    rebellion_texture = memalign(16, bytes);
-    if (!rebellion_vertices || !rebellion_indices || !rebellion_texture) return 0;
-    for (i = 0; i < DMC3_REBELLION_VERTEX_COUNT; ++i) {
-        ModelVertex *v = &rebellion_vertices[i];
-        v->u = dmc3_rebellion_uvs[i].u; v->v = dmc3_rebellion_uvs[i].v;
-        v->nx = dmc3_rebellion_normals[i].x; v->ny = dmc3_rebellion_normals[i].y; v->nz = dmc3_rebellion_normals[i].z;
-        v->x = dmc3_rebellion_positions[i].x; v->y = dmc3_rebellion_positions[i].y; v->z = dmc3_rebellion_positions[i].z;
-    }
-    memcpy(rebellion_indices, dmc3_rebellion_indices, sizeof(unsigned short) * DMC3_REBELLION_INDEX_COUNT);
-    memcpy(rebellion_texture, dmc3_rebellion_texture, bytes);
-    if (!swizzle_texture32(rebellion_texture, DMC3_REBELLION_TEXTURE_WIDTH, DMC3_REBELLION_TEXTURE_HEIGHT)) return 0;
-    return 1;
-}
-
 /* The guns: each drawn in a hand while it's in use. */
 typedef struct {
     const Dmc3Vec3 *positions, *normals;
@@ -313,13 +297,14 @@ typedef struct {
 
 #define GUN_MODEL(n, N) {dmc3_##n##_positions, dmc3_##n##_normals, dmc3_##n##_uvs, dmc3_##n##_indices, dmc3_##n##_texture, \
                           DMC3_##N##_VERTEX_COUNT, DMC3_##N##_INDEX_COUNT, DMC3_##N##_TEXTURE_WIDTH, DMC3_##N##_TEXTURE_HEIGHT, 0, 0, 0}
-enum { GUN_EBONY, GUN_IVORY, GUN_SHOTGUN, GUN_ARTEMIS, GUN_SPIRAL, GUN_KALINA, GUN_MODEL_COUNT };
+enum { GUN_REBELLION, GUN_CERBERUS, GUN_AGNI, GUN_NEVAN, GUN_BEOWULF,
+       GUN_EBONY, GUN_SHOTGUN, GUN_ARTEMIS, GUN_SPIRAL, GUN_KALINA, GUN_IVORY, GUN_MODEL_COUNT };
 static GunModel gun_models[GUN_MODEL_COUNT] = {
-    GUN_MODEL(ebony, EBONY), GUN_MODEL(ivory, IVORY), GUN_MODEL(shotgun, SHOTGUN),
-    GUN_MODEL(artemis, ARTEMIS), GUN_MODEL(spiral, SPIRAL), GUN_MODEL(kalina, KALINA),
+    GUN_MODEL(rebellion, REBELLION), GUN_MODEL(cerberus, CERBERUS), GUN_MODEL(agni, AGNI),
+    GUN_MODEL(nevan, NEVAN), GUN_MODEL(beowulf, BEOWULF),
+    GUN_MODEL(ebony, EBONY), GUN_MODEL(shotgun, SHOTGUN), GUN_MODEL(artemis, ARTEMIS),
+    GUN_MODEL(spiral, SPIRAL), GUN_MODEL(kalina, KALINA), GUN_MODEL(ivory, IVORY),
 };
-#define GUN_OUT_SECONDS 0.6f   /* how long a gun stays out after a shot (test room choice) */
-static float gun_out_time;
 
 static int init_guns(void) {
     int g, i;
@@ -351,17 +336,6 @@ static void to_gu_matrix(ScePspFMatrix4 *out, const float r[3][3], const float t
     out->y.x = r[0][1]; out->y.y = r[1][1]; out->y.z = r[2][1]; out->y.w = 0.0f;
     out->z.x = r[0][2]; out->z.y = r[1][2]; out->z.z = r[2][2]; out->z.w = 0.0f;
     out->w.x = t[0]; out->w.y = t[1]; out->w.z = t[2]; out->w.w = 1.0f;
-}
-
-/* Sheathed: diagonal across the back, hilt over the right (-X) shoulder,
- * blade pointing down toward the left hip; expressed relative to the chest. */
-static void back_mount(float r[3][3], float t[3]) {
-    float d[3] = {0.62f, -0.78f, 0.0f};        /* blade (+Z of the sword) */
-    float x[3] = {0.78f, 0.62f, 0.0f};         /* guard width (+X of the sword) */
-    float y[3] = {d[1] * x[2] - d[2] * x[1], d[2] * x[0] - d[0] * x[2], d[0] * x[1] - d[1] * x[0]};
-    int k;
-    for (k = 0; k < 3; ++k) { r[k][0] = x[k]; r[k][1] = y[k]; r[k][2] = d[k]; }
-    t[0] = -16.0f; t[1] = 16.0f; t[2] = -17.0f;
 }
 
 static void init_room(void) {
@@ -473,6 +447,7 @@ static void draw_text(int x, int y, const char *text) {
 }
 
 #define HUD_LINES 4
+static char fps_line[12];   /* top right, always on */
 static void draw_hud(const char *lines[HUD_LINES]) {
     static const int ys[HUD_LINES] = {8, 18, SCR_HEIGHT - 26, SCR_HEIGHT - 16};
     int pass, i;
@@ -489,6 +464,7 @@ static void draw_hud(const char *lines[HUD_LINES]) {
         for (i = 0; i < HUD_LINES; ++i) {
             if (lines[i]) draw_text(8 + (pass ? 0 : 1), ys[i] + (pass ? 0 : 1), lines[i]);
         }
+        draw_text(SCR_WIDTH - 6 - (int)strlen(fps_line) * 8 + (pass ? 0 : 1), 6 + (pass ? 0 : 1), fps_line);
     }
 }
 
@@ -617,14 +593,23 @@ static void draw_bones(void) {
 
 static void to_gu_matrix(ScePspFMatrix4 *out, const float r[3][3], const float t[3]);
 
+/* R = Rz * Ry * Rx, applied X first (FUN_00131760). */
+static void place_rotation(const float e[3], float r[3][3]) {
+    float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
+    r[0][0] = cz * cy; r[0][1] = cz * sy * sx - sz * cx; r[0][2] = cz * sy * cx + sz * sx;
+    r[1][0] = sz * cy; r[1][1] = sz * sy * sx + cz * cx; r[1][2] = sz * sy * cx - cz * sx;
+    r[2][0] = -sy;     r[2][1] = cy * sx;                r[2][2] = cy * cx;
+}
+
 /* Call with Dante's model matrix current. */
-static void draw_gun(const GunModel *m, int bone) {
+static void draw_weapon_at(const GunModel *m, const float pr[3][3], const float pt[3], const float pos[3], const float rot[3]) {
     ScePspFMatrix4 matrix;
-    float r[3][3], t[3];
+    float local[3][3], r[3][3], t[3];
     int a, b;
+    place_rotation(rot, local);
     for (a = 0; a < 3; ++a) {
-        for (b = 0; b < 3; ++b) r[a][b] = pose.world_rot[bone].m[a][b];
-        t[a] = pose.world_pos[bone][a];
+        for (b = 0; b < 3; ++b) r[a][b] = pr[a][0] * local[0][b] + pr[a][1] * local[1][b] + pr[a][2] * local[2][b];
+        t[a] = pt[a] + pr[a][0] * pos[0] + pr[a][1] * pos[1] + pr[a][2] * pos[2];
     }
     to_gu_matrix(&matrix, r, t);
     sceGumPushMatrix();
@@ -635,19 +620,53 @@ static void draw_gun(const GunModel *m, int bone) {
     sceGumPopMatrix();
 }
 
-static void draw_active_gun(const Player *player) {
-    if (gun_out_time <= 0.0f) return;
-    switch (player->gun_weapon) {
-    case 5:
-        draw_gun(&gun_models[GUN_EBONY], BONE_L_HAND);
-        draw_gun(&gun_models[GUN_IVORY], BONE_R_HAND);
-        break;
-    case 6: draw_gun(&gun_models[GUN_SHOTGUN], BONE_L_HAND); break;
-    case 7: draw_gun(&gun_models[GUN_ARTEMIS], BONE_L_HAND); break;
-    case 8: draw_gun(&gun_models[GUN_SPIRAL], BONE_L_HAND); break;
-    case 9: draw_gun(&gun_models[GUN_KALINA], BONE_L_HAND); break;
-    default: break;
+static void draw_placed(const GunModel *m, const WeaponPlace *place) {
+    float pr[3][3], pt[3];
+    int a, b, bone = place->bone;
+    if (place->mode == 255) return;
+    if (place->owner) {
+        coat_bone_matrix(bone, pr, pt);   /* the holsters hang off the coat */
+    } else {
+        /* A weapon motion would drive it (not ported): rest pose in the hand. */
+        if (bone >= DMC3_BONE_COUNT || (place->mode && bone == 0)) bone = BONE_L_HAND;
+        for (a = 0; a < 3; ++a) {
+            for (b = 0; b < 3; ++b) pr[a][b] = pose.world_rot[bone].m[a][b];
+            pt[a] = pose.world_pos[bone][a];
+        }
     }
+    draw_weapon_at(m, pr, pt, place->pos, place->rot);
+}
+
+/* Beowulf is worn: its rest pose is Dante's, so each group follows its limb. */
+static void draw_beowulf(void) {
+    const GunModel *m = &gun_models[GUN_BEOWULF];
+    int g;
+    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    sceGuTexFlush();
+    for (g = 0; g < DMC3_BEOWULF_GROUP_COUNT; ++g) {
+        const WeaponGroup *group = &dmc3_beowulf_groups[g];
+        const Dmc3Vec3 *rest = &dmc3_bone_rest[group->bone];
+        const Mat3 *rot = &pose.world_rot[group->bone];
+        ScePspFMatrix4 matrix;
+        float t[3];
+        int k;
+        for (k = 0; k < 3; ++k)
+            t[k] = pose.world_pos[group->bone][k] - (rot->m[k][0] * rest->x + rot->m[k][1] * rest->y + rot->m[k][2] * rest->z);
+        to_gu_matrix(&matrix, rot->m, t);
+        sceGumPushMatrix();
+        sceGumMultMatrix(&matrix);
+        sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)group->count, dmc3_beowulf_group_indices + group->start, m->vertices);
+        sceGumPopMatrix();
+    }
+}
+
+/* The equipped melee weapon and gun, each where its placement state says. */
+static void draw_weapons(const Player *player) {
+    int melee = player->melee_weapon, gun = player->gun_weapon;
+    if (melee == 4) draw_beowulf();
+    else draw_placed(&gun_models[melee], combat_weapon_place(&combat, player, melee, 0));
+    draw_placed(&gun_models[gun], combat_weapon_place(&combat, player, gun, 0));
+    if (gun == 5) draw_placed(&gun_models[GUN_IVORY], combat_weapon_place(&combat, player, gun, 1));
 }
 
 static unsigned int perf_render_start;
@@ -670,6 +689,35 @@ static void perf_write(void) {
     }
     fclose(f);
 }
+/* CUIDLockOnCursor (FUN_0035af50, FUN_0035b610): at the target's screen position
+ * while R is held and there is one. Projected as sceGumLookAt + sceGumPerspective(60). */
+#define RETICLE_AIM_HEIGHT 100.0f   /* the target's lock-on point isn't decoded for the dummy */
+static void draw_lock_on_reticle(const Player *p, const FollowCamera *c) {
+    float t[3] = {p->target_x, p->target_y + RETICLE_AIM_HEIGHT, p->target_z};
+    float f[3] = {c->tx - c->x, c->ty - c->y, c->tz - c->z};
+    float d[3] = {t[0] - c->x, t[1] - c->y, t[2] - c->z};
+    float r[3], u[3], len, depth, dist, focal;
+    if (!p->locked_on || !p->has_target) return;
+    len = sqrtf(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+    if (len < 0.001f) return;
+    f[0] /= len; f[1] /= len; f[2] /= len;
+    /* right = forward x up, up = right x forward (up is +Y). */
+    r[0] = -f[2]; r[1] = 0.0f; r[2] = f[0];
+    len = sqrtf(r[0] * r[0] + r[2] * r[2]);
+    if (len < 0.001f) return;
+    r[0] /= len; r[2] /= len;
+    u[0] = r[1] * f[2] - r[2] * f[1];
+    u[1] = r[2] * f[0] - r[0] * f[2];
+    u[2] = r[0] * f[1] - r[1] * f[0];
+    depth = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+    if (depth < 1.0f) return;
+    dist = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    focal = (SCR_HEIGHT * 0.5f) / tanf(30.0f * 3.14159265f / 180.0f);
+    hud_draw_reticle(SCR_WIDTH * 0.5f + (d[0] * r[0] + d[1] * r[1] + d[2] * r[2]) / depth * focal,
+                     SCR_HEIGHT * 0.5f - (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / depth * focal,
+                     hud_reticle_scale(dist));
+}
+
 static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
@@ -780,40 +828,17 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)count, coat_idx + start, coat);
         }
     }
-    {
-        /* Rebellion: hand or back mount, on top of Dante's model matrix. */
-        ScePspFMatrix4 m;
-        float r[3][3], t[3], local_r[3][3], local_t[3];
-        int a, b, k;
-        if (anim_weapon_in_hand(&anim, player, &combat)) {
-            for (a = 0; a < 3; ++a) for (b = 0; b < 3; ++b) r[a][b] = pose.world_rot[WEAPON_HAND_BONE].m[a][b];
-            for (k = 0; k < 3; ++k) t[k] = pose.world_pos[WEAPON_HAND_BONE][k];
-        } else {
-            back_mount(local_r, local_t);
-            for (a = 0; a < 3; ++a)
-                for (b = 0; b < 3; ++b)
-                    r[a][b] = pose.world_rot[WEAPON_BACK_BONE].m[a][0] * local_r[0][b] +
-                              pose.world_rot[WEAPON_BACK_BONE].m[a][1] * local_r[1][b] +
-                              pose.world_rot[WEAPON_BACK_BONE].m[a][2] * local_r[2][b];
-            for (k = 0; k < 3; ++k)
-                t[k] = pose.world_pos[WEAPON_BACK_BONE][k] + pose.world_rot[WEAPON_BACK_BONE].m[k][0] * local_t[0] +
-                       pose.world_rot[WEAPON_BACK_BONE].m[k][1] * local_t[1] + pose.world_rot[WEAPON_BACK_BONE].m[k][2] * local_t[2];
-        }
-        to_gu_matrix(&m, r, t);
-        sceGumPushMatrix();
-        sceGumMultMatrix(&m);
-        sceGuTexImage(0, DMC3_REBELLION_TEXTURE_WIDTH, DMC3_REBELLION_TEXTURE_HEIGHT, DMC3_REBELLION_TEXTURE_WIDTH, rebellion_texture);
-        sceGuTexFlush();
-        sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, DMC3_REBELLION_INDEX_COUNT, rebellion_indices, rebellion_vertices);
-        sceGumPopMatrix();
-        bound_texture = -1;
-    }
-    draw_active_gun(player);
+    draw_weapons(player);
+    bound_texture = -1;
     enemy_draw();
     bullets_draw();
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
+    if (!anim.viewer) {
+        hud_draw(player);
+        draw_lock_on_reticle(player, camera);
+    }
     draw_hud(hud);
     if (player->weapon_wheel) draw_weapon_wheel(player);
     sceGuFinish();
@@ -1164,6 +1189,10 @@ static const float focus_stick[4][2] = {{1.0f, 0.0f}, {-1.0f, 0.0f}, {0.0f, -1.0
 /* "coat": close-ups of Dante standing from four sides, running, and stopping. */
 #define COAT_FRAMES 345
 static int focus_coat;
+static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the street */
+static int focus_weapons;  /* "weapons": each melee weapon and gun, sheathed, then swung / drawn */
+#define WEAPONS_STEP 100
+#define WEAPONS_FRAMES (WEAPONS_STEP * 5 + 10)
 /* "plink": locked on and standing, single shots with gaps; reports the biggest
  * per-frame jump of any bone, overall and around the shots. */
 static int focus_plink;
@@ -1223,6 +1252,18 @@ static void focus_pad(int frame, PlayerInput *input) {
     input->style = -1;
     if (focus_coat) {
         if (frame >= 145 && frame < 265) input->stick_y = 1.0f;
+        return;
+    }
+    if (focus_hud) {
+        input->lock_on = frame >= 40;
+        return;
+    }
+    if (focus_weapons) {
+        /* Each step: sheathed at frame 10, a melee press at 25, drawn gun from 45. */
+        int t = frame % WEAPONS_STEP;
+        if (t == 25) input->melee = 1;
+        if (t >= 75) input->lock_on = 1;
+        if (t == 5 && frame > WEAPONS_STEP) { input->next_melee = 1; input->next_gun = 1; }
         return;
     }
     if (focus_plink) {
@@ -1299,7 +1340,7 @@ int main(int argc, char *argv[]) {
     scePowerSetClockFrequency(333, 333, 166);  /* full speed (homebrew starts at 222 MHz) */
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
-    if (!init_model() || !coat_init() || !init_rebellion() || !init_guns()) {
+    if (!init_model() || !coat_init() || !init_guns()) {
         pspDebugScreenInit();
         pspDebugScreenPrintf("Out of memory loading the Dante model.\n");
         sceKernelSleepThread();
@@ -1345,6 +1386,8 @@ int main(int argc, char *argv[]) {
         if (f) { fread(text, 1, sizeof(text) - 1, f); fclose(f); }
         focus_coat = strncmp(text, "coat", 4) == 0;
         focus_plink = strncmp(text, "plink", 5) == 0;
+        focus_hud = strncmp(text, "hud", 3) == 0;
+        focus_weapons = strncmp(text, "weapons", 7) == 0;
     }
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
@@ -1569,8 +1612,6 @@ int main(int argc, char *argv[]) {
         pose_evaluate(&pose);
         if (focus && focus_plink) plink_measure(&pose, frames);
         fire_pending_shots(&combat, &player, dt);
-        if (combat_move_is_gun(combat.move) || combat.stance_active) gun_out_time = GUN_OUT_SECONDS;
-        else if (gun_out_time > 0.0f) gun_out_time -= dt;
         skin_model(&pose);
         coat_update(&pose, &player, dt);
         skin_us = sceKernelGetSystemTimeLow() - skin_start;
@@ -1590,17 +1631,20 @@ int main(int argc, char *argv[]) {
                  player.locked_on ? (player.has_target ? " [LOCK-ON: DUMMY] " : " [LOCK-ON: no target] ") : "",
                  "",
                  player.action_timer > 0.0f ? player_action_name(player.last_action) : "");
-        hud[0] = line0;
-        hud[1] = line1;
-        if (dummy_ready && !anim.viewer) {
-            static char line2[64];
-            snprintf(line2, sizeof(line2), "%s / %s  DUMMY hits %d", player_weapon_name(player.melee_weapon),
-                     player_weapon_name(player.gun_weapon), enemy_hits_taken());
-            hud[2] = line2;
-        } else
-        hud[2] = anim.viewer ? "dpad left/right: previous/next motion" : "stick move  dpad style  R lock  L melee  L+[] gun";
-        hud[3] = anim.viewer ? "START: back to play" : "X jump /\\ melee [] guns O style SELECT cam";
+        hud[0] = anim.viewer ? line0 : NULL;
+        hud[1] = NULL;
+        hud[2] = anim.viewer ? "dpad left/right: previous/next motion" : NULL;
+        hud[3] = anim.viewer ? "START: back to play" : NULL;
         if (player.weapon_wheel) hud[2] = hud[3] = NULL;  /* the wheel uses that space */
+        if (focus && focus_weapons) {
+            /* A tripod three-quarters behind him, close: back mounts and hands both show. */
+            int t = frames % WEAPONS_STEP;
+            float yaw = player.yaw + (t >= 25 && t < 60 ? 1.8f : t >= 75 ? 2.4f : 0.7f);
+            camera.x = player.x - sinf(yaw) * 170.0f;
+            camera.y = player.y + 130.0f;
+            camera.z = player.z - cosf(yaw) * 170.0f;
+            camera.tx = player.x; camera.ty = player.y + 95.0f; camera.tz = player.z;
+        }
         if (focus && focus_coat) {
             /* The dummy would only get in the way; a clean view of the coat. */
             if (frames == 1) enemy_spawn(player.x + 3000.0f, player.z);
@@ -1617,11 +1661,22 @@ int main(int argc, char *argv[]) {
             if (perf_second_us >= 1000000u && perf_count < PERF_SECONDS) {
                 perf_second_us = 0;
                 ++perf_count;
-                if (perf_count % 10 == 0) perf_write();
             }
         }
         frame_us_total += frame_us;
         if (frame_us > frame_us_max) frame_us_max = frame_us;
+        {
+            /* Frames actually shown, counted over half a second. */
+            static unsigned int fps_start;
+            static int fps_frames;
+            unsigned int elapsed = frame_start - fps_start;
+            ++fps_frames;
+            if (elapsed >= 500000u) {
+                snprintf(fps_line, sizeof(fps_line), "%d FPS", (int)(((unsigned long long)fps_frames * 1000000u + elapsed / 2) / elapsed));
+                fps_start = frame_start;
+                fps_frames = 0;
+            }
+        }
 
         if (tour && !tour_step()) tour_done = 1;
         if (recording) {
@@ -1640,6 +1695,22 @@ int main(int argc, char *argv[]) {
                 running = 0;
             }
         }
+        if (focus && focus_weapons) {
+            static char shot_name[32];
+            static const char *views[3] = {"SHEATH", "SWING", "GUN"};
+            int step = frames / WEAPONS_STEP, t = frames % WEAPONS_STEP;
+            int view = t == 18 ? 0 : t == 38 ? 1 : t == 95 ? 2 : -1;
+            if (frames == 2) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; coat_reset(); enemy_spawn(player.x + sinf(player.yaw) * 500.0f, player.z + cosf(player.yaw) * 500.0f); }
+            if (view >= 0) { snprintf(shot_name, sizeof(shot_name), "FOCUS_W%d_%s.BMP", step, views[view]); focus_pending = shot_name; }
+            if (frames == WEAPONS_FRAMES) {
+                char path[320];
+                FILE *report;
+                path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
+                report = fopen(path, "w");
+                if (report) { fprintf(report, "weapons scene done, max_frame_us=%u\n", frame_us_max); fclose(report); }
+                running = 0;
+            }
+        } else
         if (focus && focus_coat) {
             unsigned int shot;
             for (shot = 0; shot < sizeof(coat_shots) / sizeof(coat_shots[0]); ++shot)
@@ -1675,6 +1746,18 @@ int main(int argc, char *argv[]) {
                 camera.tx = player.x; camera.ty = player.y + CAMERA_TARGET_HEIGHT; camera.tz = player.z;
                 player.gun_weapon = 5;
             }
+            if (focus_hud) {
+                if (frames == 30) focus_pending = "FOCUS_HUD_PLAIN.BMP";
+                if (frames == 70) focus_pending = "FOCUS_HUD_LOCK.BMP";
+                if (frames == 90) {
+                    char path[320];
+                    FILE *report;
+                    path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
+                    report = fopen(path, "w");
+                    if (report) { fprintf(report, "hud scene done, max_frame_us=%u\n", frame_us_max); fclose(report); }
+                    running = 0;
+                }
+            } else
             if (frames >= 20 && (frames - 20) % FOCUS_LEG == 0 && (frames - 20) / FOCUS_LEG <= 4) {
                 int leg = (frames - 20) / FOCUS_LEG - 1;
                 if (leg >= 0) {
@@ -1686,7 +1769,7 @@ int main(int argc, char *argv[]) {
                 }
                 leg_x = player.x; leg_z = player.z;
             }
-            if (frames >= 20 && (frames - 20) / FOCUS_LEG < 4 && (frames - 20) % FOCUS_LEG == 30) {
+            if (!focus_hud && frames >= 20 && (frames - 20) / FOCUS_LEG < 4 && (frames - 20) % FOCUS_LEG == 30) {
                 static const char *shots[4] = {"FOCUS_RIGHT.BMP", "FOCUS_LEFT.BMP", "FOCUS_BACK.BMP", "FOCUS_FWD.BMP"};
                 leg_rows[(frames - 20) / FOCUS_LEG] = combat.lower_motion;
                 focus_pending = shots[(frames - 20) / FOCUS_LEG];
@@ -1867,6 +1950,8 @@ int main(int argc, char *argv[]) {
         if (focus_pending) { focus_hold(focus_pending); focus_pending = NULL; }
     }
 
+    /* Only on the way out: a memory stick write mid-game costs frames. */
+    perf_write();
     sceGuTerm();
     sceKernelExitGame();
     return 0;

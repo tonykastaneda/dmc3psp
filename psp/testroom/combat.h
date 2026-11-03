@@ -21,6 +21,10 @@
 #include "player.h"
 #include "combat_moves.h"
 
+/* A weapon's place on Dante in one placement state (FUN_00293910). mode: 0 fixed to the
+ * bone, 255 hidden, else a weapon motion plays. owner: nonzero, the bone is the coat's. */
+typedef struct { unsigned char mode, owner, bone; float pos[3], rot[3]; } WeaponPlace;
+
 typedef enum {
     MOVE_NONE = -1,
     /* Rebellion (GDATA 23, "rb-NN") */
@@ -115,6 +119,8 @@ typedef struct {
     float lower_fade_frame, lower_fade_weight;
     int upper_pending;     /* a new shot: set it up on the next update */
     int gun_row;           /* player+0x3b9f */
+    int place_state;       /* the current script's weapon placement (player+0x24d2) */
+    int script_bank;       /* its bank, which says which weapon it belongs to */
     int delayed_shot;      /* a shot waiting out shot_delay */
     MoveId last_move_for_end;
     /* Restored: charge, input recognition and Air Trick state. */
@@ -133,6 +139,9 @@ const char *combat_move_name(MoveId move);
 /* Takes the shots fired since the last call; 0 if none. */
 int combat_take_shots(Combat *combat);
 int combat_move_is_gun(MoveId move);
+/* Where a weapon (0-4 melee, 5-9 guns) is now (FUN_002954b0, FUN_00293550): the placement
+ * state if it's in use, else sheathed. second: Ivory, the gun's second model. */
+const WeaponPlace *combat_weapon_place(const Combat *combat, const Player *player, int weapon, int second);
 /* The stance's motions: whichever drives the pose while no move plays. */
 void combat_stance_motion(const Combat *combat, int *upper, float *upper_frame);
 int combat_idle_motion(void);  /* sword-drawn idle (rb-00) or -1 */

@@ -1,6 +1,7 @@
 #include "combat.h"
 
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "combat_data.h"
@@ -223,6 +224,19 @@ void combat_stance_motion(const Combat *c, int *upper, float *upper_frame) {
     *upper_frame = c->stance_frame;
 }
 
+const WeaponPlace *combat_weapon_place(const Combat *c, const Player *player, int weapon, int second) {
+    int state = 1;   /* sheathed */
+    if (c->move != MOVE_NONE && (c->script_bank == 3 + weapon || c->script_bank == 13 + weapon)) {
+        state = c->place_state;
+    } else if (weapon >= 5 && weapon == player->gun_weapon && c->stance_active) {
+        state = 40;  /* the gun stance scripts' state, in hand */
+    } else if (weapon == 0 && c->sword_out > 0.0f && player->speed < 1.0f) {
+        state = 2;   /* Rebellion's ready stance */
+    }
+    if (state < 0 || state >= WEAPON_PLACE_STATES) state = 1;
+    return second ? &ivory_places[state] : &weapon_places[weapon][state];
+}
+
 int combat_move_is_gun(MoveId move) { return move >= 0 && move < MOVE_COUNT && moves[move].gun; }
 
 int combat_take_shots(Combat *c) {
@@ -297,6 +311,8 @@ static void start_move(Combat *c, MoveId move, int action) {
     if (action) c->action = action;
     c->motion = motion_of[move];
     c->script = script_of[move];
+    c->script_bank = c->script >= 0 ? atoi(script_data[c->script].key) : -1;
+    c->place_state = 1;
     m = motion_get(c->motion);
     /* Scripts start at their op-1 frame, or the motion's own first frame. */
     c->frame = c->script >= 0 && script_data[c->script].start >= 0 ? (float)script_data[c->script].start
@@ -526,6 +542,7 @@ static int run_events(Combat *c) {
         const ScriptEvent *e = &sd->events[c->next_event++];
         if (e->kind == EV_GATE) c->gates[e->a & 0x0F] = e->b;
         else if (e->kind == EV_FLAG) c->flag = e->a;
+        else if (e->kind == EV_PLACE) c->place_state = e->a;
         else if (e->kind == EV_ACTIVE) {
             if (e->a && !c->active) ++hits;
             c->active = e->a;

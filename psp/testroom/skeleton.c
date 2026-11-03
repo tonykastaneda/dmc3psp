@@ -168,13 +168,6 @@ void anim_reset(AnimState *anim) {
     }
 }
 
-int anim_weapon_in_hand(const AnimState *anim, const Player *player, const Combat *combat) {
-    /* Viewer: base motions are named "<chunk>-NN"; anything else is a weapon set. */
-    if (anim->viewer) return motion_get(anim->viewer_motion)->name[1] != '-';
-    if (combat->move >= MOVE_TR_DASH || combat->stance_active) return 0;  /* style moves and guns keep Rebellion on the back */
-    return combat->move != MOVE_NONE || (combat->sword_out > 0.0f && player->speed < 1.0f);
-}
-
 void anim_update(AnimState *anim, const Player *player, float dt) {
     const Motion *idle = motion_get(MOTION_IDLE), *walk = motion_get(MOTION_WALK), *run = motion_get(MOTION_RUN);
     int moving = player->speed > 1.0f;

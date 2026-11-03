@@ -23,4 +23,7 @@ void coat_object(int index, unsigned int *index_start, unsigned int *index_count
 int coat_joint_count(void);
 void coat_joint(int index, float out[3], int *parent_index);
 
+/* A coat bone in Dante's model space, for what hangs from it (Ebony & Ivory's holsters). */
+void coat_bone_matrix(int bone, float r[3][3], float t[3]);
+
 #endif
