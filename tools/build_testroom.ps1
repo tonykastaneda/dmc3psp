@@ -61,7 +61,7 @@ foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "s
 
 $Elf = Join-Path $Build "testroom.elf"
 Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-Wl,-zmax-page-size=128") + $ObjectFiles + @(
-    "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lm",
+    "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lm",
     "-o", $Elf
 ))
 Invoke-Native "psp-fixup-imports.exe" @($Elf)

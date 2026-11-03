@@ -12,6 +12,7 @@
 #include "player.h"
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
+#include "swizzle.h"
 #include "model_runtime.h"   /* Dmc3Vec3 / Dmc3Uv / Dmc3ModelObject / Dmc3Texture types */
 #include "enemy_runtime.h"
 
@@ -119,6 +120,7 @@ int enemy_init(void) {
         textures[i] = memalign(16, bytes);
         if (!textures[i]) return 0;
         memcpy(textures[i], enemy_textures[i].rgba, bytes);
+        if (!swizzle_texture32(textures[i], enemy_textures[i].width, enemy_textures[i].height)) return 0;
     }
     sceKernelDcacheWritebackAll();
     return 1;
@@ -333,7 +335,7 @@ void enemy_draw(void) {
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
-    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
+    sceGuTexMode(GU_PSM_8888, 0, 0, 1);   /* swizzled at load */
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     for (i = 0; i < ENEMY_OBJECT_COUNT; ++i) {

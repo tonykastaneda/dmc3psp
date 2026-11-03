@@ -19,6 +19,9 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
     m->name = blob->name;
     m->loop_start = rdf(d + 0x08);
     m->end_frame = rdf(d + 0x0C);
+    m->loop_from = rdf(d + 0x10);
+    m->loop_to = rdf(d + 0x14);
+    m->looping = (d[0x18] | (d[0x19] << 8)) == 1;
     bones = (int)rd16(d + 0x1C);
     if (bones <= 0 || bones > MOTION_MAX_BONES) return 0;
     m->channel_count = 0;

@@ -16,8 +16,11 @@ primitives that leave the GE guard band):
 
 Blob layout (little-endian, every section 16-byte aligned):
   header  'STG1', version, counts, spawn, bounds, section offsets
-  textures: per texture {w, h, levels, alpha flag, level offsets[8]} + RGBA8888 levels
-  batches: {texture, first vertex, vertex count, flags (1 = alpha test, 2 = decal, 4 = alpha blend)}
+  textures: per texture {w, h, levels, alpha flag, level offsets[8]} + RGBA8888 levels (GE swizzled)
+  batches: {texture, first vertex, vertex count, flags (1 = alpha test, 2 = decal, 4 = alpha blend),
+            first chunk, chunk count, 2 pad}
+  chunks (header 'reserved' = offset): {first vertex, vertex count, float min[3], max[3]}; a
+            batch's triangles grouped by CHUNK x CHUNK XZ cell for culling
   vertices: {float u, v; u32 ABGR colour; float x, y, z} (GU_TEXTURE_32BITF|GU_COLOR_8888|GU_VERTEX_32BITF)
   floor: walkable triangles (9 floats) + uniform XZ grid of triangle indices
   hits:  the stage's own collision (HITS chunk): triangles {9 floats vertices,
@@ -45,7 +48,21 @@ STAGE_DATA_SLOT = 277
 MAX_EDGE = 300.0          # cm
 FLOOR_MIN_NY = 0.55       # walkable if the face normal's Y is at least this
 GRID_CELL = 200.0         # cm
-MIN_MIP = 8
+MIN_MIP = 8               # also keeps every level swizzlable (>= 4 px wide, 8 rows)
+CHUNK = 800.0             # cm: draw chunks (XZ cells by triangle centre) culled on the PSP
+
+
+def swizzle(w, h, data):
+    """PSP GE swizzle for 32-bit texels: 16-byte x 8-row blocks, row-major.
+    The GE fetches these far faster than linear textures from main RAM."""
+    row = w * 4
+    out = bytearray()
+    for by in range(h // 8):
+        for bx in range(row // 16):
+            for y in range(8):
+                o = (by * 8 + y) * row + bx * 16
+                out += data[o:o + 16]
+    return bytes(out)
 
 
 def pac_entries(data: bytes):
@@ -243,7 +260,7 @@ def main() -> None:
         offsets = []
         for lw, lh, data in levels:
             offsets.append(align(blob))
-            blob += data
+            blob += swizzle(lw, lh, data)
         tex_entries.append((w, h, len(levels), 2 if i in blend_textures else int(i in alpha_textures), offsets))
     for i, (w, h, n, alpha, offsets) in enumerate(tex_entries):
         struct.pack_into("<4I8I", blob, tex_table + 48 * i, w, h, n, alpha, *(offsets + [0] * (8 - len(offsets))))
@@ -251,19 +268,37 @@ def main() -> None:
     # no depth writes) -- sub-mesh order kept inside each group.
     order = sorted(range(len(batches)), key=lambda i: (batches[i][1] == 2, batches[i][3], batches[i][1], i))
     batch_table = align(blob)
-    blob += bytes(16 * len(batches))
+    blob += bytes(32 * len(batches))
     vertex_offset = align(blob)
     first = 0
+    chunks = []  # (first vertex, vertex count, min xyz, max xyz)
     for slot, bi in enumerate(order):
         texture, kind, tris, decal = batches[bi]
+        # Group the batch's triangles by XZ chunk (centre), keeping order inside.
+        groups = {}
         for t in tris:
-            for v in t:
-                x, y, z, u, vv, r, g, b = v
-                col = 0xFF000000 | (min(255, int(b * 2)) << 16) | (min(255, int(g * 2)) << 8) | min(255, int(r * 2))
-                blob += struct.pack("<2fI3f", u, vv, col, x, y, z)
-        struct.pack_into("<4I", blob, batch_table + 16 * slot, texture, first, len(tris) * 3,
-                         (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0))
-        first += len(tris) * 3
+            cx = sum(v[0] for v in t) / 3.0
+            cz = sum(v[2] for v in t) / 3.0
+            groups.setdefault((math.floor(cx / CHUNK), math.floor(cz / CHUNK)), []).append(t)
+        batch_first, chunk_first = first, len(chunks)
+        for key in sorted(groups):
+            g = groups[key]
+            for t in g:
+                for v in t:
+                    x, y, z, u, vv, r, g_, b = v
+                    col = 0xFF000000 | (min(255, int(b * 2)) << 16) | (min(255, int(g_ * 2)) << 8) | min(255, int(r * 2))
+                    blob += struct.pack("<2fI3f", u, vv, col, x, y, z)
+            pts = [v for t in g for v in t]
+            chunks.append((first, len(g) * 3,
+                           min(v[0] for v in pts), min(v[1] for v in pts), min(v[2] for v in pts),
+                           max(v[0] for v in pts), max(v[1] for v in pts), max(v[2] for v in pts)))
+            first += len(g) * 3
+        struct.pack_into("<6I", blob, batch_table + 32 * slot, texture, batch_first, first - batch_first,
+                         (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0),
+                         chunk_first, len(chunks) - chunk_first)
+    chunk_table = align(blob)
+    for c in chunks:
+        blob += struct.pack("<2I6f", *c)
     floor_offset = align(blob)
     for t in floor:
         blob += struct.pack("<9f", *t)
@@ -290,16 +325,16 @@ def main() -> None:
     all_z = [v[2] for _, _, tris, _ in batches for t in tris for v in t]
     struct.pack_into("<4I", blob, 0x80, hits_offset, len(hit_walls), len(hit_floors), wall_grid)
     struct.pack_into("<I", blob, 0x90, hfloor_grid)
-    struct.pack_into("<4s7I4f6f6I2f2I", blob, 0, b"STG1", 2,
+    struct.pack_into("<4s7I4f6f6I2f2I", blob, 0, b"STG1", 3,
                      len(textures), len(batches), first, len(floor), gw, gh,
                      sx, sy, sz, math.radians(syaw),
                      min(all_x), min(all_y), min(all_z), max(all_x), max(all_y), max(all_z),
                      tex_table, batch_table, vertex_offset, floor_offset, grid_offset, index_base,
-                     gx0, gz0, int(GRID_CELL), 0)
+                     gx0, gz0, int(GRID_CELL), chunk_table)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(blob)
     tri_count = first // 3
-    print(f"{args.output}: {name}, {len(textures)} textures (mipmapped), {len(batches)} batches, "
+    print(f"{args.output}: {name}, {len(textures)} textures (mipmapped), {len(batches)} batches in {len(chunks)} chunks, "
           f"{tri_count} triangles after subdividing to {MAX_EDGE:.0f} cm, {len(floor)} floor triangles "
           f"({gw}x{gh} grid), {len(shared)} shared planes -> {decal_batches} decal batches, "
           f"collision {len(hit_walls)} walls / {len(hit_floors)} floors, "

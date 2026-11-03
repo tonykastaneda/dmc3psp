@@ -16,11 +16,13 @@ typedef struct {
     float min[3], max[3];
     unsigned int tex_table, batch_table, vertex_offset, floor_offset, grid_offset, index_offset;
     float grid_x0, grid_z0;
-    unsigned int grid_cell, reserved;
+    unsigned int grid_cell, chunk_table;
 } Header;
 
 typedef struct { unsigned int w, h, levels, alpha, level_offset[8]; } TexEntry;
-typedef struct { unsigned int texture, first, count, flags; } Batch;
+typedef struct { unsigned int texture, first, count, flags, chunk_first, chunk_count, pad[2]; } Batch;
+/* A batch's triangles in one XZ cell, with their bounds (culled per frame). */
+typedef struct { unsigned int first, count; float min[3], max[3]; } Chunk;
 typedef struct { unsigned int first, count; } Cell;
 
 #define BATCH_ALPHA 1
@@ -37,6 +39,8 @@ static unsigned char *blob;
 static const Header *header;
 static const HitsHeader *hits;
 static StageInfo info;
+static unsigned char *chunk_visible;   /* per chunk, this frame */
+static unsigned int chunk_total;
 
 int stage_load(const char *path) {
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
@@ -49,11 +53,18 @@ int stage_load(const char *path) {
     got = sceIoRead(fd, blob, (unsigned int)size);
     sceIoClose(fd);
     header = (const Header *)blob;
-    if (got != size || memcmp(header->magic, "STG1", 4) != 0 || header->version != 2) {
+    if (got != size || memcmp(header->magic, "STG1", 4) != 0 || header->version != 3) {
         free(blob);
         blob = 0;
         header = 0;
         return 0;
+    }
+    {
+        const Batch *bt = (const Batch *)(blob + header->batch_table);
+        unsigned int i;
+        for (i = 0; i < header->batches; ++i)
+            if (bt[i].chunk_first + bt[i].chunk_count > chunk_total) chunk_total = bt[i].chunk_first + bt[i].chunk_count;
+        chunk_visible = malloc(chunk_total ? chunk_total : 1);
     }
     sceKernelDcacheWritebackAll();
     hits = (const HitsHeader *)(blob + 0x80);
@@ -70,20 +81,59 @@ const StageInfo *stage_info(void) { return &info; }
 
 static void bind_texture(const TexEntry *t) {
     unsigned int level;
-    /* Mipmapped, trilinear: distant tiles average instead of shimmering. */
-    sceGuTexMode(GU_PSM_8888, (int)t->levels - 1, 0, 0);
+    /* Swizzled (prepare_stage.py) and mipmapped. Bilinear within the nearest
+     * mip level: trilinear reads two levels per pixel, too slow on the GE. */
+    sceGuTexMode(GU_PSM_8888, (int)t->levels - 1, 0, 1);
     for (level = 0; level < t->levels; ++level) {
         int w = (int)(t->w >> level), h = (int)(t->h >> level);
         sceGuTexImage((int)level, w, h, w, blob + t->level_offset[level]);
     }
     sceGuTexLevelMode(GU_TEXTURE_AUTO, 0.0f);
-    sceGuTexFilter(GU_LINEAR_MIPMAP_LINEAR, GU_LINEAR);
+    sceGuTexFilter(GU_LINEAR_MIPMAP_NEAREST, GU_LINEAR);
     sceGuTexFlush();
 }
+
+/* Clip-space transform for culling: view * projection, read back from GUM. */
+static ScePspFMatrix4 cull_view, cull_proj;
+static int stage_chunks_drawn;
+
+static void to_clip(const float p[3], float out[4]) {
+    const ScePspFMatrix4 *v = &cull_view, *m = &cull_proj;
+    float e[4];
+    e[0] = v->x.x * p[0] + v->y.x * p[1] + v->z.x * p[2] + v->w.x;
+    e[1] = v->x.y * p[0] + v->y.y * p[1] + v->z.y * p[2] + v->w.y;
+    e[2] = v->x.z * p[0] + v->y.z * p[1] + v->z.z * p[2] + v->w.z;
+    e[3] = 1.0f;
+    out[0] = m->x.x * e[0] + m->y.x * e[1] + m->z.x * e[2] + m->w.x * e[3];
+    out[1] = m->x.y * e[0] + m->y.y * e[1] + m->z.y * e[2] + m->w.y * e[3];
+    out[2] = m->x.z * e[0] + m->y.z * e[1] + m->z.z * e[2] + m->w.z * e[3];
+    out[3] = m->x.w * e[0] + m->y.w * e[1] + m->z.w * e[2] + m->w.w * e[3];
+}
+
+/* 1 if the box is entirely outside one side of the view (or behind the eye). */
+static int chunk_hidden(const Chunk *c) {
+    int out_l = 0, out_r = 0, out_b = 0, out_t = 0, out_n = 0, i;
+    for (i = 0; i < 8; ++i) {
+        float p[3], q[4];
+        p[0] = (i & 1) ? c->max[0] : c->min[0];
+        p[1] = (i & 2) ? c->max[1] : c->min[1];
+        p[2] = (i & 4) ? c->max[2] : c->min[2];
+        to_clip(p, q);
+        out_l += q[0] < -q[3];
+        out_r += q[0] > q[3];
+        out_b += q[1] < -q[3];
+        out_t += q[1] > q[3];
+        out_n += q[3] <= 0.0f;
+    }
+    return out_l == 8 || out_r == 8 || out_b == 8 || out_t == 8 || out_n == 8;
+}
+
+int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
 
 void stage_draw(void) {
     const TexEntry *textures;
     const Batch *batches;
+    const Chunk *chunks;
     const unsigned char *vertices;
     unsigned int i;
     int bound = -1, decal_mode = 0, blend_mode = 0;
@@ -91,6 +141,13 @@ void stage_draw(void) {
     textures = (const TexEntry *)(blob + header->tex_table);
     batches = (const Batch *)(blob + header->batch_table);
     vertices = blob + header->vertex_offset;
+    chunks = (const Chunk *)(blob + header->chunk_table);
+    sceGumMatrixMode(GU_VIEW);
+    sceGumStoreMatrix(&cull_view);
+    sceGumMatrixMode(GU_PROJECTION);
+    sceGumStoreMatrix(&cull_proj);
+    stage_chunks_drawn = 0;
+    for (i = 0; i < chunk_total; ++i) chunk_visible[i] = !chunk_hidden(&chunks[i]);
 
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
@@ -103,7 +160,9 @@ void stage_draw(void) {
     sceGuColor(0xffffffff);
     for (i = 0; i < header->batches; ++i) {
         const Batch *b = &batches[i];
-        unsigned int done = 0;
+        unsigned int k, visible = 0;
+        for (k = 0; k < b->chunk_count; ++k) visible += chunk_visible[b->chunk_first + k];
+        if (!visible) continue;
         if ((int)b->texture != bound) {
             bind_texture(&textures[b->texture]);
             bound = (int)b->texture;
@@ -125,13 +184,19 @@ void stage_draw(void) {
             decal_mode = (b->flags & BATCH_DECAL) != 0;
             sceGuDepthOffset(decal_mode ? DECAL_DEPTH_OFFSET : 0);
         }
-        /* The GE takes at most 65535 vertices per draw; batches are split. */
-        while (done < b->count) {
-            unsigned int n = b->count - done;
-            if (n > 65535 - 65535 % 3) n = 65535 - 65535 % 3;
-            sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
-                            (int)n, 0, vertices + (size_t)(b->first + done) * 24);
-            done += n;
+        for (k = 0; k < b->chunk_count; ++k) {
+            const Chunk *c = &chunks[b->chunk_first + k];
+            unsigned int done = 0;
+            if (!chunk_visible[b->chunk_first + k]) continue;
+            ++stage_chunks_drawn;
+            /* The GE takes at most 65535 vertices per draw. */
+            while (done < c->count) {
+                unsigned int n = c->count - done;
+                if (n > 65535 - 65535 % 3) n = 65535 - 65535 % 3;
+                sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                                (int)n, 0, vertices + (size_t)(c->first + done) * 24);
+                done += n;
+            }
         }
     }
     sceGuDepthOffset(0);

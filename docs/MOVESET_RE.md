@@ -178,30 +178,55 @@ actions 180-183 are not dispatched there: `FUN_00245f10` sends them to
 dedicated player states (0x17 / 0x18 / ...). Gun actions 134, 160, 170
 request their motions indirectly.
 
+## Trickster (actions 180-183)
+
+`FUN_00245f10` turns the style rows (game style 2) into player states, not
+actions; each state clears the current action (player+0x2998 = 0), so the
+next command needs only its cancel flag (0x200) and gates. Dashes in a row
+are counted at player+0x3c75 (< 1 / 2 / 3 by style level, cleared by
+`FUN_0021f500` in neutral).
+
+| action | state | handler | scripts |
+|---|---|---|---|
+| 180 dash (CIR, ground) | 0x16 | `FUN_00225c90` | table 0x5911d0 `{0,1,2,3, 24,25,26,27}`: fwd / back / left / right; the second dash on uses 24-27, and a fwd dash right after a fwd dash uses 23:17 |
+| 181 Sky Star (CIR, air) | 0x17 | `FUN_002261b0` | 23:11 (580 cm); aims at the target within 10 deg |
+| 182 Air Trick (R1 + fwd(target) + CIR) | 0x18 | `FUN_00226550` | 23:15 ground / 23:16 air, then a 10-frame warp to the lock-on point (stops 120 cm short, at most 500 cm across / up / down; config +0x290..0x29c), then a fall (0:4 / 0:5 / 0:9) |
+| 183 Wall Hike (CIR into a wall; extra check 2) | via `FUN_0021e360` | `FUN_00227fb0` | wall ahead (player+0x3c6d = 2): 23:5 (462 cm up) -> 23:6; wall at the side (0 / 1): 23:7 / 23:9 -> 23:8 / 23:10 |
+
+Dash direction (`FUN_00254180`): neutral or R1 released -> fwd, facing the
+stick; with R1 held the stick picks a 45 deg sector against the facing.
+Root motion: 23:0 +Z, 23:1 -Z, 23:2 +X, 23:3 -X, all 400 cm.
+
+## Royalguard
+
+Release is in the command table (190-197: R1 + fwd + CIR, scripts 24:15-17
+ground, 24:18-20 air). The block itself is a player state: handlers
+`FUN_00224850` (24:0, 24:1, 24:10, 24:11, 24:30, 24:31), `FUN_00224db0`
+(24:2, 24:3, 24:6-8, 24:11, 24:12, 24:31-35) and `FUN_00225a00` (24:4,
+24:9, 24:14). Not decoded yet.
+
 ## Open questions (next steps, in order)
 
 1. **Gate meanings.** Gates 0 (melee), 1 (Combo II pause: opens at frame
    29 of Combo I-1), 4 (directional / style), 7 (mash follow-ups), 8
    (Trickster), 10 (guns) are clear from the commands that need them;
    5, 6, 9, 15 still need naming (15 looks like "free to move").
-2. Trickster states 0x17 / 0x18 and the indirect gun handlers.
+2. Royalguard block states (above), Air Hike, and the indirect gun handlers.
 3. Chunk 6 (252 x 4 bytes) and chunk 7 (251 x 80-byte floats, likely hit
    spheres): index and meaning.
 4. Identify motion files 27-33 (likely Devil Trigger / special states).
+5. The Air Trick lock-on point (player+0x3c40) and side Wall Hike (needs
+   the wall's side, player+0x3c6d).
 
 ## Corrections already known
 
-- Aerial Rave is Swordmaster (circle in the air, up to four hits); plain
-  triangle in the air is Helm Breaker. The test room currently has these
-  wrong (see psp/testroom/combat.c) and will be rebuilt from the map above.
-- The test room's "Trickster (slot 33)" moves are from GDATA 33 =
-  Swordmaster-Rebellion, and "Royalguard (slot 34)" from GDATA 34 =
-  Swordmaster-Cerberus. Real Trickster / Royalguard motions are GDATA 43 /
-  44. `STUDY_MOTION_SLOTS` in tools/prepare_skinned_model.py is mislabeled
-  the same way.
-- Test room Rebellion assignments that the data contradicts: rb-10 is
-  Helm Breaker (air TRI, action 6), not High Time; High Time (R1 + back +
-  TRI, action 10) is rb-11, not Quick Drive; rb-17/18/19 are Round Trip
-  (charge TRI, action 13), not Prop / Dance Macabre; Helm Breaker is not
-  rb-29 (that is action 12). Swordmaster Rebellion moves live in GDATA 33
-  (s33-): Prop 13:19 -> Shredder 13:12/13, Aerial Rave 13:7-10.
+- Rebellion, Swordmaster-Rebellion and Trickster in the test room now come
+  from the data above (psp/testroom/combat.c, generated
+  psp/testroom/combat_data.h). Royalguard block and Air Hike still play
+  stand-in motions.
+- Rebellion assignments the old test room had wrong: rb-10 is Helm Breaker
+  (air TRI, action 6), not High Time; High Time (R1 + back + TRI, action
+  10) is rb-11; rb-17/18/19 are Round Trip (charge TRI, action 13), not
+  Prop / Dance Macabre; rb-29 is action 12. Swordmaster Rebellion moves
+  live in GDATA 33 (s33-): Prop 13:19 -> Shredder 13:12/13, Aerial Rave
+  13:7-10. Real Trickster / Royalguard motions are GDATA 43 / 44.

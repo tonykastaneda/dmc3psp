@@ -15,6 +15,7 @@
 #include <pspgum.h>
 #include <pspdebug.h>
 #include <psputils.h>
+#include <psppower.h>
 
 #include <malloc.h>
 #include <math.h>
@@ -28,6 +29,7 @@
 #include "coat.h"
 #include "combat.h"
 #include "stage.h"
+#include "swizzle.h"
 #include "enemy.h"
 #include "rebellion_runtime.h"
 
@@ -76,6 +78,35 @@ static unsigned short *model_indices;
 static void *model_textures[DMC3_MODEL_TEXTURE_COUNT];
 static unsigned int __attribute__((aligned(16))) font_texture[FONT_TEX_SIZE * FONT_TEX_SIZE];
 static unsigned int *capture_buffer;
+
+/* ---- On-device timing log (PERF.TXT) -------------------------------------
+ * One line per second of normal play: frames shown, frames that missed a
+ * vblank (gap > 20 ms), and average / worst microseconds for each part of
+ * the frame. Written every 10 s of play, up to 60 s (each write may hitch once). */
+#define PERF_SECONDS 60
+typedef struct {
+    unsigned int frames, missed, gap_max;
+    unsigned int update_sum, update_max, skin_sum, skin_max;
+    unsigned int draw_sum, draw_max, gpu_sum, gpu_max, chunks_sum;
+} PerfSecond;
+static PerfSecond perf_log[PERF_SECONDS];
+static int perf_count;
+static unsigned int perf_gpu_us;   /* sceGuSync wait in the last render_scene */
+static unsigned int perf_draw_us;  /* display list build in the last render_scene */
+
+static void perf_add(unsigned int gap, unsigned int update, unsigned int skin) {
+    PerfSecond *p;
+    if (perf_count >= PERF_SECONDS) return;
+    p = &perf_log[perf_count];
+    ++p->frames;
+    if (gap > 20000u) ++p->missed;
+    if (gap > p->gap_max) p->gap_max = gap;
+    p->update_sum += update; if (update > p->update_max) p->update_max = update;
+    p->skin_sum += skin; if (skin > p->skin_max) p->skin_max = skin;
+    p->draw_sum += perf_draw_us; if (perf_draw_us > p->draw_max) p->draw_max = perf_draw_us;
+    p->gpu_sum += perf_gpu_us; if (perf_gpu_us > p->gpu_max) p->gpu_max = perf_gpu_us;
+    if (stage_loaded()) p->chunks_sum += (unsigned int)stage_last_chunks_drawn();
+}
 static Pose pose;
 static AnimState anim;
 static Combat combat;
@@ -185,6 +216,7 @@ static int init_model(void) {
         model_textures[i] = memalign(16, bytes);
         if (!model_textures[i]) return 0;
         memcpy(model_textures[i], t->rgba, bytes);
+        if (!swizzle_texture32(model_textures[i], t->width, t->height)) return 0;
     }
     return 1;
 }
@@ -256,6 +288,7 @@ static int init_rebellion(void) {
     }
     memcpy(rebellion_indices, dmc3_rebellion_indices, sizeof(unsigned short) * DMC3_REBELLION_INDEX_COUNT);
     memcpy(rebellion_texture, dmc3_rebellion_texture, bytes);
+    if (!swizzle_texture32(rebellion_texture, DMC3_REBELLION_TEXTURE_WIDTH, DMC3_REBELLION_TEXTURE_HEIGHT)) return 0;
     return 1;
 }
 
@@ -434,10 +467,31 @@ static void draw_bones(void) {
     sceGumDrawArray(GU_LINES, COLOR_VTYPE, n, 0, v);
 }
 
+static unsigned int perf_render_start;
+static unsigned int perf_second_us;
+static void path_in_game_dir(char *out, size_t size, const char *name);
+static void perf_write(void) {
+    char path[320];
+    FILE *f;
+    int i;
+    path_in_game_dir(path, sizeof(path), "PERF.TXT");
+    f = fopen(path, "w");
+    if (!f) return;
+    fprintf(f, "sec frames missed gap_max | update avg/max | skin avg/max | draw avg/max | gpu avg/max (us) | chunks\n");
+    for (i = 0; i < perf_count; ++i) {
+        const PerfSecond *p = &perf_log[i];
+        unsigned int n = p->frames ? p->frames : 1;
+        fprintf(f, "%3d %3u %3u %6u | %5u %6u | %5u %6u | %5u %6u | %5u %6u | %4u\n", i + 1, p->frames, p->missed,
+                p->gap_max, p->update_sum / n, p->update_max, p->skin_sum / n, p->skin_max,
+                p->draw_sum / n, p->draw_max, p->gpu_sum / n, p->gpu_max, p->chunks_sum / n);
+    }
+    fclose(f);
+}
 static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
     const FollowCamera *camera = &camera_copy;
+    perf_render_start = sceKernelGetSystemTimeLow();
     if (stage_loaded()) {
         /* Keep the follow camera on Dante's side of walls: pull the eye in to
          * just before the first collision hit along target -> eye. */
@@ -516,6 +570,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
+    sceGuTexMode(GU_PSM_8888, 0, 0, 1);   /* character textures are swizzled at load */
     for (i = 0; i < DMC3_MODEL_OBJECT_COUNT; ++i) {
         const Dmc3ModelObject *object = &dmc3_model_objects[i];
         if ((int)object->texture != bound_texture) {
@@ -571,11 +626,17 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         bound_texture = -1;
     }
     enemy_draw();
+    sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
     draw_hud(hud);
     sceGuFinish();
-    sceGuSync(0, 0);
+    {
+        unsigned int t = sceKernelGetSystemTimeLow();
+        perf_draw_us = t - perf_render_start;
+        sceGuSync(0, 0);
+        perf_gpu_us = sceKernelGetSystemTimeLow() - t;
+    }
 }
 
 /* Copies the finished draw buffer into RAM with a GE block transfer (PPSSPP
@@ -627,12 +688,14 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
     input->gun = (pressed & PSP_CTRL_SQUARE) != 0;
     input->style_action = (pressed & PSP_CTRL_CIRCLE) != 0;
     input->style_held = (pad.Buttons & PSP_CTRL_CIRCLE) != 0;
+    input->melee_held = (pad.Buttons & PSP_CTRL_TRIANGLE) != 0;
     input->jump = (pressed & PSP_CTRL_CROSS) != 0;
     input->snap_camera = (pressed & PSP_CTRL_SELECT) != 0;
     input->toggle_viewer = (pressed & PSP_CTRL_START) != 0;
 }
 
 /* Scripted input for the automated test (240 frames). */
+#define AUTOTEST_FRAMES 2200
 static void scripted_pad(int frame, PlayerInput *input) {
     memset(input, 0, sizeof(*input));
     input->style = -1;
@@ -653,7 +716,8 @@ static void scripted_combat(int frame, PlayerInput *input) {
     if (frame >= 515 && frame < 560) input->lock_on = 1;
     if (frame >= 515 && frame < 520) input->stick_y = 1.0f;
     if (frame == 517) input->melee = 1;
-    /* Swordmaster: switch style (d-pad left), Prop with mashing, then Drive. */
+    /* Swordmaster: switch style (d-pad left), Prop -> Shredder by mashing
+     * circle, then R + back + circle (Dance Macabre). */
     if (frame == 610) input->style = STYLE_SWORDMASTER;
     /* (Stinger ends at ~640.) */
     if (frame >= 660 && frame < 780 && (frame - 660) % 8 == 0) input->style_action = 1;
@@ -662,7 +726,7 @@ static void scripted_combat(int frame, PlayerInput *input) {
     if (frame == 903) input->style_action = 1;
     /* Trickster (d-pad up): Dash, then jump + Air Hike. Royalguard (d-pad
      * down): hold circle to block. */
-    if (frame == 1025) input->reset = 1;                 /* (Drive ends ~1016) */
+    if (frame == 1025) input->reset = 1;                 /* (Dance Macabre is over by then) */
     if (frame == 1028) input->style = STYLE_TRICKSTER;
     if (frame == 1032) input->style_action = 1;
     if (frame == 1100) input->jump = 1;
@@ -678,6 +742,15 @@ static void scripted_combat(int frame, PlayerInput *input) {
     if (frame == 1593) input->melee = 1;                    /* High Time */
     if (frame >= 1730 && frame < 1736) input->stick_x = 1.0f;
     if (frame == 1733) input->jump = 1;                     /* roll */
+    /* Trickster (real GDATA 43 data): three chained dashes (a fourth is
+     * refused), Sky Star off a jump, then Air Trick onto the dummy (the stick
+     * is aimed at it in main). */
+    if (frame == 1805) input->style = STYLE_TRICKSTER;
+    if (frame == 1810 || frame == 1840 || frame == 1870 || frame == 1900) input->style_action = 1;
+    if (frame == 1990) input->jump = 1;
+    if (frame == 2005) input->style_action = 1;
+    if (frame >= 2080 && frame < 2150) input->lock_on = 1;
+    if (frame == 2093) input->style_action = 1;
 }
 
 /* Demo for RECORD.TXT: run, then the Rebellion set -- Combo I, Combo II
@@ -689,7 +762,7 @@ static void record_pad(int frame, PlayerInput *input) {
     input->style = -1;
     if (frame >= 20 && frame < 80) input->stick_y = 1.0f;
     if (frame == 95 || frame == 105 || frame == 133) input->melee = 1;        /* Combo I */
-    if (frame == 320 || frame == 345 || frame == 375) input->melee = 1;       /* Combo II: tap, pause, tap */
+    if (frame == 320 || frame == 355) input->melee = 1;   /* Combo II: tap, pause (gate 1 opens at frame 29), tap */
     if (frame >= 420 && frame < 640 && (frame - 420) % 6 == 0) input->melee = 1; /* mash: Million Stab */
     if (frame >= 1000 && frame < 1050) input->lock_on = 1;                   /* Stinger */
     if (frame >= 1000 && frame < 1006) input->stick_y = 1.0f;
@@ -697,7 +770,7 @@ static void record_pad(int frame, PlayerInput *input) {
     if (frame >= 1150 && frame < 1200) input->lock_on = 1;                   /* High Time */
     if (frame >= 1150 && frame < 1156) input->stick_y = -1.0f;
     if (frame == 1153) input->melee = 1;
-    if (frame == 1260) input->jump = 1;                                      /* Aerial Rave */
+    if (frame == 1260) input->jump = 1;                                      /* Helm Breaker (TRI in the air) */
     if (frame == 1275) input->melee = 1;
 }
 
@@ -719,24 +792,34 @@ static int tour_step(void) {
     return 1;
 }
 
+/* Scripted lock-on directions: +1 toward the target (or Dante's facing with
+ * none), -1 away. Lock-on commands read the stick relative to the target, so
+ * demos set pad_aim instead of a fixed camera-relative stick. */
+static int pad_aim;
+static void aim_stick(PlayerInput *input, const Player *player, int sign) {
+    float dir = player->has_target ? atan2f(player->target_x - player->x, player->target_z - player->z) : player->yaw;
+    float wx = sinf(dir) * (float)sign, wz = cosf(dir) * (float)sign;
+    float cy = player->camera_yaw;
+    input->stick_y = wx * sinf(cy) + wz * cosf(cy);      /* camera forward */
+    input->stick_x = wx * -cosf(cy) + wz * sinf(cy);     /* camera right */
+}
+
 /* Swordmaster demo for RECORD.TXT "swordmaster". */
 #define SM_RECORD_FRAMES 1100
 static void sm_record_pad(int frame, PlayerInput *input) {
     memset(input, 0, sizeof(*input));
     input->style = frame == 5 ? STYLE_SWORDMASTER : -1;
     if (frame >= 30 && frame < 150 && (frame - 30) % 8 == 0) input->style_action = 1;  /* Prop -> Shredder */
-    if (frame >= 255 && frame < 300) input->lock_on = 1;                                /* Dance Macabre */
-    if (frame >= 255 && frame < 261) input->stick_y = 1.0f;
+    if (frame >= 255 && frame < 300) input->lock_on = 1;                                /* Dance Macabre: */
+    if (frame >= 255 && frame < 261) pad_aim = -1;                                       /* R + back + CIR */
     if (frame == 258) input->style_action = 1;
-    if (frame >= 300 && frame < 470 && (frame - 300) % 10 == 0) input->style_action = 1; /* -> Crazy Dance */
-    if (frame >= 640 && frame < 680) input->lock_on = 1;                                /* Drive */
-    if (frame >= 640 && frame < 646) input->stick_y = -1.0f;
-    if (frame == 643) input->style_action = 1;
-    if (frame == 790) input->melee = 1;                                                 /* combo hit ... */
-    if (frame == 800) input->style_action = 1;                                          /* ... Quick Drive */
+    if (frame >= 300 && frame < 600 && (frame - 300) % 10 == 0) input->style_action = 1; /* steps, stabs -> Crazy Dance */
+    if (frame >= 700 && frame < 740) input->lock_on = 1;                                /* Sword Pierce: */
+    if (frame >= 700 && frame < 706) pad_aim = 1;                                        /* R + fwd + CIR */
+    if (frame == 703) input->style_action = 1;
+    if (frame == 790) input->jump = 1;                                                  /* Aerial Rave: */
+    if (frame == 805 || frame == 825 || frame == 845 || frame == 865) input->style_action = 1; /* CIR x4 */
     if (frame == 930) input->jump = 1;                                                  /* Helm Breaker */
-    if (frame >= 940 && frame < 960) input->lock_on = 1;
-    if (frame >= 940 && frame < 946) input->stick_y = 1.0f;
     if (frame == 945) input->melee = 1;
 }
 
@@ -809,8 +892,10 @@ int main(int argc, char *argv[]) {
     float dummy_max_height = 0.0f, roll_travel = 0.0f, roll_x = 0.0f, roll_z = 0.0f;
     int autotest, recording, show_bones, tour = 0, sm_demo = 0, styles_demo = 0, jumps_demo = 0, dummy_demo = 0, tour_done = 0, motions_loaded, combat_ready = 0;
     int dash_seen = 0, hike_seen = 0, block_frames = 0;
+    int tr_dashes = 0, sky_seen = 0, trick_seen = 0;
+    float sky_x = 0.0f, sky_z = 0.0f, sky_travel = 0.0f, trick_start_dist = 0.0f, trick_end_dist = 0.0f;
     float dash_x = 0.0f, dash_z = 0.0f, dash_travel = 0.0f, hike_height = 0.0f;
-    int combo_moves_seen = 0, stinger_seen = 0, style_before_reset = -1, prop_frames = 0, drive_seen = 0;
+    int combo_moves_seen = 0, stinger_seen = 0, style_before_reset = -1, prop_frames = 0, dance_seen = 0;
     float moved_before_reset = 0.0f;
     float attack_start_x = 0.0f, attack_start_z = 0.0f, attack_travel = 0.0f;
     int style_switched = 0, snapped = 0;
@@ -825,6 +910,7 @@ int main(int argc, char *argv[]) {
     }
 
     setup_callbacks();
+    scePowerSetClockFrequency(333, 333, 166);  /* full speed (homebrew starts at 222 MHz) */
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
     if (!init_model() || !coat_init() || !init_rebellion()) {
@@ -944,7 +1030,7 @@ int main(int argc, char *argv[]) {
 
     while (running) {
         unsigned int frame_start = sceKernelGetSystemTimeLow();
-        unsigned int frame_us, skin_start;
+        unsigned int frame_us, skin_start, skin_us, gap = frame_start - last_time;
         float dt;
         char line0[64], line1[64];
         const char *hud[HUD_LINES];
@@ -961,9 +1047,12 @@ int main(int argc, char *argv[]) {
             else if (styles_demo) styles_record_pad(frames, &input);
             else if (sm_demo) sm_record_pad(frames, &input);
             else record_pad(frames, &input);
+            if (pad_aim) aim_stick(&input, &player, pad_aim);
+            pad_aim = 0;
         } else if (autotest) {
             dt = 1.0f / 60.0f;
             scripted_pad(frames, &input);
+            if (frames >= 2090 && frames < 2096) aim_stick(&input, &player, 1);  /* R + fwd(target) + CIR */
             scripted_combat(frames, &input);
         } else {
             dt = (float)(frame_start - last_time) / 1000000.0f;
@@ -998,12 +1087,29 @@ int main(int argc, char *argv[]) {
             if (dx * dx + dz * dz < 2500.0f * 2500.0f) {
                 player.has_target = 1;
                 player.target_x = e[0];
+                player.target_y = e[1];
                 player.target_z = e[2];
             }
         }
         if (combat_ready && !anim.viewer) {
             MoveId before = combat.move;
             combat_update(&combat, &player, &input, dt);
+            if ((autotest || recording) && (combat.move != before || input.melee || input.style_action)) {
+                /* COMBAT_TRACE.TXT: every move change, to check gate timings. */
+                static FILE *trace;
+                if (!trace) {
+                    char path[320];
+                    path_in_game_dir(path, sizeof(path), "COMBAT_TRACE.TXT");
+                    trace = fopen(path, "w");
+                }
+                if (trace) {
+                    fprintf(trace, "%d %s action=%d frame=%d hits=%d lock=%d dir=%d yaw=%d cam=%d\n", frames,
+                            combat.move == MOVE_NONE ? "-" : combat_move_name(combat.move), combat.action,
+                            (int)combat.frame, combat.hits_dealt, player.locked_on, combat.last_dir,
+                            (int)(player.yaw * 57.3f), (int)(player.camera_yaw * 57.3f));
+                    fflush(trace);
+                }
+            }
             if (combat.move != before && combat.move != MOVE_NONE) {
                 if (combat.move <= MOVE_COMBO1_3) ++combo_moves_seen;
                 if (combat.move == MOVE_STINGER_DASH) {
@@ -1036,7 +1142,8 @@ int main(int argc, char *argv[]) {
         pose_evaluate(&pose);
         skin_model(&pose);
         coat_update(&pose, &player, dt);
-        if (sceKernelGetSystemTimeLow() - skin_start > skin_us_max) skin_us_max = sceKernelGetSystemTimeLow() - skin_start;
+        skin_us = sceKernelGetSystemTimeLow() - skin_start;
+        if (skin_us > skin_us_max) skin_us_max = skin_us;
 
         snprintf(line0, sizeof(line0), "%-11s  frame %2u.%u ms  pos %5d %5d",
                  player_style_name(player.style), last_frame_us / 1000, (last_frame_us % 1000) / 100,
@@ -1065,6 +1172,15 @@ int main(int argc, char *argv[]) {
 
         frame_us = sceKernelGetSystemTimeLow() - frame_start;
         last_frame_us = frame_us;
+        if (!autotest && !recording && !tour && frames > 60) {
+            perf_add(gap, skin_start - frame_start, skin_us);
+            perf_second_us += gap;
+            if (perf_second_us >= 1000000u && perf_count < PERF_SECONDS) {
+                perf_second_us = 0;
+                ++perf_count;
+                if (perf_count % 10 == 0) perf_write();
+            }
+        }
         frame_us_total += frame_us;
         if (frame_us > frame_us_max) frame_us_max = frame_us;
 
@@ -1102,10 +1218,10 @@ int main(int argc, char *argv[]) {
         }
         if (autotest && frames == 285) capture_frame(draw_buffer, "SHOT_COMBO.BMP");
         if (autotest && frames == 535) capture_frame(draw_buffer, "SHOT_STINGER.BMP");
-        if (autotest && combat.move == MOVE_SM_PROP) prop_frames++;
-        if (autotest && combat.move == MOVE_SM_DRIVE) drive_seen = 1;
+        if (autotest && combat.move >= MOVE_SM_PROP && combat.move <= MOVE_SM_SHREDDER_END) prop_frames++;
+        if (autotest && combat.move == MOVE_SM_DANCE_START) dance_seen = 1;
         if (autotest && frames == 700) capture_frame(draw_buffer, "SHOT_PROP.BMP");
-        if (autotest && combat.move == MOVE_TR_DASH) {
+        if (autotest && frames < 1800 && combat.move == MOVE_TR_DASH) {
             if (!dash_seen) { dash_x = player.x; dash_z = player.z; }
             dash_seen = 1;
             dash_travel = sqrtf((player.x - dash_x) * (player.x - dash_x) + (player.z - dash_z) * (player.z - dash_z));
@@ -1126,16 +1242,31 @@ int main(int argc, char *argv[]) {
             roll_seen = 1;
             roll_travel = sqrtf((player.x - roll_x) * (player.x - roll_x) + (player.z - roll_z) * (player.z - roll_z));
         }
+        if (autotest && combat.dashes > tr_dashes) tr_dashes = combat.dashes;
+        if (autotest && combat.move == MOVE_TR_SKY_STAR) {
+            if (!sky_seen) { sky_x = player.x; sky_z = player.z; }
+            sky_seen = 1;
+            sky_travel = sqrtf((player.x - sky_x) * (player.x - sky_x) + (player.z - sky_z) * (player.z - sky_z));
+        }
+        if (autotest && (combat.move == MOVE_TR_AIR_TRICK || combat.move == MOVE_TR_AIR_TRICK_AIR)) {
+            float tdx = player.x - player.target_x, tdz = player.z - player.target_z;
+            if (!trick_seen) trick_start_dist = sqrtf(tdx * tdx + tdz * tdz);
+            trick_seen = 1;
+            trick_end_dist = sqrtf(tdx * tdx + tdz * tdz);
+        }
         if (autotest && frames == 1050) capture_frame(draw_buffer, "SHOT_DASH.BMP");
-        if (autotest && frames == 1800) {
+        if (autotest && frames == 2010) capture_frame(draw_buffer, "SHOT_SKY_STAR.BMP");
+        if (autotest && frames == AUTOTEST_FRAMES - 1) {
             char path[320];
             FILE *report;
             float moved = moved_before_reset;
             int ok = motions_loaded == motion_count() && combat_ready && combo_moves_seen >= 3 &&
-                     stinger_seen && attack_travel > 150.0f && prop_frames > 85 && drive_seen && moved > 500.0f &&
+                     stinger_seen && attack_travel > 150.0f && prop_frames > 85 && dance_seen && moved > 500.0f &&
                      dash_seen && dash_travel > 150.0f && hike_seen && hike_height > 300.0f && block_frames > 90 &&
                      dummy_ready && dummy_hits_combo >= 3 && dummy_max_height > 150.0f && roll_seen && roll_travel > 150.0f && frame_us_max < 33333u && rest_error < 1000u &&
-                     max_height > 200.0f && style_switched && style_before_reset == STYLE_GUNSLINGER && snapped;
+                     max_height > 200.0f && style_switched && style_before_reset == STYLE_GUNSLINGER && snapped &&
+                     tr_dashes == 3 && sky_seen && sky_travel > 300.0f && trick_seen &&
+                     (trick_start_dist <= 200.0f || trick_end_dist < trick_start_dist - 100.0f);
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
             if (report) {
@@ -1144,16 +1275,18 @@ int main(int argc, char *argv[]) {
                         "camera_snapped=%d\njump_max_height=%d\nstyle=%s\nrest_pose_error_um=%u\n"
                         "avg_frame_us=%u\nmax_frame_us=%u\nmax_skin_us=%u\nmotions_loaded=%d\n"
                         "combat_ready=%d\ncombo_moves=%d\nstinger=%d\nstinger_travel=%d\n"
-                        "prop_frames=%d\ndrive=%d\ndash_travel=%d\nair_hike=%d\nhike_height=%d\nblock_frames=%d\n"
-                        "dummy=%d\ndummy_combo_hits=%d\ndummy_launch_height=%d\nroll_travel=%d\n",
+                        "prop_frames=%d\ndance=%d\ndash_travel=%d\nair_hike=%d\nhike_height=%d\nblock_frames=%d\n"
+                        "dummy=%d\ndummy_combo_hits=%d\ndummy_launch_height=%d\nroll_travel=%d\n"
+                        "trickster_dashes=%d\nsky_star_travel=%d\nair_trick=%d\nair_trick_dist=%d,%d\n",
                         ok ? "DMC3PSP_TESTROOM_OK" : "DMC3PSP_TESTROOM_FAIL", frames + 1, (int)moved,
                         (int)start_x, (int)start_z, (int)player.x, (int)player.z,
                         (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f), snapped,
                         (int)max_height, player_style_name((Style)style_before_reset), rest_error,
                         frame_us_total / (unsigned int)(frames + 1), frame_us_max, skin_us_max, motions_loaded,
-                        combat_ready, combo_moves_seen, stinger_seen, (int)attack_travel, prop_frames, drive_seen,
+                        combat_ready, combo_moves_seen, stinger_seen, (int)attack_travel, prop_frames, dance_seen,
                         (int)dash_travel, hike_seen, (int)hike_height, block_frames,
-                        dummy_ready, dummy_hits_combo, (int)dummy_max_height, (int)roll_travel);
+                        dummy_ready, dummy_hits_combo, (int)dummy_max_height, (int)roll_travel,
+                        tr_dashes, (int)sky_travel, trick_seen, (int)trick_start_dist, (int)trick_end_dist);
                 fclose(report);
             }
             running = 0;

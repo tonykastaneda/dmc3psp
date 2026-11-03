@@ -1,0 +1,53 @@
+262 COMBO I action=1 frame=1 hits=0 lock=0 dir=0 yaw=180 cam=180
+272 COMBO I action=1 frame=11 hits=0 lock=0 dir=0 yaw=180 cam=180
+283 COMBO I action=2 frame=24 hits=0 lock=0 dir=0 yaw=180 cam=180
+300 COMBO I action=3 frame=41 hits=0 lock=0 dir=0 yaw=180 cam=180
+412 - action=0 frame=153 hits=0 lock=0 dir=0 yaw=180 cam=180
+517 STINGER action=8 frame=1 hits=0 lock=1 dir=1 yaw=157 cam=180
+526 STINGER action=8 frame=11 hits=0 lock=1 dir=1 yaw=157 cam=180
+540 STINGER action=8 frame=20 hits=0 lock=1 dir=1 yaw=157 cam=180
+619 - action=0 frame=99 hits=0 lock=0 dir=1 yaw=157 cam=180
+660 PROP action=16 frame=1 hits=0 lock=0 dir=0 yaw=157 cam=180
+668 PROP action=16 frame=9 hits=0 lock=0 dir=0 yaw=157 cam=180
+676 PROP action=16 frame=17 hits=0 lock=0 dir=0 yaw=157 cam=180
+684 PROP action=16 frame=25 hits=0 lock=0 dir=0 yaw=157 cam=180
+692 PROP action=16 frame=33 hits=0 lock=0 dir=0 yaw=157 cam=180
+700 PROP action=16 frame=41 hits=0 lock=0 dir=0 yaw=157 cam=180
+702 SHREDDER action=24 frame=1 hits=0 lock=0 dir=0 yaw=157 cam=180
+708 SHREDDER action=24 frame=7 hits=0 lock=0 dir=0 yaw=157 cam=180
+716 SHREDDER action=24 frame=15 hits=0 lock=0 dir=0 yaw=157 cam=180
+724 SHREDDER action=24 frame=23 hits=0 lock=0 dir=0 yaw=157 cam=180
+732 SHREDDER action=24 frame=31 hits=0 lock=0 dir=0 yaw=157 cam=180
+740 SHREDDER action=24 frame=24 hits=0 lock=0 dir=0 yaw=157 cam=180
+748 SHREDDER action=24 frame=32 hits=0 lock=0 dir=0 yaw=157 cam=180
+756 SHREDDER action=24 frame=25 hits=0 lock=0 dir=0 yaw=157 cam=180
+764 SHREDDER action=24 frame=33 hits=0 lock=0 dir=0 yaw=157 cam=180
+772 SHREDDER action=24 frame=26 hits=0 lock=0 dir=0 yaw=157 cam=180
+798 SHREDDER action=24 frame=39 hits=0 lock=0 dir=0 yaw=157 cam=180
+828 - action=0 frame=69 hits=0 lock=0 dir=0 yaw=157 cam=180
+903 DANCE MACABRE action=200 frame=1 hits=0 lock=1 dir=-1 yaw=126 cam=180
+960 - action=0 frame=58 hits=0 lock=0 dir=-1 yaw=126 cam=180
+1032 DASH action=0 frame=1 hits=0 lock=0 dir=0 yaw=180 cam=180
+1089 - action=0 frame=58 hits=0 lock=0 dir=0 yaw=180 cam=180
+1125 AIR HIKE action=0 frame=1 hits=0 lock=0 dir=0 yaw=180 cam=180
+1181 - action=0 frame=56 hits=0 lock=0 dir=0 yaw=180 cam=180
+1230 ROYAL BLOCK action=0 frame=132 hits=0 lock=0 dir=0 yaw=180 cam=180
+1330 - action=0 frame=153 hits=0 lock=0 dir=0 yaw=180 cam=180
+1350 COMBO I action=1 frame=1 hits=0 lock=1 dir=0 yaw=180 cam=180
+1360 COMBO I action=1 frame=11 hits=1 lock=1 dir=0 yaw=180 cam=180
+1371 COMBO I action=2 frame=24 hits=1 lock=1 dir=0 yaw=180 cam=180
+1388 COMBO I action=3 frame=41 hits=2 lock=1 dir=0 yaw=180 cam=180
+1500 - action=0 frame=153 hits=3 lock=1 dir=0 yaw=180 cam=180
+1593 HIGH TIME action=10 frame=1 hits=3 lock=1 dir=-1 yaw=180 cam=180
+1646 - action=0 frame=54 hits=4 lock=1 dir=-1 yaw=180 cam=180
+1733 ROLL action=0 frame=1 hits=4 lock=1 dir=-1 yaw=-168 cam=180
+1792 - action=0 frame=60 hits=4 lock=0 dir=-1 yaw=-168 cam=180
+1810 DASH action=0 frame=1 hits=4 lock=0 dir=0 yaw=-168 cam=180
+1840 DASH action=0 frame=1 hits=4 lock=0 dir=0 yaw=-168 cam=180
+1870 DASH action=0 frame=1 hits=4 lock=0 dir=0 yaw=-168 cam=180
+1900 DASH action=0 frame=31 hits=4 lock=0 dir=0 yaw=-168 cam=180
+1927 - action=0 frame=58 hits=4 lock=0 dir=0 yaw=-168 cam=180
+2005 SKY STAR action=0 frame=1 hits=4 lock=0 dir=0 yaw=-168 cam=180
+2067 - action=0 frame=63 hits=4 lock=0 dir=0 yaw=-168 cam=180
+2093 AIR TRICK action=0 frame=1 hits=4 lock=1 dir=1 yaw=-9 cam=180
+2112 - action=0 frame=20 hits=4 lock=1 dir=1 yaw=-9 cam=180

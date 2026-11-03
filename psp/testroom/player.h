@@ -54,7 +54,7 @@ typedef struct {
     int air_hiked;      /* Air Hike used this airtime */
     int wall_contact;   /* collision pushed Dante out of a wall this frame */
     int has_target;     /* lock-on has something to face (the training dummy) */
-    float target_x, target_z;
+    float target_x, target_y, target_z;
     int jump_motion;    /* motion driving the current jump/landing, -1 = none */
     float jump_frame;   /* frame in that motion */
     float jump_base_y;  /* floor height at takeoff */
@@ -77,6 +77,7 @@ typedef struct {
     float stick_y;     /* -1..1, up (away from the camera) is positive */
     int style;         /* Style pressed this frame, or -1 */
     int style_held;    /* circle held (Royalguard block) */
+    int melee_held;    /* triangle held (Round Trip charge) */
     int lock_on;       /* R held */
     int weapon_wheel;  /* L held */
     int melee, gun, style_action, jump, snap_camera, reset, toggle_viewer; /* pressed this frame */

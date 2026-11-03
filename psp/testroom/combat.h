@@ -1,67 +1,93 @@
 #ifndef DMC3PSP_TESTROOM_COMBAT_H
 #define DMC3PSP_TESTROOM_COMBAT_H
 
-/* Rebellion moveset (Dante's GDATA slot 23 motions, "rb-NN").
+/* Rebellion and Swordmaster-Rebellion, driven by the game's own data
+ * (docs/MOVESET.md, docs/MOVESET_RE.md; tables in combat_data.h):
  *
- * Move chaining was recovered from the data, not guessed from names: every
- * follow-up motion starts with its root (bone 0) translation equal to the
- * root position of its predecessor at the frame where the hand-off happens
- * (rb-03@18 -> rb-04, rb-04@37 -> rb-05, rb-06@66 -> rb-07, rb-07@137 and
- * rb-08@97 -> rb-09, rb-14@10 -> rb-15/rb-16). The button mapping is the
- * standard DMC3 scheme; which motion is which named move is an informed
- * reading (root travel, loop flags, poses) and still needs a player's eye. */
+ *   - which move a button press starts, and when it may cancel the current
+ *     one, is DMC3's command walker (FUN_002458f0) over the command table:
+ *     input, posture, style, category order, "after action N", and cancel
+ *     gates;
+ *   - the gates (player+0x24dd[16]) and the attack-active frames come from
+ *     each move's motion script timeline, in the motion's own frames;
+ *   - multi-part moves (Stinger, Million Stab, Shredder, Crazy Dance, Round
+ *     Trip) chain their scripts the way the action handlers request them.
+ *
+ * Trickster (actions 180-183) goes through the same command rows; its player
+ * states (dash 0x16, Sky Star 0x17, Air Trick 0x18, Wall Hike) pick scripts
+ * as their handlers do. Royalguard, Air Hike and the lock-on rolls are not
+ * decoded yet and keep their hand-made starts. */
 
 #include "player.h"
 
 typedef enum {
     MOVE_NONE = -1,
-    MOVE_COMBO1_1, MOVE_COMBO1_2, MOVE_COMBO1_3,  /* rb-03, rb-04, rb-05 */
-    MOVE_COMBO2_2, MOVE_COMBO2_3,                 /* rb-06, rb-07 (pause combo) */
-    MOVE_MILLION_STAB, MOVE_COMBO2_FINISH,        /* rb-08 (mash loop), rb-09 */
-    MOVE_STINGER_DASH, MOVE_STINGER_HOLD, MOVE_STINGER_THRUST, /* rb-14, rb-15, rb-16 */
-    MOVE_HIGH_TIME,                               /* rb-10 */
-    MOVE_AERIAL_RAVE,                             /* rb-32 */
-    MOVE_HELM_BREAKER,                            /* rb-29: air, R + forward + triangle */
-    /* Swordmaster (circle, only in Swordmaster style). Identification of
-     * these from the data is a best reading; see combat.c. */
-    MOVE_SM_PROP,                                 /* rb-18: mash for Shredder */
-    MOVE_SM_DANCE_START, MOVE_SM_DANCE,           /* rb-17 -> rb-19: Dance Macabre */
-    MOVE_SM_CRAZY_DANCE,                          /* rb-31: mash circle in Dance Macabre */
-    MOVE_SM_DRIVE,                                /* rb-01: R + back + circle */
-    MOVE_SM_QUICK_DRIVE,                          /* rb-11: circle during a combo hit */
-    /* Trickster (shared set, GDATA slot 33, "s33-NN"). */
-    MOVE_TR_DASH,                                 /* s33-17: crouch, then a 4 m burst */
-    MOVE_TR_SKY_STAR,                             /* s33-18: air dash */
-    MOVE_TR_AIR_HIKE,                             /* s33-07: double jump (cross in the air) */
-    MOVE_TR_WALL_HIKE,                            /* s33-08: circle into a wall */
-    /* Royalguard (slot 34, "s34-NN"): hold circle. */
-    MOVE_RG_BLOCK,                                /* s34-06: guard, loops while held */
-    MOVE_RG_AIR_BLOCK,                            /* s34-08 */
-    /* Lock-on + direction + cross (base motions). */
-    MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT,              /* 2-07 (+X = Dante's left), 2-08 */
-    MOVE_BACKFLIP,                                /* 2-09: 394 cm back, root Y arc */
+    /* Rebellion (GDATA 23, "rb-NN") */
+    MOVE_COMBO1_1, MOVE_COMBO1_2, MOVE_COMBO1_3,  /* actions 1, 2, 3 */
+    MOVE_COMBO2_2, MOVE_COMBO2_3,                 /* 4 (after the pause), 5 */
+    MOVE_MILLION_STAB, MOVE_COMBO2_FINISH,        /* 14 (mash) -> rb-09 */
+    MOVE_STINGER_DASH, MOVE_STINGER_HOLD, MOVE_STINGER_THRUST, /* 7/8: R + fwd + TRI */
+    MOVE_HIGH_TIME,                               /* 10: R + back + TRI */
+    MOVE_HELM_BREAKER,                            /* 6: TRI in the air */
+    MOVE_ROUND_TRIP, MOVE_ROUND_TRIP_CATCH,       /* 13: charge TRI, release */
+    /* Swordmaster - Rebellion (GDATA 33, "s33-NN"; dance steps reuse rb-) */
+    MOVE_SM_SWORD_PIERCE,                         /* 15: R + fwd + CIR */
+    MOVE_SM_PROP,                                 /* 16: CIR */
+    MOVE_SM_SHREDDER, MOVE_SM_SHREDDER_END,       /* 24: CIR after Prop */
+    MOVE_SM_DANCE_START,                          /* 200: R + back + CIR */
+    MOVE_SM_DANCE_1, MOVE_SM_DANCE_2, MOVE_SM_DANCE_3, /* 201-206: CIR each */
+    MOVE_SM_DANCE_4, MOVE_SM_DANCE_5, MOVE_SM_DANCE_6,
+    MOVE_SM_DANCE_STAB, MOVE_SM_DANCE_FINISH,     /* 207 */
+    MOVE_SM_CRAZY_DANCE, MOVE_SM_CRAZY_FINISH,    /* 208: mash CIR */
+    MOVE_SM_RAVE_1, MOVE_SM_RAVE_2, MOVE_SM_RAVE_3, MOVE_SM_RAVE_4, /* 19-22: CIR in the air */
+    /* Trickster (GDATA 43, "s43-NN"; player states 0x16-0x18, FUN_00225c90 ...) */
+    MOVE_TR_DASH, MOVE_TR_DASH_BACK, MOVE_TR_DASH_LEFT, MOVE_TR_DASH_RIGHT,     /* 180: 23:0-3 */
+    MOVE_TR_DASH2, MOVE_TR_DASH2_BACK, MOVE_TR_DASH2_LEFT, MOVE_TR_DASH2_RIGHT, /* chained: 23:24-27 */
+    MOVE_TR_DASH_CHAIN,                           /* 2nd fwd dash after a fwd dash: 23:17 */
+    MOVE_TR_SKY_STAR,                             /* 181: 23:11 */
+    MOVE_TR_AIR_TRICK, MOVE_TR_AIR_TRICK_AIR,     /* 182: 23:15 / 23:16 */
+    MOVE_TR_WALL_HIKE, MOVE_TR_WALL_FLIP,         /* 183: 23:5 -> 23:6 */
+    /* Not decoded yet: hand-made. */
+    MOVE_TR_AIR_HIKE,
+    MOVE_RG_BLOCK, MOVE_RG_AIR_BLOCK,
+    MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT, MOVE_BACKFLIP,
     MOVE_COUNT
 } MoveId;
 
+#define COMBAT_GATES 16
+
 typedef struct {
     MoveId move;
+    int action;            /* command-table action id of the current move (0 = none) */
     int motion;            /* motion table index of the current move */
-    float frame;
-    MoveId queued;         /* follow-up requested inside the input window */
+    float frame;           /* motion frame (absolute, as the scripts address it) */
+    int script;            /* script_data index, -1 for hand-made moves */
+    int next_event;        /* next script event to apply */
+    unsigned char gates[COMBAT_GATES]; /* 0 closed, 1 buffer, 2 open */
+    int pending;           /* action buffered while its gate was 1 */
+    int active;            /* attack-active window (window 0 byte 1 bit 0x80) */
     float last_root[3];    /* root translation sampled last frame (for deltas) */
-    int mash_presses;      /* presses of the move's button during the current move */
-    float since_melee;     /* seconds since the last triangle press */
-    float since_style;     /* seconds since the last (Swordmaster) circle press */
+    float phase_time;      /* seconds in the current move */
+    int plays;             /* times the current move's motion has completed */
+    /* Input recognition (the game's patterns 4, 16, 40: charge and mash). */
+    int tri_mash, cir_mash;          /* presses in the current mash run */
+    float since_tri, since_cir;      /* seconds since the last press */
+    float tri_held;                  /* seconds TRI has been held */
+    unsigned int buffered;           /* inputs of the last press, kept briefly */
+    int last_dir;                    /* stick vs facing at the last press (+1 fwd, -1 back) */
+    float buffer_time;
     float sword_out;       /* seconds left holding the drawn sword after attacking */
     /* Cross-fade from the previous pose source (locomotion or prior move). */
     int fade_motion;       /* -1 = locomotion */
     float fade_frame, fade_weight;
-    float next_hit;        /* frame of the move's next hit (-1 = done) */
     float base_y;          /* height at the start of a root-Y move */
     int hits_dealt;
+    int dashes;            /* Trickster dashes in a row (player+0x3c75; reset in neutral) */
+    /* Air Trick warp (FUN_00226550 state 1-2): per-frame step toward the target. */
+    float warp_time, warp_step[3];
 } Combat;
 
-int combat_init(void);     /* resolves rb-NN names; 0 if the moveset is missing */
+int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */
 void combat_reset(Combat *combat);
 /* Consumes attack input, advances the current move and applies root motion to
  * the player. Call before player_update; player->attacking is set here. */

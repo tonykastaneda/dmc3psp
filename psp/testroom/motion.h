@@ -21,7 +21,12 @@ typedef struct {
 
 typedef struct {
     const char *name;
-    float loop_start, end_frame;
+    float loop_start, end_frame;   /* header +0x08 / +0x0C: the motion's first / last frame */
+    /* Header +0x10 / +0x14 / +0x18: loop range and loop flag. A weapon's motions
+     * share one frame timeline (rb-04 runs 23-127, Million Stab rb-08 80-149
+     * looping 104-149), and motion scripts address these absolute frames. */
+    float loop_from, loop_to;
+    int looping;
     int channel_count;
     MotionChannel channels[MOTION_MAX_CHANNELS];
 } Motion;
