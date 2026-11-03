@@ -744,3 +744,21 @@
 [2026-11-02 18:43:44.600 -08:00] Launching PPSSPP test-room autotest.
 [2026-11-02 18:44:25.047 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.
 [2026-11-02 18:53:23.872 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (3,548,108 bytes)
+[2026-11-02 19:41:05.090 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 2e2f20 2e3f50 2e3010 2e2ea0 2e35c0 2e3ed0 21e5e0 2506b0 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-02 19:41:13.486 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-02 19:42:11.879 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 21e3c0 21e5b0 2e2d70 250e40 131b60 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-02 19:42:20.177 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-02 19:43:32.055 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 1ae400 1ae3d0 252f70 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-02 19:43:39.498 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-02 19:47:08.671 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (3,550,316 bytes)
+[2026-11-02 19:47:13.588 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 19:48:01.407 -08:00] Test room autotest FAILED.
+[2026-11-02 19:48:22.275 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (3,550,316 bytes)
+[2026-11-02 19:48:22.369 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 19:49:10.043 -08:00] Test room autotest FAILED.
+[2026-11-02 19:49:52.358 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (3,550,492 bytes)
+[2026-11-02 19:49:52.451 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 19:50:40.025 -08:00] Test room autotest FAILED.
+[2026-11-02 19:50:44.657 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (3,550,348 bytes)
+[2026-11-02 19:50:44.717 -08:00] Launching PPSSPP test-room autotest.
+[2026-11-02 19:51:32.446 -08:00] Test room autotest PASSED; screenshots in analysis\testroom.

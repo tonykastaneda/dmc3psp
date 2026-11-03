@@ -7,7 +7,7 @@
  *   analog stick  move (camera-relative)
  *   d-pad         style switch: up Trickster, down Royalguard,
  *                 left Swordmaster, right Gunslinger
- *   R             lock-on (no enemies yet: holds Dante's facing, strafe)
+ *   R             lock-on: aims attacks at the target; movement is unchanged
  *   L             weapon wheel (placeholder)
  *   triangle      melee (placeholder)   square  guns (placeholder)
  *   circle        style action (placeholder)
@@ -18,8 +18,19 @@
 
 #define ROOM_HALF_SIZE 1000.0f   /* room spans -1000..1000 on X and Z */
 #define PLAYER_RADIUS 40.0f
-#define PLAYER_RUN_SPEED 510.0f  /* cm/s at full stick; matches the run motion (408 cm / 48 frames) */
-#define PLAYER_TURN_RATE 12.0f   /* radians per second */
+/* Dante's row of the movement table (0x5a85c0), authored per 60 fps frame:
+ * walk 3.5 and run 8.5 cm/frame, turn 0x800 angle units/frame, 8 frame start
+ * turn, 6 frame run acceleration, full tilt held 4 frames before running. */
+#define PLAYER_WALK_SPEED 210.0f
+#define PLAYER_RUN_SPEED 510.0f
+#define PLAYER_TURN_RATE 11.781f /* radians per second */
+#define LOCO_START_FRAMES 8.0f
+#define LOCO_ACCEL_FRAMES 6.0f
+#define LOCO_RUN_HOLD_FRAMES 4.0f
+/* Stick tilt thresholds (FUN_002e2f20): below 53 neutral, 113 and up runs. */
+#define STICK_TILT_SCALE 127.0f
+#define STICK_TILT_NEUTRAL 53.0f
+#define STICK_TILT_RUN 113.0f
 /* Jumps follow the MOT root curve (2-04 standing / 2-05 running: 265 cm apex
  * at frame 27, airborne frames 7-52, landing 52-69). Free falls use the
  * gravity implied by that descent (265 cm in 25 frames at 60 fps). */
@@ -38,6 +49,9 @@ typedef enum {
     ACTION_NONE, ACTION_MELEE, ACTION_GUN, ACTION_STYLE, ACTION_JUMP, ACTION_ROLL,
     ACTION_STYLE_SWITCH, ACTION_CAMERA_SNAP
 } Action;
+
+/* Ground movement states: FUN_002217a0 idle, FUN_00221ba0 start, FUN_00221d20 move. */
+typedef enum { LOCO_IDLE, LOCO_START, LOCO_MOVE } LocoState;
 
 typedef struct {
     float x, y, z;     /* y is height above the floor */
@@ -58,8 +72,13 @@ typedef struct {
     int jump_motion;    /* motion driving the current jump/landing, -1 = none */
     float jump_frame;   /* frame in that motion */
     float jump_base_y;  /* floor height at takeoff */
-    float camera_yaw;   /* input reference yaw: latched while the stick is held (combat aims with it) */
-    int stick_held;     /* stick out of neutral last frame */
+    float camera_yaw;   /* input reference yaw: the camera's, every frame (combat aims with it) */
+    LocoState loco;
+    int running;        /* run motion and speed, else walk */
+    float loco_timer;   /* frames left: start turn, or full tilt hold before running */
+    float start_yaw;    /* direction latched when a start begins */
+    float start_turn;   /* turn per frame during a start */
+    float accel;        /* speed change per frame while ramping up to a run */
     Action last_action;
     float action_timer; /* seconds the HUD keeps showing last_action */
 } Player;

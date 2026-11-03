@@ -134,9 +134,19 @@ void pose_procedural(Pose *pose, const Player *player, float time) {
 
 /* ---- Motion-driven animation ------------------------------------------- */
 
-#define RUN_BLEND_RATE 10.0f
-/* The run motion covers 408 cm in 48 frames at 60 fps = 510 cm/s, which is
- * PLAYER_RUN_SPEED; playback is scaled by actual speed so feet don't slide. */
+/* Blend lengths in 60 fps frames, from the motion requests in FUN_00221ba0 and
+ * FUN_00221d20 (start 3, walk <-> run 5). The stop length is passed in by the
+ * caller of FUN_0021d280 and isn't decoded; 10 is a value idle requests elsewhere.
+ * Motions play at their authored rate. */
+#define START_BLEND_FRAMES 3.0f
+#define STOP_BLEND_FRAMES 10.0f
+#define WALK_RUN_BLEND_FRAMES 5.0f
+
+static float approach(float value, float target, float step) {
+    if (value < target) { value += step; return value > target ? target : value; }
+    value -= step;
+    return value < target ? target : value;
+}
 
 /* MOT rotation order: X applied first, R = Rz * Ry * Rx (verified on the
  * idle: ankles stay exactly planted only with this order). */
@@ -166,20 +176,29 @@ int anim_weapon_in_hand(const AnimState *anim, const Player *player, const Comba
 }
 
 void anim_update(AnimState *anim, const Player *player, float dt) {
-    const Motion *idle = motion_get(MOTION_IDLE), *run = motion_get(MOTION_RUN);
-    float target = player->speed > 1.0f ? 1.0f : 0.0f;
-    float rate;
+    const Motion *idle = motion_get(MOTION_IDLE), *walk = motion_get(MOTION_WALK), *run = motion_get(MOTION_RUN);
+    int moving = player->speed > 1.0f;
+    float frames = dt * MOTION_FPS;
     if (anim->viewer) {
         const Motion *m = motion_get(anim->viewer_motion);
         anim->viewer_frame = motion_wrap(m, anim->viewer_frame + dt * MOTION_FPS);
         return;
     }
-    anim->run_blend += (target - anim->run_blend) * (1.0f - expf(-RUN_BLEND_RATE * dt));
-    anim->idle_frame = motion_wrap(idle, anim->idle_frame + dt * MOTION_FPS);
-    rate = player->speed / PLAYER_RUN_SPEED;
-    if (rate < 0.35f && target > 0.0f) rate = 0.35f;
-    anim->run_frame = motion_wrap(run, anim->run_frame + dt * MOTION_FPS * rate);
-    if (anim->run_blend < 0.01f) anim->run_frame = 0.0f; /* restart the stride from the motion start */
+    /* A motion restarts from its first frame each time it is requested. */
+    if (moving && anim->move_blend <= 0.0f) {
+        anim->walk_frame = anim->run_frame = 0.0f;
+        anim->run_blend = player->running ? 1.0f : 0.0f;
+    } else if (player->running != anim->was_running) {
+        if (player->running) anim->run_frame = 0.0f;
+        else anim->walk_frame = 0.0f;
+    }
+    anim->was_running = player->running;
+    anim->move_blend = approach(anim->move_blend, moving ? 1.0f : 0.0f,
+                                frames / (moving ? START_BLEND_FRAMES : STOP_BLEND_FRAMES));
+    anim->run_blend = approach(anim->run_blend, player->running ? 1.0f : 0.0f, frames / WALK_RUN_BLEND_FRAMES);
+    anim->idle_frame = motion_wrap(idle, anim->idle_frame + frames);
+    anim->walk_frame = motion_wrap(walk, anim->walk_frame + frames);
+    anim->run_frame = motion_wrap(run, anim->run_frame + frames);
 }
 
 static void apply_sample(Pose *pose, const MotionSample *a, const MotionSample *b, float w, int keep_root) {
@@ -222,13 +241,20 @@ static void blend_samples(MotionSample *out, const MotionSample *a, const Motion
 }
 
 static void locomotion_sample(const AnimState *anim, const Combat *combat, MotionSample *out) {
-    static MotionSample idle, run;
+    static MotionSample idle, walk, run, move;
+    const MotionSample *moving;
     int idle_motion = MOTION_IDLE;
     /* Standing with the sword still drawn: Rebellion's ready stance. */
     if (combat && combat->sword_out > 0.0f && combat_idle_motion() >= 0) idle_motion = combat_idle_motion();
     motion_sample(motion_get(idle_motion), motion_wrap(motion_get(idle_motion), anim->idle_frame), &idle);
-    motion_sample(motion_get(MOTION_RUN), anim->run_frame, &run);
-    blend_samples(out, &idle, &run, anim->run_blend);
+    /* Only the motions with weight are sampled: this runs on the PSP every frame. */
+    if (anim->move_blend <= 0.0f) { *out = idle; return; }
+    if (anim->run_blend > 0.0f) motion_sample(motion_get(MOTION_RUN), anim->run_frame, &run);
+    if (anim->run_blend < 1.0f) motion_sample(motion_get(MOTION_WALK), anim->walk_frame, &walk);
+    if (anim->run_blend >= 1.0f) moving = &run;
+    else if (anim->run_blend <= 0.0f) moving = &walk;
+    else { blend_samples(&move, &walk, &run, anim->run_blend); moving = &move; }
+    blend_samples(out, &idle, moving, anim->move_blend);
 }
 
 #define AIR_BLEND_RATE 14.0f

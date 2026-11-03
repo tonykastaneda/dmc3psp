@@ -35,8 +35,10 @@ void pose_procedural(Pose *pose, const Player *player, float time);
 /* Motion-driven animation: idle/run blend on the ground, viewer mode for
  * browsing every MOT. */
 typedef struct {
-    float idle_frame, run_frame;
-    float run_blend;       /* 0 = idle, 1 = run */
+    float idle_frame, walk_frame, run_frame;
+    float move_blend;      /* 0 = idle, 1 = moving */
+    float run_blend;       /* 0 = walk, 1 = run */
+    int was_running;
     int viewer;            /* motion viewer active */
     int viewer_motion;
     float viewer_frame;

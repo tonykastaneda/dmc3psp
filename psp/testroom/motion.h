@@ -11,6 +11,7 @@
 #define MOTION_FPS 60.0f
 
 #define MOTION_IDLE 0  /* "2-00" */
+#define MOTION_WALK 1  /* "2-01": 3.5 cm/frame */
 #define MOTION_RUN 2   /* "2-02": 48-frame loop, 408 cm of root motion */
 
 typedef struct {

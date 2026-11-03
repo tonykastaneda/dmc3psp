@@ -660,12 +660,8 @@ static void capture_frame(void *draw_buffer, const char *name) {
 /* ---- Input -------------------------------------------------------------- */
 
 static float stick_axis(unsigned char raw) {
-    float value = ((float)raw - 128.0f) / 127.0f;
-    const float dead = 0.2f;
-    if (value > 1.0f) value = 1.0f;
-    if (value < -1.0f) value = -1.0f;
-    if (value > -dead && value < dead) return 0.0f;
-    return value > 0.0f ? (value - dead) / (1.0f - dead) : (value + dead) / (1.0f - dead);
+    float value = ((float)raw - 128.0f) / STICK_TILT_SCALE;
+    return value > 1.0f ? 1.0f : (value < -1.0f ? -1.0f : value);
 }
 
 static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
@@ -677,6 +673,10 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
     memset(input, 0, sizeof(*input));
     input->stick_x = stick_axis(pad.Lx);
     input->stick_y = -stick_axis(pad.Ly);
+    /* Radial dead zone at the game's own neutral threshold, unscaled above it,
+     * so tilt stays in the units of the walk / run thresholds. */
+    if (sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y) * STICK_TILT_SCALE < STICK_TILT_NEUTRAL)
+        input->stick_x = input->stick_y = 0.0f;
     input->style = -1;
     if (pressed & PSP_CTRL_UP) input->style = STYLE_TRICKSTER;
     if (pressed & PSP_CTRL_DOWN) input->style = STYLE_ROYALGUARD;
@@ -695,7 +695,8 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
 }
 
 /* Scripted input for the automated test (240 frames). */
-#define AUTOTEST_FRAMES 2200
+#define AUTOTEST_FRAMES 2620
+#define MOVE_TEST_START 2210
 static void scripted_pad(int frame, PlayerInput *input) {
     memset(input, 0, sizeof(*input));
     input->style = -1;
@@ -705,6 +706,16 @@ static void scripted_pad(int frame, PlayerInput *input) {
     if (frame == 50) input->style = STYLE_GUNSLINGER;
     if (frame == 180) input->snap_camera = 1;                       /* SELECT */
     if (frame == 205) input->jump = 1;
+    /* Movement check, in the open street: run sideways so the camera swings,
+     * pull straight back and back-left without passing through neutral (the
+     * stick has to keep meaning its on-screen direction), then partial tilt
+     * (walk), full tilt (run), and lock-on with the stick held sideways. */
+    if (frame >= MOVE_TEST_START && frame < 2300) input->stick_x = 1.0f;
+    else if (frame >= 2300 && frame < 2380) input->stick_y = -1.0f;
+    else if (frame >= 2380 && frame < 2440) { input->stick_x = -0.7f; input->stick_y = -0.7f; }
+    else if (frame >= 2460 && frame < 2500) input->stick_y = 0.6f;
+    else if (frame >= 2500 && frame < 2540) input->stick_y = 1.0f;
+    else if (frame >= 2550 && frame < 2610) { input->stick_x = 1.0f; input->lock_on = 1; }
 }
 
 /* Combat autotest: combo I by tapping (262-470), then SELECT so "forward"
@@ -899,6 +910,8 @@ int main(int argc, char *argv[]) {
     float moved_before_reset = 0.0f;
     float attack_start_x = 0.0f, attack_start_z = 0.0f, attack_travel = 0.0f;
     int style_switched = 0, snapped = 0;
+    int dir_frames = 0, lock_turned = 0;
+    float dir_error = 0.0f, walk_speed = 0.0f, run_speed = 0.0f, prev_x = 0.0f, prev_z = 0.0f;
     float start_x, start_z, max_height = 0.0f, time = 0.0f;
 
     if (argc > 0 && argv[0]) {
@@ -1123,6 +1136,8 @@ int main(int argc, char *argv[]) {
                 attack_travel = sqrtf(ax * ax + az * az);
             }
         }
+        prev_x = player.x;
+        prev_z = player.z;
         player_update(&player, &camera, &input, dt);
         player.wall_contact = stage_loaded() && stage_collide(&player.x, &player.z, player.y, PLAYER_RADIUS);
         if (dummy_ready) {
@@ -1130,6 +1145,25 @@ int main(int argc, char *argv[]) {
             enemy_push_out(&player.x, &player.z, PLAYER_RADIUS);
         }
         if (input.style >= 0) style_switched = 1;
+        if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
+            /* Dante's actual travel against the stick's on-screen direction. */
+            float mx = player.x - prev_x, mz = player.z - prev_z;
+            if (mx * mx + mz * mz > 0.25f) {
+                float sf = sinf(camera.yaw), cf = cosf(camera.yaw);
+                float wx = sf * input.stick_y - cf * input.stick_x, wz = cf * input.stick_y + sf * input.stick_x;
+                float e = fabsf(atan2f(mx * wz - mz * wx, mx * wx + mz * wz));
+                if (e > dir_error) dir_error = e;
+                ++dir_frames;
+            }
+        }
+        if (autotest && frames == 2495) walk_speed = player.speed;
+        if (autotest && frames == 2535) run_speed = player.speed;
+        if (autotest && frames == 2605) {
+            /* Lock-on with the stick right: Dante faces the way he travels
+             * (screen right is yaw - 90 degrees in this convention). */
+            float e = player.yaw - (camera.yaw - 1.5708f);
+            lock_turned = fabsf(atan2f(sinf(e), cosf(e))) < 0.2f;
+        }
         if (player.y > max_height) max_height = player.y;
 
         skin_start = sceKernelGetSystemTimeLow();
@@ -1210,11 +1244,13 @@ int main(int argc, char *argv[]) {
         if (autotest && frames > 180 && frames <= 240 && !camera.snapping &&
             fabsf(camera.yaw - camera.target_yaw) < 0.02f) snapped = 1;
         if (autotest && frames == 227) capture_frame(draw_buffer, "SHOT_JUMP.BMP");
-        if (autotest && frames == 249) {
-            /* Locomotion checks are taken before the combat section resets Dante. */
-            float bx = player.x - start_x, bz = player.z - start_z;
-            moved_before_reset = sqrtf(bx * bx + bz * bz);
-            style_before_reset = player.style;
+        /* Locomotion checks are taken before the combat section resets Dante.
+         * Distance travelled, not displacement: the camera turning under a held
+         * stick curves his path, and the script can bring him back near the start. */
+        if (autotest && frames <= 249) {
+            float bx = player.x - prev_x, bz = player.z - prev_z;
+            moved_before_reset += sqrtf(bx * bx + bz * bz);
+            if (frames == 249) style_before_reset = player.style;
         }
         if (autotest && frames == 285) capture_frame(draw_buffer, "SHOT_COMBO.BMP");
         if (autotest && frames == 535) capture_frame(draw_buffer, "SHOT_STINGER.BMP");
@@ -1254,6 +1290,20 @@ int main(int argc, char *argv[]) {
             trick_seen = 1;
             trick_end_dist = sqrtf(tdx * tdx + tdz * tdz);
         }
+        if (autotest && frames == MOVE_TEST_START - 8) {
+            input.reset = 1;
+            player_reset(&player, &camera);
+            if (stage_loaded()) {
+                /* The dummy was moved next to the spawn at 1340; the street is clear. */
+                float gy;
+                player.x = 2750.0f; player.z = 2450.0f;
+                if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy;
+                camera.x = player.x - sinf(camera.yaw) * CAMERA_DISTANCE;
+                camera.y = player.y + CAMERA_HEIGHT;
+                camera.z = player.z - cosf(camera.yaw) * CAMERA_DISTANCE;
+                camera.tx = player.x; camera.ty = player.y + CAMERA_TARGET_HEIGHT; camera.tz = player.z;
+            }
+        }
         if (autotest && frames == 1050) capture_frame(draw_buffer, "SHOT_DASH.BMP");
         if (autotest && frames == 2010) capture_frame(draw_buffer, "SHOT_SKY_STAR.BMP");
         if (autotest && frames == AUTOTEST_FRAMES - 1) {
@@ -1266,7 +1316,9 @@ int main(int argc, char *argv[]) {
                      dummy_ready && dummy_hits_combo >= 3 && dummy_max_height > 150.0f && roll_seen && roll_travel > 150.0f && frame_us_max < 33333u && rest_error < 1000u &&
                      max_height > 200.0f && style_switched && style_before_reset == STYLE_GUNSLINGER && snapped &&
                      tr_dashes == 3 && sky_seen && sky_travel > 300.0f && trick_seen &&
-                     (trick_start_dist <= 200.0f || trick_end_dist < trick_start_dist - 100.0f);
+                     (trick_start_dist <= 200.0f || trick_end_dist < trick_start_dist - 100.0f) &&
+                     dir_frames > 120 && dir_error < 0.15f && lock_turned &&
+                     fabsf(walk_speed - PLAYER_WALK_SPEED) < 1.0f && fabsf(run_speed - PLAYER_RUN_SPEED) < 1.0f;
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
             if (report) {
@@ -1277,7 +1329,8 @@ int main(int argc, char *argv[]) {
                         "combat_ready=%d\ncombo_moves=%d\nstinger=%d\nstinger_travel=%d\n"
                         "prop_frames=%d\ndance=%d\ndash_travel=%d\nair_hike=%d\nhike_height=%d\nblock_frames=%d\n"
                         "dummy=%d\ndummy_combo_hits=%d\ndummy_launch_height=%d\nroll_travel=%d\n"
-                        "trickster_dashes=%d\nsky_star_travel=%d\nair_trick=%d\nair_trick_dist=%d,%d\n",
+                        "trickster_dashes=%d\nsky_star_travel=%d\nair_trick=%d\nair_trick_dist=%d,%d\n"
+                        "stick_dir_frames=%d\nstick_dir_error_mdeg=%d\nwalk_speed=%d\nrun_speed=%d\nlock_turned=%d\n",
                         ok ? "DMC3PSP_TESTROOM_OK" : "DMC3PSP_TESTROOM_FAIL", frames + 1, (int)moved,
                         (int)start_x, (int)start_z, (int)player.x, (int)player.z,
                         (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f), snapped,
@@ -1286,7 +1339,8 @@ int main(int argc, char *argv[]) {
                         combat_ready, combo_moves_seen, stinger_seen, (int)attack_travel, prop_frames, dance_seen,
                         (int)dash_travel, hike_seen, (int)hike_height, block_frames,
                         dummy_ready, dummy_hits_combo, (int)dummy_max_height, (int)roll_travel,
-                        tr_dashes, (int)sky_travel, trick_seen, (int)trick_start_dist, (int)trick_end_dist);
+                        tr_dashes, (int)sky_travel, trick_seen, (int)trick_start_dist, (int)trick_end_dist,
+                        dir_frames, (int)(dir_error * 57295.78f), (int)walk_speed, (int)run_speed, lock_turned);
                 fclose(report);
             }
             running = 0;

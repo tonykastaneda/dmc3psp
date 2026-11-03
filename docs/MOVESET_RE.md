@@ -4,6 +4,32 @@ Goal: an authoritative motion -> move map for Dante's whole arsenal, taken from
 the game's own code and data instead of reading moves off root motion and poses
 by eye. This document records what is known so far and what is next.
 
+## Ground movement
+
+Implemented in `psp/testroom/player.c` (`locomotion_step`).
+
+- **Stick reference** (`FUN_00254670`): `player+0x28e4` is recomputed from the
+  camera (target - eye) every frame, so the stick always means its on-screen
+  direction. The latched case (`player+0x28e8`, set by `FUN_00254990`) is only
+  armed from `FUN_0021f500` on area entry; it releases at neutral or when the
+  stick moves more than 0xaab (15 degrees).
+- **Tilt** (`FUN_002e2f20`, `player+0x4a3a`): under 53 neutral, 53-112 walk,
+  113 and up run. The test room assumes a 0-127 tilt scale; the scale itself
+  wasn't confirmed from the pad code.
+- **Table** (`player+0x2830`, Dante at `0x5a85c0`, per 60 fps frame): walk 3.5,
+  run 8.5, turn 0x800 angle units, start turn 8 frames, run acceleration 6
+  frames, full tilt held 4 frames before running. The second row (`player+0x28a7`,
+  set from `FUN_0021f500`) raises run to 11.0755. The test room uses row 0 only.
+- **States**: `FUN_00221ba0` start (walk toward the direction held on entry,
+  turning evenly over 8 frames, motion 2-01), `FUN_00221d20` move (motion 2-01,
+  then 2-02 or 2-51 if `player+0x28a0`), `FUN_002217a0` idle (2-00, long idle 2-03).
+- **Lock-on**: none of these handlers read R1 or the target, so lock-on doesn't
+  change walking or running. There is no strafe animation.
+- **Not ported**: the body lean in `player+0x28ec`, row 1, 2-51, long idle. The
+  stop transition and its blend length weren't traced; the test room stops at
+  once and blends over 10 frames. Its camera follow (rate and angle limit) is
+  its own tuning, not taken from the game's camera code.
+
 ## Executable (SLUS_213.61, DMC3 Special Edition)
 
 - Analysed with the repo-local Ghidra project (`tools/run_ghidra.ps1

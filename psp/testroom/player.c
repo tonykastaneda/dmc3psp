@@ -15,6 +15,7 @@ float player_room_limit = ROOM_HALF_SIZE - PLAYER_RADIUS;
 int (*player_floor_fn)(float x, float y, float z, float step, float *out) = 0;
 int camera_auto_follow = 0;
 #define CAMERA_FOLLOW_RATE 1.6f  /* rad/s toward Dante's heading at full run speed */
+#define CAMERA_FOLLOW_MAX_ANGLE 1.9f  /* rad off the camera; beyond this it holds still */
 
 static int floor_at(float x, float y, float z, float *out) {
     if (!player_floor_fn) { *out = 0.0f; return 1; }
@@ -76,6 +77,70 @@ void player_reset(Player *player, FollowCamera *camera) {
     camera->tx = player->x;
     camera->ty = player->y + CAMERA_TARGET_HEIGHT;
     camera->tz = player->z;
+    player->camera_yaw = camera->yaw;
+}
+
+static void turn_toward(Player *player, float yaw, float max_turn) {
+    player->yaw = wrap_angle(player->yaw + clampf(wrap_angle(yaw - player->yaw), -max_turn, max_turn));
+}
+
+/* One frame of ground movement with the stick out of neutral. Turns Dante, sets
+ * player->speed and returns the direction he travels. Lock-on plays no part:
+ * none of the three state handlers reads R1 or the target. */
+static float locomotion_step(Player *player, float stick_yaw, float magnitude, float dt) {
+    float frames = dt * MOTION_FPS;
+    int full_tilt = magnitude * STICK_TILT_SCALE >= STICK_TILT_RUN;
+    if (!player->on_ground) {
+        /* Air steering is the test room's own, not from the game's handlers. */
+        player->loco = LOCO_IDLE;
+        player->running = 1;
+        player->speed = PLAYER_RUN_SPEED * magnitude;
+        turn_toward(player, stick_yaw, PLAYER_TURN_RATE * dt);
+        return stick_yaw;
+    }
+    if (player->loco == LOCO_IDLE) {
+        /* Start: walk toward the direction held at this moment, turning to it
+         * evenly over 8 frames. */
+        player->loco = LOCO_START;
+        player->running = 0;
+        player->speed = PLAYER_WALK_SPEED;
+        player->accel = 0.0f;
+        player->loco_timer = LOCO_START_FRAMES;
+        player->start_yaw = stick_yaw;
+        player->start_turn = fabsf(wrap_angle(stick_yaw - player->yaw)) / LOCO_START_FRAMES;
+        return stick_yaw;
+    }
+    if (player->loco == LOCO_START) {
+        turn_toward(player, player->start_yaw, player->start_turn * frames);
+        player->loco_timer -= frames;
+        if (player->loco_timer <= 0.0f) {
+            player->loco = LOCO_MOVE;
+            player->loco_timer = LOCO_RUN_HOLD_FRAMES;
+        }
+        return player->start_yaw;
+    }
+    turn_toward(player, stick_yaw, PLAYER_TURN_RATE * dt);
+    if (!player->running) {
+        if (full_tilt) {
+            player->loco_timer -= frames;
+            if (player->loco_timer <= 0.0f) {
+                player->running = 1;
+                player->accel = (PLAYER_RUN_SPEED - player->speed) / LOCO_ACCEL_FRAMES;
+            }
+        } else {
+            player->loco_timer = LOCO_RUN_HOLD_FRAMES;
+        }
+    } else if (!full_tilt) {
+        player->running = 0;
+        player->speed = PLAYER_WALK_SPEED;
+        player->accel = 0.0f;
+        player->loco_timer = LOCO_RUN_HOLD_FRAMES;
+    }
+    if (player->running) {
+        player->speed += player->accel * frames;
+        if (player->speed >= PLAYER_RUN_SPEED) { player->speed = PLAYER_RUN_SPEED; player->accel = 0.0f; }
+    }
+    return stick_yaw;
 }
 
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt) {
@@ -111,8 +176,9 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     if (camera_auto_follow && !camera->snapping && !player->locked_on && !player->attacking &&
         player->speed > 1.0f && player->on_ground) {
         float delta = wrap_angle(player->yaw - camera->yaw);
-        /* Running straight at the camera: leave it (DMC keeps the shot). */
-        if (fabsf(delta) < 2.4f) {
+        /* Running toward the camera: leave it, so Dante keeps coming at the
+         * lens instead of the camera circling around behind him. */
+        if (fabsf(delta) < CAMERA_FOLLOW_MAX_ANGLE) {
             float rate = CAMERA_FOLLOW_RATE * (player->speed / PLAYER_RUN_SPEED) * dt;
             camera->yaw = wrap_angle(camera->yaw + clampf(delta, -rate, rate));
         }
@@ -125,17 +191,10 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
 
     magnitude = sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y);
     if (magnitude > 1.0f) magnitude = 1.0f;
-    player->speed = 0.0f;
-    if (player->locked_on && player->has_target && !player->attacking) {
-        float delta = wrap_angle(atan2f(player->target_x - player->x, player->target_z - player->z) - player->yaw);
-        float max_turn = PLAYER_TURN_RATE * dt;
-        player->yaw = wrap_angle(player->yaw + clampf(delta, -max_turn, max_turn));
-    }
-    /* Input reference: latched when the stick leaves neutral and kept while it
-     * is held, so a moving camera (auto follow, snap) doesn't bend Dante's path
-     * into circles -- the DMC behaviour across camera changes. */
-    if (magnitude <= 0.0f || !player->stick_held) player->camera_yaw = camera->yaw;
-    player->stick_held = magnitude > 0.0f;
+    if (magnitude * STICK_TILT_SCALE < STICK_TILT_NEUTRAL) magnitude = 0.0f;
+    /* The stick is read against the camera as it is now (FUN_00254670), so it
+     * always means the same direction on screen, even while the camera turns. */
+    player->camera_yaw = camera->yaw;
     if (player->attacking) magnitude = 0.0f;  /* root motion drives Dante instead */
     if (magnitude > 0.0f) {
         /* Camera-relative: stick up runs away from the camera. Right-handed
@@ -144,23 +203,18 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         float right_x = -cosf(player->camera_yaw), right_z = sinf(player->camera_yaw);
         float move_x = forward_x * input->stick_y + right_x * input->stick_x;
         float move_z = forward_z * input->stick_y + right_z * input->stick_x;
-        float length = sqrtf(move_x * move_x + move_z * move_z);
         float limit = player_room_limit;
-        move_x /= length;
-        move_z /= length;
-        /* Lock-on faces the target (or holds the facing with none); otherwise turn toward travel. */
-        if (!player->locked_on) {
-            float delta = wrap_angle(atan2f(move_x, move_z) - player->yaw);
-            float max_turn = PLAYER_TURN_RATE * dt;
-            player->yaw = wrap_angle(player->yaw + clampf(delta, -max_turn, max_turn));
-        }
-        player->speed = PLAYER_RUN_SPEED * magnitude;
-        player->x = clampf(player->x + move_x * player->speed * dt, -limit, limit);
-        player->z = clampf(player->z + move_z * player->speed * dt, -limit, limit);
+        float move_yaw = locomotion_step(player, atan2f(move_x, move_z), magnitude, dt);
+        player->x = clampf(player->x + sinf(move_yaw) * player->speed * dt, -limit, limit);
+        player->z = clampf(player->z + cosf(move_yaw) * player->speed * dt, -limit, limit);
         if (player->on_ground) {
             player->run_phase += player->speed * dt / STRIDE_LENGTH * TWO_PI_F;
             if (player->run_phase > TWO_PI_F) player->run_phase -= TWO_PI_F;
         }
+    } else {
+        player->loco = LOCO_IDLE;
+        player->running = 0;
+        player->speed = 0.0f;
     }
 
     if (input->jump && player->on_ground && !player->attacking &&

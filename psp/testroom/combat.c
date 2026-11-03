@@ -554,12 +554,15 @@ static void start_handmade(Combat *c, Player *player, const PlayerInput *input) 
         float mx = fx * input->stick_y + rx * input->stick_x, mz = fz * input->stick_y + rz * input->stick_x;
         float len = sqrtf(mx * mx + mz * mz);
         if (len > 0.5f) {
-            float fwd = (mx * sinf(player->yaw) + mz * cosf(player->yaw)) / len;
-            float side = (mx * -cosf(player->yaw) + mz * sinf(player->yaw)) / len;  /* + = Dante's right */
+            /* Against the target when there is one (FUN_00253650), since lock-on
+             * doesn't hold Dante's facing on it; the roll then starts facing it. */
+            float ref = player->has_target ? atan2f(player->target_x - player->x, player->target_z - player->z) : player->yaw;
+            float fwd = (mx * sinf(ref) + mz * cosf(ref)) / len;
+            float side = (mx * -cosf(ref) + mz * sinf(ref)) / len;  /* + = Dante's right */
             if (fwd < -0.6f) start_move(c, MOVE_BACKFLIP, 0);
             else if (side > 0.5f) start_move(c, MOVE_ROLL_RIGHT, 0);
             else if (side < -0.5f) start_move(c, MOVE_ROLL_LEFT, 0);
-            if (c->move != MOVE_NONE) c->base_y = player->y;
+            if (c->move != MOVE_NONE) { c->base_y = player->y; player->yaw = ref; }
         }
     } else if (hike) {
         player->air_hiked = 1;
@@ -600,6 +603,9 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     } else if (action) {
         c->buffer_time = 0.0f;
         if (c->move == MOVE_NONE && player->on_ground && !player->locked_on) face_stick(player, input, player->camera_yaw);
+        /* Locked on, attacks go at the target even if Dante was running elsewhere. */
+        else if (c->move == MOVE_NONE && player->locked_on && player->has_target)
+            player->yaw = atan2f(player->target_x - player->x, player->target_z - player->z);
         if (is_trickster(c->move)) c->dashes = 0;
         start_move(c, action_move(action), action);
     } else if (c->move == MOVE_NONE) {
