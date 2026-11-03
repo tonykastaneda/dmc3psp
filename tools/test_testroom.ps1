@@ -14,7 +14,7 @@ $Eboot = Join-Path $Root "build\testroom\EBOOT.PBP"
 $EmuDir = Split-Path -Parent $Emulator
 $GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM"
 $Evidence = Join-Path $Root "analysis\testroom"
-$Shots = @("SHOT_IDLE", "SHOT_BONES", "SHOT_RUN", "SHOT_SIDE", "SHOT_JUMP", "SHOT_COMBO", "SHOT_STINGER", "SHOT_PROP", "SHOT_DASH", "SHOT_SKY_STAR", "SHOT_BLOCK", "SHOT_DUMMY_HIT", "SHOT_DUMMY_AIR")
+$Shots = @("SHOT_IDLE", "SHOT_BONES", "SHOT_RUN", "SHOT_SIDE", "SHOT_JUMP", "SHOT_COMBO", "SHOT_STINGER", "SHOT_PROP", "SHOT_DASH", "SHOT_SKY_STAR", "SHOT_BLOCK", "SHOT_DUMMY_HIT", "SHOT_DUMMY_AIR", "SHOT_WHEEL", "SHOT_GUN", "SHOT_ROCKET", "SHOT_WALKFIRE")
 $Outputs = @("TESTROOM_OK.TXT", "TESTROOM_FAIL.TXT", "COMBAT_TRACE.TXT", "MEMORY.TXT") + ($Shots | ForEach-Object { "$_.BMP" })
 
 function Write-Log([string]$Message) {

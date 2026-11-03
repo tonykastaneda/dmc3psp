@@ -171,7 +171,7 @@ void anim_reset(AnimState *anim) {
 int anim_weapon_in_hand(const AnimState *anim, const Player *player, const Combat *combat) {
     /* Viewer: base motions are named "<chunk>-NN"; anything else is a weapon set. */
     if (anim->viewer) return motion_get(anim->viewer_motion)->name[1] != '-';
-    if (combat->move >= MOVE_TR_DASH) return 0;  /* style moves keep Rebellion on the back */
+    if (combat->move >= MOVE_TR_DASH || combat->stance_active) return 0;  /* style moves and guns keep Rebellion on the back */
     return combat->move != MOVE_NONE || (combat->sword_out > 0.0f && player->speed < 1.0f);
 }
 
@@ -240,6 +240,29 @@ static void blend_samples(MotionSample *out, const MotionSample *a, const Motion
     }
 }
 
+/* The gun stance's legs, with the blend between rows (FUN_002243e0). */
+static void stance_legs_sample(const Combat *combat, MotionSample *out) {
+    static MotionSample a, b;
+    motion_sample(motion_get(combat->lower_motion), combat->lower_frame, &a);
+    if (combat->lower_fade_weight > 0.0f && combat->lower_fade_motion >= 0) {
+        motion_sample(motion_get(combat->lower_fade_motion), combat->lower_fade_frame, &b);
+        blend_samples(out, &a, &b, combat->lower_fade_weight);
+    } else {
+        *out = a;
+    }
+}
+
+/* What the arms' motion doesn't drive comes from the legs'. */
+static void overlay_upper(MotionSample *upper, const MotionSample *legs) {
+    int bone, k;
+    for (bone = 0; bone < MOTION_MAX_BONES; ++bone) {
+        for (k = 0; k < 3; ++k) {
+            if (!upper->has_rot[bone][k] && legs->has_rot[bone][k]) { upper->rot[bone][k] = legs->rot[bone][k]; upper->has_rot[bone][k] = 1; }
+            if (!upper->has_trans[bone][k] && legs->has_trans[bone][k]) { upper->trans[bone][k] = legs->trans[bone][k]; upper->has_trans[bone][k] = 1; }
+        }
+    }
+}
+
 static void locomotion_sample(const AnimState *anim, const Combat *combat, MotionSample *out) {
     static MotionSample idle, walk, run, move;
     const MotionSample *moving;
@@ -297,11 +320,27 @@ void anim_pose(const AnimState *anim, const Player *player, const Combat *combat
         }
         return;
     }
-    if (!anim->viewer && combat && (attacking || combat->fade_weight > 0.0f)) {
+    if (!anim->viewer && combat && (attacking || combat->stance_active || combat->fade_weight > 0.0f)) {
         reset_offsets(pose);
         /* Target: the current move (or locomotion once the move ended). */
-        if (attacking) motion_sample(motion_get(combat->motion), combat->frame, &sa);
-        else locomotion_sample(anim, combat, &sa);
+        if (attacking) {
+            motion_sample(motion_get(combat->motion), combat->frame, &sa);
+            /* Upper-body shot over the legs. */
+            if (combat->lower_motion >= 0 && combat->lower_motion != combat->motion) {
+                static MotionSample legs;
+                stance_legs_sample(combat, &legs);
+                overlay_upper(&sa, &legs);
+            }
+        }
+        else if (combat->stance_active) {
+            int upper;
+            float upper_frame;
+            static MotionSample legs;
+            combat_stance_motion(combat, &upper, &upper_frame);
+            motion_sample(motion_get(upper), upper_frame, &sa);
+            stance_legs_sample(combat, &legs);
+            overlay_upper(&sa, &legs);
+        } else locomotion_sample(anim, combat, &sa);
         if (combat->fade_weight > 0.0f) {
             if (combat->fade_motion >= 0) motion_sample(motion_get(combat->fade_motion), combat->fade_frame, &sb);
             else locomotion_sample(anim, combat, &sb);

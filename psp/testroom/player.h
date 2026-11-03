@@ -7,10 +7,10 @@
  *   analog stick  move (camera-relative)
  *   d-pad         style switch: up Trickster, down Royalguard,
  *                 left Swordmaster, right Gunslinger
- *   R             lock-on: aims attacks at the target; movement is unchanged
- *   L             weapon wheel (placeholder)
- *   triangle      melee (placeholder)   square  guns (placeholder)
- *   circle        style action (placeholder)
+ *   R             lock-on: draws the gun, faces the target, strafes
+ *   L             hold: weapon wheel, the stick picks a melee weapon
+ *                 tap: next melee weapon     L + square: next gun
+ *   triangle      melee   square  guns       circle  style action
  *   cross         jump (implemented)
  *   SELECT        snap the camera behind Dante
  *   START         motion viewer (d-pad left/right picks a motion)
@@ -63,7 +63,10 @@ typedef struct {
     Style style;
     int locked_on;
     int weapon_wheel;
+    int melee_weapon;   /* 0 Rebellion, 1 Cerberus, 2 Agni & Rudra, 3 Nevan, 4 Beowulf */
+    int gun_weapon;     /* 5 Ebony & Ivory, 6 Shotgun, 7 Artemis, 8 Spiral, 9 Kalina Ann */
     int attacking;      /* set by combat: movement and turning are suspended */
+    int gun_stance;     /* set by combat: R1 drew the gun, combat walks Dante (player+0x28a6) */
     int free_fall;      /* combat move that keeps gravity (Air Hike, Wall Hike) */
     int air_hiked;      /* Air Hike used this airtime */
     int wall_contact;   /* collision pushed Dante out of a wall this frame */
@@ -97,6 +100,8 @@ typedef struct {
     int style;         /* Style pressed this frame, or -1 */
     int style_held;    /* circle held (Royalguard block) */
     int melee_held;    /* triangle held (Round Trip charge) */
+    int gun_held;      /* square held */
+    int next_melee, next_gun; /* cycle weapons this frame: L tap, L + square */
     int lock_on;       /* R held */
     int weapon_wheel;  /* L held */
     int melee, gun, style_action, jump, snap_camera, reset, toggle_viewer; /* pressed this frame */
@@ -115,5 +120,6 @@ void player_reset(Player *player, FollowCamera *camera);
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt);
 const char *player_style_name(Style style);
 const char *player_action_name(Action action);
+const char *player_weapon_name(int weapon);
 
 #endif

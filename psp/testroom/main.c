@@ -31,7 +31,14 @@
 #include "stage.h"
 #include "swizzle.h"
 #include "enemy.h"
+#include "bullets.h"
 #include "rebellion_runtime.h"
+#include "ebony_runtime.h"
+#include "ivory_runtime.h"
+#include "shotgun_runtime.h"
+#include "artemis_runtime.h"
+#include "spiral_runtime.h"
+#include "kalina_runtime.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -292,6 +299,50 @@ static int init_rebellion(void) {
     return 1;
 }
 
+/* The guns: each drawn in a hand while it's in use. */
+typedef struct {
+    const Dmc3Vec3 *positions, *normals;
+    const Dmc3Uv *uvs;
+    const unsigned short *source_indices;
+    const unsigned char *rgba;
+    int vertex_count, index_count, width, height;
+    ModelVertex *vertices;
+    unsigned short *indices;
+    void *texture;
+} GunModel;
+
+#define GUN_MODEL(n, N) {dmc3_##n##_positions, dmc3_##n##_normals, dmc3_##n##_uvs, dmc3_##n##_indices, dmc3_##n##_texture, \
+                          DMC3_##N##_VERTEX_COUNT, DMC3_##N##_INDEX_COUNT, DMC3_##N##_TEXTURE_WIDTH, DMC3_##N##_TEXTURE_HEIGHT, 0, 0, 0}
+enum { GUN_EBONY, GUN_IVORY, GUN_SHOTGUN, GUN_ARTEMIS, GUN_SPIRAL, GUN_KALINA, GUN_MODEL_COUNT };
+static GunModel gun_models[GUN_MODEL_COUNT] = {
+    GUN_MODEL(ebony, EBONY), GUN_MODEL(ivory, IVORY), GUN_MODEL(shotgun, SHOTGUN),
+    GUN_MODEL(artemis, ARTEMIS), GUN_MODEL(spiral, SPIRAL), GUN_MODEL(kalina, KALINA),
+};
+#define GUN_OUT_SECONDS 0.6f   /* how long a gun stays out after a shot (test room choice) */
+static float gun_out_time;
+
+static int init_guns(void) {
+    int g, i;
+    for (g = 0; g < GUN_MODEL_COUNT; ++g) {
+        GunModel *m = &gun_models[g];
+        size_t bytes = (size_t)m->width * m->height * 4;
+        m->vertices = memalign(16, sizeof(ModelVertex) * m->vertex_count);
+        m->indices = memalign(16, sizeof(unsigned short) * m->index_count);
+        m->texture = memalign(16, bytes);
+        if (!m->vertices || !m->indices || !m->texture) return 0;
+        for (i = 0; i < m->vertex_count; ++i) {
+            ModelVertex *v = &m->vertices[i];
+            v->u = m->uvs[i].u; v->v = m->uvs[i].v;
+            v->nx = m->normals[i].x; v->ny = m->normals[i].y; v->nz = m->normals[i].z;
+            v->x = m->positions[i].x; v->y = m->positions[i].y; v->z = m->positions[i].z;
+        }
+        memcpy(m->indices, m->source_indices, sizeof(unsigned short) * m->index_count);
+        memcpy(m->texture, m->rgba, bytes);
+        if (!swizzle_texture32(m->texture, m->width, m->height)) return 0;
+    }
+    return 1;
+}
+
 /* GU matrix from a rotation and translation (v' = R v + t). pspgum is
  * column-major: x/y/z hold the images of the basis axes (R's columns), as in
  * sceGumRotateY, and w holds the translation. */
@@ -441,6 +492,103 @@ static void draw_hud(const char *lines[HUD_LINES]) {
     }
 }
 
+/* ---- Weapon wheel ---------------------------------------------------------
+ * Hold L: the outer ring is the melee weapons (the stick picks one), the inner
+ * ring the guns (square cycles them). Sector 0 is at the top, going clockwise. */
+#define WHEEL_SLOTS 5
+#define WHEEL_ARC_STEPS 8
+#define WHEEL_CX 240.0f
+#define WHEEL_CY 132.0f
+#define WHEEL_OUTER 74.0f
+#define WHEEL_OUTER_IN 44.0f
+#define WHEEL_INNER 38.0f
+#define WHEEL_INNER_IN 20.0f
+#define WHEEL_LABEL_RADIUS 84.0f
+#define WHEEL_SLOT_COLOR 0xb0302828u   /* ABGR */
+#define WHEEL_MELEE_COLOR 0xf02828d0u  /* red */
+#define WHEEL_GUN_COLOR 0xf0d08828u    /* blue */
+
+typedef struct { unsigned int color; float x, y, z; } WheelVertex;
+
+static int wheel_add_wedge(WheelVertex *v, float slot, float r0, float r1, unsigned int color) {
+    const float span = 6.2831853f / WHEEL_SLOTS, gap = 0.05f;
+    float a0 = (slot - 0.5f) * span + gap, a1 = (slot + 0.5f) * span - gap;
+    int i, n = 0;
+    for (i = 0; i < WHEEL_ARC_STEPS; ++i) {
+        float t0 = a0 + (a1 - a0) * (float)i / WHEEL_ARC_STEPS, t1 = a0 + (a1 - a0) * (float)(i + 1) / WHEEL_ARC_STEPS;
+        float sa = sinf(t0), ca = cosf(t0), sb = sinf(t1), cb = cosf(t1);
+        WheelVertex q[4] = {
+            {color, WHEEL_CX + sa * r0, WHEEL_CY - ca * r0, 0.0f}, {color, WHEEL_CX + sa * r1, WHEEL_CY - ca * r1, 0.0f},
+            {color, WHEEL_CX + sb * r1, WHEEL_CY - cb * r1, 0.0f}, {color, WHEEL_CX + sb * r0, WHEEL_CY - cb * r0, 0.0f},
+        };
+        v[n++] = q[0]; v[n++] = q[1]; v[n++] = q[2];
+        v[n++] = q[0]; v[n++] = q[2]; v[n++] = q[3];
+    }
+    return n;
+}
+
+/* Call after draw_hud, inside the display list. */
+static void draw_weapon_wheel(const Player *player) {
+    WheelVertex *v = sceGuGetMemory(sizeof(WheelVertex) * WHEEL_SLOTS * 2 * WHEEL_ARC_STEPS * 6);
+    int i, n = 0, pass;
+    for (i = 0; i < WHEEL_SLOTS; ++i) {
+        n += wheel_add_wedge(v + n, (float)i, WHEEL_OUTER_IN, WHEEL_OUTER,
+                             i == player->melee_weapon ? WHEEL_MELEE_COLOR : WHEEL_SLOT_COLOR);
+        n += wheel_add_wedge(v + n, (float)i, WHEEL_INNER_IN, WHEEL_INNER,
+                             i == player->gun_weapon - 5 ? WHEEL_GUN_COLOR : WHEEL_SLOT_COLOR);
+    }
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuDisable(GU_ALPHA_TEST);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    sceGuShadeModel(GU_FLAT);
+    sceGuDrawArray(GU_TRIANGLES, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_2D, n, 0, v);
+    sceGuShadeModel(GU_SMOOTH);
+    sceGuDisable(GU_BLEND);
+    /* Labels: names around the ring, the current gun below it. */
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuTexImage(0, FONT_TEX_SIZE, FONT_TEX_SIZE, FONT_TEX_SIZE, font_texture);
+    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+    sceGuTexFlush();
+    for (pass = 0; pass < 2; ++pass) {
+        int shadow = pass ? 0 : 1;
+        for (i = 0; i < WHEEL_SLOTS; ++i) {
+            const char *name = player_weapon_name(i);
+            float a = (float)i * 6.2831853f / WHEEL_SLOTS, s = sinf(a), c = cosf(a);
+            float w = (float)strlen(name) * 8.0f;
+            /* Grow outward from the ring: left of it on the left, right on the right. */
+            float x = WHEEL_CX + s * WHEEL_LABEL_RADIUS + (s > 0.3f ? 0.0f : s < -0.3f ? -w : -w * 0.5f);
+            float y = WHEEL_CY - c * WHEEL_LABEL_RADIUS - 4.0f - (c > 0.8f ? 6.0f : 0.0f);
+            sceGuColor(pass ? (i == player->melee_weapon ? 0xff60a0ffu : 0xffffffffu) : 0xff000000u);
+            draw_text((int)x + shadow, (int)y + shadow, name);
+        }
+        {
+            const char *gun = player_weapon_name(player->gun_weapon);
+            sceGuColor(pass ? 0xffffc080u : 0xff000000u);
+            draw_text((int)(WHEEL_CX - (float)strlen(gun) * 4.0f) + shadow, (int)(WHEEL_CY + WHEEL_LABEL_RADIUS + 14.0f) + shadow, gun);
+            sceGuColor(pass ? 0xffc0c0c0u : 0xff000000u);
+            draw_text((int)WHEEL_CX - 76 + shadow, (int)(WHEEL_CY + WHEEL_LABEL_RADIUS + 26.0f) + shadow, "stick melee  [] gun");
+        }
+    }
+}
+
+/* While the wheel is open the stick picks a melee weapon and nothing else acts. */
+static void apply_weapon_wheel(PlayerInput *input, Player *player) {
+    if (!input->weapon_wheel) return;
+    if (input->stick_x * input->stick_x + input->stick_y * input->stick_y > 0.25f) {
+        float span = 6.2831853f / WHEEL_SLOTS;
+        int slot = (int)floorf(atan2f(input->stick_x, input->stick_y) / span + 0.5f);
+        player->melee_weapon = (slot + WHEEL_SLOTS) % WHEEL_SLOTS;
+    }
+    input->stick_x = input->stick_y = 0.0f;
+    input->melee = input->melee_held = input->style_action = input->style_held = 0;
+    input->gun = input->gun_held = input->jump = input->lock_on = 0;
+    input->style = -1;
+}
+
 /* Skeleton overlay: a line from each bone to its parent, drawn over Dante. */
 static void draw_bones(void) {
     ColorVertex *v = sceGuGetMemory(sizeof(ColorVertex) * 2 * (DMC3_BONE_COUNT + coat_joint_count()));
@@ -465,6 +613,41 @@ static void draw_bones(void) {
     sceGuDisable(GU_LIGHTING);
     sceGuDisable(GU_ALPHA_TEST);
     sceGumDrawArray(GU_LINES, COLOR_VTYPE, n, 0, v);
+}
+
+static void to_gu_matrix(ScePspFMatrix4 *out, const float r[3][3], const float t[3]);
+
+/* Call with Dante's model matrix current. */
+static void draw_gun(const GunModel *m, int bone) {
+    ScePspFMatrix4 matrix;
+    float r[3][3], t[3];
+    int a, b;
+    for (a = 0; a < 3; ++a) {
+        for (b = 0; b < 3; ++b) r[a][b] = pose.world_rot[bone].m[a][b];
+        t[a] = pose.world_pos[bone][a];
+    }
+    to_gu_matrix(&matrix, r, t);
+    sceGumPushMatrix();
+    sceGumMultMatrix(&matrix);
+    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    sceGuTexFlush();
+    sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, m->index_count, m->indices, m->vertices);
+    sceGumPopMatrix();
+}
+
+static void draw_active_gun(const Player *player) {
+    if (gun_out_time <= 0.0f) return;
+    switch (player->gun_weapon) {
+    case 5:
+        draw_gun(&gun_models[GUN_EBONY], BONE_L_HAND);
+        draw_gun(&gun_models[GUN_IVORY], BONE_R_HAND);
+        break;
+    case 6: draw_gun(&gun_models[GUN_SHOTGUN], BONE_L_HAND); break;
+    case 7: draw_gun(&gun_models[GUN_ARTEMIS], BONE_L_HAND); break;
+    case 8: draw_gun(&gun_models[GUN_SPIRAL], BONE_L_HAND); break;
+    case 9: draw_gun(&gun_models[GUN_KALINA], BONE_L_HAND); break;
+    default: break;
+    }
 }
 
 static unsigned int perf_render_start;
@@ -625,11 +808,14 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         sceGumPopMatrix();
         bound_texture = -1;
     }
+    draw_active_gun(player);
     enemy_draw();
+    bullets_draw();
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
     draw_hud(hud);
+    if (player->weapon_wheel) draw_weapon_wheel(player);
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -664,7 +850,7 @@ static float stick_axis(unsigned char raw) {
     return value > 1.0f ? 1.0f : (value < -1.0f ? -1.0f : value);
 }
 
-static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
+static void read_pad(PlayerInput *input, unsigned int *previous_buttons, int *previous_l) {
     SceCtrlData pad;
     unsigned int pressed;
     sceCtrlPeekBufferPositive(&pad, 1);
@@ -686,6 +872,20 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
     input->weapon_wheel = (pad.Buttons & PSP_CTRL_LTRIGGER) != 0;
     input->melee = (pressed & PSP_CTRL_TRIANGLE) != 0;
     input->gun = (pressed & PSP_CTRL_SQUARE) != 0;
+    input->gun_held = (pad.Buttons & PSP_CTRL_SQUARE) != 0;
+    /* L tap cycles melee weapons; L + square cycles guns instead of firing. */
+    {
+        static int l_used;
+        if (pad.Buttons & PSP_CTRL_LTRIGGER) {
+            if (input->gun) { input->next_gun = 1; input->gun = 0; l_used = 1; }
+            input->gun_held = 0;
+            if (input->stick_x != 0.0f || input->stick_y != 0.0f) l_used = 1;  /* picked on the wheel */
+        } else if (*previous_l) {
+            if (!l_used) input->next_melee = 1;
+            l_used = 0;
+        }
+        *previous_l = (pad.Buttons & PSP_CTRL_LTRIGGER) != 0;
+    }
     input->style_action = (pressed & PSP_CTRL_CIRCLE) != 0;
     input->style_held = (pad.Buttons & PSP_CTRL_CIRCLE) != 0;
     input->melee_held = (pad.Buttons & PSP_CTRL_TRIANGLE) != 0;
@@ -695,7 +895,7 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons) {
 }
 
 /* Scripted input for the automated test (240 frames). */
-#define AUTOTEST_FRAMES 2620
+#define AUTOTEST_FRAMES 2960
 #define MOVE_TEST_START 2210
 static void scripted_pad(int frame, PlayerInput *input) {
     memset(input, 0, sizeof(*input));
@@ -716,6 +916,19 @@ static void scripted_pad(int frame, PlayerInput *input) {
     else if (frame >= 2460 && frame < 2500) input->stick_y = 0.6f;
     else if (frame >= 2500 && frame < 2540) input->stick_y = 1.0f;
     else if (frame >= 2550 && frame < 2610) { input->stick_x = 1.0f; input->lock_on = 1; }
+    /* Weapon wheel: open it and push the stick right, which is Cerberus' slot. */
+    if (frame >= 2615 && frame < 2645) input->weapon_wheel = 1;
+    if (frame >= 2620 && frame < 2640) input->stick_x = 1.0f;
+    if (frame == 2630) input->next_gun = 1;
+    /* Guns: two quick Ebony & Ivory shots at the dummy, then the shotgun with
+     * lock-on, then Kalina Ann's flying rocket. */
+    if (frame == 2665 || frame == 2674) input->gun = 1;
+    if (frame >= 2700 && frame < 2705) input->lock_on = 1;
+    if (frame == 2702) input->gun = 1;
+    if (frame == 2860) input->gun = 1;
+    /* Ebony & Ivory while walking forward, with no lock-on. */
+    if (frame >= 2920 && frame < 2950) input->stick_y = 1.0f;
+    if (frame == 2925 || frame == 2934 || frame == 2943) input->gun = 1;
 }
 
 /* Combat autotest: combo I by tapping (262-470), then SELECT so "forward"
@@ -918,6 +1131,105 @@ static void write_memory_report(unsigned int boot_us, int motions_loaded) {
     fclose(f);
 }
 
+/* Bullets leave from the gun hand, so they wait until this frame's pose is known.
+ * Ebony & Ivory alternate hands; the other guns use the weapon hand. */
+#define GUN_MUZZLE_FORWARD 30.0f   /* hand to muzzle: estimate until guns are drawn */
+#define TARGET_AIM_HEIGHT 100.0f   /* the lock-on point (player+0x3c40) isn't decoded for the dummy */
+static void fire_pending_shots(Combat *c, const Player *p, float dt) {
+    int shots = combat_take_shots(c);
+    bullets_update(dt);
+    while (shots-- > 0) {
+        int bone = BONE_L_HAND;
+        float s = sinf(p->yaw), co = cosf(p->yaw), hx, hz, muzzle[3], target[3];
+        if (p->gun_weapon == 5 && (c->shot_hand++ & 1)) bone = BONE_R_HAND;
+        hx = pose.world_pos[bone][0];
+        hz = pose.world_pos[bone][2];
+        muzzle[0] = p->x + co * hx + s * hz + s * GUN_MUZZLE_FORWARD;
+        muzzle[1] = p->y + pose.world_pos[bone][1];
+        muzzle[2] = p->z - s * hx + co * hz + co * GUN_MUZZLE_FORWARD;
+        target[0] = p->target_x;
+        target[1] = p->target_y + TARGET_AIM_HEIGHT;
+        target[2] = p->target_z;
+        bullets_fire(p->gun_weapon - 5, muzzle, p->yaw, c->aim_target && p->has_target, target);
+    }
+}
+
+/* FOCUS.TXT: one short scene for what's being worked on (tools/test_focus.ps1).
+ * "strafe": locked on to a dummy with Ebony & Ivory, firing while walking right,
+ * left, back and forward; reports how far each row carried Dante. */
+#define FOCUS_FRAMES 270
+#define FOCUS_LEG 50
+static const float focus_stick[4][2] = {{1.0f, 0.0f}, {-1.0f, 0.0f}, {0.0f, -1.0f}, {0.0f, 1.0f}};
+#define FOCUS_FIRE_START 225
+/* "coat": close-ups of Dante standing from four sides, running, and stopping. */
+#define COAT_FRAMES 345
+static int focus_coat;
+/* yaw relative to Dante's facing (0 = behind him), camera distance, and heights. */
+static const struct { int frame; float yaw, dist, eye, look; const char *name; } coat_shots[] = {
+    {60, 0.0f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_BACK.BMP"}, {70, 3.1416f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_FRONT.BMP"},
+    {80, 1.5708f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_SIDE.BMP"}, {90, -1.5708f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_SIDE2.BMP"},
+    /* Close-ups: the frame is only 480x272, so get near what's being judged. */
+    {100, 3.1416f, 75.0f, 40.0f, 35.0f, "FOCUS_COAT_HEMFRONT.BMP"}, {110, 0.0f, 75.0f, 40.0f, 35.0f, "FOCUS_COAT_HEMBACK.BMP"},
+    {120, 1.5708f, 75.0f, 40.0f, 35.0f, "FOCUS_COAT_HEMSIDE.BMP"}, {130, 0.0f, 70.0f, 125.0f, 120.0f, "FOCUS_COAT_WAISTBACK.BMP"},
+    {140, 3.1416f, 70.0f, 125.0f, 120.0f, "FOCUS_COAT_WAISTFRONT.BMP"},
+    {225, 1.5708f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_RUN.BMP"}, {240, 0.0f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_RUNBACK.BMP"},
+    {262, 1.5708f, 75.0f, 40.0f, 35.0f, "FOCUS_COAT_RUNHEM.BMP"}, {290, 1.5708f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_STOP.BMP"},
+    {340, 0.0f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_SETTLED.BMP"},
+};
+static void focus_coat_camera(const Player *p, FollowCamera *c, int frame) {
+    /* A tripod near Dante, at an angle relative to his facing. */
+    float yaw = p->yaw, dist = 190.0f, eye = 110.0f, look = 85.0f;
+    unsigned int i;
+    for (i = 0; i < sizeof(coat_shots) / sizeof(coat_shots[0]); ++i) {
+        if (frame <= coat_shots[i].frame) {
+            yaw += coat_shots[i].yaw;
+            dist = coat_shots[i].dist;
+            eye = coat_shots[i].eye;
+            look = coat_shots[i].look;
+            break;
+        }
+    }
+    c->x = p->x - sinf(yaw) * dist;
+    c->y = p->y + eye;
+    c->z = p->z - cosf(yaw) * dist;
+    c->tx = p->x;
+    c->ty = p->y + look;
+    c->tz = p->z;
+}
+
+static void focus_pad(int frame, PlayerInput *input) {
+    int leg = (frame - 20) / FOCUS_LEG;
+    memset(input, 0, sizeof(*input));
+    input->style = -1;
+    if (focus_coat) {
+        if (frame >= 145 && frame < 265) input->stick_y = 1.0f;
+        return;
+    }
+    if (frame < 10) return;
+    input->lock_on = 1;
+    /* R alone: strafe with no shots. Then standing shots, alternating guns. */
+    if (frame >= FOCUS_FIRE_START && (frame - FOCUS_FIRE_START) % 8 == 0) input->gun = 1;
+    if (frame < 20 || leg > 3) return;
+    input->stick_x = focus_stick[leg][0];
+    input->stick_y = focus_stick[leg][1];
+}
+
+/* Focus scenes: hold on this frame until tools/test_focus.ps1 has captured the
+ * emulator's window (the renderer's full resolution, not the PSP's 480x272). */
+static const char *focus_pending;
+static void focus_hold(const char *name) {
+    char path[320];
+    FILE *f;
+    int wait;
+    sceDisplayWaitVblankStart();
+    path_in_game_dir(path, sizeof(path), "FOCUS_SHOT.TXT");
+    f = fopen(path, "w");
+    if (!f) return;
+    fputs(name, f);
+    fclose(f);
+    for (wait = 0; wait < 400 && game_file_exists("FOCUS_SHOT.TXT"); ++wait) sceKernelDelayThread(25000);
+}
+
 /* ---- Main --------------------------------------------------------------- */
 
 int main(int argc, char *argv[]) {
@@ -926,6 +1238,8 @@ int main(int argc, char *argv[]) {
     PlayerInput input;
     void *draw_buffer = (void *)0;
     unsigned int last_time, previous_buttons = 0, boot_start;
+    int previous_l = 0, moves_total = 0, moves_finished = 0, moves_failed = -1, moves_fallbacks = 0;
+    int inputs_total = 0, inputs_ok = 0, inputs_failed = -1, focus = 0;
     unsigned int frame_us_total = 0, frame_us_max = 0, last_frame_us = 0, skin_us_max = 0;
     unsigned int rest_error;
     int frames = 0;
@@ -940,7 +1254,10 @@ int main(int argc, char *argv[]) {
     float moved_before_reset = 0.0f;
     float attack_start_x = 0.0f, attack_start_z = 0.0f, attack_travel = 0.0f;
     int style_switched = 0, snapped = 0;
-    int dir_frames = 0, lock_turned = 0;
+    int dir_frames = 0, lock_turned = 0, wheel_ok = 0, wheel_stayed = 0;
+    int shots_start = 0, hits_start = 0, ei_shots = 0, ei_hits = 0, shotgun_hits = 0, rocket_hits = 0;
+    int rocket_start_shots = 0, rocket_start_hits = 0, rocket_shots = 0, walk_shots = 0;
+    float walk_x = 0.0f, walk_z = 0.0f, walk_travel = 0.0f;
     float dir_error = 0.0f, walk_speed = 0.0f, run_speed = 0.0f, prev_x = 0.0f, prev_z = 0.0f;
     float start_x, start_z, max_height = 0.0f, time = 0.0f;
 
@@ -957,7 +1274,7 @@ int main(int argc, char *argv[]) {
     scePowerSetClockFrequency(333, 333, 166);  /* full speed (homebrew starts at 222 MHz) */
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
-    if (!init_model() || !coat_init() || !init_rebellion()) {
+    if (!init_model() || !coat_init() || !init_rebellion() || !init_guns()) {
         pspDebugScreenInit();
         pspDebugScreenPrintf("Out of memory loading the Dante model.\n");
         sceKernelSleepThread();
@@ -972,6 +1289,11 @@ int main(int argc, char *argv[]) {
     combat_reset(&combat);
     combat_ready = motions_loaded > 0 && combat_init();
     dummy_ready = motions_loaded > 0 && enemy_init();
+    if (combat_ready && game_file_exists("AUTOEXIT.TXT")) {   /* autotest only: it slows the boot */
+        moves_finished = combat_selftest(&moves_total, &moves_failed, &moves_fallbacks);
+        inputs_ok = combat_selftest_inputs(&inputs_total, &inputs_failed);
+    }
+    combat_reset(&combat);
 
     {
         /* The Mission 2 street (st001) if STAGE.BIN is next to the EBOOT. */
@@ -989,6 +1311,15 @@ int main(int argc, char *argv[]) {
         }
     }
     autotest = game_file_exists("AUTOEXIT.TXT");
+    focus = game_file_exists("FOCUS.TXT");
+    if (focus) {
+        char path[320], text[16] = {0};
+        FILE *f;
+        path_in_game_dir(path, sizeof(path), "FOCUS.TXT");
+        f = fopen(path, "r");
+        if (f) { fread(text, 1, sizeof(text) - 1, f); fclose(f); }
+        focus_coat = strncmp(text, "coat", 4) == 0;
+    }
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
     if (recording) {
@@ -1013,7 +1344,7 @@ int main(int argc, char *argv[]) {
         }
     }
     if (recording) autotest = 0;
-    if (autotest || recording) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
+    if (autotest || recording || focus) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
     /* Training dummy in the middle of the street (or ahead of Dante in the grid room). */
     if (dummy_ready) {
@@ -1094,6 +1425,9 @@ int main(int argc, char *argv[]) {
             else record_pad(frames, &input);
             if (pad_aim) aim_stick(&input, &player, pad_aim);
             pad_aim = 0;
+        } else if (focus) {
+            dt = 1.0f / 60.0f;
+            focus_pad(frames, &input);
         } else if (autotest) {
             dt = 1.0f / 60.0f;
             scripted_pad(frames, &input);
@@ -1102,7 +1436,7 @@ int main(int argc, char *argv[]) {
         } else {
             dt = (float)(frame_start - last_time) / 1000000.0f;
             if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
-            read_pad(&input, &previous_buttons);
+            read_pad(&input, &previous_buttons, &previous_l);
         }
         last_time = frame_start;
         time += dt;
@@ -1136,6 +1470,7 @@ int main(int argc, char *argv[]) {
                 player.target_z = e[2];
             }
         }
+        apply_weapon_wheel(&input, &player);
         if (combat_ready && !anim.viewer) {
             MoveId before = combat.move;
             combat_update(&combat, &player, &input, dt);
@@ -1206,6 +1541,9 @@ int main(int argc, char *argv[]) {
             pose_procedural(&pose, &player, time);
         }
         pose_evaluate(&pose);
+        fire_pending_shots(&combat, &player, dt);
+        if (combat_move_is_gun(combat.move) || combat.stance_active) gun_out_time = GUN_OUT_SECONDS;
+        else if (gun_out_time > 0.0f) gun_out_time -= dt;
         skin_model(&pose);
         coat_update(&pose, &player, dt);
         skin_us = sceKernelGetSystemTimeLow() - skin_start;
@@ -1223,17 +1561,25 @@ int main(int argc, char *argv[]) {
                  combat.move != MOVE_NONE ? combat_move_name(combat.move) : "",
                  combat.move != MOVE_NONE && player.action_timer > 0.0f ? "  " : "",
                  player.locked_on ? (player.has_target ? " [LOCK-ON: DUMMY] " : " [LOCK-ON: no target] ") : "",
-                 player.weapon_wheel ? "[WEAPON WHEEL] " : "",
+                 "",
                  player.action_timer > 0.0f ? player_action_name(player.last_action) : "");
         hud[0] = line0;
         hud[1] = line1;
         if (dummy_ready && !anim.viewer) {
             static char line2[64];
-            snprintf(line2, sizeof(line2), "DUMMY %-9s hits %d", enemy_state_name(), enemy_hits_taken());
+            snprintf(line2, sizeof(line2), "%s / %s  DUMMY hits %d", player_weapon_name(player.melee_weapon),
+                     player_weapon_name(player.gun_weapon), enemy_hits_taken());
             hud[2] = line2;
         } else
-        hud[2] = anim.viewer ? "dpad left/right: previous/next motion" : "stick move  dpad style  R lock  L weapons";
+        hud[2] = anim.viewer ? "dpad left/right: previous/next motion" : "stick move  dpad style  R lock  L melee  L+[] gun";
         hud[3] = anim.viewer ? "START: back to play" : "X jump /\\ melee [] guns O style SELECT cam";
+        if (player.weapon_wheel) hud[2] = hud[3] = NULL;  /* the wheel uses that space */
+        if (focus && focus_coat) {
+            /* The dummy would only get in the way; a clean view of the coat. */
+            if (frames == 1) enemy_spawn(player.x + 3000.0f, player.z);
+            focus_coat_camera(&player, &camera, frames);
+            hud[0] = hud[1] = hud[2] = hud[3] = NULL;
+        }
         render_scene(&player, &camera, hud, bones_now);
 
         frame_us = sceKernelGetSystemTimeLow() - frame_start;
@@ -1264,6 +1610,75 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(path, sizeof(path), "RECORD_DONE.TXT");
                 done = fopen(path, "w");
                 if (done) { fprintf(done, "frames=%d\n", frames / 2); fclose(done); }
+                running = 0;
+            }
+        }
+        if (focus && focus_coat) {
+            unsigned int shot;
+            for (shot = 0; shot < sizeof(coat_shots) / sizeof(coat_shots[0]); ++shot)
+                if (frames == coat_shots[shot].frame) focus_pending = coat_shots[shot].name;
+            if (frames == 2) {
+                /* The open street. */
+                float gy;
+                player.x = 2750.0f; player.z = 2450.0f;
+                if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy;
+                coat_reset();   /* a teleport would fling the coat */
+            }
+            if (frames == COAT_FRAMES) {
+                char path[320];
+                FILE *report;
+                path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
+                report = fopen(path, "w");
+                if (report) { fprintf(report, "coat scene done, max_frame_us=%u\n", frame_us_max); fclose(report); }
+                running = 0;
+            }
+        } else if (focus) {
+            static float leg_x, leg_z, leg_dist[4], leg_side[4], leg_fwd[4];
+            static int leg_rows[4];
+            if (frames == 2 && dummy_ready) {
+                /* The open street, the dummy 4 m ahead. */
+                float gy;
+                player.x = 2750.0f; player.z = 2450.0f;
+                if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy;
+                enemy_spawn(player.x + sinf(player.yaw) * 400.0f, player.z + cosf(player.yaw) * 400.0f);
+                camera.yaw = camera.target_yaw = player.yaw;
+                camera.x = player.x - sinf(camera.yaw) * CAMERA_DISTANCE;
+                camera.y = player.y + CAMERA_HEIGHT;
+                camera.z = player.z - cosf(camera.yaw) * CAMERA_DISTANCE;
+                camera.tx = player.x; camera.ty = player.y + CAMERA_TARGET_HEIGHT; camera.tz = player.z;
+                player.gun_weapon = 5;
+            }
+            if (frames >= 20 && (frames - 20) % FOCUS_LEG == 0 && (frames - 20) / FOCUS_LEG <= 4) {
+                int leg = (frames - 20) / FOCUS_LEG - 1;
+                if (leg >= 0) {
+                    /* Travel in the frame of the line to the dummy: + side = Dante's right. */
+                    float mx = player.x - leg_x, mz = player.z - leg_z, s = sinf(player.yaw), co = cosf(player.yaw);
+                    leg_dist[leg] = sqrtf(mx * mx + mz * mz);
+                    leg_fwd[leg] = mx * s + mz * co;
+                    leg_side[leg] = mx * -co + mz * s;
+                }
+                leg_x = player.x; leg_z = player.z;
+            }
+            if (frames >= 20 && (frames - 20) / FOCUS_LEG < 4 && (frames - 20) % FOCUS_LEG == 30) {
+                static const char *shots[4] = {"FOCUS_RIGHT.BMP", "FOCUS_LEFT.BMP", "FOCUS_BACK.BMP", "FOCUS_FWD.BMP"};
+                leg_rows[(frames - 20) / FOCUS_LEG] = combat.lower_motion;
+                focus_pending = shots[(frames - 20) / FOCUS_LEG];
+            }
+            if (frames == FOCUS_FRAMES - 1) {
+                char path[320];
+                FILE *report;
+                int i;
+                static const char *names[4] = {"right", "left", "back", "forward"};
+                path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
+                report = fopen(path, "w");
+                if (report) {
+                    for (i = 0; i < 4; ++i)
+                        fprintf(report, "%-8s legs=%s travel=%d side=%d forward=%d\n", names[i],
+                                leg_rows[i] >= 0 ? motion_get(leg_rows[i])->name : "(none)", (int)leg_dist[i], (int)leg_side[i], (int)leg_fwd[i]);
+                    fprintf(report, "shots=%d hits=%d stance=%d shot_count=%d max_frame_us=%u\n", bullets_shots(), bullets_hits(),
+                            combat.stance_active, combat.shot_count, frame_us_max);
+                    fclose(report);
+                }
                 running = 0;
             }
         }
@@ -1336,6 +1751,39 @@ int main(int argc, char *argv[]) {
                 camera.tx = player.x; camera.ty = player.y + CAMERA_TARGET_HEIGHT; camera.tz = player.z;
             }
         }
+        if (autotest && frames == 2635) capture_frame(draw_buffer, "SHOT_WHEEL.BMP");
+        if (autotest && frames == 2640) wheel_stayed = fabsf(player.speed) < 1.0f;
+        if (autotest && frames == 2650) {
+            /* The dummy 3 m ahead of Dante, in the open street; start with Ebony & Ivory. */
+            enemy_spawn(player.x + sinf(player.yaw) * 300.0f, player.z + cosf(player.yaw) * 300.0f);
+            player.gun_weapon = 5;
+            shots_start = bullets_shots();
+            hits_start = bullets_hits();
+        }
+        if (autotest && frames == 2667) capture_frame(draw_buffer, "SHOT_GUN.BMP");
+        if (autotest && frames == 2690) { ei_shots = bullets_shots() - shots_start; ei_hits = bullets_hits() - hits_start; player.gun_weapon = 6; }
+        if (autotest && frames == 2725) shotgun_hits = bullets_hits() - hits_start - ei_hits;
+        if (autotest && frames == 2850) {
+            /* The shotgun's motion is over; a standing dummy again, and Kalina Ann. */
+            enemy_spawn(player.x + sinf(player.yaw) * 300.0f, player.z + cosf(player.yaw) * 300.0f);
+            player.gun_weapon = 9;
+            rocket_start_shots = bullets_shots();
+            rocket_start_hits = bullets_hits();
+        }
+        if (autotest && frames == 2868) capture_frame(draw_buffer, "SHOT_ROCKET.BMP");
+        if (autotest && frames == 2910) player.gun_weapon = 5;
+        if (autotest && frames == 2924) { walk_x = player.x; walk_z = player.z; walk_shots = bullets_shots(); }
+        if (autotest && frames == 2938) capture_frame(draw_buffer, "SHOT_WALKFIRE.BMP");
+        if (autotest && frames == 2950) {
+            float wx = player.x - walk_x, wz = player.z - walk_z;
+            walk_travel = sqrtf(wx * wx + wz * wz);
+            walk_shots = bullets_shots() - walk_shots;
+        }
+        if (autotest && frames == 2895) {
+            rocket_shots = bullets_shots() - rocket_start_shots;
+            rocket_hits = bullets_hits() - rocket_start_hits;
+        }
+        if (autotest && frames == 2645) wheel_ok = wheel_stayed && player.melee_weapon == 1 && player.gun_weapon == 6;
         if (autotest && frames == 1050) capture_frame(draw_buffer, "SHOT_DASH.BMP");
         if (autotest && frames == 2010) capture_frame(draw_buffer, "SHOT_SKY_STAR.BMP");
         if (autotest && frames == AUTOTEST_FRAMES - 1) {
@@ -1350,6 +1798,8 @@ int main(int argc, char *argv[]) {
                      tr_dashes == 3 && sky_seen && sky_travel > 300.0f && trick_seen &&
                      (trick_start_dist <= 200.0f || trick_end_dist < trick_start_dist - 100.0f) &&
                      dir_frames > 120 && dir_error < 0.15f && lock_turned &&
+                     moves_total > 0 && moves_finished == moves_total && inputs_total > 0 && inputs_ok == inputs_total && wheel_ok &&
+                     ei_shots == 2 && ei_hits == 2 && shotgun_hits == 1 && rocket_shots == 1 && rocket_hits == 1 && walk_shots == 3 && walk_travel > 30.0f &&
                      fabsf(walk_speed - PLAYER_WALK_SPEED) < 1.0f && fabsf(run_speed - PLAYER_RUN_SPEED) < 1.0f;
             path_in_game_dir(path, sizeof(path), ok ? "TESTROOM_OK.TXT" : "TESTROOM_FAIL.TXT");
             report = fopen(path, "w");
@@ -1362,7 +1812,10 @@ int main(int argc, char *argv[]) {
                         "prop_frames=%d\ndance=%d\ndash_travel=%d\nair_hike=%d\nhike_height=%d\nblock_frames=%d\n"
                         "dummy=%d\ndummy_combo_hits=%d\ndummy_launch_height=%d\nroll_travel=%d\n"
                         "trickster_dashes=%d\nsky_star_travel=%d\nair_trick=%d\nair_trick_dist=%d,%d\n"
-                        "stick_dir_frames=%d\nstick_dir_error_mdeg=%d\nwalk_speed=%d\nrun_speed=%d\nlock_turned=%d\n",
+                        "stick_dir_frames=%d\nstick_dir_error_mdeg=%d\nwalk_speed=%d\nrun_speed=%d\nlock_turned=%d\n"
+                        "selftest_actions=%d/%d\nselftest_first_failure=%d\nselftest_flag_fallbacks=%d\n"
+                        "selftest_inputs=%d/%d\nselftest_input_first_failure=%d\nweapon_wheel=%d\n"
+                        "ei_shots=%d\nei_hits=%d\nshotgun_hits=%d\nrocket_shots=%d\nrocket_hits=%d\nwalk_fire_shots=%d\nwalk_fire_travel=%d\n",
                         ok ? "DMC3PSP_TESTROOM_OK" : "DMC3PSP_TESTROOM_FAIL", frames + 1, (int)moved,
                         (int)start_x, (int)start_z, (int)player.x, (int)player.z,
                         (int)(player.yaw * 57295.78f), (int)(camera.yaw * 57295.78f), snapped,
@@ -1372,7 +1825,8 @@ int main(int argc, char *argv[]) {
                         (int)dash_travel, hike_seen, (int)hike_height, block_frames,
                         dummy_ready, dummy_hits_combo, (int)dummy_max_height, (int)roll_travel,
                         tr_dashes, (int)sky_travel, trick_seen, (int)trick_start_dist, (int)trick_end_dist,
-                        dir_frames, (int)(dir_error * 57295.78f), (int)walk_speed, (int)run_speed, lock_turned);
+                        dir_frames, (int)(dir_error * 57295.78f), (int)walk_speed, (int)run_speed, lock_turned,
+                        moves_finished, moves_total, moves_failed, moves_fallbacks, inputs_ok, inputs_total, inputs_failed, wheel_ok, ei_shots, ei_hits, shotgun_hits, rocket_shots, rocket_hits, walk_shots, (int)walk_travel);
                 fclose(report);
             }
             running = 0;
@@ -1381,6 +1835,7 @@ int main(int argc, char *argv[]) {
         ++frames;
         sceDisplayWaitVblankStart();
         draw_buffer = sceGuSwapBuffers();
+        if (focus_pending) { focus_hold(focus_pending); focus_pending = NULL; }
     }
 
     sceGuTerm();

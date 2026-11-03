@@ -10,34 +10,38 @@
 #include "model_runtime.h"
 #include "coat_runtime.h"
 
-/* The coat hangs from Dante's pelvis (bone 14, at hip height in the rest
+/* The coat hangs from Dante's upper spine (bone 3, y=135: its back meets the jacket hem and its hem stops at the ankle; the rest
  * pose; the coat rig's root sits at its origin). */
-#define ATTACH_BONE BONE_PELVIS
+#define ATTACH_BONE BONE_SPINE1
 
-/* Simulation constants. The .clt values (gravity -0.01, spring 0.02,
- * stiffness 0.25, max speed 50) are in the PS2 engine's own per-frame units,
- * which are not calibrated yet; these are tuned by eye in centimetres. */
+/* The game's chain update (CCnsChain, FUN_0022f270), run once per 60 fps frame with
+ * the coat's cloth script (pl000_02.clt: gravity, spring, max speed, stiffness). What
+ * the script doesn't set keeps the constructor's value (FUN_0022f1d0). */
 #define SIM_HZ 60.0f
-#define SIM_GRAVITY (-980.0f / (SIM_HZ * SIM_HZ))  /* cm per frame^2 */
-#define SIM_DAMPING 0.90f
-#define SIM_PULL_ROOT 0.16f   /* pull toward the rigid pose near the waist ... */
-#define SIM_PULL_TIP 0.05f    /* ... tapering to the hem (toned down: less flare) */
-#define SIM_MAX_STEP 25.0f    /* cm per frame */
-#define SIM_ITERATIONS 3
-#define SIM_DRAG_TIP 0.10f    /* air drag vs. the waist's motion, scaled up toward the hem */
-#define LEG_RADIUS 12.0f
-#define HIP_RADIUS 15.0f
+#define SIM_DAMPING 0.99f     /* +0x54 */
+/* Body capsules (FUN_00230130: list 0x5949d0, shapes 0x5948b0): both ends in the
+ * bone's space, then the radius. A point inside is pushed to the surface, and
+ * its sideways velocity stops. */
+typedef struct { int bone; float a[3], b[3], radius; } CoatCapsule;
+static const CoatCapsule capsules[6] = {
+    {BONE_SPINE1, {0.0f, 20.0f, 10.0f}, {0.0f, -40.0f, 10.0f}, 15.0f},
+    {BONE_SPINE0, {0.0f, -5.0f, 0.0f}, {0.0f, -15.0f, 0.0f}, 18.0f},
+    {BONE_L_THIGH, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+    {BONE_L_SHIN, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+    {BONE_R_THIGH, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+    {BONE_R_SHIN, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+};
 
 typedef struct { float m[3][3]; } M3;
 
 static CoatVertex *vertices;
 static unsigned short *indices;
 static float joints[DMC3_COAT_STRAND_COUNT][DMC3_COAT_STRAND_MAX][3];   /* world space */
-static float previous[DMC3_COAT_STRAND_COUNT][DMC3_COAT_STRAND_MAX][3];
+static float velocity[DMC3_COAT_STRAND_COUNT][DMC3_COAT_STRAND_MAX][3];
+static M3 joint_rot[DMC3_COAT_STRAND_COUNT][DMC3_COAT_STRAND_MAX];
 static float rest_length[DMC3_COAT_STRAND_COUNT][DMC3_COAT_STRAND_MAX];
 static int strand_length[DMC3_COAT_STRAND_COUNT];
 static float accumulator;
-static float last_attach[3];
 static int initialised;
 /* Last pose-derived transforms (world space). */
 static M3 attach_rot;
@@ -45,7 +49,6 @@ static float attach_pos[3];
 static M3 bone_rot[DMC3_COAT_BONE_COUNT];   /* world */
 static float bone_pos[DMC3_COAT_BONE_COUNT][3];
 static float player_yaw, player_pos[3];
-static float floor_y;  /* ground under Dante, for the hem */
 
 static void m_mul(M3 *o, const M3 *a, const M3 *b) {
     M3 r;
@@ -131,8 +134,8 @@ static void rigid(int bone, float out[3]) {
     out[0] += attach_pos[0]; out[1] += attach_pos[1]; out[2] += attach_pos[2];
 }
 
-/* Push p out of the capsule a-b of radius r. */
-static void push_capsule(float p[3], const float a[3], const float b[3], float r) {
+/* Push p out of the capsule a-b of radius r (FUN_001be780). */
+static int push_capsule(float p[3], const float a[3], const float b[3], float r) {
     float ab[3] = {b[0] - a[0], b[1] - a[1], b[2] - a[2]};
     float ap[3] = {p[0] - a[0], p[1] - a[1], p[2] - a[2]};
     float len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
@@ -146,74 +149,81 @@ static void push_capsule(float p[3], const float a[3], const float b[3], float r
     if (dist < r && dist > 1e-4f) {
         float k = r / dist;
         p[0] = c[0] + d[0] * k; p[1] = c[1] + d[1] * k; p[2] = c[2] + d[2] * k;
+        return 1;
     }
+    return 0;
 }
 
-static void to_world(const Pose *pose, int bone, float out[3]) {
-    M3 yaw;
+static void bone_point(const Pose *pose, int bone, const float local[3], float out[3]) {
+    M3 yaw, world;
+    float v[3];
     m_yaw(&yaw, player_yaw);
+    m_mul(&world, &yaw, (const M3 *)&pose->world_rot[bone]);
+    m_apply(&world, local, v);
     m_apply(&yaw, pose->world_pos[bone], out);
-    out[0] += player_pos[0]; out[1] += player_pos[1]; out[2] += player_pos[2];
+    out[0] += v[0] + player_pos[0];
+    out[1] += v[1] + player_pos[1];
+    out[2] += v[2] + player_pos[2];
 }
 
+/* One frame of FUN_0022f270 for every free bone, parents first. */
 static void step(const Pose *pose) {
-    static const int legs[4][2] = {
-        {BONE_L_THIGH, BONE_L_SHIN}, {BONE_L_SHIN, BONE_L_FOOT},
-        {BONE_R_THIGH, BONE_R_SHIN}, {BONE_R_SHIN, BONE_R_FOOT},
-    };
-    float capsule[4][2][3], hip_a[3], hip_b[3];
-    int s, i, k, it, l;
-    for (l = 0; l < 4; ++l) {
-        to_world(pose, legs[l][0], capsule[l][0]);
-        to_world(pose, legs[l][1], capsule[l][1]);
+    const float stiffness = DMC3_COAT_STIFFNESS, keep = 1.0f - DMC3_COAT_STIFFNESS;
+    float capsule_a[6][3], capsule_b[6][3];
+    int s, i, k, c;
+    for (c = 0; c < 6; ++c) {
+        bone_point(pose, capsules[c].bone, capsules[c].a, capsule_a[c]);
+        bone_point(pose, capsules[c].bone, capsules[c].b, capsule_b[c]);
     }
-    to_world(pose, BONE_PELVIS, hip_a);
-    to_world(pose, BONE_SPINE0, hip_b);
-    hip_a[1] -= 18.0f;
-    {
-        /* Waist motion this step drives air drag on the free joints. */
-        float wind[3] = {attach_pos[0] - last_attach[0], attach_pos[1] - last_attach[1], attach_pos[2] - last_attach[2]};
-        memcpy(last_attach, attach_pos, sizeof(last_attach));
-        for (s = 0; s < DMC3_COAT_STRAND_COUNT; ++s) {
-            int n = strand_length[s];
-            for (i = 1; i < n; ++i) {
-                float k2 = SIM_DRAG_TIP * (float)i / (float)(n - 1);
-                for (k = 0; k < 3; ++k) joints[s][i][k] -= wind[k] * k2;
-            }
-        }
-    }
-
     for (s = 0; s < DMC3_COAT_STRAND_COUNT; ++s) {
         int n = strand_length[s];
+        /* The anchors ride on the root. */
         rigid(dmc3_coat_strands[s][0], joints[s][0]);
+        joint_rot[s][0] = attach_rot;
         for (i = 1; i < n; ++i) {
-            float *p = joints[s][i], *q = previous[s][i];
-            float target[3], v[3], speed, pull = SIM_PULL_ROOT + (SIM_PULL_TIP - SIM_PULL_ROOT) * (float)(i - 1) / (float)(n > 2 ? n - 2 : 1);
-            rigid(dmc3_coat_strands[s][i], target);
-            for (k = 0; k < 3; ++k) v[k] = (p[k] - q[k]) * SIM_DAMPING;
-            v[1] += SIM_GRAVITY;
-            speed = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-            if (speed > SIM_MAX_STEP) for (k = 0; k < 3; ++k) v[k] *= SIM_MAX_STEP / speed;
+            const Dmc3Vec3 *rest_a = &dmc3_coat_bone_rest[dmc3_coat_strands[s][i - 1]];
+            const Dmc3Vec3 *rest_b = &dmc3_coat_bone_rest[dmc3_coat_strands[s][i]];
+            const float up[3] = {0.0f, 1.0f, 0.0f};
+            const float local[3] = {rest_b->x - rest_a->x, rest_b->y - rest_a->y, rest_b->z - rest_a->z};
+            float *parent = joints[s][i - 1], *p = joints[s][i], *v = velocity[s][i];
+            float rest_pos[3], rest_up[3], predicted[3], sim_up[3], blended[3], d[3], len, speed;
+            float limit = rest_length[s][i];
+            M3 align;
+            int hit = 0;
+            /* Where the parent wants it, and where its velocity takes it. */
+            m_apply(&joint_rot[s][i - 1], local, rest_pos);
+            m_apply(&joint_rot[s][i - 1], up, rest_up);
             for (k = 0; k < 3; ++k) {
-                q[k] = p[k];
-                p[k] += v[k];
-                p[k] += (target[k] - p[k]) * pull;
+                rest_pos[k] += parent[k];
+                predicted[k] = p[k] + v[k];
+                sim_up[k] = parent[k] - predicted[k];   /* Y axis at the parent ('Y' in the script) */
             }
-        }
-        for (it = 0; it < SIM_ITERATIONS; ++it) {
-            for (i = 1; i < n; ++i) {
-                float *a = joints[s][i - 1], *b = joints[s][i];
-                float d[3] = {b[0] - a[0], b[1] - a[1], b[2] - a[2]};
-                float len = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-                if (len > 1e-4f) {
-                    float k2 = rest_length[s][i] / len;
-                    /* Anchor-side joint is fixed: move only the child. */
-                    b[0] = a[0] + d[0] * k2; b[1] = a[1] + d[1] * k2; b[2] = a[2] + d[2] * k2;
+            normalize(sim_up);
+            /* Stiffness blends the authored pose back in (FUN_00133ab0). */
+            for (k = 0; k < 3; ++k) {
+                p[k] = rest_pos[k] * stiffness + predicted[k] * keep;
+                blended[k] = rest_up[k] * stiffness + sim_up[k] * keep;
+            }
+            normalize(blended);
+            m_align(&align, rest_up, blended);
+            m_mul(&joint_rot[s][i], &align, &joint_rot[s][i - 1]);
+            for (c = 0; c < 6; ++c) hit |= push_capsule(p, capsule_a[c], capsule_b[c], capsules[c].radius);
+            if (hit) v[0] = v[2] = 0.0f;
+            v[1] += DMC3_COAT_GRAVITY;
+            /* LimitLength (on by default) holds the length; the spring still sees the stretch. */
+            for (k = 0; k < 3; ++k) d[k] = p[k] - parent[k];
+            len = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+            if (len > 0.0f && limit > 0.0f) {
+                float stretch = len - limit;
+                for (k = 0; k < 3; ++k) {
+                    float dir = d[k] / len;
+                    p[k] = parent[k] + dir * limit;
+                    v[k] -= DMC3_COAT_SPRING * dir * stretch;
                 }
-                for (l = 0; l < 4; ++l) push_capsule(b, capsule[l][0], capsule[l][1], LEG_RADIUS);
-                push_capsule(b, hip_a, hip_b, HIP_RADIUS);
-                if (b[1] < floor_y) b[1] = floor_y; /* floor */
             }
+            speed = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+            if (speed > DMC3_COAT_MAX_SPEED) for (k = 0; k < 3; ++k) v[k] *= DMC3_COAT_MAX_SPEED / speed;
+            for (k = 0; k < 3; ++k) v[k] *= SIM_DAMPING;
         }
     }
 }
@@ -223,7 +233,6 @@ void coat_update(const Pose *pose, const Player *player, float dt) {
     float local_attach[3];
     int s, i;
     player_yaw = player->yaw;
-    floor_y = (player->on_ground ? player->y : player->y - 250.0f) + 1.0f;
     player_pos[0] = player->x; player_pos[1] = player->y; player_pos[2] = player->z;
     m_yaw(&yaw, player_yaw);
     m_mul(&attach_rot, &yaw, (const M3 *)&pose->world_rot[ATTACH_BONE]);
@@ -235,10 +244,10 @@ void coat_update(const Pose *pose, const Player *player, float dt) {
         for (s = 0; s < DMC3_COAT_STRAND_COUNT; ++s)
             for (i = 0; i < strand_length[s]; ++i) {
                 rigid(dmc3_coat_strands[s][i], joints[s][i]);
-                memcpy(previous[s][i], joints[s][i], sizeof(joints[s][i]));
+                memset(velocity[s][i], 0, sizeof(velocity[s][i]));
+                joint_rot[s][i] = attach_rot;
             }
         accumulator = 0.0f;
-        memcpy(last_attach, attach_pos, sizeof(last_attach));
         initialised = 1;
     }
     accumulator += dt;
@@ -248,31 +257,13 @@ void coat_update(const Pose *pose, const Player *player, float dt) {
         accumulator -= 1.0f / SIM_HZ;
     }
 
-    /* Bone transforms: root = attachment; strand bones aim at the next joint. */
     bone_rot[0] = attach_rot;
     memcpy(bone_pos[0], attach_pos, sizeof(attach_pos));
     for (s = 0; s < DMC3_COAT_STRAND_COUNT; ++s) {
-        int n = strand_length[s];
-        for (i = 0; i < n; ++i) {
+        for (i = 0; i < strand_length[s]; ++i) {
             int bone = dmc3_coat_strands[s][i];
             memcpy(bone_pos[bone], joints[s][i], sizeof(joints[s][i]));
-            if (i + 1 < n) {
-                int child = dmc3_coat_strands[s][i + 1];
-                float rest_dir[3] = {dmc3_coat_bone_rest[child].x - dmc3_coat_bone_rest[bone].x,
-                                     dmc3_coat_bone_rest[child].y - dmc3_coat_bone_rest[bone].y,
-                                     dmc3_coat_bone_rest[child].z - dmc3_coat_bone_rest[bone].z};
-                float world_rest[3], actual[3] = {joints[s][i + 1][0] - joints[s][i][0],
-                                                  joints[s][i + 1][1] - joints[s][i][1],
-                                                  joints[s][i + 1][2] - joints[s][i][2]};
-                M3 align;
-                m_apply(&attach_rot, rest_dir, world_rest);
-                normalize(world_rest);
-                normalize(actual);
-                m_align(&align, world_rest, actual);
-                m_mul(&bone_rot[bone], &align, &attach_rot);
-            } else {
-                bone_rot[bone] = bone_rot[dmc3_coat_strands[s][i - 1]];
-            }
+            bone_rot[bone] = joint_rot[s][i];
         }
     }
 }

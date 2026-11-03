@@ -44,6 +44,12 @@ const char *player_style_name(Style style) {
     return (unsigned)style < STYLE_COUNT ? names[style] : "?";
 }
 
+const char *player_weapon_name(int weapon) {
+    static const char *names[10] = {"REBELLION", "CERBERUS", "AGNI&RUDRA", "NEVAN", "BEOWULF",
+                                    "EBONY&IVORY", "SHOTGUN", "ARTEMIS", "SPIRAL", "KALINA ANN"};
+    return weapon >= 0 && weapon < 10 ? names[weapon] : "?";
+}
+
 const char *player_action_name(Action action) {
     switch (action) {
     case ACTION_MELEE: return "MELEE (no weapon yet)";
@@ -63,7 +69,10 @@ static void set_action(Player *player, Action action) {
 }
 
 void player_reset(Player *player, FollowCamera *camera) {
+    int melee = player->melee_weapon, gun = player->gun_weapon;
     memset(player, 0, sizeof(*player));
+    player->melee_weapon = melee;
+    player->gun_weapon = gun;
     player->jump_motion = -1;
     player->x = player_spawn[0];
     player->y = player_spawn[1];
@@ -71,6 +80,7 @@ void player_reset(Player *player, FollowCamera *camera) {
     player->yaw = player_spawn[3];
     player->on_ground = 1;
     player->style = STYLE_TRICKSTER;
+    if (player->gun_weapon < 5) player->gun_weapon = 5;
     memset(camera, 0, sizeof(*camera));
     camera->yaw = camera->target_yaw = player->yaw;
     camera_goal(player, camera, &camera->x, &camera->y, &camera->z);
@@ -160,10 +170,8 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         player->style = (Style)input->style;
         set_action(player, ACTION_STYLE_SWITCH);
     }
-    if (input->gun) set_action(player, ACTION_GUN);
-    /* Swordmaster's circle moves are handled by combat; other styles still placeholder. */
-    /* Gunslinger's circle needs the guns (not in yet); the other styles are in combat.c. */
-    if (input->style_action && player->style == STYLE_GUNSLINGER) set_action(player, ACTION_STYLE);
+    if (input->next_melee) player->melee_weapon = (player->melee_weapon + 1) % 5;
+    if (input->next_gun) player->gun_weapon = 5 + (player->gun_weapon - 5 + 1) % 5;
 
     /* SELECT: swing the camera behind Dante's current facing. */
     if (input->snap_camera) {
@@ -195,7 +203,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     /* The stick is read against the camera as it is now (FUN_00254670), so it
      * always means the same direction on screen, even while the camera turns. */
     player->camera_yaw = camera->yaw;
-    if (player->attacking) magnitude = 0.0f;  /* root motion drives Dante instead */
+    if (player->attacking || player->gun_stance) magnitude = 0.0f;  /* combat moves Dante instead */
     if (magnitude > 0.0f) {
         /* Camera-relative: stick up runs away from the camera. Right-handed
          * view (gumLookAt), so right = forward x up. */

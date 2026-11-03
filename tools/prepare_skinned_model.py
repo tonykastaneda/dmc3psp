@@ -198,13 +198,14 @@ def write_coat(output: Path, coat_data: bytes, cloth_data: bytes) -> None:
           f"{strands}, skipped objects {coat['skipped']}, cloth {cloth}")
 
 
-def write_weapon(output: Path, name: str, mod_data: bytes, texture_data: bytes) -> None:
-    """A rigid weapon MOD (every vertex on one bone at the origin) -> <name>_runtime.h."""
+def write_weapon(output: Path, name: str, mod_data: bytes, texture_data: bytes, strict: bool = True) -> None:
+    """A rigid weapon MOD (every vertex on one bone at the origin) -> <name>_runtime.h.
+    strict=False keeps a weapon with moving parts in its rest pose."""
     skel = parse_skeleton(mod_data)
     mesh = build_mesh(mod_data, skel["count"])
     for bones, weights in zip(mesh["bones"], mesh["weights"]):
         used = {b for b, w in zip(bones, weights) if w}
-        if any(skel["world"][b] != (0.0, 0.0, 0.0) for b in used):
+        if strict and any(skel["world"][b] != (0.0, 0.0, 0.0) for b in used):
             raise ValueError(f"{name}: vertex bound to a bone away from the origin; not rigid")
     textures = decode_textures(texture_data)
     up = name.upper()
@@ -389,6 +390,19 @@ def main() -> None:
 
     write_coat(args.output, chunks[COAT_CHUNK], chunks[CLOTH_CHUNK])
     write_weapon(args.output, "rebellion", rebellion[1], rebellion[0])
+    # Gun packs, in weapon order (texture set first, then the MODs): moving parts
+    # (the shotgun's action, Artemis' arms) stay in their rest pose for now.
+    with Iso9660(args.iso) as iso:
+        gdata = AfsArchive(iso, "GDATA.AFS")
+        def pack(slot):
+            entry = gdata.entries[slot]
+            return pnst_entries(iso.read_file("GDATA.AFS", entry["offset"], entry["size"]))
+        ei = pack(102)
+        write_weapon(args.output, "ebony", ei[1], ei[0], strict=False)
+        write_weapon(args.output, "ivory", ei[2], ei[0], strict=False)
+        for name, slot in (("shotgun", 103), ("artemis", 104), ("spiral", 105), ("kalina", 106)):
+            guns = pack(slot)
+            write_weapon(args.output, name, guns[1], guns[0], strict=False)
     write_enemy(args.output, enemy_pack[ENEMY_BODY], enemy_pack[0], enemy_pack[ENEMY_WEAPON])
 
     # Motions: every MOT in Dante's PAC chunks 2-4, embedded raw and parsed on

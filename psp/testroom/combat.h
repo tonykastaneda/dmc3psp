@@ -19,6 +19,7 @@
  * decoded yet and keep their hand-made starts. */
 
 #include "player.h"
+#include "combat_moves.h"
 
 typedef enum {
     MOVE_NONE = -1,
@@ -51,6 +52,8 @@ typedef enum {
     MOVE_TR_AIR_HIKE,
     MOVE_RG_BLOCK, MOVE_RG_AIR_BLOCK,
     MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT, MOVE_BACKFLIP,
+    /* Every other weapon: phases generated from tools/moveset_phases.py. */
+    GEN_MOVE_IDS
     MOVE_COUNT
 } MoveId;
 
@@ -83,8 +86,42 @@ typedef struct {
     float base_y;          /* height at the start of a root-Y move */
     int hits_dealt;
     int dashes;            /* Trickster dashes in a row (player+0x3c75; reset in neutral) */
-    /* Air Trick warp (FUN_00226550 state 1-2): per-frame step toward the target. */
-    float warp_time, warp_step[3];
+    int flag;              /* script window 0 byte 4 this frame (player+0x24d5, one-shot) */
+    int air;               /* the move owns Dante's height */
+    float air_v[4];        /* speed, speed accel, vy, gravity, per 60 fps frame */
+    float charge_frames;   /* frames in the current charge phase */
+    float phase_frames;    /* frames in a timed phase */
+    float since_cir_short;
+    int shots_pending;     /* shots for main to fire this frame (it knows the hand's position) */
+    int shot_buffered;     /* square pressed during a shot: fires again at the refire frame */
+    int shot_hand;         /* alternates Ebony and Ivory */
+    float auto_timer;
+    /* Gun stance (player+0x28a6, FUN_002436e0: R1 held, or just after a shot). */
+    int stance_active;
+    float stance_timer;    /* player+0x3c60: frames the stance outlasts R1 */
+    int stance_upper;      /* whole-pose or arms motion while no shot plays */
+    float stance_frame;
+    float walk_dir;        /* player+0x28dc: direction of travel */
+    int walking;
+    int shot_count;        /* player+0x299f: gun shots in a row */
+    float since_fire;      /* frames since the last shot left the gun */
+    float shot_delay;      /* frames before a shot fires, turning to the target */
+    int aim_target;        /* shots go at the target, not straight ahead */
+    int was_stance;        /* the stance was on when this shot started */
+    /* Legs under the stance and under upper-body shots (-1 = none). */
+    int lower_motion;
+    float lower_frame;
+    int lower_fade_motion;
+    float lower_fade_frame, lower_fade_weight;
+    int upper_pending;     /* a new shot: set it up on the next update */
+    int gun_row;           /* player+0x3b9f */
+    int delayed_shot;      /* a shot waiting out shot_delay */
+    MoveId last_move_for_end;
+    /* Restored: charge, input recognition and Air Trick state. */
+    int charge_looped;     /* the charge motion has played through (player+0x2856) */
+    int sq_mash, cir_short_mash;
+    float since_sq, sq_held, cir_held;
+    float warp_time, warp_step[3];  /* Air Trick warp (FUN_00226550 state 1-2) */
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */
@@ -93,6 +130,18 @@ void combat_reset(Combat *combat);
  * the player. Call before player_update; player->attacking is set here. */
 void combat_update(Combat *combat, Player *player, const PlayerInput *input, float dt);
 const char *combat_move_name(MoveId move);
+/* Takes the shots fired since the last call; 0 if none. */
+int combat_take_shots(Combat *combat);
+int combat_move_is_gun(MoveId move);
+/* The stance's motions: whichever drives the pose while no move plays. */
+void combat_stance_motion(const Combat *combat, int *upper, float *upper_frame);
 int combat_idle_motion(void);  /* sword-drawn idle (rb-00) or -1 */
+/* Runs every generated action to its end with no input, off screen; returns how
+ * many finished. *failed_action = the first that hung, *fallbacks = phases that
+ * waited on a script flag the script never set. */
+int combat_selftest(int *total, int *failed_action, int *fallbacks);
+/* Feeds each neutral command's button through combat_update with its weapon, style
+ * and posture set, as the pad does; returns how many started a move of that weapon. */
+int combat_selftest_inputs(int *total, int *first_failed_action);
 
 #endif

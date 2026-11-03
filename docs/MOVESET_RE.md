@@ -23,12 +23,81 @@ Implemented in `psp/testroom/player.c` (`locomotion_step`).
 - **States**: `FUN_00221ba0` start (walk toward the direction held on entry,
   turning evenly over 8 frames, motion 2-01), `FUN_00221d20` move (motion 2-01,
   then 2-02 or 2-51 if `player+0x28a0`), `FUN_002217a0` idle (2-00, long idle 2-03).
-- **Lock-on**: none of these handlers read R1 or the target, so lock-on doesn't
-  change walking or running. There is no strafe animation.
+- **Lock-on**: these handlers don't read R1, but `FUN_002436e0` (every frame, from
+  `FUN_00240830`) does: with R1 held it calls `FUN_00243a60`, which picks the current
+  gun or Ebony & Ivory (`+0x3ba1`), and sets `+0x28a6`. Back in neutral `FUN_0021d280`
+  then enters the gun stance (`FUN_0021dba0`, states 10, 12, 13) instead of the
+  states above. See "Gun stance" below.
 - **Not ported**: the body lean in `player+0x28ec`, row 1, 2-51, long idle. The
   stop transition and its blend length weren't traced; the test room stops at
   once and blends over 10 frames. Its camera follow (rate and angle limit) is
   its own tuning, not taken from the game's camera code.
+
+## Coat (CCnsChain, FUN_0022f270)
+
+`psp/testroom/coat.c` ports the update, once per 60 fps frame, parents first: predict
+position + velocity; aim the bone's Y at the parent; blend with the authored pose by
+Stiffness (0.25 toward the pose); push out of six body capsules (list 0x5949d0, shapes
+0x5948b0), which stops sideways velocity; add gravity; hold the length (LimitLength,
+on by default) while the spring (0.02) acts on the stretch; clamp to MaxSpeed; damp by
+0.99 (`FUN_0022f1d0`). Wind is zero in pl000_02.clt and not ported. The root's parent
+hangs from bone 3 (the upper spine, y=135). That wasn't traced in the code: it comes from the geometry and reference images of the game. The coat's back then meets the jacket hem at 136 and its hem stops at the ankle. On the pelvis (y=116) it sits 19 cm too low, leaving his waist bare and dragging the hem to the floor.
+
+## Gun stance (lock-on)
+
+R1 held, or `+0x3c60` frames after a shot, keeps `+0x28a6` set. Movement is state 12
+`FUN_00223c30` (start) and 13 `FUN_002243e0`: the movement table's walk speed (3.5
+cm/frame) along `+0x28dc`, which turns at most 0x800 a frame toward the stick, while
+the facing turns to the target at config +0xc0 (24 degrees a frame). No target: the
+aim is the current facing. `FUN_00223e80` picks the row, travel against the aim, and
+`FUN_00222e00` plays it from the tables (0x594420 E&I, 0x5944d0 shotgun, 0x594580
+Artemis, 0x594630 Spiral, 0x5946e0 Kalina Ann): column 6 is the idle, 2 the level aim,
+3 the level shot, 1 / 5 aiming up / down (blended by `+0x2430`, not ported). Legs
+blend over 10 frames on a new row.
+
+`+0x299f` counts shots in a row: odd ones play the shot from frame 0 and end at 13,
+even ones from 15 and end at 28 (the two guns). The first shot at a target waits for
+the turn, at least 10 frames from outside the stance. A press fires again 7 frames
+after a shot. A neutral-stick shot without R1 finds a target and holds the stance 50
+frames (`FUN_00246d40`).
+
+## All weapons in the test room
+
+`tools/moveset_phases.py` turns the action handlers into phase lists: play a
+script, wait for a trigger (motion end, `player+0x24d5` flag, floor, mash, charge
+release, timer), go on. `tools/gen_combat_data.py` generates the moves from it and
+`psp/testroom/combat.c` runs them. The autotest's self-tests run every generated
+action to its end and feed every neutral command's button through the walker.
+
+Known to differ from the game (each one is still to do):
+
+- **Weapon models**: Rebellion and the guns are drawn, the other melee weapons not.
+  Packs are GDATA 97-106 (order inferred from the data); `+0x24d2` holds each
+  weapon's placement state. Guns sit on the hand bones in their rest pose.
+- **Guns**: the player has separate upper and lower body states (`player+0x2848` /
+  `+0x284a`). `FUN_0021e620` with param_4 = 1 changes only the upper one, so Ebony &
+  Ivory and the shotgun fire over walking legs: shot tables 0x594420 / 0x5944d0,
+  row = travel against the aim (`FUN_00223e80`), column 6 without lock-on and 3 with
+  it, script layer 1 the arms and layer 0 the legs. Spiral, Kalina Ann and Artemis
+  request whole-body motions. E&I's shell lives one frame: an instant hit toward the
+  lock-on point, or 2000 cm ahead (shotgun 1000, Spiral 1500). Not in: aim pitch
+  columns, the gun-stance walk after a shot (`player+0x3c60`), charged shot types,
+  damage, and Artemis' and Kalina Ann's real shells (their speeds are estimates).
+  Shotgun spread and tracers are stand-ins for the game's effects. Air and
+  Gunslinger fire counts are approximate.
+- **Hit detection and damage**: every generated move uses the same stand-in reach
+  and light hit, at the scripts' active frames. Chunk 7 is still undecoded.
+- **Royalguard**: release ignores the gauge (`player+0x3c86` picks among 13
+  scripts), and block plays the state's first script without its logic.
+- **Nevan**: actions 81 and 82 are simplified (the handler forks on state not
+  ported); the charge tiers in action 121 / 122 are a best reading.
+- **Agni & Rudra 58-60 and other rows sharing an input**: the first table row wins;
+  rows may really be gated by style level or weapon upgrades.
+- **Beowulf 120**, Doppelganger, Quicksilver, Devil Trigger, taunts (209), action
+  96 and effects and sounds are not in. Air-move velocities pair a config offset
+  with the next float, which fits the values read but wasn't traced per move.
+- **Controls**: the PSP has no L2 / R2, so L cycles melee weapons and L + square
+  guns. This mapping is the test room's own.
 
 ## Executable (SLUS_213.61, DMC3 Special Edition)
 
