@@ -142,15 +142,49 @@ usable from neutral, 0x200 = usable as a cancel.
 So Dante's combo/cancel logic is data: scripts open gates on frames, and
 commands name the gate and preceding action they need.
 
+### Inputs (solved)
+
+`FUN_002532d0` runs every frame: it tests the 58 input patterns at
+**0x5950e0** (`{s16 steps, s16 precondition, s16 reset, s16 0, u32
+steps}`) against per-pattern history at `player+0x3e9c` and sets bit *i*
+of `player+0x4a40` on a match. Preconditions (`FUN_00254080`): 1 = R1
+(lock-on) held, 2 = not in state 0x18, 3 = Artemis equipped. Steps are 10
+bytes `{u16 kind, u16 button, u16 a, u16 b, u16 timeout}`
+(`FUN_00253650`): kind 1 = button pressed / released / held (0x8000 /
+0x4000 / 0x2000); kind 2 = stick sector `a & 0xf0` relative to facing
+(0x10 forward, 0x40 back) or to the target (0x80 / 0x20, 0x90 / 0x30
+need a target); kind 4 = hold *b* frames (charge, 0x4000 = on release);
+kind 8 = more than *b* presses with gaps of at most *a* frames (mash).
+Buttons are PS2 pad bits (0x10 TRI, 0x20 CIR, 0x40 X, 0x80 SQ, 0x08 R1)
+remapped through the button config (`FUN_001ae900(0x6c37d0, bit)`).
+The forward/back orientation is fixed by data: the Stinger scripts
+(three phases) belong to the 0x10 command.
+
+A command's `[8]` picks its input (`FUN_0024b1d0`): bit 0 = pattern
+`[9]`, bit 1 = pattern from `0x594bc8[character][9][player+0x3d90]`
+(mash variants). With no pattern, types 0 / 1 / 3 fire on a plain TRI /
+SQ / CIR press (`FUN_00245f10`). `tools/command_table.py` writes the
+decoded text to `command_table.csv` and `input_patterns.csv`.
+
+### Action -> handler -> scripts (solved for 135 of 142 commands)
+
+`FUN_002625d0` is a compare chain on `player+0x2998` that `jal`s one
+handler per action; Ghidra does not decompile it, so
+`tools/action_dispatch.py` emulates it (146 actions ->
+`analysis/moveset/action_dispatch.json`). Each handler requests its
+scripts with constant `(bank, index)` (`motion_calls.csv`).
+`tools/moveset.py` joins everything into **docs/MOVESET.md**. Trickster
+actions 180-183 are not dispatched there: `FUN_00245f10` sends them to
+dedicated player states (0x17 / 0x18 / ...). Gun actions 134, 160, 170
+request their motions indirectly.
+
 ## Open questions (next steps, in order)
 
-1. **Input bytes** `[8..0xa]` of a command (`FUN_0024b2d0`,
-   `FUN_0024b1d0`): direction (forward/back on lock-on) and button.
-2. **Action id -> script.** Find where the action handlers dispatch on
-   `player+0x2998` and which `(bank, index)` each requests
-   (`analysis/moveset/motion_calls.csv`), then emit `docs/MOVESET.md`:
-   move, weapon, style, input, posture, conditions, script, motions,
-   active frames and gate timings.
+1. **Gate meanings.** Gates 0 (melee), 1 (Combo II pause: opens at frame
+   29 of Combo I-1), 4 (directional / style), 7 (mash follow-ups), 8
+   (Trickster), 10 (guns) are clear from the commands that need them;
+   5, 6, 9, 15 still need naming (15 looks like "free to move").
+2. Trickster states 0x17 / 0x18 and the indirect gun handlers.
 3. Chunk 6 (252 x 4 bytes) and chunk 7 (251 x 80-byte floats, likely hit
    spheres): index and meaning.
 4. Identify motion files 27-33 (likely Devil Trigger / special states).
@@ -165,3 +199,9 @@ commands name the gate and preceding action they need.
   Swordmaster-Cerberus. Real Trickster / Royalguard motions are GDATA 43 /
   44. `STUDY_MOTION_SLOTS` in tools/prepare_skinned_model.py is mislabeled
   the same way.
+- Test room Rebellion assignments that the data contradicts: rb-10 is
+  Helm Breaker (air TRI, action 6), not High Time; High Time (R1 + back +
+  TRI, action 10) is rb-11, not Quick Drive; rb-17/18/19 are Round Trip
+  (charge TRI, action 13), not Prop / Dance Macabre; Helm Breaker is not
+  rb-29 (that is action 12). Swordmaster Rebellion moves live in GDATA 33
+  (s33-): Prop 13:19 -> Shredder 13:12/13, Aerial Rave 13:7-10.

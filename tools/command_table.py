@@ -36,6 +36,56 @@ def reader(path):
     return rd
 
 
+BUTTONS = {0x10: "TRI", 0x20: "CIR", 0x40: "X", 0x80: "SQ", 0x08: "R1", 0x04: "L1",
+           0x02: "R2", 0x01: "L2"}
+# Stick sector vs facing / target (FUN_00253650). Orientation fixed by data:
+# action 7/8 (sector 0x10) dispatches to the three-phase Stinger scripts.
+DIRS = {0x10: "fwd", 0x40: "back", 0x80: "fwd(target)", 0x20: "back(target)",
+        0x90: "fwd(locked)", 0x30: "back(locked)", 0xF0: "neutral"}
+PRECOND = {0: "", 1: "R1 held", 2: "not state 0x18", 3: "Artemis equipped"}
+DEFAULT_PRESS = {0: "TRI", 1: "SQ", 3: "CIR"}   # FUN_00245f10 fallback per type
+PATTERNS = 0x5950E0      # 58 x {s16 steps, s16 precond, s16 reset, s16 0, u32 steps_ptr}
+INDIRECT = 0x594BC8      # [character] -> [k] -> [player+0x3d90] -> pattern id
+
+
+def step_text(w):
+    """One 10-byte input step (FUN_00253650)."""
+    kind, btn = w[0], BUTTONS.get(w[1], f"btn{w[1]:#x}")
+    if kind & 1:
+        how = "press" if kind & 0x8000 else "release" if kind & 0x4000 else "hold"
+        return f"{how} {btn}"
+    if kind & 2:
+        return DIRS.get(w[2] & 0xF0, f"dir{w[2]:#x}")
+    if kind & 4:
+        return f"charge {btn} {w[3]}f" + (" release" if kind & 0x4000 else "")
+    if kind & 8:
+        return f"mash {btn} >{w[3]}x (gap<={w[2]}f)"
+    return f"step{kind:#x}"
+
+
+def patterns(rd):
+    out = []
+    for i in range(58):
+        steps, pre, _, _, ptr = struct.unpack_from("<4hI", rd(PATTERNS + i * 12, 12))
+        seq = [step_text(struct.unpack_from("<5H", rd(ptr + k * 10, 10))) for k in range(steps)]
+        text = " + ".join(seq)
+        if PRECOND.get(pre):
+            text = f"[{PRECOND[pre]}] " + text
+        out.append(text)
+    return out
+
+
+def input_text(rd, pats, r):
+    mode, k = r[8], r[9]
+    if mode & 1:
+        return pats[k]
+    if mode & 2:
+        u32 = lambda a: struct.unpack("<I", rd(a, 4))[0]
+        ids = sorted({rd(u32(u32(u32(INDIRECT) + 4 * k) + 4 * m), 1)[0] for m in range(8)})
+        return " | ".join(pats[i] for i in ids)
+    return f"press {DEFAULT_PRESS[r[0]]}" if r[0] in DEFAULT_PRESS else ""
+
+
 def cond(c):
     if c == 0:
         return ""
@@ -53,6 +103,7 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     rd = reader(a.elf)
+    pats = patterns(rd)
     rows = []
     for i in range(1000):
         r = rd(a.table + i * 0x28, 0x28)
@@ -62,7 +113,7 @@ def main():
         rows.append({
             "row": i, "type": r[0], "weapon_req": r[1] if r[1] != 0xFF else -1,
             "action": r[2], "category": r[3], "flags": f"{flags:#x}",
-            "input": r[8:0xB].hex(), "weapon": r[0xB] if r[0xB] != 0xFF else -1,
+            "input": r[8:0xB].hex(), "input_text": input_text(rd, pats, r), "weapon": r[0xB] if r[0xB] != 0xFF else -1,
             "weapon_arg": r[0xC], "style": r[0xD], "b_e": r[0xE], "b_f": r[0xF],
             "posture": {1: "ground", 2: "air", 3: "both"}.get(posture, f"{posture:#x}"),
             "conditions": " ".join(filter(None, (cond(c) for c in struct.unpack_from("<5I", r, 0x14)))),
@@ -72,6 +123,8 @@ def main():
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
         w.writeheader()
         w.writerows(rows)
+    (a.out.parent / "input_patterns.csv").write_text(
+        "id,pattern\n" + "".join(f'{i},"{t}"\n' for i, t in enumerate(pats)))
     print(f"{len(rows)} commands -> {a.out}")
 
 
