@@ -1164,6 +1164,26 @@ static const float focus_stick[4][2] = {{1.0f, 0.0f}, {-1.0f, 0.0f}, {0.0f, -1.0
 /* "coat": close-ups of Dante standing from four sides, running, and stopping. */
 #define COAT_FRAMES 345
 static int focus_coat;
+/* "plink": locked on and standing, single shots with gaps; reports the biggest
+ * per-frame jump of any bone, overall and around the shots. */
+static int focus_plink;
+static float plink_prev[DMC3_BONE_COUNT][3], plink_max_jump;
+static int plink_max_frame, plink_max_bone;
+static void plink_measure(const Pose *p, int frame) {
+    int b, k;
+    if (frame > 30) {
+        for (b = 0; b < DMC3_BONE_COUNT; ++b) {
+            float d = 0.0f;
+            for (k = 0; k < 3; ++k) {
+                float e = p->world_pos[b][k] - plink_prev[b][k];
+                d += e * e;
+            }
+            d = sqrtf(d);
+            if (d > plink_max_jump) { plink_max_jump = d; plink_max_frame = frame; plink_max_bone = b; }
+        }
+    }
+    memcpy(plink_prev, p->world_pos, sizeof(plink_prev));
+}
 /* yaw relative to Dante's facing (0 = behind him), camera distance, and heights. */
 static const struct { int frame; float yaw, dist, eye, look; const char *name; } coat_shots[] = {
     {60, 0.0f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_BACK.BMP"}, {70, 3.1416f, 190.0f, 110.0f, 85.0f, "FOCUS_COAT_FRONT.BMP"},
@@ -1203,6 +1223,11 @@ static void focus_pad(int frame, PlayerInput *input) {
     input->style = -1;
     if (focus_coat) {
         if (frame >= 145 && frame < 265) input->stick_y = 1.0f;
+        return;
+    }
+    if (focus_plink) {
+        input->lock_on = frame >= 10;
+        if (frame == 60 || frame == 120 || frame == 180) input->gun = 1;
         return;
     }
     if (frame < 10) return;
@@ -1319,6 +1344,7 @@ int main(int argc, char *argv[]) {
         f = fopen(path, "r");
         if (f) { fread(text, 1, sizeof(text) - 1, f); fclose(f); }
         focus_coat = strncmp(text, "coat", 4) == 0;
+        focus_plink = strncmp(text, "plink", 5) == 0;
     }
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
@@ -1541,6 +1567,7 @@ int main(int argc, char *argv[]) {
             pose_procedural(&pose, &player, time);
         }
         pose_evaluate(&pose);
+        if (focus && focus_plink) plink_measure(&pose, frames);
         fire_pending_shots(&combat, &player, dt);
         if (combat_move_is_gun(combat.move) || combat.stance_active) gun_out_time = GUN_OUT_SECONDS;
         else if (gun_out_time > 0.0f) gun_out_time -= dt;
@@ -1677,6 +1704,8 @@ int main(int argc, char *argv[]) {
                                 leg_rows[i] >= 0 ? motion_get(leg_rows[i])->name : "(none)", (int)leg_dist[i], (int)leg_side[i], (int)leg_fwd[i]);
                     fprintf(report, "shots=%d hits=%d stance=%d shot_count=%d max_frame_us=%u\n", bullets_shots(), bullets_hits(),
                             combat.stance_active, combat.shot_count, frame_us_max);
+                    if (focus_plink)
+                        fprintf(report, "biggest bone jump: %.1f cm at frame %d (bone %d)\n", plink_max_jump, plink_max_frame, plink_max_bone);
                     fclose(report);
                 }
                 running = 0;

@@ -281,8 +281,17 @@ static void seek_events(Combat *c) {
 static void start_move(Combat *c, MoveId move, int action) {
     const Motion *m;
     if (move != c->move || action) c->plays = 0;
-    c->fade_motion = c->move == MOVE_NONE ? -1 : c->motion;
-    c->fade_frame = c->frame;
+    /* Blend from what's on screen: the last move, the gun stance, or plain locomotion. */
+    if (c->move != MOVE_NONE) {
+        c->fade_motion = c->motion;
+        c->fade_frame = c->frame;
+    } else if (c->stance_active && c->stance_upper >= 0) {
+        c->fade_motion = c->stance_upper;
+        c->fade_frame = c->stance_frame;
+    } else {
+        c->fade_motion = -1;
+        c->fade_frame = 0.0f;
+    }
     c->fade_weight = 1.0f;
     c->move = move;
     if (action) c->action = action;
@@ -643,9 +652,12 @@ static void gun_stance_step(Combat *c, Player *player, const PlayerInput *input,
         return;
     }
     if (!was) {
-        c->fade_motion = -1;
-        c->fade_frame = 0.0f;
-        c->fade_weight = 1.0f;
+        /* Coming from a move, end_move already set the blend from that move. */
+        if (c->fade_weight <= 0.0f) {
+            c->fade_motion = -1;
+            c->fade_frame = 0.0f;
+            c->fade_weight = 1.0f;
+        }
         c->walking = 0;
         c->sword_out = 0.0f;
     }
