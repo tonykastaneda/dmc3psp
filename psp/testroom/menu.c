@@ -407,8 +407,6 @@ void pause_draw(void) {
 enum { SHOP_INDEX, SHOP_ITEM, SHOP_STATIC };
 enum { ROW_STYLE, ROW_EQUIP, ROW_ITEM, ROW_ACTION, ROW_GUNS, ROW_EXIT, INDEX_ROWS };
 #define ITEM_ROWS 7
-/* How many of each can be held. Not read from the game yet: estimates. */
-static const unsigned char item_max[SHOP_ITEMS] = {30, 30, 10, 10, 1, 1, 3, 99};
 MenuText menu_text;
 static ShopState *shop;
 static int shop_screen, shop_cursor, index_cursor, shop_image, shop_confirm, shop_yes, shop_note;
@@ -515,7 +513,8 @@ int shop_update(unsigned int pressed) {
         if (pressed & PSP_CTRL_DOWN) { shop_cursor = (shop_cursor + 1) % ITEM_ROWS; shop_note = 0; }
         if (pressed & PSP_CTRL_CIRCLE) { shop_screen = SHOP_INDEX; break; }
         if (pressed & PSP_CTRL_CROSS) {
-            if (shop->owned[shop_cursor] >= item_max[shop_cursor]) shop_note = 20103;
+            int buys = shop_item_max_buys[shop_cursor];
+            if (shop->owned[shop_cursor] >= shop_item_max_held[shop_cursor] || (buys > 0 && shop->bought[shop_cursor] >= buys)) shop_note = 20103;
             else { shop_confirm = 1; shop_yes = 1; shop_note = 0; }
         }
         break;
@@ -569,7 +568,7 @@ static void shop_draw_items(void) {
     small_glyph(GROUP_ITEM_FRAGMENT, 0, 4);
     /* How many of the chosen one are held, of how many. */
     {
-        int owned = shop->owned[shop_cursor], most = item_max[shop_cursor];
+        int owned = shop->owned[shop_cursor], most = shop_item_max_held[shop_cursor];
         shop_glyph(GROUP_ITEM_COUNT, 0, owned / 10 % 10, 0.0f, 0.0f, BRIGHT);
         shop_glyph(GROUP_ITEM_COUNT, 1, owned % 10, 0.0f, 0.0f, BRIGHT);
         draw_quad(GROUP_ITEM_COUNT, 2, BRIGHT);

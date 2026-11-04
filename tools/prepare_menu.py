@@ -59,6 +59,7 @@ IMAGES = [
 # MODs, each followed by its texture set, and a "# Msg" block of its English text.
 CUSTOMIZE, ITEM_SHOP, ACTION_SHOP, GUN_SHOP, EQUIP_SHOP, STYLE_SHOP = 2294, 2649, 2322, 3017, 2302, 1716
 ITEM_PRICES = 0x5DB680    # in SLUS_213.61: 8 items x 8 prices, rising with each one bought
+ITEM_MAX_HELD, ITEM_MAX_BUYS = 0x61A868, 0x61A870   # s8 each: how many can be held, and bought (< 1: no limit)
 SHOP_TEXT = (CUSTOMIZE, ITEM_SHOP, ACTION_SHOP, GUN_SHOP)
 IMAGES += [
     # Chunk 6's second quad is a rotated brush stroke, which a box of its corners can't draw.
@@ -321,6 +322,9 @@ def main():
     elf = Elf(executable)
     lines.append("static const unsigned int shop_item_prices[8][8] = {" + ",".join(
         "{" + ",".join(str(elf.word(ITEM_PRICES + item * 32 + k * 4)) for k in range(8)) + "}" for item in range(8)) + "};")
+    signed = lambda a: elf.byte(a) - 256 if elf.byte(a) > 127 else elf.byte(a)
+    lines.append("static const signed char shop_item_max_held[8] = {" + ",".join(str(signed(ITEM_MAX_HELD + k)) for k in range(8)) + "};")
+    lines.append("static const signed char shop_item_max_buys[8] = {" + ",".join(str(signed(ITEM_MAX_BUYS + k)) for k in range(8)) + "};")
     lines.append("typedef struct { short screen, id; const char *text; } ShopText;")
     cells = []
     for screen, slot in enumerate(SHOP_TEXT):
