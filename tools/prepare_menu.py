@@ -83,6 +83,8 @@ GROUPS = [
     ("GROUP_MISSION_TAGS", MISSION, 20, True),
     ("GROUP_BRIEFING", STRIP, 1, False),
     ("GROUP_PAUSE", 2075, 1, False),
+    # Only drawn from the font: the briefing's two choices, where its strip has them (BRIEFING_* in menu.c).
+    ("GROUP_BRIEFING_TEXT", None, [(-60.0, -166.0, 116.0, -140.0), (136.0, -166.0, 236.0, -140.0)], None),
     ("GROUP_CUSTOM_BOX", CUSTOMIZE, 2, True),
     ("GROUP_CUSTOM_LABELS", CUSTOMIZE, 4, True),
     ("GROUP_CUSTOM_BARS", CUSTOMIZE, 8, True),
@@ -111,6 +113,9 @@ RECREATE = {
                              14: ("BLOODY PALACE", BAR_MIDDLE), 15: ("DEMO DIGEST", BAR_MIDDLE), 5: ("TOTAL RANKING", BAR_MIDDLE),
                              6: ("DEBUG ROOM", BAR_MIDDLE), 7: ("SAVE", BAR_LEFT + 0.31 * (BAR_RIGHT - BAR_LEFT)),
                              8: ("LOAD", BAR_LEFT + 0.72 * (BAR_RIGHT - BAR_LEFT))},
+    "GROUP_PAUSE": {2: ("STATUS", MIDDLE), 3: ("SAVE DATA", MIDDLE), 4: ("QUIT THE MISSION", MIDDLE),
+                    5: ("RESTART THE MISSION", MIDDLE), 6: ("EXIT", MIDDLE), 7: ("OPTIONS", MIDDLE), 8: ("YES", MIDDLE), 9: ("NO", MIDDLE)},
+    "GROUP_BRIEFING_TEXT": {0: ("MISSION START", 40.0), 1: ("CUSTOMIZE", 190.0)},
     "GROUP_CUSTOM_LABELS": {0: ("CUSTOMIZE", LEFT_EDGE), 1: ("STYLE", LEFT_EDGE), 2: ("EQUIP", LEFT_EDGE), 3: ("ITEM", LEFT_EDGE),
                             4: ("ACTION", LEFT_EDGE), 5: ("GUNS", LEFT_EDGE), 6: ("EXIT", LEFT_EDGE)},
 }
@@ -123,7 +128,7 @@ def font_labels(quads, groups):
     if not FONT.exists():
         print(f"{FONT} not found: keeping the disc's menu labels")
         return None
-    atlas = Image.new("RGBA", (FONT_ATLAS, FONT_ATLAS), (0, 0, 0, 0))
+    sheets = [Image.new("RGBA", (FONT_ATLAS, FONT_ATLAS), (0, 0, 0, 0))]   # the PSP's textures stop at 512
     x = y = row_height = 0
     placed = []
     names = [g[0] for g in GROUPS]
@@ -143,7 +148,8 @@ def font_labels(quads, groups):
             if x + w > FONT_ATLAS:
                 x, y, row_height = 0, y + row_height, 0
             if y + h > FONT_ATLAS:
-                raise ValueError("menu font atlas is full")
+                sheets.append(Image.new("RGBA", (FONT_ATLAS, FONT_ATLAS), (0, 0, 0, 0)))
+                x = y = row_height = 0
             cell = Image.new("RGBA", (w, h), (0, 0, 0, 0))
             draw = ImageDraw.Draw(cell)
             baseline = (h - (bottom - top)) // 2 - top
@@ -152,7 +158,7 @@ def font_labels(quads, groups):
             ImageDraw.Draw(shadow).text((4 - l, baseline), text, font=font, fill=(0, 0, 0, 255), stroke_width=3, stroke_fill=(0, 0, 0, 255))
             cell.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(1.2)))
             draw.text((4 - l, baseline), text, font=font, fill=(255, 255, 255, 255), stroke_width=1, stroke_fill=(20, 20, 20, 255))
-            atlas.alpha_composite(cell, (x, y))
+            sheets[-1].alpha_composite(cell, (x, y))
             # Same height and place as the disc's label; the width is the text's own.
             width_units = w / 2.0 / UNIT
             if align == LEFT_EDGE:
@@ -161,10 +167,10 @@ def font_labels(quads, groups):
                 x0 = (q[5] + q[7]) * 0.5 - width_units * 0.5
             else:   # centred on this x
                 x0 = align - width_units * 0.5
-            placed.append((first + index, (x, y, w, h), (x0, q[6], x0 + width_units, q[8])))
+            placed.append((first + index, len(sheets) - 1, (x, y, w, h), (x0, q[6], x0 + width_units, q[8])))
             x += w + 2
             row_height = max(row_height, h + 2)
-    return atlas, placed
+    return sheets, placed
 
 
 def whole_screen(data):
@@ -331,7 +337,7 @@ def main():
     with Iso9660(args.iso) as iso:
         afs = AfsArchive(iso, "GDATA.AFS")
         read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
-        wanted = {g[1] for g in GROUPS} | {NOW_LOADING} | set(SHOP_TEXT)
+        wanted = {g[1] for g in GROUPS if g[1] is not None} | {NOW_LOADING} | set(SHOP_TEXT)
         for _, layers, *rest in IMAGES:
             wanted |= {rest[0]} if layers == "all" else {layer[0] for layer in layers}
         slots = {s: read(s) for s in wanted}
@@ -347,6 +353,11 @@ def main():
     atlases, atlas_index, groups, quads = [], {}, [], []
     atlases.append((pic["width"], pic["height"], bytes(rgba)))
     for name, slot, chunk, after in GROUPS:
+        if slot is None:
+            # Places only, for font_labels to fill.
+            groups.append((len(quads), len(chunk)))
+            quads += [(0, 0.0, 0.0, 0.0, 0.0, *rect) for rect in chunk]
+            continue
         parts = split_pac(slots[slot])
         sets = chunk_textures(parts, chunk, after)
         first = len(quads)
@@ -364,13 +375,14 @@ def main():
 
     made = font_labels(quads, groups)
     if made:
-        atlas_image, placed = made
+        sheets, placed = made
         font_atlas = len(atlases)
-        atlases.append((FONT_ATLAS, FONT_ATLAS, atlas_image.tobytes()))
-        for at, (ax, ay, aw, ah), (x0, y0, x1, y1) in placed:
-            quads[at] = (font_atlas, ax / FONT_ATLAS, ay / FONT_ATLAS, (ax + aw) / FONT_ATLAS, (ay + ah) / FONT_ATLAS, x0, y0, x1, y1)
+        for sheet in sheets:
+            atlases.append((FONT_ATLAS, FONT_ATLAS, sheet.tobytes()))
+        for at, sheet, (ax, ay, aw, ah), (x0, y0, x1, y1) in placed:
+            quads[at] = (font_atlas + sheet, ax / FONT_ATLAS, ay / FONT_ATLAS, (ax + aw) / FONT_ATLAS, (ay + ah) / FONT_ATLAS, x0, y0, x1, y1)
         if args.dump:
-            atlas_image.save("build/hdref/menu_font_atlas.png")
+            sheets[0].save("build/hdref/menu_font_atlas.png")
         print(f"menu labels from {FONT.name}: {len(placed)}")
 
     header = 16 + 16 + 16

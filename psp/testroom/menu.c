@@ -256,8 +256,8 @@ static void draw_missions(const MenuChoice *c, int row) {
 static void draw_briefing(const MenuChoice *c, int cursor) {
     draw_image(IMG_BANNER_1 + c->mission - 1);
     draw_briefing_piece(BRIEFING_BAR, BRIGHT);
-    draw_briefing_piece(BRIEFING_START, cursor == 0 ? BRIGHT : DIM);
-    draw_briefing_piece(BRIEFING_CUSTOMIZE, !menu_shop ? LOCKED : cursor == 1 ? BRIGHT : DIM);
+    draw_quad(GROUP_BRIEFING_TEXT, 0, cursor == 0 ? BRIGHT : DIM);   /* from the font: tools/prepare_menu.py */
+    draw_quad(GROUP_BRIEFING_TEXT, 1, !menu_shop ? LOCKED : cursor == 1 ? BRIGHT : DIM);
 }
 
 static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after_frame) {
