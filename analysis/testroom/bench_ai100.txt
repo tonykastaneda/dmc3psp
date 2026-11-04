@@ -1,0 +1,4 @@
+Dummy ramp, ai100, on the PSP, Turbo
+dummies   FPS  late  worst ms | update (of it AI)  skin  draw   gpu (ms) | cpu+gpu
+    100  30.0     0      33.4 |   3.95       3.71  2.76  4.23  9.54      |   20.5
+Holds 30 FPS up to 100 dummies.

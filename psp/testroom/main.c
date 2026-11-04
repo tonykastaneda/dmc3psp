@@ -1581,11 +1581,13 @@ static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_
 #define BENCH_LOW_STEPS 2
 typedef struct {
     int dummies;
-    unsigned int frames, late, gap_max, elapsed, update, skin, draw, gpu;
+    unsigned int frames, late, gap_max, elapsed, update, skin, draw, gpu, ai;
 } BenchStep;
 static BenchStep bench_steps[ENEMY_MAX + 1];
 static int bench_step_frames, bench_count, bench_fire, bench_quicksilver, bench_devil, bench_attack = 1, bench_anim = 1, bench_start = 1, bench_max = ENEMY_MAX;
-static int bench_low_steps, bench_done;
+static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
+static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
+static unsigned int bench_ai_us;
 static int bench_measuring;
 static unsigned int bench_began;
 
@@ -1597,6 +1599,7 @@ static void bench_add(unsigned int gap, unsigned int update, unsigned int skin) 
     if (gap > 34000u) ++b->late;
     if (gap > b->gap_max) b->gap_max = gap;
     b->update += update;
+    b->ai += bench_ai_us;
     b->skin += skin;
     b->draw += perf_draw_us;
     b->gpu += perf_gpu_us;
@@ -1629,6 +1632,11 @@ static void cmp_load(void) {
         else if (strncmp(line, "ring ", 5) == 0) bench_ring = atoi(line + 5);
         else if (strncmp(line, "devil ", 6) == 0) bench_devil = atoi(line + 6);
         else if (strncmp(line, "fps ", 4) == 0) cmp_fps = atoi(line + 4);
+        else if (strncmp(line, "aionly ", 7) == 0) bench_ai_only = atoi(line + 7);
+        else if (strncmp(line, "hit ", 4) == 0) {
+            if (cmp_hit_count < 16 && sscanf(line + 4, "%d %d", &cmp_hits[cmp_hit_count][0], &cmp_hits[cmp_hit_count][1]) == 2) ++cmp_hit_count;
+        }
+        else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
@@ -2088,7 +2096,11 @@ int main(int argc, char *argv[]) {
         if (dummy_ready) {
             float from_x, from_z;
             int heavy;
-            enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+            {
+                unsigned int ai_start = sceKernelGetSystemTimeLow();
+                enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+                bench_ai_us = sceKernelGetSystemTimeLow() - ai_start;
+            }
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
                 if (combat_player_hit(&combat, &player, from_x, from_z, heavy)) fx_hit_spark(chest);
@@ -2247,8 +2259,16 @@ int main(int argc, char *argv[]) {
                     enemy_set_attacks(bench_attack);
                     enemy_set_anim_auto(bench_anim);
                     enemy_set_test(bench_no_texture, bench_no_lighting, (float)bench_ring);
+                    enemy_set_ai_only(bench_ai_only);
+                    if (bench_trace) enemy_trace_start();
                     bench_steps[0].dummies = bench_start;
                     enemy_set_count(bench_start, player.x, player.z);
+                }
+                {
+                    int h;
+                    for (h = 0; h < cmp_hit_count; ++h) {
+                        if (cmp_hits[h][0] == frames) { enemy_select(0); enemy_hit((HitKind)cmp_hits[h][1], player.x, player.z); }
+                    }
                 }
                 if (bench_quicksilver) player.quicksilver = 1;
                 if (bench_devil) player.devil = 1;
@@ -2289,11 +2309,15 @@ int main(int argc, char *argv[]) {
                         for (i = 0; i < bench_count; ++i) {
                             const BenchStep *b = &bench_steps[i];
                             unsigned int n = b->frames ? b->frames : 1;
-                            fprintf(report, "%d %u %u %u %u %u %u %u %u %u\n", b->dummies, b->frames, b->late, b->gap_max, b->elapsed,
-                                    b->update / n, b->skin / n, b->draw / n, b->gpu / n, (unsigned int)enemy_poses_done());
+                            fprintf(report, "%d %u %u %u %u %u %u %u %u %u %u\n", b->dummies, b->frames, b->late, b->gap_max, b->elapsed,
+                                    b->update / n, b->skin / n, b->draw / n, b->gpu / n, (unsigned int)enemy_poses_done(), b->ai / n);
                         }
                         fclose(report);
                     }
+                }
+                if (bench_trace) {
+                    path_in_game_dir(path, sizeof(path), "AI_TRACE.TXT");
+                    enemy_trace_write(path);
                 }
                 path_in_game_dir(path, sizeof(path), "CMP_OUT.TXT");
                 report = fopen(path, "w");

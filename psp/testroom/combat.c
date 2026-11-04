@@ -151,10 +151,12 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_RG_AIR_BLOCK] = {S("24:5"), "AIR ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 1},
     [MOVE_TAUNT] = {S("2:0"), "TAUNT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DEVIL_ON] = {H("2-50"), "DEVIL TRIGGER", MOVE_NONE, 0, 0, 0, 0, -1},
-    /* Ground motions seen on the HD Collection (state 44). Which hit picks which is an estimate,
+    /* Ground motions seen on the HD Collection (state 44). Their roots say which way each throws
+     * him: 3-00 back 72 cm, 3-02 back 201, while 3-01 and 3-03 go forward, for hits from behind.
+     * He always turns to face the hit here, so these two. Which hit picks which is an estimate,
      * and so is the air one: 1:4 was seen once when Dante was knocked away in the air. */
-    [MOVE_HIT] = {H("3-01"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_HIT_HEAVY] = {H("3-00"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT] = {H("3-00"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_HEAVY] = {H("3-02"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_AIR] = {H("3-04"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1, .air = 1, .air_v = {0.0f, 0.0f, 0.0f, -1.5f}},
     [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOPPELGANGER] = {H("2-58"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},

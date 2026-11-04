@@ -140,6 +140,7 @@ void motion_root(const Motion *m, float frame, float out[3]) {
     out[0] = out[1] = out[2] = 0.0f;
     for (i = 0; i < m->channel_count; ++i) {
         const MotionChannel *c = &m->channels[i];
-        if (c->bone == 0 && c->channel >= 6) out[c->channel - 6] = evaluate(c, frame);
+        if (c->bone > 0) break;  /* in bone order */
+        if (c->channel >= 6) out[c->channel - 6] = evaluate(c, frame);
     }
 }

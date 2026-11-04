@@ -19,6 +19,7 @@ from mod_skeleton import parse_skeleton, parse_skin, strip_faces
 from mot_ps2 import parse_mot
 from tim2 import decode_picture
 from decimate import slim_mesh
+import gen_enemy_ai
 
 SLOT = 0
 MOTION_CHUNKS = (2, 3, 4)  # nested PACs of MOT files in Dante's archive
@@ -409,6 +410,7 @@ def main() -> None:
         rebellion_moves = read_slot(REBELLION_MOTION_SLOT)
         study_moves = {slot: read_slot(slot) for slot in STUDY_MOTION_SLOTS}
         enemy_pack = pnst_entries(read_slot(ENEMY_SLOT))
+        executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
     model_data = chunks[1]
@@ -539,6 +541,7 @@ def main() -> None:
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
     write_enemy(args.output, enemy_pack[ENEMY_BODY], enemy_pack[0], enemy_pack[ENEMY_WEAPON])
+    gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable)
     write_devils(args.output, devil_packs)
 
     # Motions: every MOT in Dante's PAC chunks 2-4, embedded raw and parsed on
