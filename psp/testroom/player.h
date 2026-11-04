@@ -71,7 +71,11 @@ typedef enum { LOCO_IDLE, LOCO_START, LOCO_MOVE } LocoState;
 
 enum { AIR_NONE, AIR_JUMP, AIR_HIKE, AIR_STEP };
 
+/* Dante's health on the maxed save the reference runs use. */
+#define PLAYER_HEALTH_MAX 20000.0f
+
 typedef struct {
+    float health;
     float x, y, z;     /* y is height above the floor */
     float vy;
     int on_ground;

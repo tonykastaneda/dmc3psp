@@ -71,6 +71,7 @@ static void set_action(Player *player, Action action) {
 void player_reset(Player *player, FollowCamera *camera) {
     int melee = player->melee_weapon, gun = player->gun_weapon;
     memset(player, 0, sizeof(*player));
+    player->health = PLAYER_HEALTH_MAX;
     player->melee_weapon = melee;
     player->gun_weapon = gun;
     player->jump_motion = -1;

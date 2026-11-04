@@ -46,7 +46,7 @@ EDGE = SCREEN_UNITS_X - 256.0     # how far a +-256 layer moves to sit against t
 IMAGES = [
     ("IMG_TITLE", [(TITLE, 1, False, SPAN, {}), (TITLE, 12, False, LEFT, {}), (TITLE, 9, False, RIGHT, {}),
                    (TITLE, 15, False, CENTRE, {1: SPAN, 2: None, 3: None})]),
-    ("IMG_MISSION", [(MISSION, 0, True, EXTEND, {}), (PORTRAIT, 0, True, "right half", {})]),
+    ("IMG_MISSION", [(MISSION, 0, True, EXTEND, {})]),
     ("IMG_BANNER_1", [(BANNER_BASE, 1, False, ZOOM, {})]),
     ("IMG_BANNER_2", [(BANNER_BASE + ENGLISH_BANNER_STEP, 1, False, ZOOM, {})]),
 ]
@@ -162,10 +162,6 @@ def bake(slots, layers):
                 at = x0 + (x1 - x0) * 2 / 5 - EDGE
                 place(canvas, source, (left, top, cut, bottom), x0 - EDGE, y0, at, y1)
                 place(canvas, source, (cut, top, right, bottom), at, y0, SCREEN_UNITS_X, y1)
-            else:
-                # Costume portraits hold a close-up on their left, which goes under the list.
-                middle = (left + right) // 2
-                place(canvas, source, (middle, top, right, bottom), (x0 + x1) / 2 + EDGE, y0, x1 + EDGE, y1)
     return canvas.convert("RGB").resize((ART_W, ART_H), Image.Resampling.LANCZOS)
 
 

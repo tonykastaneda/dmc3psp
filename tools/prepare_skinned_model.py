@@ -31,7 +31,7 @@ REBELLION_MOTION_SLOT = 23 # PAC of 21 MOTs: Dante's Rebellion moveset (first of
 # 33-37 Swordmaster, 38-42 Gunslinger, 43-46 styles, 47-53 not identified yet.
 STUDY_MOTION_SLOTS = tuple(range(24, 54))
 ENEMY_SLOT = 117           # PNST: Seven Hells pack ([0] TIM2 set, [1] em000 body, [26] scythe, [35] motions)
-ENEMY_BODY = 1             # em000 -- the training dummy (Hell Sloth candidate; confirm with the user)
+ENEMY_BODY = 1             # em000 -- the training dummy (the Hell Pride, class CEm000; confirm with the user)
 ENEMY_WEAPON = 26          # first scythe model
 ENEMY_MOTIONS = 35         # PAC of 71 shared Seven Hells motions, exported as hl-NN
 

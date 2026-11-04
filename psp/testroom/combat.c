@@ -1224,6 +1224,9 @@ int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR) return 1;
     /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
+    /* The attack records' damage (0x5a7600 on the PS2): the swing 700, the wide swing 800. No dying yet. */
+    player->health -= heavy ? 800.0f : 700.0f;
+    if (player->health < 1.0f) player->health = 1.0f;
     player->yaw = atan2f(from_x - player->x, from_z - player->z);
     player->air_kind = AIR_NONE;
     player->jump_motion = -1;
