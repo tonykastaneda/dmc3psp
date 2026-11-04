@@ -41,9 +41,9 @@ enum { TITLE_NEW, TITLE_LOAD, TITLE_OPTIONS, TITLE_ITEMS };
 enum { LABEL_NORMAL = 1, LABEL_EASY = 12 };
 enum { TAG_TURBO = 0 };
 enum { ROWS_SHOWN = 2 };
-/* Mission Select's rows: Easy and Normal, then Bloody Palace (a placeholder, not in yet) and the Debug Room. */
-enum { ROW_EASY, ROW_NORMAL, ROW_PALACE, ROW_DEBUG, SELECT_ROWS };
-enum { LABEL_BLOODY_PALACE = 14, ROWBAR_THIRD = 2, ROWBAR_FOURTH = 8 };
+/* What the cursor visits on Mission Select: Easy, Normal and the Debug Room. The game's other rows are shown greyed out. */
+enum { ROW_EASY, ROW_NORMAL, ROW_DEBUG, SELECT_ROWS };
+enum { LABEL_GALLERY = 6 };
 /* The briefing strip holds the bar and both labels on one texture and one quad; the labels' places
  * are read off the HD Collection. */
 static const float BRIEFING_BAR[8] = {0.0f, 0.0f, 1.0f, 0.494f, -269.0f, -203.0f, 265.0f, -117.0f};
@@ -199,14 +199,31 @@ static void draw_title(int cursor) {
 
 /* Easy and Normal only, for now. Row 0's arrows and digit sit one row-height above row 1's. */
 static void draw_missions(const MenuChoice *c, int row) {
-    static const int labels[ROWS_SHOWN] = {LABEL_EASY, LABEL_NORMAL};
+    /* The HD Collection's Mission Select, every row where the disc lays it out (bar, label): Easy and Normal
+     * work; the others are greyed out until they're in. Gallery's row is the port's Debug Room. */
+    static const signed char bars[] = {0, 1, 2, 8, 3, 4, 9, 10, 5, 6, 7, 7};
+    static const signed char labels[] = {LABEL_EASY, LABEL_NORMAL, 2, 13, 3, 4, 14, 15, 5, 6, 7, 8};
     const float row_height = 26.7f;
     int i;
     draw_image(IMG_MISSION);
-    for (i = 0; i < ROWS_SHOWN; ++i) {
-        unsigned int color = i == row ? BRIGHT : DIM;
-        draw_quad(GROUP_MISSION_ROWS, i, BRIGHT);
+    for (i = 0; i < (int)sizeof(bars); ++i) {
+        int working = i < ROWS_SHOWN;
+        unsigned int color = !working ? LOCKED : i == row ? BRIGHT : DIM;
+        if (labels[i] == LABEL_GALLERY) {
+            /* The Debug Room, in Gallery's place: no art says that, so plain text, centred where Gallery's is. */
+            const Quad *q = group_quad(GROUP_MISSION_LABELS, LABEL_GALLERY);
+            float centre = (q->x0 + q->x1) * 0.5f * SPREAD;
+            draw_quad(GROUP_MISSION_ROWS, bars[i], BRIGHT);
+            if (menu_text) {
+                menu_text((int)(SCR_W / 2.0f + centre * UNIT) - 40, (int)(SCR_H / 2.0f - (q->y0 + q->y1) * 0.5f * UNIT) - 4, "DEBUG ROOM",
+                          row == ROW_DEBUG ? 0xffffffffu : 0xff909090u);
+                begin_2d();
+            }
+            continue;
+        }
+        if (i == 0 || bars[i] != bars[i - 1]) draw_quad(GROUP_MISSION_ROWS, bars[i], working ? BRIGHT : 0xa0ffffff);
         draw_quad(GROUP_MISSION_LABELS, labels[i], color);
+        if (!working) continue;
         if (i == row) {
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2, BRIGHT, 0.0f, 0.0f, 0);
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2 + 1, BRIGHT, 0.0f, 0.0f, 1);
@@ -214,23 +231,6 @@ static void draw_missions(const MenuChoice *c, int row) {
         draw_quad_offset(GROUP_MISSION_DIGITS, c->mission - 1, color, 0.0f, -row_height * (float)i, 0);
     }
     if (c->turbo) draw_quad(GROUP_MISSION_TAGS, TAG_TURBO, BRIGHT);
-    {
-        /* Bloody Palace, greyed out, on the third row; the Debug Room on the fourth, in plain text. */
-        const Quad *label = group_quad(GROUP_MISSION_LABELS, LABEL_BLOODY_PALACE), *third = group_quad(GROUP_MISSION_ROWS, ROWBAR_THIRD);
-        const Quad *fourth = group_quad(GROUP_MISSION_ROWS, ROWBAR_FOURTH);
-        const Quad *normal = group_quad(GROUP_MISSION_LABELS, labels[1]);
-        draw_quad(GROUP_MISSION_ROWS, ROWBAR_THIRD, BRIGHT);
-        draw_quad_offset(GROUP_MISSION_LABELS, LABEL_BLOODY_PALACE, row == ROW_PALACE ? 0xa0ffffff : LOCKED,
-                         normal->x0 - label->x0, (third->y0 + third->y1 - label->y0 - label->y1) * 0.5f, 0);
-        draw_quad(GROUP_MISSION_ROWS, ROWBAR_FOURTH, BRIGHT);
-        if (menu_text) {
-            float centre = normal->x0 * SPREAD;
-            int x = (int)(SCR_W / 2.0f + centre * UNIT), y = (int)(SCR_H / 2.0f - (fourth->y0 + fourth->y1) * 0.5f * UNIT) - 4;
-            if (row == ROW_PALACE) menu_text(x + 150, (int)(SCR_H / 2.0f - (third->y0 + third->y1) * 0.5f * UNIT) - 4, "coming soon", 0xff9090ffu);
-            menu_text(x, y, "DEBUG ROOM", row == ROW_DEBUG ? 0xffffffffu : 0xff909090u);
-            begin_2d();
-        }
-    }
 }
 
 static void draw_briefing(const MenuChoice *c, int cursor) {
@@ -275,7 +275,6 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 if (pressed & PSP_CTRL_UP) row = (row + SELECT_ROWS - 1) % SELECT_ROWS;
                 if (pressed & PSP_CTRL_DOWN) row = (row + 1) % SELECT_ROWS;
                 if ((pressed & PSP_CTRL_CROSS) && row == ROW_DEBUG) { c->mission = MENU_DEBUG_ROOM; next = SCREEN_DONE; leaving = 1; break; }
-                if ((pressed & PSP_CTRL_CROSS) && row == ROW_PALACE) break;   /* not in yet */
                 if (pressed & PSP_CTRL_LEFT) c->mission = c->mission > 1 ? c->mission - 1 : MENU_MISSIONS;
                 if (pressed & PSP_CTRL_RIGHT) c->mission = c->mission < MENU_MISSIONS ? c->mission + 1 : 1;
                 if (pressed & PSP_CTRL_SQUARE) c->turbo = !c->turbo;
