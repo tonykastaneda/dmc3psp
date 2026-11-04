@@ -134,6 +134,58 @@ static void draw_quad_offset(int group, int index, unsigned int color, float dx,
 
 static void draw_quad(int group, int index, unsigned int color) { draw_quad_offset(group, index, color, 0.0f, 0.0f, 0); }
 
+/* ---- Text from the menus' font: one sprite a glyph, scaled from the sheet's size. */
+float menu_font_width(float height, const char *text) {
+    float w = 0.0f, k = height / (float)MENU_GLYPH_CELL;
+    if (MENU_GLYPH_ATLAS < 0) return 8.0f * (float)strlen(text);
+    for (; *text; ++text) {
+        int c = (unsigned char)*text - 32;
+        if (c < 0 || c >= 95) c = '?' - 32;
+        w += menu_glyphs[c].advance * k;
+    }
+    return w;
+}
+
+float menu_font_draw(float x, float y, float height, const char *text, unsigned int color) {
+    float k = height / (float)MENU_GLYPH_CELL, start = x;
+    if (!header || MENU_GLYPH_ATLAS < 0) return 0.0f;
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    bind_atlas(MENU_GLYPH_ATLAS);
+    for (; *text; ++text) {
+        int c = (unsigned char)*text - 32;
+        const MenuGlyph *g;
+        if (c < 0 || c >= 95) c = '?' - 32;
+        g = &menu_glyphs[c];
+        if (c) sprite((float)g->u0 / texture_w, (float)g->v0 / texture_h, (float)g->u1 / texture_w, (float)g->v1 / texture_h,
+                      x - g->left * k, y, x - g->left * k + (float)(g->u1 - g->u0) * k, y + height, color);
+        x += g->advance * k;
+    }
+    return x - start;
+}
+
+/* A screen-unit box's corners in PSP pixels, spread as unit_quad does. */
+static void unit_box(float x0, float y0, float x1, float y1, float *l, float *t, float *r, float *b) {
+    float centre = (x0 + x1) * 0.5f * layout_spread + layout_dx, half = (x1 - x0) * 0.5f;
+    *l = SCR_W / 2.0f + (centre - half) * UNIT; *r = SCR_W / 2.0f + (centre + half) * UNIT;
+    *t = SCR_H / 2.0f - y1 * UNIT; *b = SCR_H / 2.0f - y0 * UNIT;
+}
+
+/* Text right-aligned (align 1), centred (0) or left (-1) in the box of these quads, as tall as it. */
+static void font_in_quads(int group, int first, int last, const char *text, int align, unsigned int color) {
+    const Quad *a = group_quad(group, first), *z = group_quad(group, last);
+    float l, t, r, b, h, w;
+    unit_box(a->x0, a->y0, z->x1, z->y1, &l, &t, &r, &b);
+    h = (b - t) * 1.15f;
+    w = menu_font_width(h, text);
+    menu_font_draw(align > 0 ? r - w : align == 0 ? (l + r - w) * 0.5f : l, t - (h - (b - t)) * 0.5f, h, text, color);
+}
+
 /* For a column of labels: the left edge spreads, not the centre, so labels of different widths that share
  * a left edge on the disc still share one. */
 static void draw_quad_left(int group, int index, unsigned int color) {
@@ -246,11 +298,18 @@ static void draw_missions(const MenuChoice *c, int row) {
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2, BRIGHT, 0.0f, 0.0f, 0);
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2 + 1, BRIGHT, 0.0f, 0.0f, 1);
         }
-        draw_quad_offset(GROUP_MISSION_DIGITS, c->mission - 1, color, 0.0f, -row_height * (float)i, 0);
+        draw_quad_offset(GROUP_MISSION_NUMBERS, c->mission - 1, color, 0.0f, -row_height * (float)i, 0);
     }
     layout_spread = SPREAD;
     layout_dx = 0.0f;
-    if (c->turbo) draw_quad(GROUP_MISSION_TAGS, TAG_TURBO, BRIGHT);
+    draw_quad(GROUP_MISSION_HEADING, 0, BRIGHT);
+    /* Turbo sits in the bottom right corner, as on the HD Collection: against the screen's edge. */
+    if (c->turbo) {
+        const Quad *q = group_quad(GROUP_MISSION_TAGS, TAG_TURBO);
+        float w = (q->x1 - q->x0) * UNIT;
+        bind_atlas(q->atlas);
+        sprite(q->u0, q->v0, q->u1, q->v1, SCR_W - 10.0f - w, SCR_H / 2.0f - q->y1 * UNIT, SCR_W - 10.0f, SCR_H / 2.0f - q->y0 * UNIT, BRIGHT);
+    }
 }
 
 static void draw_briefing(const MenuChoice *c, int cursor) {
@@ -363,6 +422,8 @@ void menu_mission_clear(MenuPad pad, MenuAfterFrame after_frame) {
         sceGuClear(GU_COLOR_BUFFER_BIT);
         begin_2d();
         draw_image(IMG_CLEAR);
+        draw_quad(GROUP_CLEAR_TEXT, 0, BRIGHT);
+        draw_quad(GROUP_CLEAR_TEXT, 1, BRIGHT);
         fade_overlay((float)fade / (float)FADE_FRAMES);
         end_2d();
         sceGuFinish();
@@ -380,9 +441,8 @@ void menu_show_loading(void) {
     sceGuClearColor(0xff000000);
     sceGuClear(GU_COLOR_BUFFER_BIT);
     begin_2d();
-    bind_atlas(ATLAS_NOW_LOADING);
-    /* The logo is the top half of its picture, whose bottom holds effect sprites. */
-    sprite(0.0f, 0.0f, 1.0f, 0.45f, SCR_W - (float)a->width - 16.0f, SCR_H - 74.0f, SCR_W - 16.0f, SCR_H - 16.0f, BRIGHT);
+    (void)a;
+    menu_font_draw(SCR_W - 16.0f - menu_font_width(26.0f, "NOW LOADING"), SCR_H - 46.0f, 26.0f, "NOW LOADING", BRIGHT);
     end_2d();
     sceGuFinish();
     sceGuSync(0, 0);
@@ -474,12 +534,13 @@ static const char *shop_message(int screen, int id) {
 static void text_lines(int x, int y, const char *text, unsigned int color) {
     char line[64];
     int n = 0;
-    if (!menu_text) return;
+    if (!menu_text && MENU_GLYPH_ATLAS < 0) return;
     for (;; ++text) {
         if (*text == '\n' || !*text || n == 63) {
             line[n] = 0;
-            menu_text(x, y, line, color);
-            y += 11;
+            if (MENU_GLYPH_ATLAS >= 0) menu_font_draw((float)x, (float)y - 3.0f, 18.0f, line, color);
+            else menu_text(x, y, line, color);
+            y += 16;
             n = 0;
             if (!*text) break;
             continue;
@@ -505,13 +566,12 @@ static void small_glyph(int group, int index, int g) {
     unit_quad(q->u0 + du, q->v0 + dv, q->u1 + du, q->v1 + dv, q->x0, q->y0, q->x1, q->y1, BRIGHT, 0);
 }
 
-/* A number right-aligned on a row's digit quads (6 of them). */
+/* A number right-aligned across a row's six digit places. */
 static void shop_number(int row, int value, float dy, unsigned int color) {
-    int k;
-    for (k = 5; k >= 0; --k) {
-        shop_glyph(GROUP_ITEM_DIGITS, row * 6 + k, value % 10, 0.0f, dy, color);
-        value /= 10;
-    }
+    char text[16];
+    (void)dy;
+    snprintf(text, sizeof(text), "%d", value);
+    font_in_quads(GROUP_ITEM_DIGITS, row * 6, row * 6 + 5, text, 1, color);
 }
 
 void shop_open(ShopState *state) {
@@ -594,7 +654,7 @@ static void shop_draw_index(void) {
     {
         char orbs[32];
         snprintf(orbs, sizeof(orbs), "RED ORBS %d", shop->red_orbs);
-        text_lines(SCR_W - 8 - (int)strlen(orbs) * 8, 8, orbs, 0xff4040ff);
+        text_lines(SCR_W - 10 - (int)menu_font_width(18.0f, orbs), 8, orbs, 0xff4040ff);
     }
 }
 
@@ -611,25 +671,24 @@ static void shop_draw_items(void) {
     /* The bottom bar: Yellow Orbs held, and Blue Orb fragments of 4, in the small font. */
     draw_quad(GROUP_ITEM_ROWS, ITEM_ROWS, BRIGHT);
     draw_quad(GROUP_ITEM_YELLOW, 2, BRIGHT);
-    small_glyph(GROUP_ITEM_YELLOW, 1, shop->owned[7] / 10 % 10);
-    small_glyph(GROUP_ITEM_YELLOW, 0, shop->owned[7] % 10);
-    draw_quad(GROUP_ITEM_FRAGMENT, 3, BRIGHT);
-    small_glyph(GROUP_ITEM_FRAGMENT, 2, shop->blue_fragments % 4);
-    draw_quad(GROUP_ITEM_FRAGMENT, 1, BRIGHT);
-    small_glyph(GROUP_ITEM_FRAGMENT, 0, 4);
+    {
+        char text[16];
+        snprintf(text, sizeof(text), "%02d", shop->owned[7]);
+        font_in_quads(GROUP_ITEM_YELLOW, 1, 0, text, -1, BRIGHT);
+        draw_quad(GROUP_ITEM_FRAGMENT, 3, BRIGHT);
+        snprintf(text, sizeof(text), "%d/4", shop->blue_fragments % 4);
+        font_in_quads(GROUP_ITEM_FRAGMENT, 2, 0, text, -1, BRIGHT);
+    }
     /* How many of the chosen one are held, of how many. */
     {
-        int owned = shop->owned[shop_cursor], most = shop_item_max_held[shop_cursor];
-        shop_glyph(GROUP_ITEM_COUNT, 0, owned / 10 % 10, 0.0f, 0.0f, BRIGHT);
-        shop_glyph(GROUP_ITEM_COUNT, 1, owned % 10, 0.0f, 0.0f, BRIGHT);
-        draw_quad(GROUP_ITEM_COUNT, 2, BRIGHT);
-        shop_glyph(GROUP_ITEM_COUNT, 3, most / 10 % 10, 0.0f, 0.0f, BRIGHT);
-        shop_glyph(GROUP_ITEM_COUNT, 4, most % 10, 0.0f, 0.0f, BRIGHT);
+        char text[16];
+        snprintf(text, sizeof(text), "%02d/%02d", shop->owned[shop_cursor], shop_item_max_held[shop_cursor]);
+        font_in_quads(GROUP_ITEM_COUNT, 0, 4, text, 0, BRIGHT);
     }
     {
         char orbs[32];
         snprintf(orbs, sizeof(orbs), "RED ORBS %d", shop->red_orbs);
-        text_lines(SCR_W - 8 - (int)strlen(orbs) * 8, 8, orbs, 0xff4040ff);
+        text_lines(SCR_W - 10 - (int)menu_font_width(18.0f, orbs), 8, orbs, 0xff4040ff);
     }
     {
         static const short names[ITEM_ROWS] = {20003, 20004, 20005, 20006, 20000, 20001, 20002};

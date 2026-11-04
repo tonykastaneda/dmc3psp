@@ -53,8 +53,7 @@ IMAGES = [
     ("IMG_BANNER_3", [(BANNER_BASE + ENGLISH_BANNER_STEP * 2, 1, False, ZOOM, {})]),
     ("IMG_BANNER_4", [(BANNER_BASE + ENGLISH_BANNER_STEP * 3, 1, False, ZOOM, {})]),
     # Only the heading and the band for now: the results themselves aren't tracked yet.
-    ("IMG_CLEAR", [(1665, 1, False, None, {0: CENTRE, 1: CENTRE}), (1665, 23, False, SPAN, {}),
-                   (1665, 25, False, None, {1: CENTRE})]),
+    ("IMG_CLEAR", [(1665, 1, False, None, {0: CENTRE}), (1665, 23, False, SPAN, {})]),
 ]
 # The Divinity Statue's shop: the game's Customize screens (build/hdref/shop/shop_ui.md). Each is a PAC of flat
 # MODs, each followed by its texture set, and a "# Msg" block of its English text.
@@ -85,6 +84,11 @@ GROUPS = [
     ("GROUP_PAUSE", 2075, 1, False),
     # Only drawn from the font: the briefing's two choices, where its strip has them (BRIEFING_* in menu.c).
     ("GROUP_BRIEFING_TEXT", None, [(-60.0, -166.0, 116.0, -140.0), (136.0, -166.0, 236.0, -140.0)], None),
+    # Font-only places: Mission Select's heading and its mission numbers 1-20 (where the disc's digit quads sit),
+    # and the Mission Clear screen's two headings (where the disc's lettering was, now left out of IMG_CLEAR).
+    ("GROUP_MISSION_HEADING", None, [(-232.0, 141.0, -40.0, 171.0)], None),
+    ("GROUP_MISSION_NUMBERS", None, [(-40.0, 100.0, -7.0, 123.0)] * 20, None),
+    ("GROUP_CLEAR_TEXT", None, [(-225.0, 116.0, 10.0, 155.0), (-8.0, -162.0, 141.0, -136.0)], None),
     ("GROUP_CUSTOM_BOX", CUSTOMIZE, 2, True),
     ("GROUP_CUSTOM_LABELS", CUSTOMIZE, 4, True),
     ("GROUP_CUSTOM_BARS", CUSTOMIZE, 8, True),
@@ -100,7 +104,32 @@ GROUPS = [
 # Menu labels drawn from a font instead of the disc's lettering, cleaner on the PSP's screen: each takes the
 # place and height of the label it replaces. (group, {quad: (text, alignment)}). The font is open (SIL OFL) and
 # lives in .tools/fonts, not the repo; without it the disc's labels stay.
-FONT = Path(__file__).resolve().parents[1] / ".tools" / "fonts" / "CormorantGaramond-Italic[wght].ttf"
+FONT_SOURCE = Path(__file__).resolve().parents[1] / ".tools" / "fonts" / "CormorantGaramond-Italic[wght].ttf"
+FONT = FONT_SOURCE.with_name("menu-font.ttf")
+
+
+def make_font():
+    """The source font at its Bold Italic weight, with its digits swapped for its full-height lining ones
+    (its default figures are old-style, at lowercase height). Needs fontTools; without it the source is used."""
+    global FONT
+    if FONT.exists() or not FONT_SOURCE.exists():
+        return
+    try:
+        from fontTools.ttLib import TTFont
+        from fontTools.varLib import instancer
+    except ImportError:
+        print("fontTools isn't installed: menu digits stay old-style")
+        FONT = FONT_SOURCE
+        return
+    font = instancer.instantiateVariableFont(TTFont(str(FONT_SOURCE)), {"wght": 700})
+    names = set(font.getGlyphOrder())
+    digits = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+    for table in font["cmap"].tables:
+        for code in range(0x30, 0x3A):
+            lining = digits[code - 0x30] + ".lf"
+            if code in table.cmap and lining in names:
+                table.cmap[code] = lining
+    font.save(str(FONT))
 LEFT_EDGE, MIDDLE = "left", "middle"
 # Mission Select's row containers span x -238..25: centred labels sit on their middle, as on the HD Collection,
 # and Save and Load at about 31% and 72% across theirs (measured off the HD Collection's screen).
@@ -115,6 +144,10 @@ RECREATE = {
                              8: ("LOAD", BAR_LEFT + 0.72 * (BAR_RIGHT - BAR_LEFT))},
     "GROUP_PAUSE": {2: ("STATUS", MIDDLE), 3: ("SAVE DATA", MIDDLE), 4: ("QUIT THE MISSION", MIDDLE),
                     5: ("RESTART THE MISSION", MIDDLE), 6: ("EXIT", MIDDLE), 7: ("OPTIONS", MIDDLE), 8: ("YES", MIDDLE), 9: ("NO", MIDDLE)},
+    "GROUP_MISSION_HEADING": {0: ("MISSION SELECT", LEFT_EDGE)},
+    "GROUP_MISSION_NUMBERS": {n: (str(n + 1), MIDDLE) for n in range(20)},
+    "GROUP_MISSION_TAGS": {0: ("TURBO", MIDDLE)},
+    "GROUP_CLEAR_TEXT": {0: ("MISSION CLEAR", LEFT_EDGE), 1: ("MISSION SELECT", MIDDLE)},
     "GROUP_BRIEFING_TEXT": {0: ("MISSION START", 40.0), 1: ("CUSTOMIZE", 190.0)},
     "GROUP_CUSTOM_LABELS": {0: ("CUSTOMIZE", LEFT_EDGE), 1: ("STYLE", LEFT_EDGE), 2: ("EQUIP", LEFT_EDGE), 3: ("ITEM", LEFT_EDGE),
                             4: ("ACTION", LEFT_EDGE), 5: ("GUNS", LEFT_EDGE), 6: ("EXIT", LEFT_EDGE)},
@@ -140,7 +173,7 @@ def font_labels(quads, groups):
             px_h = max(12, round(box_h * UNIT * 2))   # twice the PSP's pixels, for a clean filter down
             font = ImageFont.truetype(str(FONT), round(px_h * 0.92))
             try:
-                font.set_variation_by_name(b"Bold Italic")
+                font.set_variation_by_name(b"Bold Italic") if FONT == FONT_SOURCE else None
             except (OSError, ValueError):
                 pass
             l, top, r, bottom = font.getbbox(text)
@@ -171,6 +204,42 @@ def font_labels(quads, groups):
             x += w + 2
             row_height = max(row_height, h + 2)
     return sheets, placed
+
+
+GLYPH_SIZE = 36          # px: drawn smaller on the PSP, the filter keeps it clean
+GLYPHS = "".join(chr(c) for c in range(32, 127))
+
+
+def glyph_sheet():
+    """Every printable ASCII character of the font on one 512x512 sheet, for text the PSP writes as it runs.
+    Returns the sheet and [(char, u0, v0, u1, v1, advance, ascent)] in pixels at GLYPH_SIZE, or None."""
+    from PIL import ImageDraw, ImageFilter, ImageFont
+    if not FONT.exists():
+        return None
+    font = ImageFont.truetype(str(FONT), GLYPH_SIZE)
+    try:
+        font.set_variation_by_name(b"Bold Italic")
+    except (OSError, ValueError):
+        pass
+    sheet = Image.new("RGBA", (FONT_ATLAS, FONT_ATLAS), (0, 0, 0, 0))
+    ascent, descent = font.getmetrics()
+    cell_h = ascent + descent + 6
+    x = y = 0
+    table = []
+    for ch in GLYPHS:
+        l, top, r, bottom = font.getbbox(ch)
+        w = max(1, r - min(l, 0)) + 6
+        if x + w > FONT_ATLAS:
+            x, y = 0, y + cell_h
+        cell = Image.new("RGBA", (w, cell_h), (0, 0, 0, 0))
+        shadow = Image.new("RGBA", (w, cell_h), (0, 0, 0, 0))
+        ImageDraw.Draw(shadow).text((3 - min(l, 0), 3), ch, font=font, fill=(0, 0, 0, 255), stroke_width=3, stroke_fill=(0, 0, 0, 255))
+        cell.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(1.2)))
+        ImageDraw.Draw(cell).text((3 - min(l, 0), 3), ch, font=font, fill=(255, 255, 255, 255), stroke_width=1, stroke_fill=(20, 20, 20, 255))
+        sheet.alpha_composite(cell, (x, y))
+        table.append((ch, x, y, x + w, y + cell_h, font.getlength(ch), 3 - min(l, 0)))
+        x += w + 1
+    return sheet, table, cell_h
 
 
 def whole_screen(data):
@@ -261,6 +330,9 @@ def place(canvas, source, box, x0, y0, x1, y1):
 
 
 WHITE_IMAGES = {"IMG_TITLE"}
+# Lettering painted into a background, covered with the plain band beside it (PSP pixels, and how far right the
+# cover comes from). The font draws the heading over it.
+HEADING_PATCHES = [("IMG_MISSION", (30, 8, 200, 42), 190)]
 
 
 def bake(slots, layers, background=(0, 0, 0, 255)):
@@ -347,6 +419,9 @@ def main():
             IMAGES[n] = (name, [(rest[0], *layer[1:]) for layer in whole_screen(slots[rest[0]])])
 
     images = [bake(slots, layers, (255, 255, 255, 255) if name in WHITE_IMAGES else (0, 0, 0, 255)) for name, layers in IMAGES]
+    for name, (left, top, right, bottom), shift in HEADING_PATCHES:
+        image = images[[n for n, _ in IMAGES].index(name)]
+        image.paste(image.crop((left + shift, top, right + shift, bottom)), (left, top))
     # Now Loading is a bare picture, over black.
     _, rgba, pic = decode_picture(slots[NOW_LOADING], 0x80 if slots[NOW_LOADING][5] == 1 else 0x10)
 
@@ -373,6 +448,7 @@ def main():
             for i, q in enumerate(quads[first:]):
                 print(f"  {i:2d} atlas{q[0]} uv {q[1]:.3f},{q[2]:.3f}-{q[3]:.3f},{q[4]:.3f} at {q[5]:.0f},{q[6]:.0f} .. {q[7]:.0f},{q[8]:.0f}")
 
+    make_font()
     made = font_labels(quads, groups)
     if made:
         sheets, placed = made
@@ -384,6 +460,11 @@ def main():
         if args.dump:
             sheets[0].save("build/hdref/menu_font_atlas.png")
         print(f"menu labels from {FONT.name}: {len(placed)}")
+    glyphs = glyph_sheet()
+    glyph_atlas = len(atlases)
+    if glyphs:
+        sheet, table, cell_h = glyphs
+        atlases.append((FONT_ATLAS, FONT_ATLAS, sheet.tobytes()))
 
     header = 16 + 16 + 16
     blob = bytearray(header)
@@ -424,6 +505,13 @@ def main():
     signed = lambda a: elf.byte(a) - 256 if elf.byte(a) > 127 else elf.byte(a)
     lines.append("static const signed char shop_item_max_held[8] = {" + ",".join(str(signed(ITEM_MAX_HELD + k)) for k in range(8)) + "};")
     lines.append("static const signed char shop_item_max_buys[8] = {" + ",".join(str(signed(ITEM_MAX_BUYS + k)) for k in range(8)) + "};")
+    if glyphs:
+        lines += [f"#define MENU_GLYPH_ATLAS {glyph_atlas}", f"#define MENU_GLYPH_SIZE {GLYPH_SIZE}", f"#define MENU_GLYPH_CELL {cell_h}",
+                  "typedef struct { unsigned short u0, v0, u1, v1; float advance, left; } MenuGlyph;",
+                  "static const MenuGlyph menu_glyphs[95] = {" +
+                  ",".join(f"{{{u0},{v0},{u1},{v1},{adv:.2f}f,{left}}}" for _, u0, v0, u1, v1, adv, left in table) + "};"]
+    else:
+        lines.append("#define MENU_GLYPH_ATLAS (-1)")
     lines.append("typedef struct { short screen, id; const char *text; } ShopText;")
     cells = []
     for screen, slot in enumerate(SHOP_TEXT):

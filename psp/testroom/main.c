@@ -967,6 +967,12 @@ static void door_prompt_draw(void) {
     sceGuTexImage(0, FONT_TEX_SIZE, FONT_TEX_SIZE, FONT_TEX_SIZE, font_texture);
     sceGuTexFilter(GU_NEAREST, GU_NEAREST);
     sceGuTexFlush();
+    if (menu_loaded()) {
+        /* The menus' font. */
+        menu_font_draw(SCR_WIDTH / 2 - menu_font_width(20.0f, "O  ENTER") * 0.5f, SCR_HEIGHT - 46, 20.0f, "O  ENTER", 0xffffffffu);
+        sceGuDisable(GU_BLEND);
+        return;
+    }
     sceGuColor(0xff000000u);
     draw_text(SCR_WIDTH / 2 - 27, SCR_HEIGHT - 39, "O  ENTER");
     sceGuColor(0xffffffffu);
