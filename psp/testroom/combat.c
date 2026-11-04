@@ -1086,6 +1086,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
      * gravity per frame, until Dante reaches the floor. */
     if (c->air) {
         float k = player_step_scale, floor_y = 0.0f, s = sinf(player->yaw), co = cosf(player->yaw);
+        float frame_start_y = player->y;
         player->on_ground = 0;
         /* One real game step every 60th of a second, however long this frame was. */
         c->air_accum += dt * MOTION_FPS / k;
@@ -1099,7 +1100,13 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             c->air_v[2] += c->air_v[3] * k;
             if (c->air_v[2] < -70.0f) c->air_v[2] = -70.0f;   /* FUN_002e2560's fall limit */
         }
-        if (player_floor_fn && !player_floor_fn(player->x, player->y, player->z, 45.0f, &floor_y)) floor_y = -1.0e9f;
+        /* From where he started this frame: at 30 FPS a fast fall can pass well below the floor in one. */
+        if (player_floor_fn && !player_floor_fn(player->x, frame_start_y, player->z, 45.0f, &floor_y)) floor_y = -1.0e9f;
+        if (player->y < -5000.0f) {   /* nothing under him at all: player.c puts him back */
+            c->air = 0;
+            end_move(c, player);
+            return;
+        }
         if (c->air_v[2] <= 0.0f && player->y <= floor_y) {
             player->y = floor_y;
             player->vy = 0.0f;

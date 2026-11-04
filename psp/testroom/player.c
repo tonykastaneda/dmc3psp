@@ -429,7 +429,8 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
                     air_step(player, stick_world, input->jump_held);
                 }
                 player->vy = (player->y - prev_y) / (dt > 0.0f ? dt : 1.0f / 60.0f);
-                has_ground = floor_at(player->x, player->y, player->z, &ground);
+                /* From where he started this frame: at 30 FPS a fast fall can pass well below the floor in one. */
+                has_ground = floor_at(player->x, prev_y, player->z, &ground);
                 if (player->vy < 0.0f && has_ground && player->y <= ground) {
                     /* Touchdown (possibly on something higher): landing frames. */
                     player->y = ground;
