@@ -83,7 +83,9 @@ static void bind_texture(const TexEntry *t) {
     unsigned int level;
     /* Swizzled (prepare_stage.py) and mipmapped. Bilinear within the nearest
      * mip level: trilinear reads two levels per pixel, too slow on the GE. */
-    sceGuTexMode(GU_PSM_8888, (int)t->levels - 1, 0, 1);
+    sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
+    sceGuClutLoad(256 / 8, blob + t->level_offset[7]);
+    sceGuTexMode(GU_PSM_T8, (int)t->levels - 1, 0, 1);
     for (level = 0; level < t->levels; ++level) {
         int w = (int)(t->w >> level), h = (int)(t->h >> level);
         sceGuTexImage((int)level, w, h, w, blob + t->level_offset[level]);

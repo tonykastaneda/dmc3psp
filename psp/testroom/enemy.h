@@ -30,6 +30,8 @@ void enemy_select_nearest(float x, float z);
 void enemy_set_attacks(int attacks);
 /* Bones update less often the more dummies there are; their positions still move every frame. */
 void enemy_set_anim_auto(int on);
+/* For the PSP benchmark, to see what costs what. */
+void enemy_set_test(int no_texture, int no_lighting, float ring);
 int enemy_anim_rate(void);          /* poses a second each right now, 0 = every frame */
 int enemy_poses_done(void);         /* running total, to measure the saving */
 /* (px, py, pz) is Dante, whom they go for when attacking. */

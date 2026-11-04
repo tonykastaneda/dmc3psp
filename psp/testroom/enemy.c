@@ -100,6 +100,8 @@ static float landed_x, landed_z;
 static int landed_heavy;
 static unsigned int ai_seed = 12345u;
 static int anim_auto = 1, poses_done;
+static int test_no_texture, test_no_lighting;
+static float spawn_ring = 320.0f;
 static unsigned int anim_last_time;
 
 static M3 world_rot[MAX_BONES];
@@ -157,11 +159,11 @@ int enemy_init(void) {
         v->x = enemy_weapon_positions[i].x; v->y = enemy_weapon_positions[i].y; v->z = enemy_weapon_positions[i].z;
     }
     for (i = 0; i < ENEMY_TEXTURE_COUNT; ++i) {
-        size_t bytes = (size_t)enemy_textures[i].width * enemy_textures[i].height * 4;
+        size_t bytes = (size_t)enemy_textures[i].width * enemy_textures[i].height;
         textures[i] = memalign(16, bytes);
         if (!textures[i]) return 0;
         memcpy(textures[i], enemy_textures[i].rgba, bytes);
-        if (!swizzle_texture32(textures[i], enemy_textures[i].width, enemy_textures[i].height)) return 0;
+        if (!swizzle_texture8(textures[i], enemy_textures[i].width, enemy_textures[i].height)) return 0;
     }
     sceKernelDcacheWritebackAll();
     return 1;
@@ -219,7 +221,7 @@ void enemy_set_count(int count, float x, float z) {
         if (i >= count) {
             e->active = 0;
         } else if (!e->active) {
-            float a = 0.785f * (float)i + 0.6f, r = 320.0f + 60.0f * (float)(i / 8);
+            float a = 0.785f * (float)i + 0.6f, r = spawn_ring + 60.0f * (float)(i / 8);
             spawn_one(x + sinf(a) * r, z + cosf(a) * r);
         }
     }
@@ -240,6 +242,11 @@ void enemy_select_nearest(float x, float z) {
 
 void enemy_set_attacks(int attacks) { attacks_on = attacks; }
 void enemy_set_anim_auto(int on) { anim_auto = on; }
+void enemy_set_test(int no_texture, int no_lighting, float ring) {
+    test_no_texture = no_texture;
+    test_no_lighting = no_lighting;
+    spawn_ring = ring;
+}
 int enemy_poses_done(void) { return poses_done; }
 
 int enemy_anim_rate(void) {
@@ -596,16 +603,18 @@ static void draw_one(void) {
         sceGumTranslate(&p);
         sceGumRotateY(e->yaw);
     }
-    sceGuEnable(GU_TEXTURE_2D);
-    sceGuEnable(GU_LIGHTING);
+    if (test_no_texture) sceGuDisable(GU_TEXTURE_2D); else sceGuEnable(GU_TEXTURE_2D);
+    if (test_no_lighting) sceGuDisable(GU_LIGHTING); else sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
-    sceGuTexMode(GU_PSM_8888, 0, 0, 1);   /* swizzled at load */
+    sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
+    sceGuTexMode(GU_PSM_T8, 0, 0, 1);     /* swizzled at load */
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     for (i = 0; i < ENEMY_OBJECT_COUNT; ++i) {
         const Dmc3ModelObject *o = &enemy_objects[i];
         if ((int)o->texture != bound) {
             bound = (int)o->texture;
+            sceGuClutLoad(256 / 8, enemy_palettes[bound]);
             sceGuTexImage(0, enemy_textures[bound].width, enemy_textures[bound].height, enemy_textures[bound].width, textures[bound]);
             sceGuTexFlush();
         }
@@ -622,6 +631,7 @@ static void draw_one(void) {
         sceGumPushMatrix();
         sceGumMultMatrix(&mm);
         bound = ENEMY_WEAPON_TEXTURE;
+        sceGuClutLoad(256 / 8, enemy_palettes[bound]);
         sceGuTexImage(0, enemy_textures[bound].width, enemy_textures[bound].height, enemy_textures[bound].width, textures[bound]);
         sceGuTexFlush();
         sceGumDrawArray(GU_TRIANGLES, VTYPE, ENEMY_WEAPON_INDEX_COUNT, weapon_indices, weapon_vertices);
@@ -643,5 +653,8 @@ void enemy_draw(void) {
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
     }
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_LIGHTING);
+    sceGuTexMode(GU_PSM_8888, 0, 0, 1);
     e = selected;
 }

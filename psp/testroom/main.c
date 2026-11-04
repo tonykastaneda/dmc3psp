@@ -914,6 +914,7 @@ static void draw_lock_on_reticle(const Player *p, const FollowCamera *c) {
 static float doppel_trail[DOPPEL_FRAMES][4];
 static int doppel_head;
 
+static int bench_no_stage, bench_no_texture, bench_no_lighting, bench_ring = 320;
 static void draw_debug_menu(int viewer) {
     char lines[DEBUG_ITEMS][32];
     int i, x = SCR_WIDTH / 2 - 88, y = SCR_HEIGHT / 2 - 46;
@@ -985,7 +986,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuDisable(GU_LIGHTING);
     sceGuDisable(GU_ALPHA_TEST);
     if (stage_loaded()) {
-        stage_draw();
+        if (!bench_no_stage) stage_draw();
     {
         /* The real game's soft shadow: on the floor under him, fading as he rises. */
         float floor_y;
@@ -1612,6 +1613,10 @@ static void cmp_load(void) {
         else if (strncmp(line, "anim ", 5) == 0) bench_anim = atoi(line + 5);
         else if (strncmp(line, "fire ", 5) == 0) bench_fire = atoi(line + 5);
         else if (strncmp(line, "qs ", 3) == 0) bench_quicksilver = atoi(line + 3);
+        else if (strncmp(line, "nostage ", 8) == 0) bench_no_stage = atoi(line + 8);
+        else if (strncmp(line, "notex ", 6) == 0) bench_no_texture = atoi(line + 6);
+        else if (strncmp(line, "nolight ", 8) == 0) bench_no_lighting = atoi(line + 8);
+        else if (strncmp(line, "ring ", 5) == 0) bench_ring = atoi(line + 5);
         else if (strncmp(line, "devil ", 6) == 0) bench_devil = atoi(line + 6);
         else if (strncmp(line, "fps ", 4) == 0) cmp_fps = atoi(line + 4);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
@@ -1947,6 +1952,8 @@ int main(int argc, char *argv[]) {
         int bones_now = show_bones || (autotest && frames == 26);
 
         debug_pressed = 0;
+        /* Keep the PSP awake and the screen on during long unattended runs. */
+        if (frames % 300 == 0) scePowerTick(PSP_POWER_TICK_ALL);
         if (tour) {
             dt = 1.0f / 60.0f;
             memset(&input, 0, sizeof(input));
@@ -2228,6 +2235,7 @@ int main(int argc, char *argv[]) {
                     enemy_set_count(0, player.x, player.z);
                     enemy_set_attacks(bench_attack);
                     enemy_set_anim_auto(bench_anim);
+                    enemy_set_test(bench_no_texture, bench_no_lighting, (float)bench_ring);
                     bench_steps[0].dummies = bench_start;
                     enemy_set_count(bench_start, player.x, player.z);
                 }

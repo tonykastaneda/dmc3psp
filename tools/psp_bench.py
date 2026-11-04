@@ -2,6 +2,7 @@
 
 The PSP must be plugged in with PSPLINK open.
 
+    python tools/psp_bench.py play              # just start the game, for a person to play
     python tools/psp_bench.py ramp              # add dummies until the frame rate has gone
     python tools/psp_bench.py ramp full         # with every dummy posed every frame
     python tools/psp_bench.py ramp fire         # with Dante firing, for the effects' cost
@@ -19,6 +20,14 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "testroom"
 TOOLS = ROOT / ".tools" / "psplink"
 OUT = ROOT / "analysis" / "testroom"
+# What costs what: standing dummies, with one thing changed.
+TESTS = {
+    "base": ["attack 0", "rampto 4"],
+    "nostage": ["attack 0", "rampto 8", "nostage 1"],
+    "notex": ["attack 0", "rampto 4", "notex 1"],
+    "nolight": ["attack 0", "rampto 4", "nolight 1"],
+    "far": ["attack 0", "rampto 4", "ring 900"],
+}
 STEP_FRAMES = 120   # 4 seconds at 30 FPS: 2 to settle, 2 measured
 
 
@@ -108,6 +117,8 @@ def ramp(variant):
         lines.append("devil 1")
     elif variant == "stand":
         lines.append("attack 0")
+    elif variant in TESTS:
+        lines += TESTS[variant]
     run_scene(lines, 32 * 5 + 60)
     rows = [list(map(int, line.split())) for line in (BUILD / "BENCH_OUT.TXT").read_text().splitlines()]
     text = [f"Dummy ramp, {variant or 'attacking, AUTO animation'}, on the PSP, Turbo",
@@ -124,6 +135,25 @@ def ramp(variant):
     (OUT / f"bench_{variant or 'auto'}.txt").write_text(report + "\n")
 
 
+def play():
+    """Start the normal game on the PSP from the build folder; returns once it has booted."""
+    memory = BUILD / "MEMORY.TXT"
+    (BUILD / "FOCUS.TXT").unlink(missing_ok=True)
+    before = memory.stat().st_mtime if memory.exists() else 0.0
+    if not shell_ready():
+        raise RuntimeError("PSPLINK's shell isn't answering: restart PSPLINK on the PSP")
+    subprocess.Popen([str(TOOLS / "pspsh.exe"), "-e", "./testroom.prx"], cwd=str(BUILD), stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    start = time.time()
+    while not (memory.exists() and memory.stat().st_mtime > before):
+        if time.time() - start > 30:
+            raise RuntimeError("the game didn't boot")
+        time.sleep(0.5)
+    print("booted on the PSP")
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "play":
+        play()
     if sys.argv[1] == "ramp":
         ramp(sys.argv[2] if len(sys.argv) > 2 else "")

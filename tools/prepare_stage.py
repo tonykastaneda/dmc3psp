@@ -104,6 +104,49 @@ def mip_chain(w, h, rgba):
     return levels
 
 
+def paletted(w, h, rgba):
+    """8-bit levels for the PSP, all from one palette: (w, h, pixels) per level, 256 ABGR words.
+    Swizzling needs 16-byte-wide blocks 8 rows high, so tiny textures grow and the chain stops early."""
+    import numpy as np
+    from PIL import Image
+    image = Image.frombytes("RGBA", (w, h), bytes(rgba))
+    while w < 16 or h < 8:
+        w, h = max(w, 16), max(h, 8)
+        image = image.resize((w, h), Image.Resampling.NEAREST)
+    quant = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
+    palette = quant.getpalette("RGBA")
+    palette += [0] * (1024 - len(palette))
+    table = np.array(palette, dtype=np.int32).reshape(256, 4)
+    used = table
+    levels, pixels = [], image.tobytes()
+    chain = [lv for lv in mip_chain(w, h, pixels) if lv[0] >= 16 and lv[1] >= 8][:7]
+    for i, (lw, lh, data) in enumerate(chain):
+        if i == 0:
+            levels.append((lw, lh, quant.tobytes()))
+            continue
+        rows = np.frombuffer(data, dtype=np.uint8).reshape(-1, 4).astype(np.int32)
+        indices = np.zeros(len(rows), dtype=np.uint8)
+        for start in range(0, len(rows), 4096):
+            part = rows[start:start + 4096]
+            indices[start:start + 4096] = ((part[:, None, :] - used[None, :, :]) ** 2).sum(axis=2).argmin(axis=1)
+        levels.append((lw, lh, indices.tobytes()))
+    words = [palette[i] | palette[i + 1] << 8 | palette[i + 2] << 16 | palette[i + 3] << 24 for i in range(0, 1024, 4)]
+    return levels, words
+
+
+def swizzle8(w, h, data):
+    """The GE's swizzled layout for 8-bit: 16 bytes x 8 rows, row-major."""
+    out = bytearray(w * h)
+    at = 0
+    for by in range(h // 8):
+        for bx in range(w // 16):
+            for y in range(8):
+                start = (by * 8 + y) * w + bx * 16
+                out[at:at + 16] = data[start:start + 16]
+                at += 16
+    return bytes(out)
+
+
 def lerp_vertex(a, b):
     return tuple((x + y) * 0.5 for x, y in zip(a, b))
 
@@ -260,14 +303,17 @@ def main() -> None:
     blob += bytes(48 * len(textures))
     tex_entries = []
     for i, (w, h, rgba) in enumerate(textures):
-        levels = mip_chain(w, h, rgba)
+        levels, words = paletted(w, h, rgba)
         offsets = []
         for lw, lh, data in levels:
             offsets.append(align(blob))
-            blob += swizzle(lw, lh, data)
-        tex_entries.append((w, h, len(levels), 2 if i in blend_textures else int(i in alpha_textures), offsets))
-    for i, (w, h, n, alpha, offsets) in enumerate(tex_entries):
-        struct.pack_into("<4I8I", blob, tex_table + 48 * i, w, h, n, alpha, *(offsets + [0] * (8 - len(offsets))))
+            blob += swizzle8(lw, lh, data)
+        palette_at = align(blob)
+        blob += struct.pack("<256I", *words)
+        tex_entries.append((levels[0][0], levels[0][1], len(levels), 2 if i in blend_textures else int(i in alpha_textures), offsets, palette_at))
+    for i, (w, h, n, alpha, offsets, palette_at) in enumerate(tex_entries):
+        # The last slot holds the palette.
+        struct.pack_into("<4I8I", blob, tex_table + 48 * i, w, h, n, alpha, *(offsets + [0] * (7 - len(offsets))), palette_at)
     # Opaque, then alpha-tested, then decals (biased), then translucent (blended,
     # no depth writes) -- sub-mesh order kept inside each group.
     order = sorted(range(len(batches)), key=lambda i: (batches[i][1] == 2, batches[i][3], batches[i][1], i))

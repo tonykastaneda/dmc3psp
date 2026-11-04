@@ -295,6 +295,17 @@ def write_devils(output: Path, packs) -> None:
     (output / "devil_runtime.h").write_text("\n".join(lines), encoding="ascii")
 
 
+def indexed_texture(texture):
+    """(pixels, 256 ABGR words), colour and alpha quantized together."""
+    from PIL import Image
+    image = Image.frombytes("RGBA", (texture["width"], texture["height"]), bytes(texture["rgba"]))
+    quant = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
+    palette = quant.getpalette("RGBA")
+    palette += [0] * (1024 - len(palette))
+    words = [palette[i] | palette[i + 1] << 8 | palette[i + 2] << 16 | palette[i + 3] << 24 for i in range(0, 1024, 4)]
+    return list(quant.tobytes()), words
+
+
 def write_enemy(output: Path, body: bytes, texture_data: bytes, weapon: bytes) -> None:
     """Enemy body (skinned MOD) + its weapon (rigid MOD) + texture set -> enemy_runtime.h."""
     skel = parse_skeleton(body)
@@ -335,11 +346,17 @@ def write_enemy(output: Path, body: bytes, texture_data: bytes, weapon: bytes) -
         "static const Dmc3Uv enemy_weapon_uvs[] = {", array_lines(wmesh["uvs"], vec, 6), "};",
         "static const unsigned short enemy_weapon_indices[] = {", array_lines(wmesh["indices"], str, 12), "};",
     ]
+    # 8-bit paletted: on the PSP, reading 32-bit textures was nearly all of an enemy's GPU cost.
     for i, t in enumerate(textures):
+        pixels, palette = indexed_texture(t)
         lines += [f"static const unsigned char enemy_texture_{i}[] = {{",
-                  array_lines(list(t["rgba"]), lambda value: f"0x{value:02x}", 16), "};"]
+                  array_lines(pixels, lambda value: f"0x{value:02x}", 16), "};",
+                  f"static const unsigned int enemy_palette_{i}[256] __attribute__((aligned(16))) = {{",
+                  array_lines(palette, lambda value: f"0x{value:08x}", 8), "};"]
     lines.append("static const Dmc3Texture enemy_textures[] = {")
     lines += [f"    {{{t['width']},{t['height']},enemy_texture_{i}}}," for i, t in enumerate(textures)]
+    lines += ["};", "static const unsigned int *const enemy_palettes[] = {"]
+    lines += [f"    enemy_palette_{i}," for i in range(len(textures))]
     lines += ["};", "", "#endif", ""]
     (output / "enemy_runtime.h").write_text("\n".join(lines), encoding="ascii")
     b = [min(v[k] for v in mesh["positions"]) for k in range(3)], [max(v[k] for v in mesh["positions"]) for k in range(3)]
