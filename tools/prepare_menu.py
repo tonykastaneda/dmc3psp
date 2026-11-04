@@ -44,8 +44,9 @@ EDGE = SCREEN_UNITS_X - 256.0     # how far a +-256 layer moves to sit against t
 # A placement in the dict overrides the layer's for that quad, and None leaves the quad out.
 # The title's logo chunk: 0 the logo, 1 the band behind the options, 2 and 3 the Vergil / Dante bar for choosing a character.
 IMAGES = [
-    ("IMG_TITLE", [(TITLE, 1, False, SPAN, {}), (TITLE, 12, False, LEFT, {}), (TITLE, 9, False, RIGHT, {}),
-                   (TITLE, 15, False, CENTRE, {1: SPAN, 2: None, 3: None})]),
+    # For now on white, without the game's background or its Dante and Vergil (chunks 1, 12 and 9), until the
+    # port has art of its own: the logo and the band behind the options stay.
+    ("IMG_TITLE", [(TITLE, 15, False, CENTRE, {1: SPAN, 2: None, 3: None})]),
     ("IMG_MISSION", [(MISSION, 0, True, EXTEND, {})]),
     ("IMG_BANNER_1", [(BANNER_BASE, 1, False, ZOOM, {})]),
     ("IMG_BANNER_2", [(BANNER_BASE + ENGLISH_BANNER_STEP, 1, False, ZOOM, {})]),
@@ -181,9 +182,12 @@ def place(canvas, source, box, x0, y0, x1, y1):
     canvas.alpha_composite(layer)
 
 
-def bake(slots, layers):
-    """Lay the quads of these MODs over black at twice the size, then shrink to the PSP's."""
-    canvas = Image.new("RGBA", (ART_W * 2, ART_H * 2), (0, 0, 0, 255))
+WHITE_IMAGES = {"IMG_TITLE"}
+
+
+def bake(slots, layers, background=(0, 0, 0, 255)):
+    """Lay the quads of these MODs over black (or another colour) at twice the size, then shrink to the PSP's."""
+    canvas = Image.new("RGBA", (ART_W * 2, ART_H * 2), background)
     for slot, chunk, after, placement, overrides in layers:
         parts = split_pac(slots[slot])
         sets = chunk_textures(parts, chunk, after)
@@ -264,7 +268,7 @@ def main():
         if layers == "all":
             IMAGES[n] = (name, [(rest[0], *layer[1:]) for layer in whole_screen(slots[rest[0]])])
 
-    images = [bake(slots, layers) for _, layers in IMAGES]
+    images = [bake(slots, layers, (255, 255, 255, 255) if name in WHITE_IMAGES else (0, 0, 0, 255)) for name, layers in IMAGES]
     # Now Loading is a bare picture, over black.
     _, rgba, pic = decode_picture(slots[NOW_LOADING], 0x80 if slots[NOW_LOADING][5] == 1 else 0x10)
 
