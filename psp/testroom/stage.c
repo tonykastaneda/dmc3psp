@@ -46,6 +46,10 @@ int stage_load(const char *path) {
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
     int size, got;
     if (fd < 0) return 0;
+    /* Replacing a stage: nothing draws during this. */
+    if (blob) { free(blob); blob = 0; header = 0; }
+    if (chunk_visible) { free(chunk_visible); chunk_visible = 0; }
+    chunk_total = 0;
     size = (int)sceIoLseek(fd, 0, PSP_SEEK_END);
     sceIoLseek(fd, 0, PSP_SEEK_SET);
     blob = memalign(64, (size_t)size);

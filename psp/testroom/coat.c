@@ -228,10 +228,34 @@ static void step(const Pose *pose) {
     }
 }
 
+/* Dante can snap round in one frame (being hit, say). Physically that would whip the coat out like
+ * wings, so a turn this sudden takes the cloth with him, as if it had happened over time. */
+#define SNAP_TURN 0.5f
+
+static void turn_with_snap(float delta) {
+    M3 turn;
+    int s, i, k;
+    m_yaw(&turn, delta);
+    for (s = 0; s < DMC3_COAT_STRAND_COUNT; ++s)
+        for (i = 0; i < strand_length[s]; ++i) {
+            float d[3], out[3];
+            for (k = 0; k < 3; ++k) d[k] = joints[s][i][k] - player_pos[k];
+            m_apply(&turn, d, out);
+            for (k = 0; k < 3; ++k) joints[s][i][k] = player_pos[k] + out[k];
+            m_apply(&turn, velocity[s][i], out);
+            memcpy(velocity[s][i], out, sizeof(out));
+            m_mul(&joint_rot[s][i], &turn, &joint_rot[s][i]);
+        }
+}
+
 void coat_update(const Pose *pose, const Player *player, float dt) {
     M3 yaw;
-    float local_attach[3];
+    float local_attach[3], turned;
     int s, i;
+    turned = player->yaw - player_yaw;
+    while (turned > 3.1415927f) turned -= 6.2831853f;
+    while (turned < -3.1415927f) turned += 6.2831853f;
+    if (initialised && fabsf(turned) > SNAP_TURN) turn_with_snap(turned);
     player_yaw = player->yaw;
     player_pos[0] = player->x; player_pos[1] = player->y; player_pos[2] = player->z;
     m_yaw(&yaw, player_yaw);

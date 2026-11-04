@@ -223,13 +223,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("iso", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--slot", type=int, default=STAGE_SLOT, help="GDATA slot of the stage; its data is the next one")
     args = parser.parse_args()
 
     with Iso9660(args.iso) as iso:
         afs = AfsArchive(iso, "GDATA.AFS")
         read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
-        stage = pac_entries(read(STAGE_SLOT))
-        stage_data = pac_entries(read(STAGE_DATA_SLOT))
+        stage = pac_entries(read(args.slot))
+        stage_data = pac_entries(read(args.slot + 1))
     name = stage[0][:16].split(b"\0")[0].decode("ascii", "replace")
     textures = decode_textures(stage[1])
     scm = parse_scm(stage[2])

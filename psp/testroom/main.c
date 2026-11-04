@@ -28,6 +28,8 @@
 #include "skeleton.h"
 #include "motion.h"
 #include "coat.h"
+#include "menu.h"
+#include "movie.h"
 #include "combat.h"
 #include "stage.h"
 #include "swizzle.h"
@@ -502,6 +504,7 @@ static void draw_text(int x, int y, const char *text) {
 enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_ACTION, DEBUG_ANIM, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
 static int dummy_anim_auto = 1;
 static int debug_open, debug_cursor, game_turbo = 1;
+static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks;
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 
@@ -1116,6 +1119,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     draw_hud(hud);
     if (player->weapon_wheel) draw_weapon_wheel(player);
     if (debug_open) draw_debug_menu(anim.viewer);
+    if (pause_active) pause_draw();
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -1605,6 +1609,26 @@ static void bench_add(unsigned int gap, unsigned int update, unsigned int skin) 
     b->gpu += perf_gpu_us;
 }
 static int cmp_melee = -1, cmp_gun = -1;
+/* "mkey button frame" and "mshot frame" drive and picture the menus, for tests. */
+#define MENU_SCRIPT_MAX 32
+static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
+static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie;
+static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
+static int game_key_count;
+static unsigned int menu_button(const char *name) {
+    static const struct { const char *name; unsigned int button; } names[] = {
+        {"cross", PSP_CTRL_CROSS}, {"circle", PSP_CTRL_CIRCLE}, {"square", PSP_CTRL_SQUARE}, {"up", PSP_CTRL_UP},
+        {"down", PSP_CTRL_DOWN}, {"left", PSP_CTRL_LEFT}, {"right", PSP_CTRL_RIGHT}, {"start", PSP_CTRL_START}};
+    unsigned int i;
+    for (i = 0; i < sizeof(names) / sizeof(names[0]); ++i) if (!strcmp(names[i].name, name)) return names[i].button;
+    return 0;
+}
+static unsigned int menu_script_pad(int frame) {
+    unsigned int held = 0;
+    int i;
+    for (i = 0; i < menu_key_count; ++i) if (frame >= menu_keys[i].frame && frame < menu_keys[i].frame + 3) held |= menu_keys[i].button;
+    return held;
+}
 static struct { float x, y, z, yaw; short move, script; } cmp_log[CMP_MAX_FRAMES];
 static void cmp_load(void) {
     char path[320], line[64];
@@ -1633,6 +1657,23 @@ static void cmp_load(void) {
         else if (strncmp(line, "devil ", 6) == 0) bench_devil = atoi(line + 6);
         else if (strncmp(line, "fps ", 4) == 0) cmp_fps = atoi(line + 4);
         else if (strncmp(line, "aionly ", 7) == 0) bench_ai_only = atoi(line + 7);
+        else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
+        else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
+        else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
+        else if (strncmp(line, "gkey ", 5) == 0) {
+            char name[12];
+            if (game_key_count < MENU_SCRIPT_MAX && sscanf(line + 5, "%11s %d", name, &game_keys[game_key_count].frame) == 2) {
+                game_keys[game_key_count].button = menu_button(name);
+                ++game_key_count;
+            }
+        }
+        else if (strncmp(line, "mkey ", 5) == 0) {
+            char name[12];
+            if (menu_key_count < MENU_SCRIPT_MAX && sscanf(line + 5, "%11s %d", name, &menu_keys[menu_key_count].frame) == 2) {
+                menu_keys[menu_key_count].button = menu_button(name);
+                ++menu_key_count;
+            }
+        }
         else if (strncmp(line, "hit ", 4) == 0) {
             if (cmp_hit_count < 16 && sscanf(line + 4, "%d %d", &cmp_hits[cmp_hit_count][0], &cmp_hits[cmp_hit_count][1]) == 2) ++cmp_hit_count;
         }
@@ -1781,6 +1822,97 @@ static void focus_hold(const char *name) {
 }
 
 /* ---- Main --------------------------------------------------------------- */
+
+/* Leave the menus for a mission: its stage, with Dante at its start and enemies around him. */
+/* Starting camera: behind Dante if that's clear, otherwise the clearest nearby angle
+ * (st001 spawns in the office doorway, where "behind" is inside the building). */
+static void start_camera(const Player *player, FollowCamera *camera) {
+    float best_yaw = camera->yaw, best_score = -1.0f, offset;
+    if (!stage_loaded()) return;
+    for (offset = 0.0f; offset < 6.28f; offset += 0.3927f) {
+        int side;
+        for (side = -1; side <= 1; side += 2) {
+            float yaw = player->yaw + offset * (float)side, t = 1.0f, score;
+            float a[3] = {player->x, player->y + CAMERA_TARGET_HEIGHT, player->z};
+            float b[3] = {player->x - sinf(yaw) * CAMERA_DISTANCE, player->y + CAMERA_HEIGHT,
+                          player->z - cosf(yaw) * CAMERA_DISTANCE};
+            if (!stage_raycast(a, b, &t)) t = 1.0f;
+            score = t - offset * 0.04f;  /* prefer angles near "behind" */
+            if (score > best_score) { best_score = score; best_yaw = yaw; }
+        }
+    }
+    camera->yaw = camera->target_yaw = best_yaw;
+    camera->x = player->x - sinf(best_yaw) * CAMERA_DISTANCE;
+    camera->z = player->z - cosf(best_yaw) * CAMERA_DISTANCE;
+    camera->y = player->y + CAMERA_HEIGHT;
+}
+
+#define MISSION_ENEMIES 4
+static int mission_stage;
+static MenuChoice mission_choice;
+static void menu_test_shot(int frame) {
+    int i;
+    for (i = 0; i < menu_shot_count; ++i) {
+        if (menu_shots[i] == frame) {
+            char name[32];
+            snprintf(name, sizeof(name), "MENU_%d.BMP", frame);
+            capture_frame(menu_draw_buffer, name);
+        }
+    }
+}
+static void movie_test_shot(int frame) {
+    static int count;
+    if (frame == cmp_movie - 5) {
+        char name[32];
+        snprintf(name, sizeof(name), "MENU_MOVIE%d.BMP", count++);
+        capture_frame(menu_draw_buffer, name);
+    }
+}
+
+/* A cutscene, if it's been converted (tools/prepare_movies.py); tests cut them short with "movie n". */
+static void play_movie(const char *name) {
+    char path[320];
+    int shown, late, decode_max;
+    unsigned int elapsed_ms, audio_ms;
+    FILE *report;
+    if (cmp_menu && !cmp_movie) return;
+    path_in_game_dir(path, sizeof(path), name);
+    if (!movie_play(path, &menu_draw_buffer, cmp_movie, cmp_menu ? movie_test_shot : NULL)) return;
+    movie_stats(&shown, &late, &decode_max);
+    movie_timing(&elapsed_ms, &audio_ms);
+    path_in_game_dir(path, sizeof(path), "MOVIE_STATS.TXT");
+    report = fopen(path, "a");
+    if (report) { fprintf(report, "%s shown=%d late=%d decode_max_us=%d error=%08x elapsed=%ums audio=%ums\n", name, shown, late, decode_max, (unsigned int)movie_last_error(), elapsed_ms, audio_ms); fclose(report); }
+}
+
+static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    char path[320];
+    menu_show_loading();
+    if (choice->mission != mission_stage) {
+        const StageInfo *si;
+        path_in_game_dir(path, sizeof(path), choice->mission == 1 ? "STAGE_M1.BIN" : "STAGE.BIN");
+        if (stage_load(path)) {
+            si = stage_info();
+            player_spawn[0] = si->spawn[0];
+            player_spawn[1] = si->spawn[1];
+            player_spawn[2] = si->spawn[2];
+            player_spawn[3] = si->spawn_yaw;
+            mission_stage = choice->mission;
+        }
+    }
+    game_turbo = choice->turbo;
+    combat_reset(&combat);
+    player_reset(player, camera);
+    coat_reset();
+    dummy_count = MISSION_ENEMIES;
+    dummy_attacks = 1;
+    enemy_set_count(0, player->x, player->z);
+    enemy_spawn_height(player->y);
+    enemy_set_attacks(1);
+    enemy_set_anim_auto(dummy_anim_auto);
+    enemy_set_count(MISSION_ENEMIES, player->x, player->z);
+    start_camera(player, camera);
+}
 
 int main(int argc, char *argv[]) {
     Player player = {.melee_weapon = 0, .gun_weapon = 5};   /* player_reset keeps the weapons */
@@ -1957,10 +2089,27 @@ int main(int argc, char *argv[]) {
     start_x = player.x;
     start_z = player.z;
     write_memory_report(sceKernelGetSystemTimeLow() - boot_start, motions_loaded);
+    /* The real flow, unless a test is running; tests can ask for it with "menu 1". */
+    {
+        char path[320];
+        path_in_game_dir(path, sizeof(path), "MENU.BIN");
+        if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
+            mission_mode = 1;
+            mission_stage = 2;   /* what's loaded */
+            mission_choice.mission = 1;
+            mission_choice.turbo = 1;
+            menu_draw_buffer = draw_buffer;
+            play_movie("MOVIES/OPENING.MOV");
+            menu_run(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
+            play_movie(mission_choice.mission == 1 ? "MOVIES/M1_INTRO.MOV" : "MOVIES/M2_INTRO.MOV");
+            start_mission(&mission_choice, &player, &camera);
+            draw_buffer = menu_draw_buffer;
+        }
+    }
     last_time = sceKernelGetSystemTimeLow();
 
     /* Scenes that measure things compare with normalised numbers. */
-    if ((focus && !(focus_cmp && cmp_turbo)) || autotest || recording || tour) game_turbo = 0;
+    if (((focus && !(focus_cmp && cmp_turbo)) || autotest || recording || tour) && !cmp_menu) game_turbo = 0;
     while (running) {
         unsigned int frame_start = sceKernelGetSystemTimeLow();
         unsigned int frame_us, skin_start, skin_us, gap = frame_start - last_time;
@@ -2000,9 +2149,33 @@ int main(int argc, char *argv[]) {
         }
         last_time = frame_start;
         {
-            int was_open = debug_open;
-            int toggle_viewer = debug_menu_update(debug_pressed);
-            if (was_open || debug_open) {
+            int was_open = debug_open || pause_active;
+            {
+                int k;
+                for (k = 0; k < game_key_count; ++k) if (game_keys[k].frame == frames) debug_pressed |= game_keys[k].button;
+            }
+            int toggle_viewer = 0;
+            if (pause_active) {
+                PauseAction action = pause_update(debug_pressed);
+                if (action == PAUSE_RESUME) pause_active = 0;
+                else if (action == PAUSE_OPTIONS) { pause_active = 0; debug_open = 1; debug_cursor = 0; }
+                else if (action == PAUSE_RESTART) { pause_active = 0; start_mission(&mission_choice, &player, &camera); }
+                else if (action == PAUSE_QUIT) {
+                    pause_active = 0;
+                    menu_draw_buffer = draw_buffer;
+                    menu_run_from_mission_select(&mission_choice, NULL, NULL);
+                    play_movie(mission_choice.mission == 1 ? "MOVIES/M1_INTRO.MOV" : "MOVIES/M2_INTRO.MOV");
+                    start_mission(&mission_choice, &player, &camera);
+                    draw_buffer = menu_draw_buffer;
+                    last_time = sceKernelGetSystemTimeLow();
+                }
+            } else if (mission_mode && !debug_open && (debug_pressed & PSP_CTRL_START)) {
+                pause_open();
+                pause_active = 1;
+            } else {
+                toggle_viewer = debug_menu_update(debug_pressed);
+            }
+            if (was_open || debug_open || pause_active) {
                 /* Nothing reaches the game, including the press that closes the menu. */
                 memset(&input, 0, sizeof(input));
                 input.style = -1;
@@ -2032,7 +2205,7 @@ int main(int argc, char *argv[]) {
             input.jump = 0;
         }
         if (dummy_ready) enemy_spawn_height(player.y);
-        if (dummy_ready && debug_open) {
+        if (dummy_ready && debug_open && !pause_active) {
             enemy_set_count(dummy_count, player.x, player.z);
             enemy_set_attacks(dummy_attacks);
             enemy_set_anim_auto(dummy_anim_auto);
@@ -2240,7 +2413,7 @@ int main(int argc, char *argv[]) {
             }
         }
         if (focus && focus_cmp) {
-            if (frames == 1) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = -1.985f; coat_reset();
+            if (frames == 1 && !cmp_menu) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = -1.985f; coat_reset();
                 /* The HD Collection test spot (tools/hd_ref.py), so the same stick goes the same way. */
                 camera.x = player.x - sinf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.z = player.z - cosf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.y = player.y + 255.0f;
                 camera.tx = player.x; camera.ty = player.y + 140.0f; camera.tz = player.z; camera.last_x = player.x; camera.last_z = player.z; camera.lead_x = camera.lead_z = 0.0f;

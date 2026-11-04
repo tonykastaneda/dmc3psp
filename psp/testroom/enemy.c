@@ -33,12 +33,12 @@
 #define GRAVITY_STEP 0.54f
 
 enum {  /* The actions this enemy uses, by the game's numbers. */
-    A_FLINCH_FRONT = 0, A_FLINCH_BACK = 1, A_LAUNCHED = 2, A_LAUNCHED_BACK = 3, A_AIR_HIT_HEAVY = 8, A_AIR_HIT = 12,
+    A_FLINCH_FRONT = 0, A_FLINCH_BACK = 1, A_LAUNCHED = 2, A_LAUNCHED_BACK = 3, A_LAUNCH_UP = 7, A_AIR_HIT_HEAVY = 8, A_AIR_HIT = 12,
     A_NONE = 14, A_WALK = 15, A_SWING = 16, A_SWING_WIDE = 17, A_LEAP = 21,
     A_STEP_LEFT = 22, A_STEP_RIGHT = 23, A_STEP_BACK = 24, A_TAUNT_A = 58, A_TAUNT_B = 59
 };
 enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't attack. */
-    P_FLINCH_FRONT = 0, P_FLINCH_BACK = 1, P_LAUNCHED = 2, P_LAUNCHED_BACK = 3, P_AIR_HIT_HEAVY = 8, P_AIR_HIT = 9,
+    P_FLINCH_FRONT = 0, P_FLINCH_BACK = 1, P_LAUNCHED = 2, P_LAUNCHED_BACK = 3, P_LAUNCH_UP = 7, P_AIR_HIT_HEAVY = 8, P_AIR_HIT = 9,
     P_DECIDE = 23, P_WATCH = 24, P_SWING = 27, P_SWING_WIDE = 28, P_LEAP = 32, P_STEP_LEFT = 33, P_STEP_RIGHT = 34,
     P_STEP_BACK = 35, P_TAUNT_A = 51, P_TAUNT_B = 52, PLAN_STAND = 200
 };
@@ -55,10 +55,10 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 #define DANTE_RADIUS 40.0f
 #define DANTE_LOW 20.0f
 #define DANTE_HIGH 160.0f
-/* What the hit records of Dante's moves would give; the moves don't carry them yet. */
-#define HEAVY_ANGLE 30.0f
-#define HEAVY_SPEED 12.0f
-#define LAUNCH_SPEED 16.5f     /* rises 250 cm under the game's gravity for this state */
+/* What the hit records of Dante's moves give. A combo's throw is measured on the HD Collection: flat,
+ * at speed 20. Helm Breaker's slam isn't measured. High Time needs nothing: its state is fixed. */
+#define HEAVY_ANGLE 0.0f
+#define HEAVY_SPEED 20.0f
 #define SLAM_SPEED 30.0f
 
 /* Measured on the HD Collection: enemies stop 96 cm apart, and 88 cm from Dante. */
@@ -460,6 +460,14 @@ static void action_enter(int a) {
         physics(1.0f);
         break;
     }
+    case A_LAUNCH_UP:
+        /* High Time. Peaks at the 302 cm measured on the HD Collection in Turbo. */
+        e->air = 1;
+        e->fall = 0.0f;
+        script_play_hit(7);
+        set_physics(0.0f, 21.0f, 0.0f, -0.7f);
+        physics(1.0f);
+        break;
     case A_AIR_HIT_HEAVY:
     case A_AIR_HIT:
         e->air = 1;
@@ -534,10 +542,22 @@ static int action_update(float px, float pz, float f) {
             if (e->done) action_enter(A_NONE);
             return 1;
         }
+    case A_LAUNCH_UP:
     case A_AIR_HIT_HEAVY:
     case A_AIR_HIT:
         switch (e->step) {
         case 0:
+            if (e->action == A_LAUNCH_UP) {
+                /* Rises, then holds its falling pose until it lands. */
+                if (e->frame >= 35.0f && e->wake == 0.0f) { script_play_hit(22); e->wake = 1.0f; }
+                physics(f);
+                if (e->vel[1] < 0.0f && on_floor()) {
+                    e->air = 0;
+                    script_play_hit(13);
+                    e->step = 2;
+                }
+                return 0;
+            }
             /* Hangs where it was hit. */
             e->timer -= f;
             if (e->timer < 0.0f) e->step = 1;
@@ -694,6 +714,7 @@ static void plan_update(float px, float pz, float f) {
     case P_FLINCH_BACK: plan_run_action(A_FLINCH_BACK); break;
     case P_LAUNCHED: plan_run_action(A_LAUNCHED); break;
     case P_LAUNCHED_BACK: plan_run_action(A_LAUNCHED_BACK); break;
+    case P_LAUNCH_UP: e->wake = 0.0f; plan_run_action(A_LAUNCH_UP); break;
     case P_AIR_HIT_HEAVY: plan_run_action(A_AIR_HIT_HEAVY); break;
     case P_AIR_HIT: plan_run_action(A_AIR_HIT); break;
     case P_SWING: plan_run_action(A_SWING); break;
@@ -724,7 +745,7 @@ static void plan_update(float px, float pz, float f) {
 
 static int is_lying(void) {
     return ((e->action == A_LAUNCHED || e->action == A_LAUNCHED_BACK) && e->step >= 1) ||
-           ((e->action == A_AIR_HIT || e->action == A_AIR_HIT_HEAVY) && e->step >= 2);
+           ((e->action == A_AIR_HIT || e->action == A_AIR_HIT_HEAVY || e->action == A_LAUNCH_UP) && e->step >= 2);
 }
 
 void enemy_hit(HitKind kind, float from_x, float from_z) {
@@ -757,11 +778,13 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     case HIT_AIR:
         plan_set(behind ? P_FLINCH_BACK : P_FLINCH_FRONT);
         break;
-    case HIT_HEAVY:
     case HIT_LAUNCH:
+        plan_set(P_LAUNCH_UP);
+        break;
+    case HIT_HEAVY:
     case HIT_SLAM:
-        e->hit_angle = kind == HIT_LAUNCH ? 90.0f : HEAVY_ANGLE;
-        e->hit_speed = kind == HIT_LAUNCH ? LAUNCH_SPEED : HEAVY_SPEED;
+        e->hit_angle = HEAVY_ANGLE;
+        e->hit_speed = HEAVY_SPEED;
         /* Square on to whoever hit it; the back version keeps its back to them. */
         e->yaw = behind ? toward + PI : toward;
         plan_set(behind ? P_LAUNCHED_BACK : P_LAUNCHED);

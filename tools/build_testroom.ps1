@@ -48,6 +48,34 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $StageBin)) {
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $StageBin)
 }
 
+$StageM1 = Join-Path $Build "STAGE_M1.BIN"
+if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    $Python = (Get-Command python -ErrorAction Stop).Source
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $StageM1, "--slot", "272")
+}
+
+$MenuBin = Join-Path $Build "MENU.BIN"
+if ($Regenerate -or -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    $Python = (Get-Command python -ErrorAction Stop).Source
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_menu.py"), $Iso.FullName, "--output", $MenuBin, "--header", (Join-Path $Generated "menu_runtime.h"))
+}
+
+$StageM1 = Join-Path $Build "STAGE_M1.BIN"
+if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    $Python = (Get-Command python -ErrorAction Stop).Source
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $StageM1, "--slot", "272")
+}
+
+$MenuBin = Join-Path $Build "MENU.BIN"
+if ($Regenerate -or -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    $Python = (Get-Command python -ErrorAction Stop).Source
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_menu.py"), $Iso.FullName, "--output", $MenuBin, "--header", (Join-Path $Generated "menu_runtime.h"))
+}
+
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "hud_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
@@ -65,7 +93,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "bullets", "hud", "fx")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "bullets", "hud", "fx", "menu", "movie")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj
@@ -73,7 +101,7 @@ foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "s
 
 $Elf = Join-Path $Build "testroom.elf"
 Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-Wl,-zmax-page-size=128") + $ObjectFiles + @(
-    "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lm",
+    "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lpspjpeg", "-lpspaudio", "-lpsputility", "-lm",
     "-o", $Elf
 ))
 Invoke-Native "psp-fixup-imports.exe" @($Elf)
@@ -81,7 +109,7 @@ Invoke-Native "psp-fixup-imports.exe" @($Elf)
 # The same objects as a PRX, for PSPLINK: pspsh runs it straight from this folder over USB.
 $PrxElf = Join-Path $Build "testroom_prx.elf"
 Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-specs=$(Join-Path $SDK 'lib\prxspecs')", "-Wl,-q,-T$(Join-Path $SDK 'lib\linkfile.prx')", "-Wl,-zmax-page-size=128") + $ObjectFiles + @((Join-Path $SDK 'lib\prxexports.o'),
-    "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lm",
+    "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lpspjpeg", "-lpspaudio", "-lpsputility", "-lm",
     "-o", $PrxElf
 ))
 Invoke-Native "psp-fixup-imports.exe" @($PrxElf)
