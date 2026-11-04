@@ -1,4 +1,4 @@
-# Enemy AI: the Seven Hells (CEm000 / CComEm000)
+# Enemy AI: the Seven Hells (the Hell Pride, CEm000 / CComEm000)
 
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
@@ -52,6 +52,9 @@ Higher ranks add the wide swing (28) and side steps (33, 34).
 
 The swing's frame 63 was also measured on the HD Collection before the script was decoded.
 
+Measured against the HD Collection in Turbo: the swing lasts 143 to 144 frames and hits at 63 to 64, the
+taunts last 233 and 223, and a leap lasts about 64 and peaks at 458 or 343 cm. All match the port.
+
 ## Being hit
 
 | Reaction | Action | Motions (scripts) | Notes |
@@ -66,12 +69,19 @@ The swing's frame 63 was also measured on the HD Collection before the script wa
 Things that are still not the game's:
 
 - **The attack token.** The manager at `(0x1d0d70c + 0x20) + 0x840` hasn't been read. The game passes
-  it 3.0 (`FUN_00369180`). The port treats this as "no one else may attack for 3 seconds".
+  it 3.0 (`FUN_00369180`). The port treats this as "no one else may attack for 3 seconds", which fits the
+  HD Collection: 49 swings from 4 enemies, never under 3.0 real seconds apart.
 - **The rank.** The game takes it from a mission object not read yet. The port fixes it at 0, which
   gives what Mission 2 on Easy shows on the HD Collection: plans 27, 32, 51 and 52.
-- **How hard Dante's moves throw it.** The game reads an angle and speed from each move's hit record.
-  Dante's moves don't carry those yet, so `HEAVY_*`, `LAUNCH_SPEED` and `SLAM_SPEED` are chosen by eye.
-  `LAUNCH_SPEED` gives a rise of about 250 cm.
+- **How hard Dante's moves throw it.** The game reads an angle and speed from each move's hit record, and
+  Dante's moves don't carry those yet. Measured so far: a combo's throw is flat at speed 20, and High Time
+  uses action 7, rising to 302 cm in Turbo. `SLAM_SPEED` is still a guess, and which moves throw at all is
+  based on few samples, since a maxed Dante kills too quickly to measure much.
+- **Being pushed into a leap** (`M[0x34]` in plan 24). The port does it when another enemy shoves one more
+  than 1 cm a frame. On the HD Collection 44% of leaps start within 8 frames against about 19% of taunts, at
+  all distances from Dante, which is what suggests this. With it the port's leap share is 81% against 83%.
+- **Bodies.** Enemies stop 96 cm apart and 88 cm from Dante, measured. How much Dante gives when pushed
+  (`ENEMY_YIELDS`) is an estimate.
 - **Dante's hurt shape.** The port uses a vertical capsule, `DANTE_*`, not the game's.
 - **Knock-back on Dante.** Heavy or not comes from the attack type (`OP6`): the wide swing counts as
   heavy. That reading is from the record's values, not from code.
@@ -81,7 +91,7 @@ Not ported yet:
 - Guarding (plan 15, slot `0x24`): can't fire at rank 0, where its list only holds "don't".
 - Rage (plan 41, `FUN_0032bc90`): only fires when another enemy dies, and these don't.
 - The spawn-in (plan 14, action 13). They start already walking.
-- Being pushed into a leap (`M[0x34]`, plan 24), hits while lying down, and hitting walls.
+- Hits while lying down, and hitting walls.
 - Stage collision on the enemies' own moves.
 - Effects and sounds (`M[0x48]`), and DMD's Devil Trigger on enemies.
 

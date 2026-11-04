@@ -20,6 +20,12 @@ typedef enum {
 int enemy_init(void);
 void enemy_spawn(float x, float z);          /* one dummy, here, selected */
 void enemy_spawn_height(float y);            /* look for the floor from about here, not the roofs */
+/* In a mission enemies can die; the dummies of the debug menu have infinite health. */
+void enemy_set_mortal(int on);
+/* Add one here. Returns 0 if every slot is taken. */
+int enemy_add(float x, float z);
+int enemy_alive_count(void);          /* those not yet dead */
+void enemy_kill_all(void);            /* for tests */
 /* Keep the ones there are; add new ones in a ring around (x, z) or remove the last ones. */
 void enemy_set_count(int count, float x, float z);
 int enemy_count(void);

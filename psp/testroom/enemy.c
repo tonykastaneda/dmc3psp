@@ -34,12 +34,12 @@
 
 enum {  /* The actions this enemy uses, by the game's numbers. */
     A_FLINCH_FRONT = 0, A_FLINCH_BACK = 1, A_LAUNCHED = 2, A_LAUNCHED_BACK = 3, A_LAUNCH_UP = 7, A_AIR_HIT_HEAVY = 8, A_AIR_HIT = 12,
-    A_NONE = 14, A_WALK = 15, A_SWING = 16, A_SWING_WIDE = 17, A_LEAP = 21,
+    A_NONE = 14, A_WALK = 15, A_DEATH = 26, A_SWING = 16, A_SWING_WIDE = 17, A_LEAP = 21,
     A_STEP_LEFT = 22, A_STEP_RIGHT = 23, A_STEP_BACK = 24, A_TAUNT_A = 58, A_TAUNT_B = 59
 };
 enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't attack. */
     P_FLINCH_FRONT = 0, P_FLINCH_BACK = 1, P_LAUNCHED = 2, P_LAUNCHED_BACK = 3, P_LAUNCH_UP = 7, P_AIR_HIT_HEAVY = 8, P_AIR_HIT = 9,
-    P_DECIDE = 23, P_WATCH = 24, P_SWING = 27, P_SWING_WIDE = 28, P_LEAP = 32, P_STEP_LEFT = 33, P_STEP_RIGHT = 34,
+    P_DEATH = 20, P_DECIDE = 23, P_WATCH = 24, P_SWING = 27, P_SWING_WIDE = 28, P_LEAP = 32, P_STEP_LEFT = 33, P_STEP_RIGHT = 34,
     P_STEP_BACK = 35, P_TAUNT_A = 51, P_TAUNT_B = 52, PLAN_STAND = 200
 };
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
@@ -51,6 +51,9 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 /* The game's value comes from a mission object not read yet. 0 gives what Mission 2 on Easy shows
  * on the HD Collection: plans 27, 32, 51 and 52 only. */
 #define AI_RANK 0.0f
+/* How much a Pride takes, in units of a light hit. An estimate: on the HD Collection a maxed Dante kills
+ * one in about three to five hits on Easy. The game's health and damage values aren't read yet. */
+#define ENEMY_HEALTH 6
 /* Dante as the attack spheres see him. Not read from the game. */
 #define DANTE_RADIUS 40.0f
 #define DANTE_LOW 20.0f
@@ -84,6 +87,7 @@ typedef struct {
     /* The layers. */
     unsigned char plan, plan_step, action, step;
     unsigned char air, loop, done, stop_finish, pushed;
+    signed char health;
     short script_at, stop;
     float gauge, timer, wake;
     float vel[3], acc[3];
@@ -111,6 +115,7 @@ static int landed;
 static float landed_x, landed_z;
 static int landed_heavy;
 static float attack_token;
+static int mortal;
 static int ai_only;
 /* For tests: every change of plan or action, and every attack landing. */
 typedef struct { int tick; short who, plan, action, motion, landed; float x, y, z, yaw, gauge, frame; } TraceRow;
@@ -210,6 +215,7 @@ static void spawn_one(float x, float z) {
     e->step = 0;
     e->plan = P_DECIDE;
     e->plan_step = 0;
+    e->health = ENEMY_HEALTH;
     script_play(0);
     e->fade = 0.0f;
     e->posed_motion = -1;
@@ -221,6 +227,39 @@ void enemy_spawn(float x, float z) {
     for (i = 1; i < ENEMY_MAX; ++i) enemies[i].active = 0;
     e = &enemies[0];
     spawn_one(x, z);
+}
+
+void enemy_set_mortal(int on) { mortal = on; }
+
+int enemy_add(float x, float z) {
+    Enemy *selected = e;
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        if (!enemies[i].active) {
+            e = &enemies[i];
+            spawn_one(x, z);
+            e = selected;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int enemy_alive_count(void) {
+    int i, n = 0;
+    for (i = 0; i < ENEMY_MAX; ++i) n += enemies[i].active && enemies[i].plan != P_DEATH;
+    return n;
+}
+
+void enemy_kill_all(void) {
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        if (enemies[i].active && enemies[i].plan != P_DEATH) {
+            enemies[i].plan = P_DEATH;
+            enemies[i].plan_step = 0;
+            enemies[i].air = 0;
+        }
+    }
 }
 
 int enemy_count(void) {
@@ -481,6 +520,7 @@ static void action_enter(int a) {
         script_play(r == 2u ? 3 : r == 1u ? 2 : 1);
         break;
     }
+    case A_DEATH: script_play(31); break;
     case A_SWING: script_play(47); break;
     case A_SWING_WIDE: script_play(48); break;
     case A_LEAP:
@@ -587,6 +627,10 @@ static int action_update(float px, float pz, float f) {
         }
     case A_WALK:
         turn(px, pz, 0x100, f);
+        return 1;
+    case A_DEATH:
+        /* Collapses, then goes. Its body fading out isn't in yet. */
+        if (e->done) e->active = 0;
         return 1;
     case A_SWING:
         turn_window(px, pz, 15.0f, 30.0f, ANGLE(728.0f), f);  /* 4 degrees */
@@ -710,6 +754,9 @@ static void plan_update(float px, float pz, float f) {
         if (e->gauge > enemy_ai_thresholds[column < 6 ? column : 5]) decide(distance);
         break;
     }
+    case P_DEATH:
+        if (e->plan_step == 0) { action_enter(A_DEATH); e->plan_step = 1; }
+        break;
     case P_FLINCH_FRONT: plan_run_action(A_FLINCH_FRONT); break;
     case P_FLINCH_BACK: plan_run_action(A_FLINCH_BACK); break;
     case P_LAUNCHED: plan_run_action(A_LAUNCHED); break;
@@ -759,6 +806,15 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         float at[3] = {e->pos[0], e->pos[1] + 110.0f, e->pos[2]};
         if (len > 1.0f) { at[0] += d[0] / len * 40.0f; at[2] += d[1] / len * 40.0f; }
         fx_hit_spark(at);
+    }
+    if (e->plan == P_DEATH) return;
+    if (mortal) {
+        e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        if (e->health <= 0) {
+            e->air = 0;
+            plan_set(P_DEATH);
+            return;
+        }
     }
     if (is_lying()) return;
     toward = atan2f(from_x - e->pos[0], from_z - e->pos[2]);

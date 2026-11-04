@@ -284,6 +284,35 @@ void menu_run(MenuChoice *choice, MenuPad pad, MenuAfterFrame after_frame) { flo
 
 void menu_run_from_mission_select(MenuChoice *choice, MenuPad pad, MenuAfterFrame after_frame) { flow(choice, SCREEN_MISSIONS, pad, after_frame); }
 
+void menu_mission_clear(MenuPad pad, MenuAfterFrame after_frame) {
+    static SceCtrlData data;
+    unsigned int held = 0xffffffffu;
+    int frame = 0, fade = FADE_FRAMES, leaving = 0;
+    for (;;) {
+        unsigned int now, pressed;
+        if (pad) now = pad(frame);
+        else { sceCtrlReadBufferPositive(&data, 1); now = data.Buttons; }
+        pressed = now & ~held;
+        held = now;
+        if (!leaving && fade == 0 && (pressed & PSP_CTRL_CROSS)) leaving = 1;
+        if (leaving) { if (++fade >= FADE_FRAMES) break; }
+        else if (fade > 0) --fade;
+        sceGuStart(GU_DIRECT, list);
+        sceGuClearColor(0xff000000);
+        sceGuClear(GU_COLOR_BUFFER_BIT);
+        begin_2d();
+        draw_image(IMG_CLEAR);
+        fade_overlay((float)fade / (float)FADE_FRAMES);
+        end_2d();
+        sceGuFinish();
+        sceGuSync(0, 0);
+        if (after_frame) after_frame(frame);
+        sceDisplayWaitVblankStart();
+        menu_draw_buffer = sceGuSwapBuffers();
+        ++frame;
+    }
+}
+
 void menu_show_loading(void) {
     const Atlas *a = (const Atlas *)(blob + header->atlas_table) + ATLAS_NOW_LOADING;
     sceGuStart(GU_DIRECT, list);

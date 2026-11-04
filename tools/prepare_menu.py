@@ -49,6 +49,9 @@ IMAGES = [
     ("IMG_MISSION", [(MISSION, 0, True, EXTEND, {})]),
     ("IMG_BANNER_1", [(BANNER_BASE, 1, False, ZOOM, {})]),
     ("IMG_BANNER_2", [(BANNER_BASE + ENGLISH_BANNER_STEP, 1, False, ZOOM, {})]),
+    # Only the heading and the band for now: the results themselves aren't tracked yet.
+    ("IMG_CLEAR", [(1665, 1, False, None, {0: CENTRE, 1: CENTRE}), (1665, 23, False, SPAN, {}),
+                   (1665, 25, False, None, {1: CENTRE})]),
 ]
 GROUPS = [
     ("GROUP_TITLE_OPTIONS", TITLE, 3, False),

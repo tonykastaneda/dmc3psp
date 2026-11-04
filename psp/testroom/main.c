@@ -1612,7 +1612,7 @@ static int cmp_melee = -1, cmp_gun = -1;
 /* "mkey button frame" and "mshot frame" drive and picture the menus, for tests. */
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
-static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie;
+static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at;
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
 static unsigned int menu_button(const char *name) {
@@ -1659,6 +1659,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "aionly ", 7) == 0) bench_ai_only = atoi(line + 7);
         else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
+        else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
         else if (strncmp(line, "gkey ", 5) == 0) {
             char name[12];
@@ -1847,7 +1848,22 @@ static void start_camera(const Player *player, FollowCamera *camera) {
     camera->y = player->y + CAMERA_HEIGHT;
 }
 
-#define MISSION_ENEMIES 4
+/* Where enemies appear, in order, measured on the HD Collection (Normal). Each wave comes when the last
+ * is dead; that rule, and how many Easy gets, are estimates. CEm002 and CEm004 spawn at some of these on
+ * the real game, and the Hell Vanguard ends Mission 2: Prides stand in for them all for now. */
+typedef struct { short x, z; } SpawnPoint;
+typedef struct { const SpawnPoint *points; int count; } Wave;
+static const SpawnPoint m1_w1[] = {{589, 577}, {573, 705}, {692, 580}}, m1_w2[] = {{605, 842}, {704, 818}}, m1_w3[] = {{631, 473}},
+                        m1_w4[] = {{698, 654}, {806, 1037}, {589, 827}}, m1_w5[] = {{538, 450}, {775, 487}};
+static const SpawnPoint m2_w1[] = {{2385, 3063}, {2661, 3006}, {2393, 2780}, {2644, 2761}}, m2_w2[] = {{2352, 2650}, {2547, 2584}, {2790, 2662}, {3065, 2605}},
+                        m2_w3[] = {{2659, 3095}, {2349, 2670}, {2588, 2574}}, m2_w4[] = {{2203, 2579}, {2729, 2323}};
+#define WAVE(p) {p, (int)(sizeof(p) / sizeof(p[0]))}
+static const Wave m1_waves[] = {WAVE(m1_w1), WAVE(m1_w2), WAVE(m1_w3), WAVE(m1_w4), WAVE(m1_w5)};
+static const Wave m2_waves[] = {WAVE(m2_w1), WAVE(m2_w2), WAVE(m2_w3), WAVE(m2_w4)};
+#define WAVES_EASY_M1 2
+#define WAVES_EASY_M2 2
+static int mission_wave;
+static float mission_clear_wait;
 static int mission_stage;
 static MenuChoice mission_choice;
 static void menu_test_shot(int frame) {
@@ -1885,6 +1901,27 @@ static void play_movie(const char *name) {
     if (report) { fprintf(report, "%s shown=%d late=%d decode_max_us=%d error=%08x elapsed=%ums audio=%ums\n", name, shown, late, decode_max, (unsigned int)movie_last_error(), elapsed_ms, audio_ms); fclose(report); }
 }
 
+/* The next wave when the last is dead; once they all are, a moment later, Mission Clear. */
+static int mission_update(float dt, float floor_y) {
+    const Wave *waves = mission_choice.mission == 1 ? m1_waves : m2_waves;
+    int total = mission_choice.mission == 1 ? (int)(sizeof(m1_waves) / sizeof(m1_waves[0])) : (int)(sizeof(m2_waves) / sizeof(m2_waves[0]));
+    if (mission_choice.difficulty == 0) total = mission_choice.mission == 1 ? WAVES_EASY_M1 : WAVES_EASY_M2;
+    if (enemy_alive_count() > 0) return 0;
+    if (mission_wave < total) {
+        int i;
+        enemy_spawn_height(floor_y);
+        for (i = 0; i < waves[mission_wave].count; ++i) enemy_add(waves[mission_wave].points[i].x, waves[mission_wave].points[i].z);
+        ++mission_wave;
+        return 0;
+    }
+    mission_clear_wait += dt;
+    return mission_clear_wait > 2.0f;
+}
+
+static void menu_clear_shot(int frame) {
+    if (frame == 30) capture_frame(menu_draw_buffer, "MENU_CLEAR.BMP");
+}
+
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     char path[320];
     menu_show_loading();
@@ -1904,13 +1941,14 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     combat_reset(&combat);
     player_reset(player, camera);
     coat_reset();
-    dummy_count = MISSION_ENEMIES;
     dummy_attacks = 1;
     enemy_set_count(0, player->x, player->z);
     enemy_spawn_height(player->y);
     enemy_set_attacks(1);
     enemy_set_anim_auto(dummy_anim_auto);
-    enemy_set_count(MISSION_ENEMIES, player->x, player->z);
+    enemy_set_mortal(1);
+    mission_wave = 0;
+    mission_clear_wait = 0.0f;
     start_camera(player, camera);
 }
 
@@ -2204,9 +2242,21 @@ int main(int argc, char *argv[]) {
             input.style = -1;
             input.jump = 0;
         }
-        if (dummy_ready) enemy_spawn_height(player.y);
+        if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
+        if (mission_mode && dummy_ready && !pause_active && !debug_open) {
+            if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
+            if (mission_update(dt, player.y)) {
+                menu_draw_buffer = draw_buffer;
+                menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
+                menu_run_from_mission_select(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
+                play_movie(mission_choice.mission == 1 ? "MOVIES/M1_INTRO.MOV" : "MOVIES/M2_INTRO.MOV");
+                start_mission(&mission_choice, &player, &camera);
+                draw_buffer = menu_draw_buffer;
+                last_time = sceKernelGetSystemTimeLow();
+            }
+        }
         if (dummy_ready && debug_open && !pause_active) {
-            enemy_set_count(dummy_count, player.x, player.z);
+            if (!mission_mode) enemy_set_count(dummy_count, player.x, player.z);
             enemy_set_attacks(dummy_attacks);
             enemy_set_anim_auto(dummy_anim_auto);
         }

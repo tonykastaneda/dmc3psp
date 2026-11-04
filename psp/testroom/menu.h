@@ -24,6 +24,7 @@ void menu_run(MenuChoice *choice, MenuPad pad, MenuAfterFrame after_frame);
 /* From Quit the Mission: back to Mission Select, skipping the title. */
 void menu_run_from_mission_select(MenuChoice *choice, MenuPad pad, MenuAfterFrame after_frame);
 void menu_show_loading(void);         /* one frame of Now Loading */
+void menu_mission_clear(MenuPad pad, MenuAfterFrame after_frame);  /* until CROSS */
 extern void *menu_draw_buffer;        /* the buffer being drawn: main's, kept in step across menu frames */
 extern void *menu_draw_buffer;        /* the buffer being drawn: main's, kept in step across menu frames */
 
