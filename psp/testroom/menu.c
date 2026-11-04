@@ -23,6 +23,7 @@
 #define DIM 0xff707070
 #define BRIGHT 0xffffffff
 #define LOCKED 0x60ffffff
+#define MENU_MISSIONS 4
 
 typedef struct {
     char magic[4];
@@ -202,7 +203,7 @@ static void draw_missions(const MenuChoice *c, int row) {
 }
 
 static void draw_briefing(const MenuChoice *c, int cursor) {
-    draw_image(c->mission == 1 ? IMG_BANNER_1 : IMG_BANNER_2);
+    draw_image(IMG_BANNER_1 + c->mission - 1);
     draw_briefing_piece(BRIEFING_BAR, BRIGHT);
     draw_briefing_piece(BRIEFING_START, cursor == 0 ? BRIGHT : DIM);
     draw_briefing_piece(BRIEFING_CUSTOMIZE, LOCKED);
@@ -240,8 +241,8 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 break;
             case SCREEN_MISSIONS:
                 if (pressed & (PSP_CTRL_UP | PSP_CTRL_DOWN)) row = !row;
-                if (pressed & PSP_CTRL_LEFT) c->mission = c->mission > 1 ? c->mission - 1 : 2;
-                if (pressed & PSP_CTRL_RIGHT) c->mission = c->mission < 2 ? c->mission + 1 : 1;
+                if (pressed & PSP_CTRL_LEFT) c->mission = c->mission > 1 ? c->mission - 1 : MENU_MISSIONS;
+                if (pressed & PSP_CTRL_RIGHT) c->mission = c->mission < MENU_MISSIONS ? c->mission + 1 : 1;
                 if (pressed & PSP_CTRL_SQUARE) c->turbo = !c->turbo;
                 if (pressed & PSP_CTRL_CROSS) { c->difficulty = row; next = SCREEN_BRIEFING; leaving = 1; }
                 if (pressed & PSP_CTRL_CIRCLE) { next = SCREEN_TITLE; leaving = 1; }

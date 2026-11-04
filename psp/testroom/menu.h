@@ -6,7 +6,7 @@
  * See docs/GAME_FLOW.md. */
 
 typedef struct {
-    int mission;      /* 1 or 2 */
+    int mission;      /* 1 to 4 */
     int difficulty;   /* 0 Easy, 1 Normal */
     int turbo;
 } MenuChoice;

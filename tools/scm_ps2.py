@@ -26,7 +26,7 @@ import struct
 from mod_skeleton import strip_faces
 
 
-def parse_scm(data: bytes):
+def parse_scm(data: bytes, root_xz: bool = True):
     if data[:4] != b"SCM ":
         raise ValueError("Not an SCM")
     object_count, node_count, texture_count = data[0x10], data[0x11], data[0x12]
@@ -40,13 +40,25 @@ def parse_scm(data: bytes):
     for node in range(node_count):
         parent[remap[node]] = -1 if hier[node] == 0xFF else hier[node]
     world = [None] * node_count
+    root_record = next((r for r in range(node_count) if parent[r] < 0), 0)
 
     def resolve(record, depth=0):
         if depth > node_count:
             raise ValueError("Cycle in SCM node hierarchy")
         if world[record] is None:
-            base = (0.0, 0.0, 0.0) if parent[record] < 0 else resolve(parent[record], depth + 1)
-            world[record] = tuple(base[k] + local[record][k] for k in range(3))
+            if parent[record] < 0:
+                # Some stages' objects are relative to the root, and some already absolute with the root
+                # elsewhere (st002's is at (5000, 0, 6000)). Callers tell by comparing with the collision.
+                world[record] = local[record] if root_xz else (0.0, local[record][1], 0.0)
+            else:
+                base = resolve(parent[record], depth + 1)
+                # In those stages a node at the root's own place is a copy of its offset, with absolute
+                # vertices under it: st002's big pieces, its ground among them.
+                root = local[root_record]
+                if not root_xz and abs(local[record][0] - root[0]) < 1.0 and abs(local[record][2] - root[2]) < 1.0:
+                    world[record] = (base[0], base[1] + local[record][1], base[2])
+                else:
+                    world[record] = tuple(base[k] + local[record][k] for k in range(3))
         return world[record]
 
     for record in range(node_count):

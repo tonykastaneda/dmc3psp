@@ -26,6 +26,8 @@ FFMPEG = r"C:\ffmpeg\bin\ffmpeg.exe"
 MOVIES = {
     "OPENING": ("MDATA2.AFS", 0),
     "M1_INTRO": ("MDATA2.AFS", 1),
+    "M3_INTRO_A": ("MDATA2.AFS", 2),
+    "M3_INTRO_B": ("MDATA2.AFS", 3),
 }
 WIDTH, HEIGHT = 480, 272       # the whole screen; sceJpeg rejects widths that aren't multiples of 16
 FPS = 30

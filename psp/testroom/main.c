@@ -30,6 +30,7 @@
 #include "coat.h"
 #include "menu.h"
 #include "movie.h"
+#include "rooms_runtime.h"
 #include "combat.h"
 #include "stage.h"
 #include "swizzle.h"
@@ -925,6 +926,22 @@ static float doppel_trail[DOPPEL_FRAMES][4];
 static int doppel_head;
 
 static int bench_no_stage, bench_no_texture, bench_no_lighting, bench_ring = 320;
+static float door_prompt_time;
+/* Standing at a door that wants a button. */
+static void door_prompt_draw(void) {
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_LIGHTING);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuTexImage(0, FONT_TEX_SIZE, FONT_TEX_SIZE, FONT_TEX_SIZE, font_texture);
+    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+    sceGuTexFlush();
+    sceGuColor(0xff000000u);
+    draw_text(SCR_WIDTH / 2 - 27, SCR_HEIGHT - 39, "O  ENTER");
+    sceGuColor(0xffffffffu);
+    draw_text(SCR_WIDTH / 2 - 28, SCR_HEIGHT - 40, "O  ENTER");
+}
+
 static void draw_debug_menu(int viewer) {
     char lines[DEBUG_ITEMS][32];
     int i, x = SCR_WIDTH / 2 - 88, y = SCR_HEIGHT / 2 - 46;
@@ -969,7 +986,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     /* Material alpha: without this the lit vertex alpha is 0 and the alpha
      * test discards every Dante pixel. */
     sceGuAmbientColor(0xffffffff);
-    sceGuClearColor(CLEAR_COLOR);
+    sceGuClearColor(mission_mode ? 0xff000000u : CLEAR_COLOR);   /* past the edge of a room: dark, not grey-blue */
     sceGuClearDepth(0);
     sceGuClear(GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT);
 
@@ -1120,6 +1137,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (player->weapon_wheel) draw_weapon_wheel(player);
     if (debug_open) draw_debug_menu(anim.viewer);
     if (pause_active) pause_draw();
+    if (door_prompt_time > 0.0f && !pause_active && !debug_open) door_prompt_draw();
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -1615,6 +1633,7 @@ static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at;
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
+static int cmp_goto[16][2], cmp_goto_count;   /* "gotoroom frame number": Dante to that door, its room cleared */
 static unsigned int menu_button(const char *name) {
     static const struct { const char *name; unsigned int button; } names[] = {
         {"cross", PSP_CTRL_CROSS}, {"circle", PSP_CTRL_CIRCLE}, {"square", PSP_CTRL_SQUARE}, {"up", PSP_CTRL_UP},
@@ -1661,6 +1680,9 @@ static void cmp_load(void) {
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
+        else if (strncmp(line, "gotoroom ", 9) == 0) {
+            if (cmp_goto_count < 16 && sscanf(line + 9, "%d %d", &cmp_goto[cmp_goto_count][0], &cmp_goto[cmp_goto_count][1]) == 2) ++cmp_goto_count;
+        }
         else if (strncmp(line, "gkey ", 5) == 0) {
             char name[12];
             if (game_key_count < MENU_SCRIPT_MAX && sscanf(line + 5, "%11s %d", name, &game_keys[game_key_count].frame) == 2) {
@@ -1839,6 +1861,11 @@ static void start_camera(const Player *player, FollowCamera *camera) {
                           player->z - cosf(yaw) * CAMERA_DISTANCE};
             if (!stage_raycast(a, b, &t)) t = 1.0f;
             score = t - offset * 0.04f;  /* prefer angles near "behind" */
+            /* Past a doorway there's a wall the collision doesn't see, and no floor. */
+            {
+                float gy;
+                if (!stage_floor(b[0], player->y + 150.0f, b[2], 0.0f, &gy) || fabsf(gy - player->y) > 200.0f) score -= 1.0f;
+            }
             if (score > best_score) { best_score = score; best_yaw = yaw; }
         }
     }
@@ -1848,21 +1875,12 @@ static void start_camera(const Player *player, FollowCamera *camera) {
     camera->y = player->y + CAMERA_HEIGHT;
 }
 
-/* Where enemies appear, in order, measured on the HD Collection (Normal). Each wave comes when the last
- * is dead; that rule, and how many Easy gets, are estimates. CEm002 and CEm004 spawn at some of these on
- * the real game, and the Hell Vanguard ends Mission 2: Prides stand in for them all for now. */
-typedef struct { short x, z; } SpawnPoint;
-typedef struct { const SpawnPoint *points; int count; } Wave;
-static const SpawnPoint m1_w1[] = {{589, 577}, {573, 705}, {692, 580}}, m1_w2[] = {{605, 842}, {704, 818}}, m1_w3[] = {{631, 473}},
-                        m1_w4[] = {{698, 654}, {806, 1037}, {589, 827}}, m1_w5[] = {{538, 450}, {775, 487}};
-static const SpawnPoint m2_w1[] = {{2385, 3063}, {2661, 3006}, {2393, 2780}, {2644, 2761}}, m2_w2[] = {{2352, 2650}, {2547, 2584}, {2790, 2662}, {3065, 2605}},
-                        m2_w3[] = {{2659, 3095}, {2349, 2670}, {2588, 2574}}, m2_w4[] = {{2203, 2579}, {2729, 2323}};
-#define WAVE(p) {p, (int)(sizeof(p) / sizeof(p[0]))}
-static const Wave m1_waves[] = {WAVE(m1_w1), WAVE(m1_w2), WAVE(m1_w3), WAVE(m1_w4), WAVE(m1_w5)};
-static const Wave m2_waves[] = {WAVE(m2_w1), WAVE(m2_w2), WAVE(m2_w3), WAVE(m2_w4)};
-#define WAVES_EASY_M1 2
-#define WAVES_EASY_M2 2
-static int mission_wave;
+/* The game's encounter scripts run here. All classes are Prides for now: CEm002, CEm004, CEm013 and the
+ * bosses aren't in, so their spawns hold Prides. See docs/GAME_FLOW.md. */
+static int mission_room = ROOM_NONE, script_at;
+static float script_wait;
+static int script_waiting_alive, doors_armed;
+static unsigned int rooms_cleared;   /* this mission: a room's fight doesn't come back */
 static float mission_clear_wait;
 static int mission_stage;
 static MenuChoice mission_choice;
@@ -1901,55 +1919,142 @@ static void play_movie(const char *name) {
     if (report) { fprintf(report, "%s shown=%d late=%d decode_max_us=%d error=%08x elapsed=%ums audio=%ums\n", name, shown, late, decode_max, (unsigned int)movie_last_error(), elapsed_ms, audio_ms); fclose(report); }
 }
 
-/* The next wave when the last is dead; once they all are, a moment later, Mission Clear. */
-static int mission_update(float dt, float floor_y) {
-    const Wave *waves = mission_choice.mission == 1 ? m1_waves : m2_waves;
-    int total = mission_choice.mission == 1 ? (int)(sizeof(m1_waves) / sizeof(m1_waves[0])) : (int)(sizeof(m2_waves) / sizeof(m2_waves[0]));
-    if (mission_choice.difficulty == 0) total = mission_choice.mission == 1 ? WAVES_EASY_M1 : WAVES_EASY_M2;
-    if (enemy_alive_count() > 0) return 0;
-    if (mission_wave < total) {
-        int i;
-        enemy_spawn_height(floor_y);
-        for (i = 0; i < waves[mission_wave].count; ++i) enemy_add(waves[mission_wave].points[i].x, waves[mission_wave].points[i].z);
-        ++mission_wave;
+#define DOOR_MARGIN 40.0f      /* Dante stops at a wall about this far short of a door's box */
+#define DOOR_BELOW 100.0f
+
+/* One step of this room's script: spawns, waits. Returns 1 once it has finished. */
+static int script_run(float dt, float floor_y) {
+    const RoomScript *script = &missions[mission_choice.mission - 1].scripts[mission_room];
+    while (script_at < script->count) {
+        const RoomOp *op = &script->ops[script_at];
+        if (script_wait > 0.0f) {
+            if (script_waiting_alive >= 0 && enemy_alive_count() > script_waiting_alive) return 0;
+            script_waiting_alive = -1;
+            script_wait -= dt * 60.0f;
+            if (script_wait > 0.0f) return 0;
+        }
+        switch (op->op) {
+        case ROOM_OP_SPAWN:
+            enemy_spawn_height(floor_y);
+            enemy_add((float)op->b, (float)op->d);
+            break;
+        case ROOM_OP_WAIT:
+            script_wait = (float)op->a;
+            break;
+        default:
+            script_wait = (float)op->b + 0.01f;
+            script_waiting_alive = op->a;
+            break;
+        }
+        ++script_at;
+        if (script_wait > 0.0f) return 0;
+    }
+    return script_wait <= 0.0f;
+}
+
+/* Into another room: its stage, Dante at the start the door names, and the room's script from the top. */
+static void enter_room(int room, int start, Player *player, FollowCamera *camera) {
+    char path[320];
+    const float *s = rooms[room].starts[start];
+    menu_show_loading();
+    enemy_set_count(0, player->x, player->z);
+    path_in_game_dir(path, sizeof(path), rooms[room].file);
+    stage_load(path);
+    mission_room = room;
+    doors_armed = 0;
+    /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
+    script_at = (rooms_cleared >> room & 1u) ? missions[mission_choice.mission - 1].scripts[room].count : 0;
+    script_wait = 0.0f;
+    script_waiting_alive = -1;
+    player_spawn[0] = s[0];
+    player_spawn[1] = s[1];
+    player_spawn[2] = s[2];
+    player_spawn[3] = s[3];
+    combat_reset(&combat);
+    player->x = s[0];
+    player->y = s[1];
+    player->z = s[2];
+    player->yaw = s[3] * 0.0174533f;
+    player->on_ground = 1;
+    coat_reset();
+    start_camera(player, camera);
+}
+
+/* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
+static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
+    const MissionInfo *info = &missions[mission_choice.mission - 1];
+    int done = script_run(dt, player->y), i, in_a_box = 0;
+    door_prompt_time = 0.0f;
+    if (!done || enemy_alive_count() > 0) {
+        /* Shut until the fight's over: push him back out of a door's box. */
+        for (i = 0; doors_armed && i < rooms[mission_room].door_count; ++i) {
+            const RoomDoor *d = &rooms[mission_room].doors[i];
+            float dx = player->x - d->box[0], dz = player->z - d->box[2];
+            float hx = d->box[3] * 0.5f + DOOR_MARGIN, hz = d->box[5] * 0.5f + DOOR_MARGIN;
+            if (fabsf(dx) >= hx || fabsf(dz) >= hz) continue;
+            if (player->y < d->box[1] - DOOR_BELOW || player->y > d->box[1] + d->box[4]) continue;
+            if (hx - fabsf(dx) < hz - fabsf(dz)) player->x = d->box[0] + (dx < 0.0f ? -hx : hx);
+            else player->z = d->box[2] + (dz < 0.0f ? -hz : hz);
+        }
+        if (!doors_armed) {
+            int inside = 0;
+            for (i = 0; i < rooms[mission_room].door_count; ++i) {
+                const RoomDoor *d = &rooms[mission_room].doors[i];
+                if (fabsf(player->x - d->box[0]) < d->box[3] * 0.5f + DOOR_MARGIN && fabsf(player->z - d->box[2]) < d->box[5] * 0.5f + DOOR_MARGIN) inside = 1;
+            }
+            if (!inside) doors_armed = 1;
+        }
         return 0;
     }
-    mission_clear_wait += dt;
-    return mission_clear_wait > 2.0f;
+    rooms_cleared |= 1u << mission_room;
+    if (info->end_room == ROOM_NONE) {
+        mission_clear_wait += dt;
+        return mission_clear_wait > 2.0f;
+    }
+    for (i = 0; i < rooms[mission_room].door_count; ++i) {
+        const RoomDoor *d = &rooms[mission_room].doors[i];
+        float mx = d->box[3] * 0.5f + DOOR_MARGIN, mz = d->box[5] * 0.5f + DOOR_MARGIN;
+        if (mission_choice.mission < d->low || mission_choice.mission > d->high) continue;
+        if (player->x < d->box[0] - mx || player->x > d->box[0] + mx || player->z < d->box[2] - mz || player->z > d->box[2] + mz) continue;
+        /* Dante often arrives standing in the door he came through: it waits until he's stepped out
+         * sideways, since he can land and bounce through its height. */
+        in_a_box = 1;
+        if (!doors_armed) continue;
+        /* A tower has doors at many heights. The temporary end of a mission can be above the floor. */
+        if (d->number != info->end_room && (player->y < d->box[1] - DOOR_BELOW || player->y > d->box[1] + d->box[4])) continue;
+        if (d->press) {
+            door_prompt_time = 1.0f;
+            if (!(pressed & PSP_CTRL_CIRCLE)) continue;
+        }
+        if (d->number == info->end_room) return 1;   /* the way out of the mission */
+        if (d->next == ROOM_NONE) continue;           /* a room that isn't built */
+        enter_room(d->next, d->start, player, camera);
+        return 0;
+    }
+    if (!in_a_box) doors_armed = 1;
+    return 0;
 }
 
 static void menu_clear_shot(int frame) {
     if (frame == 30) capture_frame(menu_draw_buffer, "MENU_CLEAR.BMP");
 }
 
+static void play_intro(int mission) {
+    if (mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
+    if (mission == 3) { play_movie("MOVIES/M3_INTRO_A.MOV"); play_movie("MOVIES/M3_INTRO_B.MOV"); }
+}
+
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
-    char path[320];
-    menu_show_loading();
-    if (choice->mission != mission_stage) {
-        const StageInfo *si;
-        path_in_game_dir(path, sizeof(path), choice->mission == 1 ? "STAGE_M1.BIN" : "STAGE.BIN");
-        if (stage_load(path)) {
-            si = stage_info();
-            player_spawn[0] = si->spawn[0];
-            player_spawn[1] = si->spawn[1];
-            player_spawn[2] = si->spawn[2];
-            player_spawn[3] = si->spawn_yaw;
-            mission_stage = choice->mission;
-        }
-    }
     game_turbo = choice->turbo;
     combat_reset(&combat);
     player_reset(player, camera);
-    coat_reset();
     dummy_attacks = 1;
-    enemy_set_count(0, player->x, player->z);
-    enemy_spawn_height(player->y);
     enemy_set_attacks(1);
     enemy_set_anim_auto(dummy_anim_auto);
     enemy_set_mortal(1);
-    mission_wave = 0;
     mission_clear_wait = 0.0f;
-    start_camera(player, camera);
+    rooms_cleared = 0;
+    enter_room(missions[choice->mission - 1].first_room, 0, player, camera);
 }
 
 int main(int argc, char *argv[]) {
@@ -2139,7 +2244,7 @@ int main(int argc, char *argv[]) {
             menu_draw_buffer = draw_buffer;
             play_movie("MOVIES/OPENING.MOV");
             menu_run(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
-            if (mission_choice.mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
+            play_intro(mission_choice.mission);
             start_mission(&mission_choice, &player, &camera);
             draw_buffer = menu_draw_buffer;
         }
@@ -2202,7 +2307,7 @@ int main(int argc, char *argv[]) {
                     pause_active = 0;
                     menu_draw_buffer = draw_buffer;
                     menu_run_from_mission_select(&mission_choice, NULL, NULL);
-                    if (mission_choice.mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
+                    play_intro(mission_choice.mission);
                     start_mission(&mission_choice, &player, &camera);
                     draw_buffer = menu_draw_buffer;
                     last_time = sceKernelGetSystemTimeLow();
@@ -2245,11 +2350,31 @@ int main(int argc, char *argv[]) {
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
-            if (mission_update(dt, player.y)) {
+            {
+                int g, k;
+                for (g = 0; g < cmp_goto_count; ++g) {
+                    if (cmp_goto[g][0] != frames) continue;
+                    script_at = missions[mission_choice.mission - 1].scripts[mission_room].count;
+                    script_wait = 0.0f;
+                    enemy_kill_all();
+                    enemy_set_count(0, player.x, player.z);
+                    for (k = 0; k < rooms[mission_room].door_count; ++k) {
+                        const RoomDoor *d = &rooms[mission_room].doors[k];
+                        if (d->number == cmp_goto[g][1]) {
+                            player.x = d->box[0];
+                            player.y = d->box[1] + 10.0f;
+                            player.z = d->box[2];
+                            doors_armed = 1;
+                            debug_pressed |= PSP_CTRL_CIRCLE;
+                        }
+                    }
+                }
+            }
+            if (mission_update(dt, debug_pressed, &player, &camera)) {
                 menu_draw_buffer = draw_buffer;
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 menu_run_from_mission_select(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
-                if (mission_choice.mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
+                play_intro(mission_choice.mission);
                 start_mission(&mission_choice, &player, &camera);
                 draw_buffer = menu_draw_buffer;
                 last_time = sceKernelGetSystemTimeLow();

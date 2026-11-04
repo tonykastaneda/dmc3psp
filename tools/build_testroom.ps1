@@ -55,18 +55,10 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $StageM1, "--slot", "272")
 }
 
-$MenuBin = Join-Path $Build "MENU.BIN"
-if ($Regenerate -or -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))) {
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
-    Invoke-Native $Python @((Join-Path $Root "tools\prepare_menu.py"), $Iso.FullName, "--output", $MenuBin, "--header", (Join-Path $Generated "menu_runtime.h"))
-}
-
-$StageM1 = Join-Path $Build "STAGE_M1.BIN"
-if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
-    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
-    $Python = (Get-Command python -ErrorAction Stop).Source
-    Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $StageM1, "--slot", "272")
+    Invoke-Native $Python @((Join-Path $Root "tools\gen_rooms.py"), $Iso.FullName, "--output", $Build, "--header", (Join-Path $Generated "rooms_runtime.h"))
 }
 
 $MenuBin = Join-Path $Build "MENU.BIN"

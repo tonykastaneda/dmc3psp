@@ -176,6 +176,23 @@ def face_normal(t):
     return tuple(c / length for c in n)
 
 
+def choose_scm(scm_data, hits):
+    """Whichever reading of the root's offset lines the visuals up with the collision, which is in world
+    coordinates: compare the middle of each one's vertices with the middle of the collision's."""
+    def middle(values):
+        values = sorted(values)
+        return values[len(values) // 2] if values else 0.0
+    target = (middle([t[0] for t in hits]), middle([t[2] for t in hits]))
+    best, best_error = None, None
+    for root_xz in (True, False):
+        scm = parse_scm(scm_data, root_xz)
+        points = [p for o in scm["objects"] for s in o["submeshes"] for p in s["positions"]]
+        error = abs(middle([p[0] for p in points]) - target[0]) + abs(middle([p[2] for p in points]) - target[1])
+        if best is None or error < best_error:
+            best, best_error = scm, error
+    return best
+
+
 def parse_hits(data: bytes):
     if data[:4] != b"HITS":
         raise ValueError("Not a HITS chunk")
@@ -233,8 +250,8 @@ def main() -> None:
         stage_data = pac_entries(read(args.slot + 1))
     name = stage[0][:16].split(b"\0")[0].decode("ascii", "replace")
     textures = decode_textures(stage[1])
-    scm = parse_scm(stage[2])
     hits = parse_hits(stage[3])
+    scm = choose_scm(stage[2], hits)
     hit_walls = [t for t in hits if abs(t[10]) < 0.5]
     hit_floors = [t for t in hits if t[10] >= 0.5]
 

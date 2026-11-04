@@ -62,18 +62,46 @@ Measured on the HD Collection with Dante's health held up. Classes come from the
 - **Mission 2, Normal:** Prides and `CEm002`, `CEm004` from about 74 s, then with the street clear, the Hell Vanguard at about 138 s.
 - **Mission 2, Easy:** 4 Prides were seen at the start in an earlier run. No census with fighting yet.
 
+## Rooms and doors
+
+Each stage's data slot has its doors as text (box, next room, which player start, press or walk through, and
+mission conditions), `POS` for the player starts, and `EST`, the encounter scripts. `tools/gen_rooms.py` reads them.
+In `EST`, sets of ops follow `12[set]`: `2[class, ?]` then `3[x, y, z]` spawns, `9[1, n]` waits n frames, and
+`9[0, n, f]` waits until n or fewer are alive. A set's number isn't its mission: which set a room uses in a
+mission is chosen in `MISSIONS` by matching what the HD Collection spawned, and the game's own rule isn't read.
+
+| Mission | Rooms | How sure |
+| --- | --- | --- |
+| 1 | 000 | Its door to 001 is commented out on the disc, so clearing the room ends it |
+| 2 | 001 | Clearing the script ends it, as the Vanguard fight isn't in |
+| 3 | 002, 009, then 003 to 006, ending at the door to 100 | Mission 4 starts in 100, and every door checks out as reachable on foot. Fights in 002 and 009 match the HD census by class |
+| 4 | 100, 110, 111, 112, ending at the door to 113 | **Partly stand-in.** See below |
+
+Mission 4, "Find the key to the stars", isn't right yet:
+
+- The door from 112 to 113 is on a ledge at about y=3500. A flood over the collision, allowing steps up to 400 cm between neighbouring cells, gets no higher than 3130 from the room's start. That could be a jump across a gap, which the flood doesn't try, or something unported. 113's door to 120 is at y=5500 with the flood topping out at 150. The temporary end triggers under the door at any height.
+- The HD route went on through 113, 120, 121 and 122, and its true end isn't known. Teleporting through missed the key pickup and whatever else the mission needs.
+- The HD census saw no enemies in those rooms in the few seconds spent in each, so the port's fights (sets in 110 and 111) are stand-ins.
+- There are no key items and no bosses.
+
+Stage geometry: some stages' scene nodes are relative to their root, others (002, 009, 011) absolute, with the root
+elsewhere. `choose_scm` in `prepare_stage.py` picks by comparing with the collision. A few stray objects in 002
+sit far outside the room and aren't explained.
+
+Cameras are the port's follow camera, not the game's. Its `CAM` zones aren't read. In tight rooms it can start
+inside scenery, as at Mission 3's start, where the first view is poor.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
 
 Stand-ins and estimates:
 
-- **All enemies are Prides.** `CEm002`, `CEm004` and the Hell Vanguard spawn points hold Prides. `CEm002` and `CEm004` have bodies in the same pack (slots [8] and [18] of GDATA 117) and AI tables already mapped (`docs/ENEMY_AI.md`), so they're the next step. The Vanguard is its own work.
-- **Waves come when the last is dead.** That rule is a guess, as is how they're grouped. The game has event scripts for this (`EVT`, and `EVE` in the stage data), not read yet.
-- **Easy gets the first 2 waves of each mission.** A guess.
+- **All enemies are Prides.** Every class in a script spawns one, including flying `CEm013`. `CEm002`, `CEm004` and the Hell Vanguard spawn points hold Prides. `CEm002` and `CEm004` have bodies in the same pack (slots [8] and [18] of GDATA 117) and AI tables already mapped (`docs/ENEMY_AI.md`), so they're the next step. The Vanguard is its own work.
+- **Encounters run from the game's scripts**, but difficulty isn't applied: Easy and Normal get the same set.
 - **Enemy health** is 6 light hits, chosen by eye. Their real health and Dante's real damage aren't read.
 - **Dante can't die.** His health falls by the attack records' damage and stops at 1.
-- **Doors and leaving the room** aren't in, so Mission 1 ends when its enemies do. The real mission goes on from there.
+- **Doors** open once a room's fight is over. The game's seals and door models aren't drawn.
 - **Real-time cutscenes** aren't in, Mission 2's intro among them.
 - **Sound** is only in movies. There's no music or effects in menus or the game.
 - **No saves.**
