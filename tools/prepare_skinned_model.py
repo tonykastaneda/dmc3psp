@@ -324,6 +324,15 @@ def write_enemy(output: Path, body: bytes, texture_data: bytes, weapon: bytes) -
     """Enemy body (skinned MOD) + its weapon (rigid MOD) + texture set -> enemy_runtime.h."""
     skel = parse_skeleton(body)
     mesh = slim_mesh(build_mesh(body, skel["count"]), 0.7)   # disposable and many on screen
+    # One draw per texture: on the PSP each dummy was 22 draws of 2 textures.
+    order, merged = sorted(mesh["objects"], key=lambda o: o["texture"]), []
+    indices = []
+    for o in order:
+        if not merged or merged[-1]["texture"] != o["texture"]:
+            merged.append({**o, "index_start": len(indices), "index_count": 0})
+        indices += mesh["indices"][o["index_start"]:o["index_start"] + o["index_count"]]
+        merged[-1]["index_count"] += o["index_count"]
+    mesh["indices"], mesh["objects"] = indices, merged
     print(f"Enemy: {len(mesh['positions'])} vertices, {len(mesh['indices']) // 3} triangles")
     textures = decode_textures(texture_data)
     wskel = parse_skeleton(weapon)
