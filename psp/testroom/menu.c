@@ -129,6 +129,15 @@ static void draw_quad_offset(int group, int index, unsigned int color, float dx,
 
 static void draw_quad(int group, int index, unsigned int color) { draw_quad_offset(group, index, color, 0.0f, 0.0f, 0); }
 
+/* For a column of labels: the left edge spreads, not the centre, so labels of different widths that share
+ * a left edge on the disc still share one. */
+static void draw_quad_left(int group, int index, unsigned int color) {
+    const Quad *q = group_quad(group, index);
+    float left = SCR_W / 2.0f + q->x0 * SPREAD * UNIT;
+    bind_atlas(q->atlas);
+    sprite(q->u0, q->v0, q->u1, q->v1, left, SCR_H / 2.0f - q->y1 * UNIT, left + (q->x1 - q->x0) * UNIT, SCR_H / 2.0f - q->y0 * UNIT, color);
+}
+
 /* The briefing strip's pieces are all on one atlas: the quad gives which. */
 static void draw_briefing_piece(const float *p, unsigned int color) {
     bind_atlas(group_quad(GROUP_BRIEFING, 0)->atlas);
@@ -184,17 +193,22 @@ int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int fram
 
 static void draw_title(int cursor) {
     int i;
-    float left = 1.0e9f, right = -1.0e9f, dx;
-    /* White, with the logo and the grey band (tools/prepare_menu.py), the options centred on the screen. */
+    float total = 0.0f, x, gap = 26.0f;   /* screen units between options */
+    /* White, with the logo and the grey band (tools/prepare_menu.py), the options spaced evenly, centred. */
     draw_image(IMG_TITLE);
     for (i = 0; i < TITLE_ITEMS; ++i) {
         const Quad *q = group_quad(GROUP_TITLE_OPTIONS, i);
-        if (q->x0 * SPREAD < left) left = q->x0 * SPREAD;
-        if (q->x1 * SPREAD > right) right = q->x1 * SPREAD;
+        total += (q->x1 - q->x0) * UNIT + (i ? gap * UNIT : 0.0f);
     }
-    dx = -(left + right) * 0.5f / SPREAD;
-    for (i = 0; i < TITLE_ITEMS; ++i)
-        draw_quad_offset(GROUP_TITLE_OPTIONS, i, i == TITLE_OPTIONS ? LOCKED : i == cursor ? BRIGHT : DIM, dx, 0.0f, 0);
+    x = (SCR_W - total) * 0.5f;
+    for (i = 0; i < TITLE_ITEMS; ++i) {
+        const Quad *q = group_quad(GROUP_TITLE_OPTIONS, i);
+        float w = (q->x1 - q->x0) * UNIT;
+        bind_atlas(q->atlas);
+        sprite(q->u0, q->v0, q->u1, q->v1, x, SCR_H / 2.0f - q->y1 * UNIT, x + w, SCR_H / 2.0f - q->y0 * UNIT,
+               i == TITLE_OPTIONS ? LOCKED : i == cursor ? BRIGHT : DIM);
+        x += w + gap * UNIT;
+    }
 }
 
 /* Easy and Normal only, for now. Row 0's arrows and digit sit one row-height above row 1's. */
@@ -210,19 +224,15 @@ static void draw_missions(const MenuChoice *c, int row) {
         int working = i < ROWS_SHOWN;
         unsigned int color = !working ? LOCKED : i == row ? BRIGHT : DIM;
         if (labels[i] == LABEL_GALLERY) {
-            /* The Debug Room, in Gallery's place: no art says that, so plain text, centred where Gallery's is. */
-            const Quad *q = group_quad(GROUP_MISSION_LABELS, LABEL_GALLERY);
-            float centre = (q->x0 + q->x1) * 0.5f * SPREAD;
+            /* The Debug Room, in Gallery's place (its label is drawn from the font: tools/prepare_menu.py). */
             draw_quad(GROUP_MISSION_ROWS, bars[i], BRIGHT);
-            if (menu_text) {
-                menu_text((int)(SCR_W / 2.0f + centre * UNIT) - 40, (int)(SCR_H / 2.0f - (q->y0 + q->y1) * 0.5f * UNIT) - 4, "DEBUG ROOM",
-                          row == ROW_DEBUG ? 0xffffffffu : 0xff909090u);
-                begin_2d();
-            }
+            draw_quad(GROUP_MISSION_LABELS, LABEL_GALLERY, row == ROW_DEBUG ? BRIGHT : DIM);
             continue;
         }
         if (i == 0 || bars[i] != bars[i - 1]) draw_quad(GROUP_MISSION_ROWS, bars[i], working ? BRIGHT : 0xa0ffffff);
-        draw_quad(GROUP_MISSION_LABELS, labels[i], color);
+        /* The difficulties line up on their left edges; the rows below them are centred. */
+        if (i < 6) draw_quad_left(GROUP_MISSION_LABELS, labels[i], color);
+        else draw_quad(GROUP_MISSION_LABELS, labels[i], color);
         if (!working) continue;
         if (i == row) {
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2, BRIGHT, 0.0f, 0.0f, 0);

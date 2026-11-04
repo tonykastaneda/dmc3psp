@@ -95,6 +95,71 @@ GROUPS = [
 ]
 
 
+# Menu labels drawn from a font instead of the disc's lettering, cleaner on the PSP's screen: each takes the
+# place and height of the label it replaces. (group, {quad: (text, alignment)}). The font is open (SIL OFL) and
+# lives in .tools/fonts, not the repo; without it the disc's labels stay.
+FONT = Path(__file__).resolve().parents[1] / ".tools" / "fonts" / "CormorantGaramond-Italic[wght].ttf"
+LEFT_EDGE, MIDDLE = "left", "middle"
+RECREATE = {
+    "GROUP_TITLE_OPTIONS": {0: ("NEW GAME", MIDDLE), 1: ("LOAD GAME", MIDDLE), 2: ("OPTIONS", MIDDLE)},
+    "GROUP_MISSION_LABELS": {12: ("EASY", LEFT_EDGE), 1: ("NORMAL", LEFT_EDGE), 2: ("HARD", LEFT_EDGE),
+                             13: ("VERY HARD", LEFT_EDGE), 3: ("DANTE MUST DIE", LEFT_EDGE), 4: ("HEAVEN OR HELL", LEFT_EDGE),
+                             14: ("BLOODY PALACE", MIDDLE), 15: ("DEMO DIGEST", MIDDLE), 5: ("TOTAL RANKING", MIDDLE),
+                             6: ("DEBUG ROOM", MIDDLE), 7: ("SAVE", MIDDLE), 8: ("LOAD", MIDDLE)},
+    "GROUP_CUSTOM_LABELS": {0: ("CUSTOMIZE", LEFT_EDGE), 1: ("STYLE", LEFT_EDGE), 2: ("EQUIP", LEFT_EDGE), 3: ("ITEM", LEFT_EDGE),
+                            4: ("ACTION", LEFT_EDGE), 5: ("GUNS", LEFT_EDGE), 6: ("EXIT", LEFT_EDGE)},
+}
+FONT_ATLAS = 512
+
+
+def font_labels(quads, groups):
+    """Draws RECREATE's labels into one atlas and points their quads at it. Returns the atlas, or None."""
+    from PIL import ImageDraw, ImageFilter, ImageFont
+    if not FONT.exists():
+        print(f"{FONT} not found: keeping the disc's menu labels")
+        return None
+    atlas = Image.new("RGBA", (FONT_ATLAS, FONT_ATLAS), (0, 0, 0, 0))
+    x = y = row_height = 0
+    placed = []
+    names = [g[0] for g in GROUPS]
+    for group_name, labels in RECREATE.items():
+        first, _ = groups[names.index(group_name)]
+        for index, (text, align) in labels.items():
+            q = list(quads[first + index])
+            box_h = q[8] - q[6]                       # screen units
+            px_h = max(12, round(box_h * UNIT * 2))   # twice the PSP's pixels, for a clean filter down
+            font = ImageFont.truetype(str(FONT), round(px_h * 0.92))
+            try:
+                font.set_variation_by_name(b"Bold Italic")
+            except (OSError, ValueError):
+                pass
+            l, top, r, bottom = font.getbbox(text)
+            w, h = r - l + 8, px_h
+            if x + w > FONT_ATLAS:
+                x, y, row_height = 0, y + row_height, 0
+            if y + h > FONT_ATLAS:
+                raise ValueError("menu font atlas is full")
+            cell = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(cell)
+            baseline = (h - (bottom - top)) // 2 - top
+            # A soft dark edge under white lettering, so it reads on the light and the dark screens alike.
+            shadow = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            ImageDraw.Draw(shadow).text((4 - l, baseline), text, font=font, fill=(0, 0, 0, 255), stroke_width=3, stroke_fill=(0, 0, 0, 255))
+            cell.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(1.2)))
+            draw.text((4 - l, baseline), text, font=font, fill=(255, 255, 255, 255), stroke_width=1, stroke_fill=(20, 20, 20, 255))
+            atlas.alpha_composite(cell, (x, y))
+            # Same height and place as the disc's label; the width is the text's own.
+            width_units = w / 2.0 / UNIT
+            if align == LEFT_EDGE:
+                x0 = q[5]
+            else:
+                x0 = (q[5] + q[7]) * 0.5 - width_units * 0.5
+            placed.append((first + index, (x, y, w, h), (x0, q[6], x0 + width_units, q[8])))
+            x += w + 2
+            row_height = max(row_height, h + 2)
+    return atlas, placed
+
+
 def whole_screen(data):
     """Every MOD of a screen, each with the texture set after it: the first extends, the rest sit as laid out."""
     parts = split_pac(data)
@@ -289,6 +354,17 @@ def main():
             print(name)
             for i, q in enumerate(quads[first:]):
                 print(f"  {i:2d} atlas{q[0]} uv {q[1]:.3f},{q[2]:.3f}-{q[3]:.3f},{q[4]:.3f} at {q[5]:.0f},{q[6]:.0f} .. {q[7]:.0f},{q[8]:.0f}")
+
+    made = font_labels(quads, groups)
+    if made:
+        atlas_image, placed = made
+        font_atlas = len(atlases)
+        atlases.append((FONT_ATLAS, FONT_ATLAS, atlas_image.tobytes()))
+        for at, (ax, ay, aw, ah), (x0, y0, x1, y1) in placed:
+            quads[at] = (font_atlas, ax / FONT_ATLAS, ay / FONT_ATLAS, (ax + aw) / FONT_ATLAS, (ay + ah) / FONT_ATLAS, x0, y0, x1, y1)
+        if args.dump:
+            atlas_image.save("build/hdref/menu_font_atlas.png")
+        print(f"menu labels from {FONT.name}: {len(placed)}")
 
     header = 16 + 16 + 16
     blob = bytearray(header)
