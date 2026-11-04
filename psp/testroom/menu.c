@@ -8,6 +8,7 @@
 #include <psputils.h>
 
 #include <malloc.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "menu_runtime.h"
@@ -175,6 +176,8 @@ static void fade_overlay(float amount) {
 }
 
 typedef enum { SCREEN_TITLE, SCREEN_MISSIONS, SCREEN_BRIEFING, SCREEN_DONE } Screen;
+ShopState *menu_shop;   /* the briefing's Customize: set by main */
+int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int frame);
 
 static void draw_title(int cursor) {
     int i;
@@ -206,13 +209,13 @@ static void draw_briefing(const MenuChoice *c, int cursor) {
     draw_image(IMG_BANNER_1 + c->mission - 1);
     draw_briefing_piece(BRIEFING_BAR, BRIGHT);
     draw_briefing_piece(BRIEFING_START, cursor == 0 ? BRIGHT : DIM);
-    draw_briefing_piece(BRIEFING_CUSTOMIZE, LOCKED);
+    draw_briefing_piece(BRIEFING_CUSTOMIZE, !menu_shop ? LOCKED : cursor == 1 ? BRIGHT : DIM);
 }
 
 static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after_frame) {
     static SceCtrlData data;
     unsigned int held = 0xffffffffu;   /* a button down when this starts isn't a press */
-    int frame = 0, title_cursor = TITLE_NEW, row = c->difficulty, fade = FADE_FRAMES, leaving = 0;
+    int frame = 0, title_cursor = TITLE_NEW, row = c->difficulty, fade = FADE_FRAMES, leaving = 0, briefing_cursor = 0;
     Screen next = screen;
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
@@ -248,6 +251,12 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 if (pressed & PSP_CTRL_CIRCLE) { next = SCREEN_TITLE; leaving = 1; }
                 break;
             case SCREEN_BRIEFING:
+                if (pressed & (PSP_CTRL_LEFT | PSP_CTRL_RIGHT)) briefing_cursor = !briefing_cursor;
+                if ((pressed & PSP_CTRL_CROSS) && briefing_cursor == 1 && menu_shop) {
+                    frame = shop_run(menu_shop, pad, after_frame, frame);
+                    held = 0xffffffffu;
+                    break;
+                }
                 if (pressed & PSP_CTRL_CROSS) { next = SCREEN_DONE; leaving = 1; }
                 if (pressed & PSP_CTRL_CIRCLE) { next = SCREEN_MISSIONS; leaving = 1; }
                 break;
@@ -267,7 +276,7 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
         switch (screen) {
         case SCREEN_TITLE: draw_title(title_cursor); break;
         case SCREEN_MISSIONS: draw_missions(c, row); break;
-        case SCREEN_BRIEFING: draw_briefing(c, 0); break;
+        case SCREEN_BRIEFING: draw_briefing(c, briefing_cursor); break;
         default: break;
         }
         fade_overlay((float)fade / (float)FADE_FRAMES);
@@ -390,4 +399,234 @@ void pause_draw(void) {
     }
     end_2d();
     sceGuEnable(GU_DEPTH_TEST);
+}
+
+/* ---- The Divinity Statue's shop (build/hdref/shop/shop_ui.md). Its index and Item screen work; Style,
+ * Equip, Action and Guns show their art from the disc, not working yet. Prices are the game's
+ * (shop_item_prices, from SLUS_213.61), rising with each one bought. */
+enum { SHOP_INDEX, SHOP_ITEM, SHOP_STATIC };
+enum { ROW_STYLE, ROW_EQUIP, ROW_ITEM, ROW_ACTION, ROW_GUNS, ROW_EXIT, INDEX_ROWS };
+#define ITEM_ROWS 7
+/* How many of each can be held. Not read from the game yet: estimates. */
+static const unsigned char item_max[SHOP_ITEMS] = {30, 30, 10, 10, 1, 1, 3, 99};
+MenuText menu_text;
+static ShopState *shop;
+static int shop_screen, shop_cursor, index_cursor, shop_image, shop_confirm, shop_yes, shop_note;
+/* The index's descriptions, by row (2294's messages). */
+static const short index_text[INDEX_ROWS] = {20004, 20003, 20000, 20001, 20002, 20005};
+
+static const char *shop_message(int screen, int id) {
+    int i;
+    for (i = 0; i < SHOP_TEXT_COUNT; ++i) if (shop_text[i].screen == screen && shop_text[i].id == id) return shop_text[i].text;
+    return "";
+}
+
+/* Lines of text from a point, in PSP pixels. */
+static void text_lines(int x, int y, const char *text, unsigned int color) {
+    char line[64];
+    int n = 0;
+    if (!menu_text) return;
+    for (;; ++text) {
+        if (*text == '\n' || !*text || n == 63) {
+            line[n] = 0;
+            menu_text(x, y, line, color);
+            y += 11;
+            n = 0;
+            if (!*text) break;
+            continue;
+        }
+        line[n++] = *text;
+    }
+    begin_2d();
+}
+
+/* A digit of the item screen's font over a digit quad: glyph g is at ((g % 5) x 32, (g / 5) x 48) of 256. */
+static void shop_glyph(int group, int index, int g, float dx, float dy, unsigned int color) {
+    const Quad *q = group_quad(group, index);
+    float du = (float)(g % 5) * 0.125f, dv = (float)(g / 5) * 0.1875f;
+    bind_atlas(q->atlas);
+    unit_quad(q->u0 + du, q->v0 + dv, q->u1 + du, q->v1 + dv, q->x0 + dx, q->y0 + dy, q->x1 + dx, q->y1 + dy, color, 0);
+}
+
+/* The small font (24x40 of 256): glyph g at ((g % 5) x 24, (g / 5) x 40). */
+static void small_glyph(int group, int index, int g) {
+    const Quad *q = group_quad(group, index);
+    float du = (float)(g % 5) * 0.09375f, dv = (float)(g / 5) * 0.15625f;
+    bind_atlas(q->atlas);
+    unit_quad(q->u0 + du, q->v0 + dv, q->u1 + du, q->v1 + dv, q->x0, q->y0, q->x1, q->y1, BRIGHT, 0);
+}
+
+/* A number right-aligned on a row's digit quads (6 of them). */
+static void shop_number(int row, int value, float dy, unsigned int color) {
+    int k;
+    for (k = 5; k >= 0; --k) {
+        shop_glyph(GROUP_ITEM_DIGITS, row * 6 + k, value % 10, 0.0f, dy, color);
+        value /= 10;
+    }
+}
+
+void shop_open(ShopState *state) {
+    shop = state;
+    shop_screen = SHOP_INDEX;
+    index_cursor = ROW_ITEM;
+    shop_cursor = 0;
+    shop_confirm = 0;
+    shop_note = 0;
+}
+
+int shop_update(unsigned int pressed) {
+    if (!shop) return 1;
+    switch (shop_screen) {
+    case SHOP_INDEX:
+        if (pressed & PSP_CTRL_UP) index_cursor = (index_cursor + INDEX_ROWS - 1) % INDEX_ROWS;
+        if (pressed & PSP_CTRL_DOWN) index_cursor = (index_cursor + 1) % INDEX_ROWS;
+        if (pressed & PSP_CTRL_CIRCLE) return 1;
+        if (pressed & PSP_CTRL_CROSS) {
+            switch (index_cursor) {
+            case ROW_EXIT: return 1;
+            case ROW_ITEM: shop_screen = SHOP_ITEM; shop_cursor = 0; shop_note = 0; break;
+            case ROW_STYLE: shop_screen = SHOP_STATIC; shop_image = IMG_STYLE_SHOP; break;
+            case ROW_EQUIP: shop_screen = SHOP_STATIC; shop_image = IMG_EQUIP_SHOP; break;
+            case ROW_ACTION: shop_screen = SHOP_STATIC; shop_image = IMG_ACTION_SHOP; break;
+            default: shop_screen = SHOP_STATIC; shop_image = IMG_GUN_SHOP; break;
+            }
+        }
+        break;
+    case SHOP_ITEM:
+        if (shop_confirm) {
+            if (pressed & (PSP_CTRL_LEFT | PSP_CTRL_RIGHT)) shop_yes = !shop_yes;
+            if (pressed & PSP_CTRL_CIRCLE) shop_confirm = 0;
+            if (pressed & PSP_CTRL_CROSS) {
+                int item = shop_cursor, price = (int)shop_item_prices[item][shop->bought[item] < 7 ? shop->bought[item] : 7];
+                shop_confirm = 0;
+                if (shop_yes) {
+                    if (shop->red_orbs < price) shop_note = 20102;
+                    else {
+                        shop->red_orbs -= price;
+                        ++shop->owned[item];
+                        if (shop->bought[item] < 255) ++shop->bought[item];
+                        shop_note = 0;
+                    }
+                }
+            }
+            break;
+        }
+        if (pressed & PSP_CTRL_UP) { shop_cursor = (shop_cursor + ITEM_ROWS - 1) % ITEM_ROWS; shop_note = 0; }
+        if (pressed & PSP_CTRL_DOWN) { shop_cursor = (shop_cursor + 1) % ITEM_ROWS; shop_note = 0; }
+        if (pressed & PSP_CTRL_CIRCLE) { shop_screen = SHOP_INDEX; break; }
+        if (pressed & PSP_CTRL_CROSS) {
+            if (shop->owned[shop_cursor] >= item_max[shop_cursor]) shop_note = 20103;
+            else { shop_confirm = 1; shop_yes = 1; shop_note = 0; }
+        }
+        break;
+    default:
+        if (pressed & (PSP_CTRL_CIRCLE | PSP_CTRL_CROSS)) shop_screen = SHOP_INDEX;
+        break;
+    }
+    return 0;
+}
+
+static void shop_draw_index(void) {
+    int i;
+    draw_image(IMG_CUSTOMIZE);
+    draw_quad(GROUP_CUSTOM_BARS, index_cursor, BRIGHT);
+    draw_quad(GROUP_CUSTOM_LABELS, 0, BRIGHT);   /* CUSTOMIZE */
+    for (i = 0; i < INDEX_ROWS; ++i) draw_quad(GROUP_CUSTOM_LABELS, 1 + i, i == index_cursor ? BRIGHT : DIM);
+    draw_quad(GROUP_CUSTOM_BOX, 0, 0xe0ffffff);
+    {
+        /* The box's top left, in pixels: the same spread as the quads. */
+        const Quad *b = group_quad(GROUP_CUSTOM_BOX, 0);
+        float centre = (b->x0 + b->x1) * 0.5f * SPREAD, half = (b->x1 - b->x0) * 0.5f;
+        int x = (int)(SCR_W / 2.0f + (centre - half) * UNIT) + 12, y = (int)(SCR_H / 2.0f - b->y1 * UNIT) + 10;
+        text_lines(x, y, shop_message(0, index_text[index_cursor]), 0xffffffff);
+        if (index_cursor != ROW_ITEM && index_cursor != ROW_EXIT) text_lines(x, y + 26, "(not working yet)", 0xff8080ff);
+    }
+    {
+        char orbs[32];
+        snprintf(orbs, sizeof(orbs), "RED ORBS %d", shop->red_orbs);
+        text_lines(SCR_W - 8 - (int)strlen(orbs) * 8, 8, orbs, 0xff4040ff);
+    }
+}
+
+static void shop_draw_items(void) {
+    int i;
+    draw_image(IMG_ITEM_SHOP);
+    for (i = 0; i < ITEM_ROWS; ++i) {
+        unsigned int color = i == shop_cursor ? BRIGHT : DIM;
+        int price = (int)shop_item_prices[i][shop->bought[i] < 7 ? shop->bought[i] : 7];
+        draw_quad(GROUP_ITEM_ROWS, i, color);
+        draw_quad(GROUP_ITEM_ICONS, i, BRIGHT);
+        shop_number(i, price, 0.0f, color);
+    }
+    /* The bottom bar: Yellow Orbs held, and Blue Orb fragments of 4, in the small font. */
+    draw_quad(GROUP_ITEM_ROWS, ITEM_ROWS, BRIGHT);
+    draw_quad(GROUP_ITEM_YELLOW, 2, BRIGHT);
+    small_glyph(GROUP_ITEM_YELLOW, 1, shop->owned[7] / 10 % 10);
+    small_glyph(GROUP_ITEM_YELLOW, 0, shop->owned[7] % 10);
+    draw_quad(GROUP_ITEM_FRAGMENT, 3, BRIGHT);
+    small_glyph(GROUP_ITEM_FRAGMENT, 2, shop->blue_fragments % 4);
+    draw_quad(GROUP_ITEM_FRAGMENT, 1, BRIGHT);
+    small_glyph(GROUP_ITEM_FRAGMENT, 0, 4);
+    /* How many of the chosen one are held, of how many. */
+    {
+        int owned = shop->owned[shop_cursor], most = item_max[shop_cursor];
+        shop_glyph(GROUP_ITEM_COUNT, 0, owned / 10 % 10, 0.0f, 0.0f, BRIGHT);
+        shop_glyph(GROUP_ITEM_COUNT, 1, owned % 10, 0.0f, 0.0f, BRIGHT);
+        draw_quad(GROUP_ITEM_COUNT, 2, BRIGHT);
+        shop_glyph(GROUP_ITEM_COUNT, 3, most / 10 % 10, 0.0f, 0.0f, BRIGHT);
+        shop_glyph(GROUP_ITEM_COUNT, 4, most % 10, 0.0f, 0.0f, BRIGHT);
+    }
+    {
+        char orbs[32];
+        snprintf(orbs, sizeof(orbs), "RED ORBS %d", shop->red_orbs);
+        text_lines(SCR_W - 8 - (int)strlen(orbs) * 8, 8, orbs, 0xff4040ff);
+    }
+    {
+        static const short names[ITEM_ROWS] = {20003, 20004, 20005, 20006, 20000, 20001, 20002};
+        const char *text = shop_confirm ? shop_message(1, 20101) : shop_note ? shop_message(1, shop_note) : shop_message(1, 20100);
+        int x = SCR_W / 2 + 40;
+        text_lines(x, 60, shop_message(1, names[shop_cursor]), 0xff60e0ff);
+        text_lines(x, 80, text, 0xffffffff);
+        if (shop_confirm) text_lines(x, 112, shop_yes ? "> YES     NO" : "  YES   > NO", 0xffffffff);
+        text_lines(x, SCR_H - 22, "X BUY   O BACK", 0xffb0b0b0);
+    }
+}
+
+void shop_draw(void) {
+    if (!header || !shop) return;
+    begin_2d();
+    switch (shop_screen) {
+    case SHOP_INDEX: shop_draw_index(); break;
+    case SHOP_ITEM: shop_draw_items(); break;
+    default:
+        draw_image(shop_image);
+        text_lines(SCR_W / 2 - 100, SCR_H - 22, "NOT WORKING YET   O BACK", 0xffb0b0b0);
+        break;
+    }
+    end_2d();
+}
+
+int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int frame) {
+    static SceCtrlData data;
+    unsigned int held = 0xffffffffu;
+    shop_open(state);
+    for (;;) {
+        unsigned int now, pressed;
+        if (pad) now = pad(frame);
+        else { sceCtrlReadBufferPositive(&data, 1); now = data.Buttons; }
+        pressed = now & ~held;
+        held = now;
+        if (shop_update(pressed)) break;
+        sceGuStart(GU_DIRECT, list);
+        sceGuClearColor(0xff000000);
+        sceGuClear(GU_COLOR_BUFFER_BIT);
+        shop_draw();
+        sceGuFinish();
+        sceGuSync(0, 0);
+        if (after_frame) after_frame(frame);
+        sceDisplayWaitVblankStart();
+        menu_draw_buffer = sceGuSwapBuffers();
+        ++frame;
+    }
+    return frame;
 }

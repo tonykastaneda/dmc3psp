@@ -28,6 +28,25 @@ void menu_mission_clear(MenuPad pad, MenuAfterFrame after_frame);  /* until CROS
 extern void *menu_draw_buffer;        /* the buffer being drawn: main's, kept in step across menu frames */
 extern void *menu_draw_buffer;        /* the buffer being drawn: main's, kept in step across menu frames */
 
+/* The Divinity Statue's shop: the game's Customize screens. What's bought is kept here; for now it
+ * doesn't change Dante (his whole moveset stays unlocked for testing). */
+#define SHOP_ITEMS 8   /* Vital Star S, Vital Star L, Devil Star, Holy Water, Blue Orb, Purple Orb, Gold Orb, Yellow Orb */
+typedef struct {
+    int red_orbs;
+    unsigned char owned[SHOP_ITEMS], bought[SHOP_ITEMS];
+    unsigned char blue_fragments;
+} ShopState;
+/* Text for the screens' messages: the game's font isn't on the disc, so main draws it with its own. */
+typedef void (*MenuText)(int x, int y, const char *text, unsigned int color);
+extern MenuText menu_text;
+void shop_open(ShopState *state);
+int shop_update(unsigned int pressed);   /* 1 when the player leaves */
+void shop_draw(void);                    /* inside an open display list */
+/* As a menu of its own, with its own frames (the briefing's Customize). */
+/* frame: where a test script's frame count is; returns where it ends. */
+int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int frame);
+extern ShopState *menu_shop;             /* set to make the briefing's Customize open the shop */
+
 /* In game, inside an open display list. */
 void pause_open(void);
 PauseAction pause_update(unsigned int pressed);

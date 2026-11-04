@@ -55,6 +55,21 @@ IMAGES = [
     ("IMG_CLEAR", [(1665, 1, False, None, {0: CENTRE, 1: CENTRE}), (1665, 23, False, SPAN, {}),
                    (1665, 25, False, None, {1: CENTRE})]),
 ]
+# The Divinity Statue's shop: the game's Customize screens (build/hdref/shop/shop_ui.md). Each is a PAC of flat
+# MODs, each followed by its texture set, and a "# Msg" block of its English text.
+CUSTOMIZE, ITEM_SHOP, ACTION_SHOP, GUN_SHOP, EQUIP_SHOP, STYLE_SHOP = 2294, 2649, 2322, 3017, 2302, 1716
+ITEM_PRICES = 0x5DB680    # in SLUS_213.61: 8 items x 8 prices, rising with each one bought
+SHOP_TEXT = (CUSTOMIZE, ITEM_SHOP, ACTION_SHOP, GUN_SHOP)
+IMAGES += [
+    # Chunk 6's second quad is a rotated brush stroke, which a box of its corners can't draw.
+    ("IMG_CUSTOMIZE", [(CUSTOMIZE, 0, True, EXTEND, {}), (CUSTOMIZE, 6, True, CENTRE, {1: None})]),
+    ("IMG_ITEM_SHOP", [(ITEM_SHOP, 0, True, EXTEND, {})]),
+    # Not working yet, so shown whole as they are on the disc.
+    ("IMG_ACTION_SHOP", "all", ACTION_SHOP),
+    ("IMG_GUN_SHOP", "all", GUN_SHOP),
+    ("IMG_EQUIP_SHOP", "all", EQUIP_SHOP),
+    ("IMG_STYLE_SHOP", "all", STYLE_SHOP),
+]
 GROUPS = [
     ("GROUP_TITLE_OPTIONS", TITLE, 3, False),
     ("GROUP_TITLE_TUTORIAL", TITLE, 5, False),
@@ -66,7 +81,36 @@ GROUPS = [
     ("GROUP_MISSION_TAGS", MISSION, 20, True),
     ("GROUP_BRIEFING", STRIP, 1, False),
     ("GROUP_PAUSE", 2075, 1, False),
+    ("GROUP_CUSTOM_BOX", CUSTOMIZE, 2, True),
+    ("GROUP_CUSTOM_LABELS", CUSTOMIZE, 4, True),
+    ("GROUP_CUSTOM_BARS", CUSTOMIZE, 8, True),
+    ("GROUP_ITEM_ROWS", ITEM_SHOP, 2, True),
+    ("GROUP_ITEM_ICONS", ITEM_SHOP, 4, True),
+    ("GROUP_ITEM_DIGITS", ITEM_SHOP, 6, True),
+    ("GROUP_ITEM_COUNT", ITEM_SHOP, 8, True),
+    ("GROUP_ITEM_YELLOW", ITEM_SHOP, 10, True),
+    ("GROUP_ITEM_FRAGMENT", ITEM_SHOP, 12, True),
 ]
+
+
+def whole_screen(data):
+    """Every MOD of a screen, each with the texture set after it: the first extends, the rest sit as laid out."""
+    parts = split_pac(data)
+    mods = [k for k, part in enumerate(parts) if part is not None and part[:4] == b"MOD " and k + 1 < len(parts) and is_textures(parts[k + 1])]
+    return [(None, k, True, EXTEND if n == 0 else CENTRE, {}) for n, k in enumerate(mods)]
+
+
+def messages(data):
+    """A screen's "# Msg n" blocks: {n: text}, with <BR> as a new line and button glyphs as names."""
+    import re
+    buttons = {"1": "TRIANGLE", "2": "SQUARE", "3": "X", "4": "R", "5": "L", "7": "L", "8": "L", "16": "X", "17": "O"}
+    out = {}
+    for m in re.finditer(rb"# Msg (\d+)\s*\n(.*?)# End", data, re.S):
+        text = "".join(re.findall(r'"(.*?)"', m.group(2).decode("cp932", "replace"), re.S))
+        text = text.replace("<HBR>", "").replace("<BR>", "\n").replace("<N00>", "%d")
+        text = re.sub(r"<BTN (\d+)>", lambda b: buttons.get(b.group(1), "?"), text)
+        out[int(m.group(1))] = text.encode("ascii", "replace").decode("ascii")
+    return out
 
 
 def split_pac(data):
@@ -210,8 +254,14 @@ def main():
     with Iso9660(args.iso) as iso:
         afs = AfsArchive(iso, "GDATA.AFS")
         read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
-        wanted = {g[1] for g in GROUPS} | {layer[0] for _, layers in IMAGES for layer in layers} | {NOW_LOADING}
+        wanted = {g[1] for g in GROUPS} | {NOW_LOADING} | set(SHOP_TEXT)
+        for _, layers, *rest in IMAGES:
+            wanted |= {rest[0]} if layers == "all" else {layer[0] for layer in layers}
         slots = {s: read(s) for s in wanted}
+        executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
+    for n, (name, layers, *rest) in enumerate(IMAGES):
+        if layers == "all":
+            IMAGES[n] = (name, [(rest[0], *layer[1:]) for layer in whole_screen(slots[rest[0]])])
 
     images = [bake(slots, layers) for _, layers in IMAGES]
     # Now Loading is a bare picture, over black.
@@ -266,6 +316,19 @@ def main():
              f"#define MENU_ART_W {ART_W}", f"#define MENU_ART_H {ART_H}", "#define ATLAS_NOW_LOADING 0"]
     lines += [f"#define {name} {i}" for i, (name, *_) in enumerate(IMAGES)]
     lines += [f"#define {name} {i}" for i, (name, *_) in enumerate(GROUPS)]
+    # The shop's prices, from the executable, and its text, from the screens' own message blocks.
+    from gen_enemy_ai import Elf
+    elf = Elf(executable)
+    lines.append("static const unsigned int shop_item_prices[8][8] = {" + ",".join(
+        "{" + ",".join(str(elf.word(ITEM_PRICES + item * 32 + k * 4)) for k in range(8)) + "}" for item in range(8)) + "};")
+    lines.append("typedef struct { short screen, id; const char *text; } ShopText;")
+    cells = []
+    for screen, slot in enumerate(SHOP_TEXT):
+        for number, text in sorted(messages(slots[slot]).items()):
+            escaped = text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+            cells.append(f'{{{screen},{number},"{escaped}"}}')
+    lines.append("static const ShopText shop_text[] = {" + ",".join(cells) + "};")
+    lines.append(f"#define SHOP_TEXT_COUNT {len(cells)}")
     args.header.write_text("\n".join(lines) + "\n")
     print(f"MENU.BIN: {len(blob):,} bytes, {len(images)} images, {len(atlases)} atlases, {len(quads)} quads")
 

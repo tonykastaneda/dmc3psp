@@ -499,12 +499,31 @@ static void draw_text(int x, int y, const char *text) {
     sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, count * 2, 0, v);
 }
 
+/* The menus' text (menu.h's MenuText): this font, in 2D, then what the menus expect back. */
+static void menu_text_hook(int x, int y, const char *text, unsigned int color) {
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexImage(0, FONT_TEX_SIZE, FONT_TEX_SIZE, FONT_TEX_SIZE, font_texture);
+    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+    sceGuTexFlush();
+    sceGuColor(0xc0000000u);
+    draw_text(x + 1, y + 1, text);
+    sceGuColor(color);
+    draw_text(x, y, text);
+    sceGuColor(0xffffffffu);
+}
+
 /* START: the debug menu. The game stops while it's open. Turbo is the real game's mode:
  * everything runs 1.2x as fast. It's the default in play; test scenes run at normal speed. */
 #define TURBO_SPEED 1.2f
-enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
+enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_ORBS, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
 static int dummy_anim_auto = 1;
 static void mission_gimmicks_draw(void);
+static ShopState shop_state;   /* the Red Orbs and what's been bought, for this session */
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
@@ -533,6 +552,8 @@ static int debug_menu_update(unsigned int pressed) {
         if (!mission_mode) { enemy_set_count(0, 0.0f, 0.0f); }
     }
     if (debug_cursor == DEBUG_ACTION && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) dummy_attacks = !dummy_attacks;
+    if (debug_cursor == DEBUG_ORBS && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_RIGHT))) shop_state.red_orbs += 10000;   /* for testing the shop */
+    if (debug_cursor == DEBUG_ORBS && (pressed & PSP_CTRL_LEFT)) shop_state.red_orbs = 0;
     if (debug_cursor == DEBUG_ANIM && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) dummy_anim_auto = !dummy_anim_auto;
     if (debug_cursor == DEBUG_VIEWER && (pressed & PSP_CTRL_CROSS)) toggle_viewer = 1;
     if (debug_cursor == DEBUG_RESUME && (pressed & PSP_CTRL_CROSS)) debug_open = 0;
@@ -956,6 +977,7 @@ static void draw_debug_menu(int viewer) {
     snprintf(lines[DEBUG_SPEED], sizeof(lines[0]), "Game speed     %s", game_turbo ? "TURBO" : "NORMAL");
     snprintf(lines[DEBUG_DUMMIES], sizeof(lines[0]), "Dummies        %d", dummy_count);
     snprintf(lines[DEBUG_KIND], sizeof(lines[0]), "Dummy kind     %s", kind_names[dummy_kind % ENEMY_KIND_TOTAL]);
+    snprintf(lines[DEBUG_ORBS], sizeof(lines[0]), "Red orbs +10k  %d", shop_state.red_orbs);
     snprintf(lines[DEBUG_ACTION], sizeof(lines[0]), "Dummy action   %s", dummy_attacks ? "ATTACK" : "STAND");
     if (dummy_anim_auto) snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     AUTO %d", enemy_anim_rate());
     else snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     FULL");
@@ -1718,6 +1740,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
+        else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
         else if (strncmp(line, "kind ", 5) == 0) { dummy_kind = atoi(line + 5) % ENEMY_KIND_TOTAL; enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
@@ -2000,6 +2023,7 @@ static void draw_box(float x, float y0, float y1, float z, float hx, float hz, f
 /* Stand-ins for their models, which aren't converted yet: the lift as a stone block, its switch as a
  * red glow until struck, the goal item as a turning gold block. */
 static float goal_spin;
+static int shop_closed;   /* the shop had its own frames: the game's clock starts again */
 static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
@@ -2120,6 +2144,19 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         } else if (lift_on && !on && lift_y > lift->low) {
             lift_y -= LIFT_SPEED * dt;
             if (lift_y < lift->low) lift_y = lift->low;
+        }
+    }
+    for (i = 0; i < ROOM_SHOP_COUNT; ++i) {
+        /* A Divinity Statue: O by it opens the shop, when there's no fight on. */
+        const RoomShop *s = &room_shops[i];
+        float sx = player->x - s->x, sz = player->z - s->z;
+        if (s->room != mission_room || !done || enemy_alive_count() > 0) continue;
+        if (sx * sx + sz * sz > 260.0f * 260.0f || fabsf(player->y - s->y) > 300.0f) continue;
+        door_prompt_time = 1.0f;
+        if (pressed & PSP_CTRL_CIRCLE) {
+            shop_run(&shop_state, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL, 100000);
+            shop_closed = 1;
+            return 0;
         }
     }
     if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull) && done && enemy_alive_count() == 0) {
@@ -2385,6 +2422,8 @@ int main(int argc, char *argv[]) {
     {
         char path[320];
         path_in_game_dir(path, sizeof(path), "MENU.BIN");
+        menu_text = menu_text_hook;
+        menu_shop = &shop_state;
         if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;
             mission_stage = 2;   /* what's loaded */
@@ -2532,6 +2571,7 @@ int main(int argc, char *argv[]) {
                     }
                 }
             }
+            if (shop_closed) { shop_closed = 0; last_time = sceKernelGetSystemTimeLow(); }
             if (mission_update(dt, debug_pressed, &player, &camera)) {
                 menu_draw_buffer = draw_buffer;
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);

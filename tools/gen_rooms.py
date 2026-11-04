@@ -47,6 +47,9 @@ MISSIONS = {
     4: ("100", None, {"101": [0], "102": [1], "110": [0], "104": [0], "111": [0]}),
 }
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
+# Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
+# is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this).
+SHOPS = {"005": (5211.4, 780.7, 1539.8)}
 # Lifts that work: 103's carries Dante up to the door into 110 in Mission 4. Others aren't on a route yet.
 LIFT_ROOMS = {"103"}
 # A mission that ends on an item instead of a door: room, the item's place (the room's ITM chunk), and the
@@ -235,6 +238,10 @@ def main():
             lifts.append(f"{{{index[name]},{x:.1f}f,{z:.1f}f,{lift['yaw']:.1f}f,{box[3]:.1f}f,{box[5]:.1f}f,{y + box[1] + box[4]:.1f}f,"
                          f"{top:.1f}f,{{{sw[0]:.1f}f,{sw[1]:.1f}f,{sw[2]:.1f}f}}}}")
             print(f"room {name}: lift at {x:.0f},{z:.0f} from {y + box[1] + box[4]:.0f} to {top:.0f}, switch {sw}")
+    shops = [f"{{{index[r]},{x:.1f}f,{y:.1f}f,{z:.1f}f}}" for r, (x, y, z) in SHOPS.items() if r in index]
+    lines.append("typedef struct { short room; float x, y, z; } RoomShop;")
+    lines.append(f"#define ROOM_SHOP_COUNT {len(shops)}")
+    lines.append("static const RoomShop room_shops[] = {" + (",".join(shops) or "{0}") + "};")
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")
