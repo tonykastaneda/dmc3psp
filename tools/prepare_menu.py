@@ -135,12 +135,15 @@ LEFT_EDGE, MIDDLE = "left", "middle"
 # and Save and Load at about 31% and 72% across theirs (measured off the HD Collection's screen).
 BAR_LEFT, BAR_RIGHT = -238.0, 25.0
 BAR_MIDDLE = (BAR_LEFT + BAR_RIGHT) / 2
+DIFFICULTY_LEFT = -223.0   # where Easy to Heaven or Hell start
 RECREATE = {
     "GROUP_TITLE_OPTIONS": {0: ("NEW GAME", MIDDLE), 1: ("LOAD GAME", MIDDLE), 2: ("OPTIONS", MIDDLE)},
     "GROUP_MISSION_LABELS": {12: ("EASY", LEFT_EDGE), 1: ("NORMAL", LEFT_EDGE), 2: ("HARD", LEFT_EDGE),
                              13: ("VERY HARD", LEFT_EDGE), 3: ("DANTE MUST DIE", LEFT_EDGE), 4: ("HEAVEN OR HELL", LEFT_EDGE),
-                             14: ("BLOODY PALACE", BAR_MIDDLE), 15: ("DEMO DIGEST", BAR_MIDDLE), 5: ("TOTAL RANKING", BAR_MIDDLE),
-                             6: ("DEBUG ROOM", BAR_MIDDLE), 7: ("SAVE", BAR_LEFT + 0.31 * (BAR_RIGHT - BAR_LEFT)),
+                             # The port's own order: two empty rows after Heaven or Hell, then Bloody Palace and the
+                             # Debug Room in Total Ranking's and Gallery's places, lined up with the difficulties.
+                             5: ("BLOODY PALACE", ("left at", DIFFICULTY_LEFT)), 6: ("DEBUG ROOM", ("left at", DIFFICULTY_LEFT)),
+                             7: ("SAVE", BAR_LEFT + 0.31 * (BAR_RIGHT - BAR_LEFT)),
                              8: ("LOAD", BAR_LEFT + 0.72 * (BAR_RIGHT - BAR_LEFT))},
     "GROUP_PAUSE": {2: ("STATUS", MIDDLE), 3: ("SAVE DATA", MIDDLE), 4: ("QUIT THE MISSION", MIDDLE),
                     5: ("RESTART THE MISSION", MIDDLE), 6: ("EXIT", MIDDLE), 7: ("OPTIONS", MIDDLE), 8: ("YES", MIDDLE), 9: ("NO", MIDDLE)},
@@ -196,6 +199,8 @@ def font_labels(quads, groups):
             width_units = w / 2.0 / UNIT
             if align == LEFT_EDGE:
                 x0 = q[5]
+            elif isinstance(align, tuple):
+                x0 = align[1]
             elif align == MIDDLE:
                 x0 = (q[5] + q[7]) * 0.5 - width_units * 0.5
             else:   # centred on this x

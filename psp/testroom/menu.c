@@ -272,8 +272,10 @@ static void draw_title(int cursor) {
 static void draw_missions(const MenuChoice *c, int row) {
     /* The HD Collection's Mission Select, every row where the disc lays it out (bar, label): Easy and Normal
      * work; the others are greyed out until they're in. Gallery's row is the port's Debug Room. */
-    static const signed char bars[] = {0, 1, 2, 8, 3, 4, 9, 10, 5, 6, 7, 7};
-    static const signed char labels[] = {LABEL_EASY, LABEL_NORMAL, 2, 13, 3, 4, 14, 15, 5, 6, 7, 8};
+    /* The port's order: the difficulties, two empty rows, Bloody Palace and the Debug Room (in Total Ranking's
+     * and Gallery's places), then Save and Load. Demo Digest and Total Ranking are left out for now. */
+    static const signed char bars[] = {0, 1, 2, 8, 3, 4, 5, 6, 7, 7};
+    static const signed char labels[] = {LABEL_EASY, LABEL_NORMAL, 2, 13, 3, 4, 5, 6, 7, 8};
     const float row_height = 26.7f, block_middle = -106.5f;   /* the containers' middle, in screen units */
     int i;
     draw_image(IMG_MISSION);
@@ -286,12 +288,12 @@ static void draw_missions(const MenuChoice *c, int row) {
         if (labels[i] == LABEL_GALLERY) {
             /* The Debug Room, in Gallery's place (its label is drawn from the font: tools/prepare_menu.py). */
             draw_quad(GROUP_MISSION_ROWS, bars[i], BRIGHT);
-            draw_quad(GROUP_MISSION_LABELS, LABEL_GALLERY, row == ROW_DEBUG ? BRIGHT : DIM);
+            draw_quad_left(GROUP_MISSION_LABELS, LABEL_GALLERY, row == ROW_DEBUG ? BRIGHT : DIM);
             continue;
         }
         if (i == 0 || bars[i] != bars[i - 1]) draw_quad(GROUP_MISSION_ROWS, bars[i], working ? BRIGHT : 0xa0ffffff);
-        /* The difficulties line up on their left edges; the rows below them are centred. */
-        if (i < 6) draw_quad_left(GROUP_MISSION_LABELS, labels[i], color);
+        /* Everything but Save and Load lines up on the difficulties' left edge. */
+        if (i < 7) draw_quad_left(GROUP_MISSION_LABELS, labels[i], color);
         else draw_quad(GROUP_MISSION_LABELS, labels[i], color);
         if (!working) continue;
         if (i == row) {
