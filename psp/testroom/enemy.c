@@ -45,7 +45,8 @@ enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't at
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 
 /* How long after one enemy is let attack before another may. The game passes 3.0 to a manager this
- * port hasn't read (FUN_00369180); taken to be seconds. */
+ * port hasn't read (FUN_00369180). Measured on the HD Collection in Turbo: 49 swings from 4 enemies,
+ * never under 3.0 real seconds apart, so it doesn't scale with game speed. */
 #define ATTACK_TOKEN_SECONDS 3.0f
 /* The game's value comes from a mission object not read yet. 0 gives what Mission 2 on Easy shows
  * on the HD Collection: plans 27, 32, 51 and 52 only. */
@@ -60,7 +61,13 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 #define LAUNCH_SPEED 16.5f     /* rises 250 cm under the game's gravity for this state */
 #define SLAM_SPEED 30.0f
 
-#define ENEMY_RADIUS 45.0f
+/* Measured on the HD Collection: enemies stop 96 cm apart, and 88 cm from Dante. */
+#define ENEMY_RADIUS 48.0f
+/* When an enemy walks into Dante it mostly stops, and he gives a little. An estimate: he drifts
+ * about 0.4 cm a frame while they walk at about 2. The rest of the overlap is enemy_push_out's. */
+#define ENEMY_YIELDS 0.8f
+/* Shoved further than this in a frame by another enemy, a watching enemy leaps (M[0x34] in plan 24). */
+#define PUSH_LEAPS 1.0f
 #define HAND_BONE 9                 /* -X hand holds the scythe */
 #define MAX_BONES 24
 
@@ -76,7 +83,7 @@ typedef struct {
     float prev_frame, fade, fade_rate;
     /* The layers. */
     unsigned char plan, plan_step, action, step;
-    unsigned char air, loop, done, stop_finish;
+    unsigned char air, loop, done, stop_finish, pushed;
     short script_at, stop;
     float gauge, timer, wake;
     float vel[3], acc[3];
@@ -417,15 +424,18 @@ static void move_local(float x, float y, float z) {
     e->pos[1] += y;
     e->pos[2] += z * c - x * s;
 }
-/* FUN_00367e40, with what FUN_00367cd0 adds when the air flag isn't up: that flag is off for a
- * leap, and this constant pull is how it peaks where the HD Collection measures it. */
+/* FUN_00367e40, in the game's own steps however long the PSP's frame was: integrating a 30 FPS frame
+ * as one step would shrink a leap's arc. With Turbo's 1.2 steps this gives the 458 and 343 cm peaks
+ * measured on the HD Collection. */
 static void physics(float f) {
-    float a[3], y;
-    int k;
-    for (k = 0; k < 3; ++k) { a[k] = e->acc[k] * f; e->vel[k] += a[k]; }
-    y = e->vel[1] * f;
-    if (!e->air) y += a[1] - GRAVITY_STEP * f;
-    move_local(e->vel[0] * f, y, e->vel[2] * f);
+    int steps = (int)(f + 0.001f), i, k;
+    float step;
+    if (steps < 1) steps = 1;
+    step = f / (float)steps;
+    for (i = 0; i < steps; ++i) {
+        for (k = 0; k < 3; ++k) e->vel[k] += e->acc[k] * step;
+        move_local(e->vel[0] * step, e->vel[1] * step, e->vel[2] * step);
+    }
 }
 static void set_physics(float vx, float vy, float vz, float gravity) {
     e->vel[0] = vx; e->vel[1] = vy; e->vel[2] = vz;
@@ -664,6 +674,11 @@ static void plan_update(float px, float pz, float f) {
             e->plan_step = 1;
         }
         if (!attacks_on) { plan_set(P_DECIDE); break; }
+        if (e->pushed) {
+            /* Crowded out: straight into a leap, without the gauge or the lists. */
+            plan_set(P_LEAP);
+            break;
+        }
         d = angle_to(px, pz);
         for (i = 0; i < ENEMY_AI_ZONES; ++i) {
             if (distance < enemy_ai_zones[i][0] && fabsf(d) < enemy_ai_zones[i][1] * PI / 180.0f) {
@@ -810,19 +825,32 @@ static void land_attack(int heavy) {
     landed_heavy = heavy;
 }
 
-/* Keep dummies from standing inside each other. */
-static void keep_apart(void) {
+/* Bodies, for one on the ground: other grounded enemies shove it, and it stops at Dante. */
+static void keep_apart(float px, float py, float pz, float f) {
+    float min = ENEMY_RADIUS * 2.0f, shoved = 0.0f, dx, dz, d2;
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
-        Enemy *o = &enemies[i];
-        float dx, dz, d;
-        if (o == e || !o->active) continue;
-        dx = e->pos[0] - o->pos[0]; dz = e->pos[2] - o->pos[2];
-        d = sqrtf(dx * dx + dz * dz);
-        if (d < ENEMY_RADIUS * 2.0f && d > 1e-3f) {
-            e->pos[0] = o->pos[0] + dx / d * ENEMY_RADIUS * 2.0f;
-            e->pos[2] = o->pos[2] + dz / d * ENEMY_RADIUS * 2.0f;
+        const Enemy *o = &enemies[i];
+        if (o == e || !o->active || fabsf(o->pos[1] - e->pos[1]) > 100.0f) continue;
+        dx = e->pos[0] - o->pos[0];
+        if (dx > min || dx < -min) continue;
+        dz = e->pos[2] - o->pos[2];
+        d2 = dx * dx + dz * dz;
+        if (d2 < min * min && d2 > 1e-3f) {
+            float d = sqrtf(d2), move = min - d;
+            e->pos[0] += dx / d * move;
+            e->pos[2] += dz / d * move;
+            if (move > shoved) shoved = move;
         }
+    }
+    e->pushed = shoved > PUSH_LEAPS * f;
+    min = ENEMY_RADIUS + PLAYER_RADIUS;
+    dx = e->pos[0] - px; dz = e->pos[2] - pz;
+    d2 = dx * dx + dz * dz;
+    if (d2 < min * min && d2 > 1e-3f && fabsf(py - e->pos[1]) < 150.0f) {
+        float d = sqrtf(d2), move = (min - d) * ENEMY_YIELDS;
+        e->pos[0] += dx / d * move;
+        e->pos[2] += dz / d * move;
     }
 }
 
@@ -883,7 +911,8 @@ static void update_one(float dt, float px, float py, float pz) {
     {
         float g;
         int leaping = e->action == A_LEAP && e->step == 1;
-        if (!e->air && !leaping) keep_apart();
+        if (!e->air && !leaping) keep_apart(px, py, pz, f);
+        else e->pushed = 0;
         if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
         if (e->air || leaping) {
             if (e->pos[1] < e->floor_y) e->pos[1] = e->floor_y;
@@ -902,7 +931,7 @@ void enemy_update(float dt, float px, float py, float pz) {
     Enemy *selected = e;
     int i;
     ++trace_tick;
-    if (attack_token > 0.0f) attack_token -= dt;
+    if (attack_token > 0.0f) attack_token -= dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f);
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         update_one(dt, px, py, pz);
