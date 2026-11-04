@@ -118,7 +118,7 @@ Invoke-Native "psp-prxgen.exe" @($PrxElf, (Join-Path $Build "testroom.prx"))
 $Eboot = Join-Path $Build "EBOOT.PBP"
 Push-Location -LiteralPath $Build
 try {
-    Invoke-Native "mksfoex.exe" @("-d", "MEMSIZE=1", "DMC3 Test Room", "PARAM.SFO")
+    Invoke-Native "mksfoex.exe" @("-d", "MEMSIZE=1", "Devil May Cry 3 Portable", "PARAM.SFO")
     Invoke-Native "psp-strip.exe" @("testroom.elf", "-o", "testroom_strip.elf")
     Invoke-Native "pack-pbp.exe" @("EBOOT.PBP", "PARAM.SFO", "NULL", "NULL", "NULL", "NULL", "NULL", "testroom_strip.elf", "NULL")
 }

@@ -181,9 +181,13 @@ int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int fram
 
 static void draw_title(int cursor) {
     int i;
-    draw_image(IMG_TITLE);
+    /* Plain white for now, until the port has its own title art and logo: the game's Dante and Vergil
+     * art and its logo are left out. The options are tinted dark to read on it. */
+    sceGuDisable(GU_TEXTURE_2D);
+    sprite(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, SCR_W, SCR_H, 0xffffffffu);
+    sceGuEnable(GU_TEXTURE_2D);
     for (i = 0; i < TITLE_ITEMS; ++i)
-        draw_quad(GROUP_TITLE_OPTIONS, i, i == TITLE_OPTIONS ? LOCKED : i == cursor ? BRIGHT : DIM);
+        draw_quad(GROUP_TITLE_OPTIONS, i, i == TITLE_OPTIONS ? 0x40000000u : i == cursor ? 0xff101010u : 0xff9a9a9au);
 }
 
 /* Easy and Normal only, for now. Row 0's arrows and digit sit one row-height above row 1's. */
