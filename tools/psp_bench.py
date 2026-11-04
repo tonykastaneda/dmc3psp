@@ -152,7 +152,22 @@ def play():
     print("booted on the PSP")
 
 
+def shots():
+    """Pictures from the PSP itself, saved by the game: analysis/testroom/psp_*.png."""
+    from PIL import Image
+    frames = (70, 100)
+    for f in frames:
+        (BUILD / f"SHOT_{f}.BMP").unlink(missing_ok=True)
+    run_scene(["frames 100", "turbo 1", "fps 30", "ramp 120", "rampfrom 4", "rampto 4", "attack 0", "ring 280", "enemy 3000"] +
+              [f"psp_shot {f}" for f in frames], 60)
+    for f in frames:
+        Image.open(BUILD / f"SHOT_{f}.BMP").convert("RGB").save(OUT / f"psp_{f}.png")
+        print(OUT / f"psp_{f}.png")
+
+
 if __name__ == "__main__":
+    if sys.argv[1] == "shots":
+        shots()
     if sys.argv[1] == "play":
         play()
     if sys.argv[1] == "ramp":

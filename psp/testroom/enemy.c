@@ -655,6 +655,5 @@ void enemy_draw(void) {
     }
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
-    sceGuTexMode(GU_PSM_8888, 0, 0, 1);
     e = selected;
 }

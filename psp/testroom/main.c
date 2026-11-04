@@ -91,6 +91,8 @@ static ColorVertex __attribute__((aligned(16))) floor_vertices[FLOOR_VERTEX_COUN
 static ColorVertex __attribute__((aligned(16))) grid_vertices[GRID_VERTEX_COUNT];
 static ModelVertex *model_vertices;   /* skinned every frame */
 static unsigned short *model_indices;
+static int t8_load(void **out, const unsigned char *source, int width, int height);
+static void t8_bind(int width, int height, const void *texture);
 static void *model_textures[DMC3_MODEL_TEXTURE_COUNT];
 static unsigned int __attribute__((aligned(16))) font_texture[FONT_TEX_SIZE * FONT_TEX_SIZE];
 static unsigned int *capture_buffer;
@@ -225,17 +227,29 @@ static int init_model(void) {
     memcpy(model_indices, dmc3_model_indices, sizeof(unsigned short) * DMC3_MODEL_INDEX_COUNT);
     for (i = 0; i < DMC3_MODEL_TEXTURE_COUNT; ++i) {
         const Dmc3Texture *t = &dmc3_model_textures[i];
-        size_t bytes = (size_t)t->width * t->height * 4;
-        model_textures[i] = memalign(16, bytes);
-        if (!model_textures[i]) return 0;
-        memcpy(model_textures[i], t->rgba, bytes);
-        if (!swizzle_texture32(model_textures[i], t->width, t->height)) return 0;
+        if (!t8_load(&model_textures[i], t->rgba, t->width, t->height)) return 0;
     }
     return 1;
 }
 
 /* Linear blend skinning: v' = sum_k w_k * (R_k (v - rest_k) + P_k). The rest
  * pose has identity rotations, so the inverse bind matrix is a translation. */
+/* Character textures are 8-bit: 1024 bytes of palette, then the pixels, swizzled once loaded. */
+#define T8_PALETTE_BYTES 1024
+static int t8_load(void **out, const unsigned char *source, int width, int height) {
+    size_t bytes = T8_PALETTE_BYTES + (size_t)width * height;
+    *out = memalign(16, bytes);
+    if (!*out) return 0;
+    memcpy(*out, source, bytes);
+    if (!swizzle_texture8((unsigned char *)*out + T8_PALETTE_BYTES, width, height)) return 0;
+    sceKernelDcacheWritebackRange(*out, bytes);
+    return 1;
+}
+static void t8_bind(int width, int height, const void *texture) {
+    sceGuClutLoad(256 / 8, texture);
+    sceGuTexImage(0, width, height, width, (const unsigned char *)texture + T8_PALETTE_BYTES);
+}
+
 static void skin_mesh(const Pose *p, const Dmc3Vec3 *positions, const Dmc3Vec3 *normals, const Dmc3Vec3 *rest,
                       const unsigned char (*bones)[3], const unsigned char (*weights)[3], int count, ModelVertex *out) {
     int i, k;
@@ -289,11 +303,7 @@ static const DevilRuntime *devil_ready(int weapon) {
     for (i = 0; i < m->vertex_count; ++i) { r->vertices[i].u = m->uvs[i].u; r->vertices[i].v = m->uvs[i].v; }
     memcpy(r->indices, m->indices, sizeof(unsigned short) * m->index_count);
     for (i = 0; i < m->texture_count && i < 8; ++i) {
-        size_t bytes = (size_t)m->textures[i].width * m->textures[i].height * 4;
-        r->textures[i] = memalign(16, bytes);
-        if (!r->textures[i]) return NULL;
-        memcpy(r->textures[i], m->textures[i].rgba, bytes);
-        if (!swizzle_texture32(r->textures[i], m->textures[i].width, m->textures[i].height)) return NULL;
+        if (!t8_load(&r->textures[i], m->textures[i].rgba, m->textures[i].width, m->textures[i].height)) return NULL;
     }
     return r;
 }
@@ -353,11 +363,9 @@ static int init_guns(void) {
     int g, i;
     for (g = 0; g < GUN_MODEL_COUNT; ++g) {
         GunModel *m = &gun_models[g];
-        size_t bytes = (size_t)m->width * m->height * 4;
         m->vertices = memalign(16, sizeof(ModelVertex) * m->vertex_count);
         m->indices = memalign(16, sizeof(unsigned short) * m->index_count);
-        m->texture = memalign(16, bytes);
-        if (!m->vertices || !m->indices || !m->texture) return 0;
+        if (!m->vertices || !m->indices) return 0;
         for (i = 0; i < m->vertex_count; ++i) {
             ModelVertex *v = &m->vertices[i];
             v->u = m->uvs[i].u; v->v = m->uvs[i].v;
@@ -365,8 +373,7 @@ static int init_guns(void) {
             v->x = m->positions[i].x; v->y = m->positions[i].y; v->z = m->positions[i].z;
         }
         memcpy(m->indices, m->source_indices, sizeof(unsigned short) * m->index_count);
-        memcpy(m->texture, m->rgba, bytes);
-        if (!swizzle_texture32(m->texture, m->width, m->height)) return 0;
+        if (!t8_load(&m->texture, m->rgba, m->width, m->height)) return 0;
     }
     return 1;
 }
@@ -681,7 +688,7 @@ static void draw_weapon_at(const GunModel *m, const float pr[3][3], const float 
     to_gu_matrix(&matrix, r, t);
     sceGumPushMatrix();
     sceGumMultMatrix(&matrix);
-    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    t8_bind(m->width, m->height, m->texture);
     sceGuTexFlush();
     sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, m->index_count, m->indices, m->vertices);
     sceGumPopMatrix();
@@ -744,7 +751,7 @@ static void draw_weapon_animated(const GunModel *m, const float base_r[3][3], co
             }
         }
     }
-    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    t8_bind(m->width, m->height, m->texture);
     sceGuTexFlush();
     for (g = 0; g < m->group_count; ++g) {
         const WeaponGroup *group = &m->groups[g];
@@ -785,7 +792,7 @@ static void place_parent(const GunModel *m, const WeaponPlace *place, float pr[3
 /* Agni & Rudra: each sword is a bone of one model, with its own record. */
 static void draw_two_swords(const GunModel *m, const WeaponPlace *first, const WeaponPlace *second) {
     int g, a, b;
-    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    t8_bind(m->width, m->height, m->texture);
     sceGuTexFlush();
     for (g = 0; g < m->group_count; ++g) {
         const WeaponGroup *group = &m->groups[g];
@@ -831,7 +838,7 @@ static void draw_placed(const GunModel *m, const WeaponPlace *place) {
 static void draw_beowulf(void) {
     const GunModel *m = &gun_models[GUN_BEOWULF];
     int g;
-    sceGuTexImage(0, m->width, m->height, m->width, m->texture);
+    t8_bind(m->width, m->height, m->texture);
     sceGuTexFlush();
     for (g = 0; g < DMC3_BEOWULF_GROUP_COUNT; ++g) {
         const WeaponGroup *group = &dmc3_beowulf_limb_groups[g];
@@ -1012,7 +1019,8 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
-    sceGuTexMode(GU_PSM_8888, 0, 0, 1);   /* character textures are swizzled at load */
+    sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
+    sceGuTexMode(GU_PSM_T8, 0, 0, 1);     /* character textures are 8-bit, swizzled at load */
     if (player->quicksilver) {
         /* Dante stays dark against the pale negative of everything else. */
         sceGumPushMatrix();
@@ -1030,7 +1038,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             if ((int)object->texture != bound_texture) {
                 const Dmc3Texture *t = &m->textures[object->texture];
                 bound_texture = (int)object->texture;
-                sceGuTexImage(0, t->width, t->height, t->width, r->textures[bound_texture]);
+                t8_bind(t->width, t->height, r->textures[bound_texture]);
                 sceGuTexFlush();
             }
             sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)object->index_count, r->indices + object->index_start, r->vertices);
@@ -1041,7 +1049,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         if ((int)object->texture != bound_texture) {
             const Dmc3Texture *t = &dmc3_model_textures[object->texture];
             bound_texture = (int)object->texture;
-            sceGuTexImage(0, t->width, t->height, t->width, model_textures[bound_texture]);
+            t8_bind(t->width, t->height, model_textures[bound_texture]);
             sceGuTexFlush();
         }
         sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)object->index_count,
@@ -1056,7 +1064,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             if ((int)texture != bound_texture) {
                 const Dmc3Texture *t = &dmc3_model_textures[texture];
                 bound_texture = (int)texture;
-                sceGuTexImage(0, t->width, t->height, t->width, model_textures[bound_texture]);
+                t8_bind(t->width, t->height, model_textures[bound_texture]);
                 sceGuTexFlush();
             }
             sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)count, coat_idx + start, coat);
@@ -1077,7 +1085,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         sceGuBlendFunc(GU_ADD, GU_FIX, GU_FIX, 0x90909090u, 0x70707070u);
         sceGuColor(0xff301818u);
         sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGB);
-        sceGuTexImage(0, dmc3_model_textures[0].width, dmc3_model_textures[0].height, dmc3_model_textures[0].width, model_textures[0]);
+        t8_bind(dmc3_model_textures[0].width, dmc3_model_textures[0].height, model_textures[0]);
         sceGuTexFlush();
         sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, DMC3_MODEL_INDEX_COUNT, model_indices, model_vertices);
         sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
@@ -1564,6 +1572,7 @@ static int focus_cmp;
 #define CMP_MAX_FRAMES 1200
 static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
 static int cmp_event_count, cmp_frames;
+static int cmp_game_shots[32];   /* saved by the game itself: works on the PSP and sees only its own picture */
 static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_yaw, cmp_turbo, cmp_fps = 60;
 
 /* The dummy ramp (tools/psp_bench.py): one more dummy every step until the frame rate has clearly
@@ -1614,6 +1623,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "fire ", 5) == 0) bench_fire = atoi(line + 5);
         else if (strncmp(line, "qs ", 3) == 0) bench_quicksilver = atoi(line + 3);
         else if (strncmp(line, "nostage ", 8) == 0) bench_no_stage = atoi(line + 8);
+        else if (strncmp(line, "psp_shot ", 9) == 0) { if (cmp_shot_count < 32) cmp_game_shots[cmp_shot_count++] = atoi(line + 9); }
         else if (strncmp(line, "notex ", 6) == 0) bench_no_texture = atoi(line + 6);
         else if (strncmp(line, "nolight ", 8) == 0) bench_no_lighting = atoi(line + 8);
         else if (strncmp(line, "ring ", 5) == 0) bench_ring = atoi(line + 5);
@@ -2227,7 +2237,8 @@ int main(int argc, char *argv[]) {
                 static char cmp_name[32];
                 int shot;
                 for (shot = 0; shot < cmp_shot_count; ++shot)
-                    if (frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }
+                    if (frames == cmp_game_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "SHOT_%d.BMP", frames); capture_frame(draw_buffer, cmp_name); }
+                    else if (frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }
             }
             if (bench_step_frames > 0 && !bench_done) {
                 int into = (frames - 2) % bench_step_frames;

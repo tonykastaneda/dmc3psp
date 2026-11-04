@@ -1,0 +1,7 @@
+Dummy ramp, base, on the PSP, Turbo
+dummies   FPS  late  worst ms | update  skin  draw   gpu (ms) | cpu+gpu
+      1  30.0     0      33.4 |   0.18  2.79  5.85 16.67      |   25.5
+      2  30.0     0      33.4 |   0.19  2.79  6.99 19.24      |   29.2
+      3  23.1    36      50.1 |   0.20  2.78  8.47 22.20      |   33.6
+      4  20.0    60      50.1 |   0.20  2.79  9.40 25.15      |   37.5
+Holds 30 FPS up to 2 dummies.

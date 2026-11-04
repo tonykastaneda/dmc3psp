@@ -208,7 +208,7 @@ def write_weapon(output: Path, name: str, mod_data: bytes, texture_data: bytes, 
         used = {b for b, w in zip(bones, weights) if w}
         if strict and any(skel["world"][b] != (0.0, 0.0, 0.0) for b in used):
             raise ValueError(f"{name}: vertex bound to a bone away from the origin; not rigid")
-    textures = decode_textures(texture_data)
+    textures = [psp_texture(t) for t in decode_textures(texture_data)]
     up = name.upper()
     # Triangles grouped by the bone they ride on, for the weapon's own motions.
     by_bone = {}
@@ -272,7 +272,7 @@ def write_devils(output: Path, packs) -> None:
         body = part(1)
         skel = parse_skeleton(body)
         mesh = slim_mesh(build_mesh(body, skel["count"]), 0.8)
-        textures = decode_textures(part(0))
+        textures = [psp_texture(t) for t in decode_textures(part(0))]
         n = f"devil{i}"
         lines += [f"static const Dmc3Vec3 {n}_rest[] = {{" + ",".join("{%.4ff,%.4ff,%.4ff}" % tuple(w) for w in skel["world"]) + "};",
                   f"static const Dmc3Vec3 {n}_positions[] = {{", array_lines(mesh["positions"], vec, 4), "};",
@@ -293,6 +293,20 @@ def write_devils(output: Path, packs) -> None:
         print(f"devil{i}: {len(mesh['positions'])} vertices, {len(mesh['indices']) // 3} triangles, {len(textures)} textures, bones {skel['count']}")
     lines += [f"#define DMC3_DEVIL_COUNT {len(packs)}", "static const DevilModel dmc3_devils[] = {" + ",".join(table) + "};", "", "#endif", ""]
     (output / "devil_runtime.h").write_text("\n".join(lines), encoding="ascii")
+
+
+def psp_texture(texture):
+    """Replaces a texture's RGBA with an 8-bit one: 1024 bytes of palette, then the pixels. Tiny ones
+    grow to fit the GE's 16-byte x 8-row swizzle blocks; UVs don't care."""
+    from PIL import Image
+    w, h = texture["width"], texture["height"]
+    if w < 16 or h < 8 or w % 16 or h % 8:
+        nw, nh = max(16, (w + 15) // 16 * 16), max(8, (h + 7) // 8 * 8)
+        image = Image.frombytes("RGBA", (w, h), bytes(texture["rgba"])).resize((nw, nh), Image.Resampling.NEAREST)
+        texture.update(width=nw, height=nh, rgba=image.tobytes())
+    pixels, words = indexed_texture(texture)
+    texture["rgba"] = struct.pack("<256I", *words) + bytes(pixels)
+    return texture
 
 
 def indexed_texture(texture):
@@ -402,6 +416,8 @@ def main() -> None:
         _, rgba, picture = decode_picture(image, 0x80 if image[5] == 1 else 0x10)
         textures.append({"width": picture["width"], "height": picture["height"], "rgba": rgba})
         offset += sector_count * 0x800
+
+    textures = [psp_texture(t) for t in textures]
 
     positions, normals, uvs = mesh["positions"], mesh["normals"], mesh["uvs"]
     bones, weights, indices = mesh["bones"], mesh["weights"], mesh["indices"]
