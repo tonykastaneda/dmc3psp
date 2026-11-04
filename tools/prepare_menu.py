@@ -100,12 +100,17 @@ GROUPS = [
 # lives in .tools/fonts, not the repo; without it the disc's labels stay.
 FONT = Path(__file__).resolve().parents[1] / ".tools" / "fonts" / "CormorantGaramond-Italic[wght].ttf"
 LEFT_EDGE, MIDDLE = "left", "middle"
+# Mission Select's row containers span x -238..25: centred labels sit on their middle, as on the HD Collection,
+# and Save and Load at about 31% and 72% across theirs (measured off the HD Collection's screen).
+BAR_LEFT, BAR_RIGHT = -238.0, 25.0
+BAR_MIDDLE = (BAR_LEFT + BAR_RIGHT) / 2
 RECREATE = {
     "GROUP_TITLE_OPTIONS": {0: ("NEW GAME", MIDDLE), 1: ("LOAD GAME", MIDDLE), 2: ("OPTIONS", MIDDLE)},
     "GROUP_MISSION_LABELS": {12: ("EASY", LEFT_EDGE), 1: ("NORMAL", LEFT_EDGE), 2: ("HARD", LEFT_EDGE),
                              13: ("VERY HARD", LEFT_EDGE), 3: ("DANTE MUST DIE", LEFT_EDGE), 4: ("HEAVEN OR HELL", LEFT_EDGE),
-                             14: ("BLOODY PALACE", MIDDLE), 15: ("DEMO DIGEST", MIDDLE), 5: ("TOTAL RANKING", MIDDLE),
-                             6: ("DEBUG ROOM", MIDDLE), 7: ("SAVE", MIDDLE), 8: ("LOAD", MIDDLE)},
+                             14: ("BLOODY PALACE", BAR_MIDDLE), 15: ("DEMO DIGEST", BAR_MIDDLE), 5: ("TOTAL RANKING", BAR_MIDDLE),
+                             6: ("DEBUG ROOM", BAR_MIDDLE), 7: ("SAVE", BAR_LEFT + 0.31 * (BAR_RIGHT - BAR_LEFT)),
+                             8: ("LOAD", BAR_LEFT + 0.72 * (BAR_RIGHT - BAR_LEFT))},
     "GROUP_CUSTOM_LABELS": {0: ("CUSTOMIZE", LEFT_EDGE), 1: ("STYLE", LEFT_EDGE), 2: ("EQUIP", LEFT_EDGE), 3: ("ITEM", LEFT_EDGE),
                             4: ("ACTION", LEFT_EDGE), 5: ("GUNS", LEFT_EDGE), 6: ("EXIT", LEFT_EDGE)},
 }
@@ -152,8 +157,10 @@ def font_labels(quads, groups):
             width_units = w / 2.0 / UNIT
             if align == LEFT_EDGE:
                 x0 = q[5]
-            else:
+            elif align == MIDDLE:
                 x0 = (q[5] + q[7]) * 0.5 - width_units * 0.5
+            else:   # centred on this x
+                x0 = align - width_units * 0.5
             placed.append((first + index, (x, y, w, h), (x0, q[6], x0 + width_units, q[8])))
             x += w + 2
             row_height = max(row_height, h + 2)

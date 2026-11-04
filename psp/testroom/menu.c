@@ -108,9 +108,14 @@ static void sprite(float u0, float v0, float u1, float v1, float x0, float y0, f
     sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, 0, v);
 }
 
+/* How the 4:3 layout spreads to the screen's width: each piece's centre moves out by SPREAD. A screen whose
+ * pieces must stay together (Mission Select's rows, labels and containers) is drawn as one block instead:
+ * spread 1, moved by an offset. */
+static float layout_spread = SPREAD, layout_dx;
+
 /* Game screen units (Y up, origin at the centre) to PSP pixels. flip mirrors the texture. */
 static void unit_quad(float u0, float v0, float u1, float v1, float x0, float y0, float x1, float y1, unsigned int color, int flip) {
-    float centre = (x0 + x1) * 0.5f * SPREAD, half = (x1 - x0) * 0.5f;
+    float centre = (x0 + x1) * 0.5f * layout_spread + layout_dx, half = (x1 - x0) * 0.5f;
     sprite(flip ? u1 : u0, v0, flip ? u0 : u1, v1,
            SCR_W / 2.0f + (centre - half) * UNIT, SCR_H / 2.0f - y1 * UNIT,
            SCR_W / 2.0f + (centre + half) * UNIT, SCR_H / 2.0f - y0 * UNIT, color);
@@ -133,7 +138,7 @@ static void draw_quad(int group, int index, unsigned int color) { draw_quad_offs
  * a left edge on the disc still share one. */
 static void draw_quad_left(int group, int index, unsigned int color) {
     const Quad *q = group_quad(group, index);
-    float left = SCR_W / 2.0f + q->x0 * SPREAD * UNIT;
+    float left = SCR_W / 2.0f + (q->x0 * layout_spread + layout_dx) * UNIT;
     bind_atlas(q->atlas);
     sprite(q->u0, q->v0, q->u1, q->v1, left, SCR_H / 2.0f - q->y1 * UNIT, left + (q->x1 - q->x0) * UNIT, SCR_H / 2.0f - q->y0 * UNIT, color);
 }
@@ -217,9 +222,12 @@ static void draw_missions(const MenuChoice *c, int row) {
      * work; the others are greyed out until they're in. Gallery's row is the port's Debug Room. */
     static const signed char bars[] = {0, 1, 2, 8, 3, 4, 9, 10, 5, 6, 7, 7};
     static const signed char labels[] = {LABEL_EASY, LABEL_NORMAL, 2, 13, 3, 4, 14, 15, 5, 6, 7, 8};
-    const float row_height = 26.7f;
+    const float row_height = 26.7f, block_middle = -106.5f;   /* the containers' middle, in screen units */
     int i;
     draw_image(IMG_MISSION);
+    /* One block, as on the HD Collection: where the containers' middle would spread to. */
+    layout_spread = 1.0f;
+    layout_dx = block_middle * (SPREAD - 1.0f);
     for (i = 0; i < (int)sizeof(bars); ++i) {
         int working = i < ROWS_SHOWN;
         unsigned int color = !working ? LOCKED : i == row ? BRIGHT : DIM;
@@ -240,6 +248,8 @@ static void draw_missions(const MenuChoice *c, int row) {
         }
         draw_quad_offset(GROUP_MISSION_DIGITS, c->mission - 1, color, 0.0f, -row_height * (float)i, 0);
     }
+    layout_spread = SPREAD;
+    layout_dx = 0.0f;
     if (c->turbo) draw_quad(GROUP_MISSION_TAGS, TAG_TURBO, BRIGHT);
 }
 
