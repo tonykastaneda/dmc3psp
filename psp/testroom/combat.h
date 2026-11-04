@@ -33,6 +33,7 @@ typedef enum {
     MOVE_MILLION_STAB, MOVE_COMBO2_FINISH,        /* 14 (mash) -> rb-09 */
     MOVE_STINGER_DASH, MOVE_STINGER_HOLD, MOVE_STINGER_THRUST, /* 7/8: R + fwd + TRI */
     MOVE_HIGH_TIME,                               /* 10: R + back + TRI */
+    MOVE_HIGH_TIME_RISE,                          /* still holding TRI: he goes up after it (3:13) */
     MOVE_HELM_BREAKER,                            /* 6: TRI in the air */
     MOVE_ROUND_TRIP, MOVE_ROUND_TRIP_CATCH,       /* 13: charge TRI, release */
     /* Swordmaster - Rebellion (GDATA 33, "s33-NN"; dance steps reuse rb-) */
@@ -53,10 +54,11 @@ typedef enum {
     MOVE_TR_AIR_TRICK, MOVE_TR_AIR_TRICK_AIR,     /* 182: 23:15 / 23:16 */
     MOVE_TR_WALL_HIKE, MOVE_TR_WALL_FLIP,         /* 183: 23:5 -> 23:6 */
     /* Not decoded yet: hand-made. */
-    MOVE_TR_AIR_HIKE,
-    MOVE_RG_BLOCK, MOVE_RG_AIR_BLOCK,
+    MOVE_RG_BLOCK, MOVE_RG_HOLD, MOVE_RG_END, MOVE_RG_AIR_BLOCK,
     MOVE_TAUNT,                                   /* SELECT: script 2:0 */
-    MOVE_QUICKSILVER, MOVE_DOPPELGANGER,          /* CIR in those styles: 25:0, 26:0 */
+    MOVE_QUICKSILVER, MOVE_DOPPELGANGER,          /* R1 + CIR in those styles: 25:0, 26:0 */
+    MOVE_DEVIL_ON,                                /* turning Devil Trigger on: 0:50 */
+    MOVE_HIT, MOVE_HIT_HEAVY, MOVE_HIT_AIR,       /* Dante hit: 1:1, 1:0, 1:4 */
     MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT, MOVE_BACKFLIP,
     /* Every other weapon: phases generated from tools/moveset_phases.py. */
     GEN_MOVE_IDS
@@ -130,12 +132,17 @@ typedef struct {
     int sq_mash, cir_short_mash;
     float since_sq, sq_held, cir_held;
     float warp_time, warp_step[3];  /* Air Trick warp (FUN_00226550 state 1-2) */
+    int held_tri, held_sq, held_cir;
+    float air_accum;
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */
 void combat_reset(Combat *combat);
 /* Consumes attack input, advances the current move and applies root motion to
  * the player. Call before player_update; player->attacking is set here. */
+const char *combat_script_key(int script);
+/* An enemy's attack reached Dante, from this point. Returns 0 if he blocked it. */
+int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy);
 void combat_update(Combat *combat, Player *player, const PlayerInput *input, float dt);
 const char *combat_move_name(MoveId move);
 /* Takes the shots fired since the last call; 0 if none. */

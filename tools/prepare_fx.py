@@ -24,6 +24,7 @@ SHEETS = {
     "RAYS": 11,    # top ray fan, bottom lightning
     "GLOW": 13,    # discs, ring, flash streak, lightning
     "LINES": 14,   # speed lines
+    "SEAL": 15,    # 2x2, cell 2 is the round seal of Air Hike and Sky Star
 }
 
 

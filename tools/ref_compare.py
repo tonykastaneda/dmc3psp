@@ -22,8 +22,26 @@ GAME_DIR = Path(r"E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3TESTROOM")
 PLAYER = 0x17E0A40
 
 SCRIPTS = {
-    "qs": (160, [("style4", 5, 6), ("circle", 20, 22), ("shot", 150, 0)]),
-    "dg": (300, [("style5", 5, 6), ("circle", 20, 22), ("ldown", 180, 250), ("shot", 170, 0), ("shot", 205, 0), ("shot", 235, 0), ("shot", 260, 0)]),
+    "lod_auto": (640, [("enemy", 300, 0), ("menu_start", 10, 10), ("menu_down", 13, 13), ("menu_right", 16, 16), ("menu_right", 18, 18), ("menu_right", 20, 20), ("menu_right", 22, 22), ("menu_right", 24, 24), ("menu_right", 26, 26), ("menu_right", 28, 28), ("menu_start", 33, 33), ("shot", 300, 0), ("shot", 303, 0), ("shot", 306, 0)]),
+    "lod_full": (640, [("enemy", 300, 0), ("menu_start", 10, 10), ("menu_down", 13, 13), ("menu_right", 16, 16), ("menu_right", 18, 18), ("menu_right", 20, 20), ("menu_right", 22, 22), ("menu_right", 24, 24), ("menu_right", 26, 26), ("menu_right", 28, 28), ("menu_down", 33, 33), ("menu_down", 35, 35), ("menu_cross", 37, 37), ("menu_start", 40, 40), ("shot", 300, 0)]),
+    "dummies": (900, [("enemy", 300, 0), ("menu_start", 10, 10), ("menu_down", 13, 13), ("menu_right", 16, 16), ("menu_right", 19, 19),
+                      ("menu_right", 22, 22), ("menu_down", 25, 25), ("menu_cross", 28, 28), ("shot", 30, 0), ("menu_start", 33, 33),
+                      ("shot", 120, 0), ("shot", 300, 0), ("shot", 500, 0), ("shot", 700, 0), ("shot", 880, 0)]),
+    "menu2": (120, [("menu_start", 5, 5), ("menu_cross", 8, 8), ("menu_start", 11, 11), ("cross", 20, 22)]),
+    "menu": (240, [("menu_start", 20, 20), ("lup", 22, 38), ("menu_cross", 30, 30), ("shot", 35, 0), ("menu_start", 45, 45),
+                   ("lup", 60, 200), ("shot", 120, 0), ("menu_start", 150, 150), ("menu_down", 155, 155), ("shot", 160, 0),
+                   ("menu_start", 165, 165)]),
+    "a_wall": (340, [("lup", 6, 330), ("cross", 180, 186), ("circle", 215, 221)]),
+    "a_trick": (170, [("r1", 6, 160), ("lup", 20, 60), ("circle", 40, 46), ("enemy", 900, 0)]),
+    "a_jump": (110, [("cross", 6, 12)]),
+    "a_jumpheld": (130, [("cross", 6, 72)]),
+    "a_hike": (140, [("cross", 6, 12), ("cross", 41, 47)]),
+    "a_hikeheld": (150, [("cross", 6, 12), ("cross", 41, 90)]),
+    "a_hikestar": (170, [("cross", 6, 12), ("cross", 41, 47), ("circle", 70, 76)]),
+    "a_starhike": (170, [("cross", 6, 12), ("circle", 41, 47), ("cross", 70, 76)]),
+    "a_star": (110, [("cross", 6, 12), ("circle", 41, 47)]),
+    "qs": (160, [("style4", 5, 6), ("r1", 18, 26), ("circle", 20, 22), ("shot", 30, 0), ("shot", 70, 0), ("shot", 110, 0)]),
+    "dg": (300, [("style5", 5, 6), ("r1", 18, 26), ("circle", 20, 22), ("ldown", 180, 250), ("shot", 170, 0), ("shot", 205, 0), ("shot", 235, 0), ("shot", 260, 0)]),
     "taunt": (200, [("select", 20, 22)]),
     "devil": (130, [("devil", 20, 21), ("shot", 22, 0), ("shot", 40, 0), ("ldown", 45, 75), ("triangle", 85, 87), ("shot", 72, 0), ("shot", 96, 0)]),
     # Trickster: dash, Sky Star (the air dash). Royalguard: block.
@@ -80,7 +98,7 @@ SCRIPTS = {
 def write_port_script(name):
     frames, events = SCRIPTS[name]
     # Option lines: ("shot", frame, 0), ("enemy", cm, 0), ("melee", n, 0), ("gun", n, 0).
-    text = f"frames {frames}\n" + "".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun") else f"{b} {a} {c}\n" for b, a, c in events)
+    text = f"frames {frames}\n" + "".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
     (GAME_DIR / "CMP_SCRIPT.TXT").write_text(text, encoding="ascii")
 
 

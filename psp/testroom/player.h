@@ -36,23 +36,12 @@
  * gravity implied by that descent (265 cm in 25 frames at 60 fps). */
 #define PLAYER_JUMP_SPEED 1590.0f   /* only for jumps without the motion */
 #define PLAYER_GRAVITY 5400.0f      /* 1.5 cm/frame^2, measured on the real game */
-/* Jump arc, measured on the real game (same for standing, running and flips):
- * 7 frames on the ground, not moving, then 35.5 cm/frame losing 2.5 a frame for 10
- * frames, then 3.0 losing 1.5 a frame until the floor. */
+/* Air moves run the real game's states per 60 fps frame (FUN_002224a0 jump, FUN_00222700
+ * Air Hike, FUN_00228950 Enemy Step), from Dante's table at 0x5a85c0: see air_rows in
+ * player.c. All of it was checked against the HD Collection's frame traces. */
 #define JUMP_CROUCH_FRAMES 7.0f
-#define JUMP_RISE_FRAMES 10.0f
-#define JUMP_RISE_SPEED 35.5f
-#define JUMP_RISE_LOSS 2.5f
-#define JUMP_FALL_SPEED 3.0f
-#define JUMP_FALL_LOSS 1.5f
-/* In the air the facing doesn't change. A running jump or a lock-on flip carries on in
- * its direction; the stick adds to that. From a standing jump the stick alone moves him. */
-#define JUMP_CARRY_SPEED 5.45f      /* cm/frame */
-#define JUMP_CARRY_SLOWING 0.03f    /* running jumps only */
-#define JUMP_CARRY_FADE_FRAME 26.0f /* late in the arc it fades */
-#define JUMP_CARRY_FADE 0.27f
-#define JUMP_STICK_SPEED 2.0f       /* stick's part on top of a carry */
-#define JUMP_DRIFT_SPEED 4.25f      /* from a standing jump */
+#define AIR_HIKE_HOLD_FRAMES 7      /* hangs still while the kick plays, then rises */
+#define ENEMY_STEP_COOLDOWN 30.0f   /* frames; the real one is config +0x2dc, not read yet */
 #define JUMP_LAND_STOP_FRAMES 6.0f  /* landing with the stick held: stopped, then starts again */
 #define JUMP_LAND_FRAME 52.0f
 #define JUMP_END_FRAME 69.0f
@@ -80,6 +69,8 @@ typedef enum {
 /* Ground movement states: FUN_002217a0 idle, FUN_00221ba0 start, FUN_00221d20 move. */
 typedef enum { LOCO_IDLE, LOCO_START, LOCO_MOVE } LocoState;
 
+enum { AIR_NONE, AIR_JUMP, AIR_HIKE, AIR_STEP };
+
 typedef struct {
     float x, y, z;     /* y is height above the floor */
     float vy;
@@ -95,7 +86,14 @@ typedef struct {
     int attacking;      /* set by combat: movement and turning are suspended */
     int gun_stance;     /* set by combat: R1 drew the gun, combat walks Dante (player+0x28a6) */
     int free_fall;      /* combat move that keeps gravity (Air Hike, Wall Hike) */
-    int air_hiked;      /* Air Hike used this airtime */
+    int air_kind;       /* AIR_JUMP, AIR_HIKE, AIR_STEP: which state runs the arc */
+    int air_row, air_col, air_stage;  /* table row and column, state step */
+    float air_hold;     /* frames still */
+    float air_timer, air_vy, air_g, air_speed, air_drift, air_accum;  /* per 60 fps frame */
+    int air_hikes, air_stars;   /* left this airtime: Air Hike, Sky Star */
+    float step_cooldown;        /* frames until Enemy Step works again */
+    int enemy_close;            /* an enemy is close enough to step off */
+    int hike_fx;                /* a burst to show this frame: 1 Air Hike, 2 Enemy Step */
     int wall_contact;   /* collision pushed Dante out of a wall this frame */
     int has_target;     /* lock-on has something to face (the training dummy) */
     float target_x, target_y, target_z;
@@ -104,8 +102,6 @@ typedef struct {
     float jump_time;    /* frames since the press */
     float land_stop;    /* frames left stopped after a landing */
     float air_yaw;      /* direction a jump carries him */
-    float air_carry;    /* cm/frame of it, 0 from a stand */
-    int air_flip;       /* a lock-on flip: the carry doesn't slow */
     int flip_request;   /* combat asks for a lock-on flip: 1 forward, -1 back */
     int devil;          /* in Devil Trigger */
     int quicksilver;    /* the world runs slow */
@@ -141,6 +137,7 @@ typedef struct {
     int next_melee, next_gun; /* cycle weapons this frame: L tap, L + square */
     int devil;         /* Devil Trigger toggled this frame: L + R together */
     int taunt;         /* SELECT, as on the real game */
+    int jump_held;     /* CROSS is down: higher jumps and Air Hikes */
     int lock_on;       /* R held */
     int weapon_wheel;  /* L held */
     int melee, gun, style_action, jump, snap_camera, reset, toggle_viewer; /* pressed this frame */
@@ -156,6 +153,10 @@ extern int (*player_floor_fn)(float x, float y, float z, float step, float *out)
 extern int camera_auto_follow;
 
 void player_reset(Player *player, FollowCamera *camera);
+void player_wall_kick(Player *player, float away_yaw);
+/* What one game step counts for: 1 at normal speed, 1.2 in Turbo. The real game runs one step
+ * every 60th of a second with this as its delta, whatever the frame rate here. */
+extern float player_step_scale;
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt);
 const char *player_style_name(Style style);
 const char *player_action_name(Action action);

@@ -69,189 +69,184 @@
     [MOVE_G_66] = {.script = "15:10", .name = "AGNI & RUDRA", .next = MOVE_G_65, .next_on = 5, .start = 68.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_66},
     [MOVE_G_67] = {.script = "6:3", .name = "NEVAN", .next = MOVE_G_68, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_68] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_69] = {.script = "6:9", .name = "NEVAN", .next = MOVE_G_70, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_71, MOVE_G_72, MOVE_G_73}},
-    [MOVE_G_70] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_71] = {.script = "6:33", .name = "NEVAN", .next = MOVE_G_70, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_72] = {.script = "6:33", .name = "NEVAN", .next = MOVE_G_70, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_73] = {.script = "6:33", .name = "NEVAN", .next = MOVE_G_70, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_74] = {.script = "6:10", .name = "NEVAN", .next = MOVE_G_75, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_76, MOVE_G_77, MOVE_G_78}},
-    [MOVE_G_75] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_76] = {.script = "6:30", .name = "NEVAN", .next = MOVE_G_75, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_77] = {.script = "6:30", .name = "NEVAN", .next = MOVE_G_75, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_78] = {.script = "6:30", .name = "NEVAN", .next = MOVE_G_75, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_79] = {.script = "6:11", .name = "MOVE", .next = MOVE_G_80, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_82},
-    [MOVE_G_80] = {.script = "6:12", .name = "MOVE", .next = MOVE_G_81, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_81] = {.script = "6:4", .name = "MOVE", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_82] = {.script = "6:41", .name = "MOVE", .next = MOVE_G_80, .next_on = 5, .start = 60.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_82},
-    [MOVE_G_83] = {.script = "6:16", .name = "NEVAN", .next = MOVE_G_84, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_84] = {.script = "6:17", .name = "NEVAN", .next = MOVE_G_85, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_86, MOVE_G_87, MOVE_G_88}},
-    [MOVE_G_85] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_86] = {.script = "6:36", .name = "NEVAN", .next = MOVE_G_85, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_87] = {.script = "6:36", .name = "NEVAN", .next = MOVE_G_85, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_88] = {.script = "6:36", .name = "NEVAN", .next = MOVE_G_85, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_89] = {.script = "6:16", .name = "MOVE", .next = MOVE_G_90, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_90] = {.script = "6:17", .name = "MOVE", .next = MOVE_G_91, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_92, MOVE_G_93, MOVE_G_94}},
-    [MOVE_G_91] = {.script = "6:4", .name = "MOVE", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_92] = {.script = "6:36", .name = "MOVE", .next = MOVE_G_91, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_93] = {.script = "6:36", .name = "MOVE", .next = MOVE_G_91, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_94] = {.script = "6:36", .name = "MOVE", .next = MOVE_G_91, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_69] = {.script = "6:5", .name = "NEVAN", .next = MOVE_G_70, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_70] = {.script = "6:9", .name = "NEVAN", .next = MOVE_G_71, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_71] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
+    [MOVE_G_72] = {.script = "6:7", .name = "NEVAN", .next = MOVE_G_73, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_73] = {.script = "6:10", .name = "NEVAN", .next = MOVE_G_74, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_74] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
+    [MOVE_G_75] = {.script = "6:11", .name = "MOVE", .next = MOVE_G_76, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_78},
+    [MOVE_G_76] = {.script = "6:12", .name = "MOVE", .next = MOVE_G_77, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_77] = {.script = "6:4", .name = "MOVE", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
+    [MOVE_G_78] = {.script = "6:41", .name = "MOVE", .next = MOVE_G_76, .next_on = 5, .start = 60.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_78},
+    [MOVE_G_79] = {.script = "6:16", .name = "NEVAN", .next = MOVE_G_80, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_80] = {.script = "6:17", .name = "NEVAN", .next = MOVE_G_81, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_82, MOVE_G_83, MOVE_G_84}},
+    [MOVE_G_81] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
+    [MOVE_G_82] = {.script = "6:36", .name = "NEVAN", .next = MOVE_G_81, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_83] = {.script = "6:36", .name = "NEVAN", .next = MOVE_G_81, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_84] = {.script = "6:36", .name = "NEVAN", .next = MOVE_G_81, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_85] = {.script = "6:16", .name = "MOVE", .next = MOVE_G_86, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_86] = {.script = "6:17", .name = "MOVE", .next = MOVE_G_87, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_88, MOVE_G_89, MOVE_G_90}},
+    [MOVE_G_87] = {.script = "6:4", .name = "MOVE", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
+    [MOVE_G_88] = {.script = "6:36", .name = "MOVE", .next = MOVE_G_87, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_89] = {.script = "6:36", .name = "MOVE", .next = MOVE_G_87, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_90] = {.script = "6:36", .name = "MOVE", .next = MOVE_G_87, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_91] = {.script = "6:21", .name = "NEVAN", .next = MOVE_G_92, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_92] = {.script = "6:35", .name = "NEVAN", .next = MOVE_G_93, .next_on = 7, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 30.0000f},
+    [MOVE_G_93] = {.script = "6:20", .name = "NEVAN", .next = MOVE_G_94, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_94] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
     [MOVE_G_95] = {.script = "6:21", .name = "NEVAN", .next = MOVE_G_96, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_96] = {.script = "6:35", .name = "NEVAN", .next = MOVE_G_97, .next_on = 7, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 30.0000f},
+    [MOVE_G_96] = {.script = "6:19", .name = "NEVAN", .next = MOVE_G_97, .next_on = 7, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 30.0000f},
     [MOVE_G_97] = {.script = "6:20", .name = "NEVAN", .next = MOVE_G_98, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_98] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_99] = {.script = "6:21", .name = "NEVAN", .next = MOVE_G_100, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_100] = {.script = "6:19", .name = "NEVAN", .next = MOVE_G_101, .next_on = 7, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 30.0000f},
-    [MOVE_G_101] = {.script = "6:20", .name = "NEVAN", .next = MOVE_G_102, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_99] = {.script = "6:15", .name = "NEVAN", .next = MOVE_G_100, .next_on = 7, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 19.0000f, .air = 1, .air_v = {3.0000f, -0.0500f, 1.5000f, -0.2400f}},
+    [MOVE_G_100] = {.script = "6:34", .name = "NEVAN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {3.0000f, -0.0500f, 1.5000f, -0.2400f}},
+    [MOVE_G_101] = {.script = "16:0", .name = "NEVAN", .next = MOVE_G_102, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_102] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_103] = {.script = "6:15", .name = "NEVAN", .next = MOVE_NONE, .next_on = 6, .start = 7.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_104, MOVE_G_105, MOVE_G_106}, .air = 1, .air_v = {3.0000f, -0.0500f, 1.5000f, -0.2400f}},
-    [MOVE_G_104] = {.script = "6:34", .name = "NEVAN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_105] = {.script = "6:34", .name = "NEVAN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_106] = {.script = "6:34", .name = "NEVAN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_107] = {.script = "16:0", .name = "NEVAN", .next = MOVE_G_108, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_103] = {.script = "16:7", .name = "NEVAN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_104] = {.script = "16:8", .name = "NEVAN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_105] = {.script = "16:3", .name = "NEVAN", .next = MOVE_G_106, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_106] = {.script = "16:21", .name = "NEVAN", .next = MOVE_G_107, .next_on = 0, .start = 31.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_107] = {.script = "16:4", .name = "NEVAN", .next = MOVE_G_108, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_108] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_109] = {.script = "16:7", .name = "NEVAN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_110] = {.script = "16:8", .name = "NEVAN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_111] = {.script = "16:3", .name = "NEVAN", .next = MOVE_G_112, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_112] = {.script = "16:21", .name = "NEVAN", .next = MOVE_G_113, .next_on = 0, .start = 31.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_113] = {.script = "16:4", .name = "NEVAN", .next = MOVE_G_114, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_114] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_115] = {.script = "16:5", .name = "NEVAN", .next = MOVE_G_116, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_116] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_117] = {.script = "16:9", .name = "NEVAN", .next = MOVE_G_118, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_120},
-    [MOVE_G_118] = {.script = "16:10", .name = "NEVAN", .next = MOVE_G_119, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_119] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
-    [MOVE_G_120] = {.script = "16:22", .name = "NEVAN", .next = MOVE_G_118, .next_on = 5, .start = 51.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_120},
-    [MOVE_G_121] = {.script = "6:25", .name = "MOVE", .next = MOVE_G_122, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_122] = {.script = "6:26", .name = "MOVE", .next = MOVE_G_123, .next_on = 7, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 60.0000f},
-    [MOVE_G_123] = {.script = "6:27", .name = "MOVE", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_124] = {.script = "7:3", .name = "BEOWULF", .next = MOVE_G_125, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_125] = {.script = "7:24", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 94.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_126, MOVE_G_127, MOVE_G_128}},
-    [MOVE_G_126] = {.script = "7:3", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 8.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_127] = {.script = "7:41", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 8.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_128] = {.script = "7:42", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 8.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_129] = {.script = "7:4", .name = "BEOWULF", .next = MOVE_G_130, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_130] = {.script = "7:25", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 115.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_131, MOVE_G_132, MOVE_G_133}},
-    [MOVE_G_131] = {.script = "7:4", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_132] = {.script = "7:43", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_133] = {.script = "7:44", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_134] = {.script = "7:5", .name = "BEOWULF", .next = MOVE_G_135, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_135] = {.script = "7:34", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 144.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_136, MOVE_G_137, MOVE_G_138}},
-    [MOVE_G_136] = {.script = "7:5", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 64.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_137] = {.script = "7:45", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 64.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_138] = {.script = "7:46", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 64.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_139] = {.script = "7:7", .name = "BEOWULF", .next = MOVE_G_140, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_140] = {.script = "7:27", .name = "BEOWULF", .next = MOVE_G_141, .next_on = 6, .start = 158.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_142, MOVE_G_143, MOVE_G_144}},
-    [MOVE_G_141] = {.script = "7:8", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_142] = {.script = "7:7", .name = "BEOWULF", .next = MOVE_G_141, .next_on = 0, .start = 84.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_143] = {.script = "7:47", .name = "BEOWULF", .next = MOVE_G_141, .next_on = 0, .start = 84.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_144] = {.script = "7:48", .name = "BEOWULF", .next = MOVE_G_141, .next_on = 0, .start = 84.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_145] = {.script = "7:9", .name = "BEOWULF", .next = MOVE_G_146, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_146] = {.script = "7:28", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 253.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_147, MOVE_G_148, MOVE_G_149}},
-    [MOVE_G_147] = {.script = "7:9", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 154.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_148] = {.script = "7:49", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 154.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_149] = {.script = "7:50", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 154.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_150] = {.script = "7:10", .name = "BEOWULF", .next = MOVE_G_151, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_152},
-    [MOVE_G_151] = {.script = "7:11", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_152] = {.script = "7:40", .name = "BEOWULF", .next = MOVE_G_151, .next_on = 5, .start = 232.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_152},
-    [MOVE_G_153] = {.script = "7:12", .name = "BEOWULF", .next = MOVE_G_154, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, 0.0000f, -8.0000f, -0.1000f}},
-    [MOVE_G_154] = {.script = "7:13", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_155] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_G_156, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_156] = {.script = "7:29", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 99.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_157, MOVE_G_158, MOVE_G_159}},
-    [MOVE_G_157] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_158] = {.script = "7:51", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_159] = {.script = "7:52", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_160] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_G_161, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_161] = {.script = "7:29", .name = "BEOWULF", .next = MOVE_G_162, .next_on = 6, .start = 99.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_163, MOVE_G_164, MOVE_G_165}},
-    [MOVE_G_162] = {.script = "7:15", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, 0.0000f, 30.0000f, -1.3500f}},
-    [MOVE_G_163] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_G_162, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_164] = {.script = "7:51", .name = "BEOWULF", .next = MOVE_G_162, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_165] = {.script = "7:52", .name = "BEOWULF", .next = MOVE_G_162, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_166] = {.script = "7:15", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, 0.0000f, 30.0000f, -1.3500f}},
-    [MOVE_G_167] = {.script = "7:16", .name = "MOVE", .next = MOVE_G_168, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 30.0000f, -1.3500f}},
-    [MOVE_G_168] = {.script = "7:17", .name = "MOVE", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_109] = {.script = "16:5", .name = "NEVAN", .next = MOVE_G_110, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_110] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
+    [MOVE_G_111] = {.script = "16:9", .name = "NEVAN", .next = MOVE_G_112, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_114},
+    [MOVE_G_112] = {.script = "16:10", .name = "NEVAN", .next = MOVE_G_113, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_113] = {.script = "6:4", .name = "NEVAN", .next = MOVE_NONE, .next_on = 8, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 3600.0000f},
+    [MOVE_G_114] = {.script = "16:22", .name = "NEVAN", .next = MOVE_G_112, .next_on = 5, .start = 51.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_114},
+    [MOVE_G_115] = {.script = "6:25", .name = "MOVE", .next = MOVE_G_116, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_116] = {.script = "6:26", .name = "MOVE", .next = MOVE_G_117, .next_on = 7, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .frames = 60.0000f},
+    [MOVE_G_117] = {.script = "6:27", .name = "MOVE", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_118] = {.script = "7:3", .name = "BEOWULF", .next = MOVE_G_119, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_119] = {.script = "7:24", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 94.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_120, MOVE_G_121, MOVE_G_122}},
+    [MOVE_G_120] = {.script = "7:3", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 8.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_121] = {.script = "7:41", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 8.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_122] = {.script = "7:42", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 8.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_123] = {.script = "7:4", .name = "BEOWULF", .next = MOVE_G_124, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_124] = {.script = "7:25", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 115.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_125, MOVE_G_126, MOVE_G_127}},
+    [MOVE_G_125] = {.script = "7:4", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_126] = {.script = "7:43", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_127] = {.script = "7:44", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_128] = {.script = "7:5", .name = "BEOWULF", .next = MOVE_G_129, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_129] = {.script = "7:34", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 144.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_130, MOVE_G_131, MOVE_G_132}},
+    [MOVE_G_130] = {.script = "7:5", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 64.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_131] = {.script = "7:45", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 64.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_132] = {.script = "7:46", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 64.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_133] = {.script = "7:7", .name = "BEOWULF", .next = MOVE_G_134, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_134] = {.script = "7:27", .name = "BEOWULF", .next = MOVE_G_135, .next_on = 6, .start = 158.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_136, MOVE_G_137, MOVE_G_138}},
+    [MOVE_G_135] = {.script = "7:8", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_136] = {.script = "7:7", .name = "BEOWULF", .next = MOVE_G_135, .next_on = 0, .start = 84.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_137] = {.script = "7:47", .name = "BEOWULF", .next = MOVE_G_135, .next_on = 0, .start = 84.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_138] = {.script = "7:48", .name = "BEOWULF", .next = MOVE_G_135, .next_on = 0, .start = 84.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_139] = {.script = "7:9", .name = "BEOWULF", .next = MOVE_G_140, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_140] = {.script = "7:28", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 253.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_141, MOVE_G_142, MOVE_G_143}},
+    [MOVE_G_141] = {.script = "7:9", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 154.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_142] = {.script = "7:49", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 154.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_143] = {.script = "7:50", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 154.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_144] = {.script = "7:10", .name = "BEOWULF", .next = MOVE_G_145, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_146},
+    [MOVE_G_145] = {.script = "7:11", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_146] = {.script = "7:40", .name = "BEOWULF", .next = MOVE_G_145, .next_on = 5, .start = 232.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_146},
+    [MOVE_G_147] = {.script = "7:12", .name = "BEOWULF", .next = MOVE_G_148, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, 0.0000f, -8.0000f, -0.1000f}},
+    [MOVE_G_148] = {.script = "7:13", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_149] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_G_150, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_150] = {.script = "7:29", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 99.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_151, MOVE_G_152, MOVE_G_153}},
+    [MOVE_G_151] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_152] = {.script = "7:51", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_153] = {.script = "7:52", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_154] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_G_155, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_155] = {.script = "7:29", .name = "BEOWULF", .next = MOVE_G_156, .next_on = 6, .start = 99.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_157, MOVE_G_158, MOVE_G_159}},
+    [MOVE_G_156] = {.script = "7:15", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, 0.0000f, 30.0000f, -1.3500f}},
+    [MOVE_G_157] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_G_156, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_158] = {.script = "7:51", .name = "BEOWULF", .next = MOVE_G_156, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_159] = {.script = "7:52", .name = "BEOWULF", .next = MOVE_G_156, .next_on = 0, .start = 23.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_160] = {.script = "7:15", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, 0.0000f, 30.0000f, -1.3500f}},
+    [MOVE_G_161] = {.script = "7:16", .name = "MOVE", .next = MOVE_G_162, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 30.0000f, -1.3500f}},
+    [MOVE_G_162] = {.script = "7:17", .name = "MOVE", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_163] = {.script = "7:30", .name = "BEOWULF", .next = MOVE_G_164, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_164] = {.script = "7:33", .name = "BEOWULF", .next = MOVE_G_165, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_166, MOVE_G_167, MOVE_G_168}},
+    [MOVE_G_165] = {.script = "7:55", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_166] = {.script = "7:31", .name = "BEOWULF", .next = MOVE_G_165, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_167] = {.script = "7:53", .name = "BEOWULF", .next = MOVE_G_165, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_168] = {.script = "7:54", .name = "BEOWULF", .next = MOVE_G_165, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_169] = {.script = "7:30", .name = "BEOWULF", .next = MOVE_G_170, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_170] = {.script = "7:33", .name = "BEOWULF", .next = MOVE_G_171, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_172, MOVE_G_173, MOVE_G_174}},
-    [MOVE_G_171] = {.script = "7:32", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_171] = {.script = "7:55", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_172] = {.script = "7:31", .name = "BEOWULF", .next = MOVE_G_171, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_173] = {.script = "7:53", .name = "BEOWULF", .next = MOVE_G_171, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_174] = {.script = "7:54", .name = "BEOWULF", .next = MOVE_G_171, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_175] = {.script = "7:30", .name = "BEOWULF", .next = MOVE_G_176, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_176] = {.script = "7:33", .name = "BEOWULF", .next = MOVE_G_177, .next_on = 6, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_178, MOVE_G_179, MOVE_G_180}},
-    [MOVE_G_177] = {.script = "7:32", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_178] = {.script = "7:31", .name = "BEOWULF", .next = MOVE_G_177, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_179] = {.script = "7:55", .name = "BEOWULF", .next = MOVE_G_177, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_180] = {.script = "7:56", .name = "BEOWULF", .next = MOVE_G_177, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_181] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_G_182, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_182] = {.script = "17:8", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 96.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_183, MOVE_G_184, MOVE_G_185}},
-    [MOVE_G_183] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 25.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_184] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 25.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_185] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 25.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_186] = {.script = "17:1", .name = "BEOWULF", .next = MOVE_G_187, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_187] = {.script = "17:9", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 108.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_188, MOVE_G_189, MOVE_G_190}},
-    [MOVE_G_188] = {.script = "17:1", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 28.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_189] = {.script = "17:10", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 28.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_190] = {.script = "17:11", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 28.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_191] = {.script = "17:2", .name = "BEOWULF", .next = MOVE_G_192, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, -0.4000f, -20.0000f, -3.7500f}},
-    [MOVE_G_192] = {.script = "17:1", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_193] = {.script = "17:4", .name = "BEOWULF", .next = MOVE_G_194, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_195, .air = 1, .air_v = {0.0000f, 0.0000f, 0.7000f, -0.0150f}},
-    [MOVE_G_194] = {.script = "17:5", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_195] = {.script = "17:4", .name = "BEOWULF", .next = MOVE_G_194, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_195},
-    [MOVE_G_196] = {.script = "17:6", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {5.0000f, -0.5000f, 3.0000f, -0.3000f}},
-    [MOVE_G_197] = {.script = "17:3", .name = "BEOWULF", .next = MOVE_G_198, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_198] = {.script = "17:7", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 45.0000f, -2.6000f}},
-    [MOVE_G_199] = {.script = "8:6", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 9, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1, .refire = 7.0000f, .frames = 13.0000f},
-    [MOVE_G_200] = {.script = "8:6", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 9, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1, .refire = 7.0000f, .frames = 13.0000f},
-    [MOVE_G_201] = {.script = "8:15", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_202] = {.script = "8:15", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_203] = {.script = "18:0", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
-    [MOVE_G_204] = {.script = "18:15", .name = "EBONY & IVORY", .next = MOVE_G_205, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_205] = {.script = "18:16", .name = "EBONY & IVORY", .next = MOVE_G_206, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .frames = 45.0000f, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, 0.0000f}},
-    [MOVE_G_206] = {.script = "18:18", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_207] = {.script = "8:33", .name = "EBONY & IVORY", .next = MOVE_G_208, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_208] = {.script = "8:34", .name = "EBONY & IVORY", .next = MOVE_G_209, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .btn = BTN_SQ, .loop_move = MOVE_G_210},
-    [MOVE_G_209] = {.script = "8:39", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_210] = {.script = "8:34", .name = "EBONY & IVORY", .next = MOVE_G_209, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .btn = BTN_SQ, .loop_move = MOVE_G_210},
-    [MOVE_G_211] = {.script = "9:6", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1},
-    [MOVE_G_212] = {.script = "9:6", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1},
-    [MOVE_G_213] = {.script = "9:15", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_214] = {.script = "9:15", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_215] = {.script = "19:0", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_216] = {.script = "19:1", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_217] = {.script = "19:2", .name = "SHOTGUN", .next = MOVE_G_218, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_218] = {.script = "19:3", .name = "SHOTGUN", .next = MOVE_G_219, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .frames = 20.0000f},
-    [MOVE_G_219] = {.script = "19:4", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_220] = {.script = "19:5", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_221},
-    [MOVE_G_221] = {.script = "19:5", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_221},
-    [MOVE_G_222] = {.script = "10:3", .name = "ARTEMIS", .next = MOVE_G_223, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_223] = {.script = "10:4", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_224] = {.script = "10:13", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_225] = {.script = "10:3", .name = "ARTEMIS", .next = MOVE_G_226, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_226] = {.script = "10:4", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_227] = {.script = "10:13", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_228] = {.script = "20:2", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_229] = {.script = "20:3", .name = "ARTEMIS", .next = MOVE_G_230, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_231},
-    [MOVE_G_230] = {.script = "20:4", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_231] = {.script = "20:3", .name = "ARTEMIS", .next = MOVE_G_230, .next_on = 5, .start = 69.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_231},
-    [MOVE_G_232] = {.script = "11:2", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .lock_move = MOVE_G_233, .shot = 1},
-    [MOVE_G_233] = {.script = "11:6", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_234] = {.script = "21:0", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_235] = {.script = "21:1", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_236] = {.script = "12:2", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .lock_move = MOVE_G_237, .shot = 1},
-    [MOVE_G_237] = {.script = "12:6", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_238] = {.script = "22:2", .name = "KALINA ANN", .next = MOVE_G_239, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_239] = {.script = "22:3", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_240] = {.script = "22:0", .name = "KALINA ANN", .next = MOVE_G_241, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
-    [MOVE_G_241] = {.script = "22:1", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
-    [MOVE_G_242] = {.script = "24:15", .name = "ROYALGUARD", .next = MOVE_G_243, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_243] = {.script = "24:16", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_244] = {.script = "24:17", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_245] = {.script = "24:40", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_246] = {.script = "24:46", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
-    [MOVE_G_247] = {.script = "24:18", .name = "ROYALGUARD", .next = MOVE_G_248, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, 0.0000f}},
-    [MOVE_G_248] = {.script = "24:19", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_249] = {.script = "24:20", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_250] = {.script = "24:52", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_251] = {.script = "24:58", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_175] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_G_176, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_176] = {.script = "17:8", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 96.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_177, MOVE_G_178, MOVE_G_179}},
+    [MOVE_G_177] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 25.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_178] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 25.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_179] = {.script = "17:0", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 25.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_180] = {.script = "17:1", .name = "BEOWULF", .next = MOVE_G_181, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_181] = {.script = "17:9", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 108.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_182, MOVE_G_183, MOVE_G_184}},
+    [MOVE_G_182] = {.script = "17:1", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 28.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_183] = {.script = "17:10", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 28.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_184] = {.script = "17:11", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 28.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_185] = {.script = "17:2", .name = "BEOWULF", .next = MOVE_G_186, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, -0.4000f, -20.0000f, -3.7500f}},
+    [MOVE_G_186] = {.script = "17:1", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = 29.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_187] = {.script = "17:4", .name = "BEOWULF", .next = MOVE_G_188, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_189, .air = 1, .air_v = {0.0000f, 0.0000f, 0.7000f, -0.0150f}},
+    [MOVE_G_188] = {.script = "17:5", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_189] = {.script = "17:4", .name = "BEOWULF", .next = MOVE_G_188, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_CIR, .loop_move = MOVE_G_189},
+    [MOVE_G_190] = {.script = "17:6", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {5.0000f, -0.5000f, 3.0000f, -0.3000f}},
+    [MOVE_G_191] = {.script = "17:3", .name = "BEOWULF", .next = MOVE_G_192, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_192] = {.script = "17:7", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 45.0000f, -2.6000f}},
+    [MOVE_G_193] = {.script = "8:6", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 9, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1, .refire = 7.0000f, .frames = 13.0000f},
+    [MOVE_G_194] = {.script = "8:6", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 9, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1, .refire = 7.0000f, .frames = 13.0000f},
+    [MOVE_G_195] = {.script = "8:32", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 11.0000f, -1.2500f}},
+    [MOVE_G_196] = {.script = "8:32", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 11.0000f, -1.2500f}},
+    [MOVE_G_197] = {.script = "18:0", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
+    [MOVE_G_198] = {.script = "18:15", .name = "EBONY & IVORY", .next = MOVE_G_199, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_199] = {.script = "18:16", .name = "EBONY & IVORY", .next = MOVE_G_200, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .btn = BTN_CIR, .loop_move = MOVE_G_201, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, 0.0000f}},
+    [MOVE_G_200] = {.script = "18:17", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_201] = {.script = "18:16", .name = "EBONY & IVORY", .next = MOVE_G_200, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .btn = BTN_CIR, .loop_move = MOVE_G_201},
+    [MOVE_G_202] = {.script = "8:33", .name = "EBONY & IVORY", .next = MOVE_G_203, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_203] = {.script = "8:34", .name = "EBONY & IVORY", .next = MOVE_G_204, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .btn = BTN_SQ, .loop_move = MOVE_G_205},
+    [MOVE_G_204] = {.script = "8:39", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_205] = {.script = "8:34", .name = "EBONY & IVORY", .next = MOVE_G_204, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .btn = BTN_SQ, .loop_move = MOVE_G_205},
+    [MOVE_G_206] = {.script = "9:6", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1},
+    [MOVE_G_207] = {.script = "9:6", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1},
+    [MOVE_G_208] = {.script = "9:39", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 13.0000f, -1.2500f}},
+    [MOVE_G_209] = {.script = "9:39", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 13.0000f, -1.2500f}},
+    [MOVE_G_210] = {.script = "19:0", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_211] = {.script = "19:1", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_212] = {.script = "19:2", .name = "SHOTGUN", .next = MOVE_G_213, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_213] = {.script = "19:3", .name = "SHOTGUN", .next = MOVE_G_214, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .frames = 20.0000f},
+    [MOVE_G_214] = {.script = "19:4", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_215] = {.script = "19:5", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_216},
+    [MOVE_G_216] = {.script = "19:5", .name = "SHOTGUN", .next = MOVE_NONE, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_216},
+    [MOVE_G_217] = {.script = "10:3", .name = "ARTEMIS", .next = MOVE_G_218, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .frames = 4.0000f},
+    [MOVE_G_218] = {.script = "10:4", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_219] = {.script = "10:13", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_220] = {.script = "10:3", .name = "ARTEMIS", .next = MOVE_G_221, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .frames = 4.0000f},
+    [MOVE_G_221] = {.script = "10:4", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_222] = {.script = "10:13", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_223] = {.script = "20:2", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_224] = {.script = "20:3", .name = "ARTEMIS", .next = MOVE_G_225, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_226},
+    [MOVE_G_225] = {.script = "20:4", .name = "ARTEMIS", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_226] = {.script = "20:3", .name = "ARTEMIS", .next = MOVE_G_225, .next_on = 5, .start = 69.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .btn = BTN_CIR, .loop_move = MOVE_G_226},
+    [MOVE_G_227] = {.script = "11:7", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .lock_move = MOVE_G_228, .shot = 1},
+    [MOVE_G_228] = {.script = "11:8", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_229] = {.script = "21:0", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_230] = {.script = "21:1", .name = "SPIRAL", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_231] = {.script = "12:7", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .lock_move = MOVE_G_232, .shot = 1},
+    [MOVE_G_232] = {.script = "12:8", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_233] = {.script = "22:2", .name = "KALINA ANN", .next = MOVE_G_234, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .frames = 139.0000f},
+    [MOVE_G_234] = {.script = "22:3", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_235] = {.script = "22:0", .name = "KALINA ANN", .next = MOVE_G_236, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
+    [MOVE_G_236] = {.script = "22:1", .name = "KALINA ANN", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1},
+    [MOVE_G_237] = {.script = "24:15", .name = "ROYALGUARD", .next = MOVE_G_238, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_238] = {.script = "24:16", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_239] = {.script = "24:17", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_240] = {.script = "24:40", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_241] = {.script = "24:46", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
+    [MOVE_G_242] = {.script = "24:18", .name = "ROYALGUARD", .next = MOVE_G_243, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, 0.0000f}},
+    [MOVE_G_243] = {.script = "24:19", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_244] = {.script = "24:20", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_245] = {.script = "24:52", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_246] = {.script = "24:58", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
 #else
 static MoveId gen_action_move(int action) {
     switch (action) {
@@ -296,74 +291,74 @@ static MoveId gen_action_move(int action) {
     case 71: return MOVE_G_64;
     case 80: return MOVE_G_67;
     case 81: return MOVE_G_69;
-    case 82: return MOVE_G_74;
-    case 83: return MOVE_G_79;
-    case 84: return MOVE_G_83;
-    case 85: return MOVE_G_89;
-    case 86: return MOVE_G_95;
-    case 87: return MOVE_G_99;
-    case 88: return MOVE_G_103;
-    case 89: return MOVE_G_107;
-    case 90: return MOVE_G_109;
-    case 91: return MOVE_G_110;
-    case 92: return MOVE_G_111;
-    case 93: return MOVE_G_115;
-    case 94: return MOVE_G_117;
-    case 95: return MOVE_G_121;
-    case 110: return MOVE_G_124;
-    case 111: return MOVE_G_129;
-    case 112: return MOVE_G_134;
-    case 113: return MOVE_G_139;
-    case 114: return MOVE_G_145;
-    case 115: return MOVE_G_150;
-    case 116: return MOVE_G_153;
-    case 117: return MOVE_G_155;
-    case 118: return MOVE_G_160;
-    case 119: return MOVE_G_166;
-    case 120: return MOVE_G_167;
-    case 121: return MOVE_G_169;
-    case 122: return MOVE_G_175;
-    case 123: return MOVE_G_181;
-    case 124: return MOVE_G_186;
-    case 125: return MOVE_G_191;
-    case 126: return MOVE_G_193;
-    case 127: return MOVE_G_196;
-    case 128: return MOVE_G_197;
-    case 130: return MOVE_G_199;
-    case 131: return MOVE_G_200;
-    case 132: return MOVE_G_201;
-    case 133: return MOVE_G_202;
-    case 134: return MOVE_G_203;
-    case 135: return MOVE_G_204;
-    case 136: return MOVE_G_207;
-    case 140: return MOVE_G_211;
-    case 141: return MOVE_G_212;
-    case 142: return MOVE_G_213;
-    case 143: return MOVE_G_214;
-    case 144: return MOVE_G_215;
-    case 145: return MOVE_G_216;
-    case 146: return MOVE_G_217;
-    case 147: return MOVE_G_220;
-    case 150: return MOVE_G_222;
-    case 151: return MOVE_G_224;
-    case 152: return MOVE_G_225;
-    case 153: return MOVE_G_227;
-    case 154: return MOVE_G_228;
-    case 155: return MOVE_G_229;
-    case 160: return MOVE_G_232;
-    case 161: return MOVE_G_234;
-    case 162: return MOVE_G_235;
-    case 170: return MOVE_G_236;
-    case 171: return MOVE_G_238;
-    case 172: return MOVE_G_240;
-    case 190: return MOVE_G_242;
-    case 191: return MOVE_G_244;
-    case 192: return MOVE_G_245;
-    case 193: return MOVE_G_246;
-    case 194: return MOVE_G_247;
-    case 195: return MOVE_G_249;
-    case 196: return MOVE_G_250;
-    case 197: return MOVE_G_251;
+    case 82: return MOVE_G_72;
+    case 83: return MOVE_G_75;
+    case 84: return MOVE_G_79;
+    case 85: return MOVE_G_85;
+    case 86: return MOVE_G_91;
+    case 87: return MOVE_G_95;
+    case 88: return MOVE_G_99;
+    case 89: return MOVE_G_101;
+    case 90: return MOVE_G_103;
+    case 91: return MOVE_G_104;
+    case 92: return MOVE_G_105;
+    case 93: return MOVE_G_109;
+    case 94: return MOVE_G_111;
+    case 95: return MOVE_G_115;
+    case 110: return MOVE_G_118;
+    case 111: return MOVE_G_123;
+    case 112: return MOVE_G_128;
+    case 113: return MOVE_G_133;
+    case 114: return MOVE_G_139;
+    case 115: return MOVE_G_144;
+    case 116: return MOVE_G_147;
+    case 117: return MOVE_G_149;
+    case 118: return MOVE_G_154;
+    case 119: return MOVE_G_160;
+    case 120: return MOVE_G_161;
+    case 121: return MOVE_G_163;
+    case 122: return MOVE_G_169;
+    case 123: return MOVE_G_175;
+    case 124: return MOVE_G_180;
+    case 125: return MOVE_G_185;
+    case 126: return MOVE_G_187;
+    case 127: return MOVE_G_190;
+    case 128: return MOVE_G_191;
+    case 130: return MOVE_G_193;
+    case 131: return MOVE_G_194;
+    case 132: return MOVE_G_195;
+    case 133: return MOVE_G_196;
+    case 134: return MOVE_G_197;
+    case 135: return MOVE_G_198;
+    case 136: return MOVE_G_202;
+    case 140: return MOVE_G_206;
+    case 141: return MOVE_G_207;
+    case 142: return MOVE_G_208;
+    case 143: return MOVE_G_209;
+    case 144: return MOVE_G_210;
+    case 145: return MOVE_G_211;
+    case 146: return MOVE_G_212;
+    case 147: return MOVE_G_215;
+    case 150: return MOVE_G_217;
+    case 151: return MOVE_G_219;
+    case 152: return MOVE_G_220;
+    case 153: return MOVE_G_222;
+    case 154: return MOVE_G_223;
+    case 155: return MOVE_G_224;
+    case 160: return MOVE_G_227;
+    case 161: return MOVE_G_229;
+    case 162: return MOVE_G_230;
+    case 170: return MOVE_G_231;
+    case 171: return MOVE_G_233;
+    case 172: return MOVE_G_235;
+    case 190: return MOVE_G_237;
+    case 191: return MOVE_G_239;
+    case 192: return MOVE_G_240;
+    case 193: return MOVE_G_241;
+    case 194: return MOVE_G_242;
+    case 195: return MOVE_G_244;
+    case 196: return MOVE_G_245;
+    case 197: return MOVE_G_246;
     default: return MOVE_NONE;
     }
 }

@@ -15,6 +15,7 @@ void fx_draw(const float eye[3]);
 void fx_draw_shadow(float x, float y, float z, float radius, unsigned int alpha);
 
 void fx_screen_tint(unsigned int color);   /* a flat wash over the whole picture */
+void fx_screen_negative(void);
 void fx_devil_burst(const float at[3]);   /* Devil Trigger's change */
 void fx_devil_aura(const float at[3]);    /* each frame while it lasts */
 void fx_muzzle(const float at[3], const float dir[3], unsigned int color);
@@ -24,7 +25,9 @@ void fx_hit_spark(const float at[3]);
 void fx_wall_spark(const float at[3]);
 void fx_explosion(const float at[3]);
 void fx_dust(const float at[3]);              /* landing, a roll */
-void fx_jump_burst(const float at[3]);        /* Air Hike */
+void fx_jump_burst(const float at[3]);        /* Enemy Step */
+void fx_hike_seal(const float at[3], unsigned int color);
+void fx_star_seal(const float at[3], const float direction[3], unsigned int color);
 void fx_streak(const float from[3], const float to[3]);   /* Trickster dash, Sky Star */
 void fx_guard_flash(const float at[3]);       /* Royalguard */
 

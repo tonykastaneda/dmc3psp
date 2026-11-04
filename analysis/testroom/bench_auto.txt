@@ -1,0 +1,7 @@
+Dummy ramp, attacking, AUTO animation, on the PSP, Turbo
+dummies   FPS  late  worst ms | update  skin  draw   gpu (ms) | cpu+gpu
+      1  30.0     0      33.4 |   0.19  2.79  6.23 16.15      |   25.4
+      2  29.9     0      33.4 |   0.21  2.77  6.96 19.80      |   29.7
+      3  22.8    38      50.1 |   0.21  2.75  8.25 22.72      |   33.9
+      4  20.0    60      50.1 |   0.23  2.77 10.28 25.09      |   38.4
+Holds 30 FPS up to 2 dummies.

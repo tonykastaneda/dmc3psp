@@ -489,6 +489,37 @@ static void draw_text(int x, int y, const char *text) {
     sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, count * 2, 0, v);
 }
 
+/* START: the debug menu. The game stops while it's open. Turbo is the real game's mode:
+ * everything runs 1.2x as fast. It's the default in play; test scenes run at normal speed. */
+#define TURBO_SPEED 1.2f
+enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_ACTION, DEBUG_ANIM, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
+static int dummy_anim_auto = 1;
+static int debug_open, debug_cursor, game_turbo = 1;
+static int dummy_count = 1, dummy_attacks;
+static unsigned int debug_pressed;   /* buttons pressed this frame */
+
+/* Returns 1 when the animation viewer should toggle. */
+static int debug_menu_update(unsigned int pressed) {
+    int toggle_viewer = 0;
+    if (!debug_open) {
+        if (pressed & PSP_CTRL_START) { debug_open = 1; debug_cursor = 0; }
+        return 0;
+    }
+    if (pressed & (PSP_CTRL_START | PSP_CTRL_CIRCLE)) debug_open = 0;
+    if (pressed & PSP_CTRL_UP) debug_cursor = (debug_cursor + DEBUG_ITEMS - 1) % DEBUG_ITEMS;
+    if (pressed & PSP_CTRL_DOWN) debug_cursor = (debug_cursor + 1) % DEBUG_ITEMS;
+    if (debug_cursor == DEBUG_SPEED && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) game_turbo = !game_turbo;
+    if (debug_cursor == DEBUG_DUMMIES) {
+        if (pressed & (PSP_CTRL_CROSS | PSP_CTRL_RIGHT)) dummy_count = (dummy_count + 1) % (ENEMY_MAX + 1);
+        if (pressed & PSP_CTRL_LEFT) dummy_count = (dummy_count + ENEMY_MAX) % (ENEMY_MAX + 1);
+    }
+    if (debug_cursor == DEBUG_ACTION && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) dummy_attacks = !dummy_attacks;
+    if (debug_cursor == DEBUG_ANIM && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) dummy_anim_auto = !dummy_anim_auto;
+    if (debug_cursor == DEBUG_VIEWER && (pressed & PSP_CTRL_CROSS)) toggle_viewer = 1;
+    if (debug_cursor == DEBUG_RESUME && (pressed & PSP_CTRL_CROSS)) debug_open = 0;
+    return toggle_viewer;
+}
+
 #define HUD_LINES 4
 static char fps_line[12];   /* top right, always on */
 static void draw_hud(const char *lines[HUD_LINES]) {
@@ -883,6 +914,35 @@ static void draw_lock_on_reticle(const Player *p, const FollowCamera *c) {
 static float doppel_trail[DOPPEL_FRAMES][4];
 static int doppel_head;
 
+static void draw_debug_menu(int viewer) {
+    char lines[DEBUG_ITEMS][32];
+    int i, x = SCR_WIDTH / 2 - 88, y = SCR_HEIGHT / 2 - 46;
+    snprintf(lines[DEBUG_SPEED], sizeof(lines[0]), "Game speed     %s", game_turbo ? "TURBO" : "NORMAL");
+    snprintf(lines[DEBUG_DUMMIES], sizeof(lines[0]), "Dummies        %d", dummy_count);
+    snprintf(lines[DEBUG_ACTION], sizeof(lines[0]), "Dummy action   %s", dummy_attacks ? "ATTACK" : "STAND");
+    if (dummy_anim_auto) snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     AUTO %d", enemy_anim_rate());
+    else snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     FULL");
+    snprintf(lines[DEBUG_VIEWER], sizeof(lines[0]), "Anim viewer    %s", viewer ? "ON" : "OFF");
+    snprintf(lines[DEBUG_RESUME], sizeof(lines[0]), "Resume");
+    fx_screen_tint(0xa0000000u);
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_LIGHTING);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuTexImage(0, FONT_TEX_SIZE, FONT_TEX_SIZE, FONT_TEX_SIZE, font_texture);
+    sceGuTexFilter(GU_NEAREST, GU_NEAREST);
+    sceGuTexFlush();
+    sceGuColor(0xffffffffu);
+    draw_text(x, y, "DEBUG");
+    for (i = 0; i < DEBUG_ITEMS; ++i) {
+        sceGuColor(i == debug_cursor ? 0xff40e0ffu : 0xffffffffu);
+        if (i == debug_cursor) draw_text(x - 12, y + 16 + i * 12, ">");
+        draw_text(x, y + 16 + i * 12, lines[i]);
+    }
+    sceGuColor(0xffa0a0a0u);
+    draw_text(x, y + 16 + DEBUG_ITEMS * 12 + 8, "X change  O close");
+    sceGuColor(0xffffffffu);
+}
+
 static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
@@ -952,6 +1012,15 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
     sceGuTexMode(GU_PSM_8888, 0, 0, 1);   /* character textures are swizzled at load */
+    if (player->quicksilver) {
+        /* Dante stays dark against the pale negative of everything else. */
+        sceGumPushMatrix();
+        enemy_draw();
+        sceGumPopMatrix();
+        fx_screen_negative();
+        sceGuDisable(GU_LIGHTING);
+        sceGuColor(0xff282830u);
+    }
     if (player->devil && player->melee_weapon < DMC3_DEVIL_COUNT && devil_ready(player->melee_weapon)) {
         const DevilModel *m = &dmc3_devils[player->melee_weapon];
         const DevilRuntime *r = devil_ready(player->melee_weapon);
@@ -1018,7 +1087,12 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     }
     draw_weapons(player);
     bound_texture = -1;
-    enemy_draw();
+    if (player->quicksilver) {
+        sceGuEnable(GU_LIGHTING);
+        sceGuColor(0xffffffffu);
+    } else {
+        enemy_draw();
+    }
     {
         float eye[3] = {camera->x, camera->y, camera->z};
         fx_draw(eye);
@@ -1026,13 +1100,13 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
-    if (player->quicksilver) fx_screen_tint(0x38402810u);
     if (!anim.viewer) {
         hud_draw(player);
         draw_lock_on_reticle(player, camera);
     }
     draw_hud(hud);
     if (player->weapon_wheel) draw_weapon_wheel(player);
+    if (debug_open) draw_debug_menu(anim.viewer);
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -1109,8 +1183,9 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons, int *pr
     input->style_held = (pad.Buttons & PSP_CTRL_CIRCLE) != 0;
     input->melee_held = (pad.Buttons & PSP_CTRL_TRIANGLE) != 0;
     input->jump = (pressed & PSP_CTRL_CROSS) != 0;
+    input->jump_held = (pad.Buttons & PSP_CTRL_CROSS) != 0;
     input->taunt = (pressed & PSP_CTRL_SELECT) != 0;
-    input->toggle_viewer = (pressed & PSP_CTRL_START) != 0;
+    debug_pressed = pressed;
 }
 
 /* Scripted input for the automated test (240 frames). */
@@ -1371,7 +1446,13 @@ static void model_to_world(const Player *p, const float m[3], float out[3]) {
 }
 
 /* Effects tied to the moves and to the player's state, once a frame. */
-static void update_move_fx(const Combat *c, const Player *p, float dt) {
+/* Air Hike's seal takes the melee weapon's colour; only these three weapons have the move.
+ * 0xAABBGGRR, from the HD Collection. Sky Star's is always red. */
+static unsigned int weapon_fx_color(const Player *p) {
+    return p->melee_weapon == 2 ? 0xff2090ffu : p->melee_weapon == 4 ? 0xffffffffu : 0xff2020ffu;
+}
+
+static void update_move_fx(const Combat *c, Player *p, float dt) {
     if (p->melee_weapon != 4) weapon_motion_update(&gun_models[p->melee_weapon], combat_weapon_place(c, p, p->melee_weapon, 0), c, dt);
     weapon_motion_update(&gun_models[p->gun_weapon], combat_weapon_place(c, p, p->gun_weapon, 0), c, dt);
     static MoveId last_move = MOVE_NONE;
@@ -1380,10 +1461,20 @@ static void update_move_fx(const Combat *c, const Player *p, float dt) {
     float feet[3] = {p->x, p->y, p->z};
     if (c->move != last_move) {
         switch (c->move) {
-        case MOVE_TR_AIR_HIKE: fx_jump_burst(feet); break;
+        case MOVE_TR_SKY_STAR: {
+            float chest[3] = {p->x, p->y + 100.0f, p->z};
+            float way[3] = {sinf(p->yaw), 0.0f, cosf(p->yaw)};
+            fx_star_seal(chest, way, 0xff2020ffu);
+            break;
+        }
         default: break;
         }
         last_move = c->move;
+    }
+    if (p->hike_fx) {
+        if (p->hike_fx == 1) fx_hike_seal(feet, weapon_fx_color(p));
+        else fx_jump_burst(feet);
+        p->hike_fx = 0;
     }
     was_on_ground = p->on_ground;
     last_vy = p->vy;
@@ -1472,9 +1563,36 @@ static int focus_cmp;
 #define CMP_MAX_FRAMES 1200
 static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
 static int cmp_event_count, cmp_frames;
-static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000;
+static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_yaw, cmp_turbo, cmp_fps = 60;
+
+/* The dummy ramp (tools/psp_bench.py): one more dummy every step until the frame rate has clearly
+ * gone, measuring the second half of each step, on the real PSP. Options in CMP_SCRIPT.TXT. */
+#define BENCH_MIN_FPS 25.0f
+#define BENCH_LOW_STEPS 2
+typedef struct {
+    int dummies;
+    unsigned int frames, late, gap_max, elapsed, update, skin, draw, gpu;
+} BenchStep;
+static BenchStep bench_steps[ENEMY_MAX + 1];
+static int bench_step_frames, bench_count, bench_fire, bench_quicksilver, bench_devil, bench_attack = 1, bench_anim = 1, bench_start = 1, bench_max = ENEMY_MAX;
+static int bench_low_steps, bench_done;
+static int bench_measuring;
+static unsigned int bench_began;
+
+static void bench_add(unsigned int gap, unsigned int update, unsigned int skin) {
+    BenchStep *b;
+    if (!bench_measuring || bench_count >= ENEMY_MAX + 1) return;
+    b = &bench_steps[bench_count];
+    ++b->frames;
+    if (gap > 34000u) ++b->late;
+    if (gap > b->gap_max) b->gap_max = gap;
+    b->update += update;
+    b->skin += skin;
+    b->draw += perf_draw_us;
+    b->gpu += perf_gpu_us;
+}
 static int cmp_melee = -1, cmp_gun = -1;
-static struct { float x, y, z, yaw; short move; } cmp_log[CMP_MAX_FRAMES];
+static struct { float x, y, z, yaw; short move, script; } cmp_log[CMP_MAX_FRAMES];
 static void cmp_load(void) {
     char path[320], line[64];
     FILE *f;
@@ -1485,6 +1603,17 @@ static void cmp_load(void) {
         if (strncmp(line, "frames ", 7) == 0) cmp_frames = atoi(line + 7);
         else if (strncmp(line, "shot ", 5) == 0) { if (cmp_shot_count < 32) cmp_shots[cmp_shot_count++] = atoi(line + 5); }
         else if (strncmp(line, "enemy ", 6) == 0) cmp_enemy_distance = atoi(line + 6);
+        else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
+        else if (strncmp(line, "turbo ", 6) == 0) cmp_turbo = atoi(line + 6);
+        else if (strncmp(line, "ramp ", 5) == 0) bench_step_frames = atoi(line + 5);
+        else if (strncmp(line, "rampfrom ", 9) == 0) bench_start = atoi(line + 9);
+        else if (strncmp(line, "rampto ", 7) == 0) bench_max = atoi(line + 7);
+        else if (strncmp(line, "attack ", 7) == 0) bench_attack = atoi(line + 7);
+        else if (strncmp(line, "anim ", 5) == 0) bench_anim = atoi(line + 5);
+        else if (strncmp(line, "fire ", 5) == 0) bench_fire = atoi(line + 5);
+        else if (strncmp(line, "qs ", 3) == 0) bench_quicksilver = atoi(line + 3);
+        else if (strncmp(line, "devil ", 6) == 0) bench_devil = atoi(line + 6);
+        else if (strncmp(line, "fps ", 4) == 0) cmp_fps = atoi(line + 4);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
@@ -1494,6 +1623,7 @@ static void cmp_load(void) {
 }
 static void cmp_pad(int frame, PlayerInput *input) {
     int i;
+    if (bench_fire && frame % bench_fire == 0) { input->gun = 1; input->gun_held = 1; }
     for (i = 0; i < cmp_event_count; ++i) {
         const char *b = cmp_events[i].button;
         int held = frame >= cmp_events[i].first && frame <= cmp_events[i].last;
@@ -1504,9 +1634,13 @@ static void cmp_pad(int frame, PlayerInput *input) {
         else if (!strcmp(b, "lleft")) input->stick_x = -1.0f;
         else if (!strcmp(b, "lright")) input->stick_x = 1.0f;
         else if (!strcmp(b, "r1")) input->lock_on = 1;
-        else if (!strcmp(b, "devil")) input->devil = pressed;
+        else if (!strcmp(b, "devil") || !strcmp(b, "l3")) input->devil = pressed;
+        else if (!strcmp(b, "menu_start") && pressed) debug_pressed |= PSP_CTRL_START;
+        else if (!strcmp(b, "menu_cross") && pressed) debug_pressed |= PSP_CTRL_CROSS;
+        else if (!strcmp(b, "menu_down") && pressed) debug_pressed |= PSP_CTRL_DOWN;
+        else if (!strcmp(b, "menu_right") && pressed) debug_pressed |= PSP_CTRL_RIGHT;
         else if (!strcmp(b, "select")) input->taunt = pressed;
-        else if (!strcmp(b, "cross")) input->jump = pressed;
+        else if (!strcmp(b, "cross")) { input->jump = pressed; input->jump_held = 1; }
         else if (!strcmp(b, "triangle")) { input->melee = pressed; input->melee_held = 1; }
         else if (!strcmp(b, "square")) { input->gun = pressed; input->gun_held = 1; }
         else if (!strcmp(b, "circle")) { input->style_action = pressed; input->style_held = 1; }
@@ -1802,6 +1936,8 @@ int main(int argc, char *argv[]) {
     write_memory_report(sceKernelGetSystemTimeLow() - boot_start, motions_loaded);
     last_time = sceKernelGetSystemTimeLow();
 
+    /* Scenes that measure things compare with normalised numbers. */
+    if ((focus && !(focus_cmp && cmp_turbo)) || autotest || recording || tour) game_turbo = 0;
     while (running) {
         unsigned int frame_start = sceKernelGetSystemTimeLow();
         unsigned int frame_us, skin_start, skin_us, gap = frame_start - last_time;
@@ -1810,6 +1946,7 @@ int main(int argc, char *argv[]) {
         const char *hud[HUD_LINES];
         int bones_now = show_bones || (autotest && frames == 26);
 
+        debug_pressed = 0;
         if (tour) {
             dt = 1.0f / 60.0f;
             memset(&input, 0, sizeof(input));
@@ -1824,7 +1961,7 @@ int main(int argc, char *argv[]) {
             if (pad_aim) aim_stick(&input, &player, pad_aim);
             pad_aim = 0;
         } else if (focus) {
-            dt = 1.0f / 60.0f;
+            dt = focus_cmp ? 1.0f / (float)cmp_fps : 1.0f / 60.0f;
             focus_pad(frames, &input);
         } else if (autotest) {
             dt = 1.0f / 60.0f;
@@ -1837,6 +1974,20 @@ int main(int argc, char *argv[]) {
             read_pad(&input, &previous_buttons, &previous_l);
         }
         last_time = frame_start;
+        {
+            int was_open = debug_open;
+            int toggle_viewer = debug_menu_update(debug_pressed);
+            if (was_open || debug_open) {
+                /* Nothing reaches the game, including the press that closes the menu. */
+                memset(&input, 0, sizeof(input));
+                input.style = -1;
+                input.toggle_viewer = toggle_viewer;
+                dt = 0.0f;
+            } else if (game_turbo) {
+                dt *= TURBO_SPEED;
+            }
+            player_step_scale = game_turbo ? TURBO_SPEED : 1.0f;
+        }
         time += dt;
 
         if (input.toggle_viewer && motions_loaded > 0) {
@@ -1855,8 +2006,15 @@ int main(int argc, char *argv[]) {
             input.style = -1;
             input.jump = 0;
         }
-        /* Lock-on target: the dummy, if it's within 25 m. */
+        if (dummy_ready) enemy_spawn_height(player.y);
+        if (dummy_ready && debug_open) {
+            enemy_set_count(dummy_count, player.x, player.z);
+            enemy_set_attacks(dummy_attacks);
+            enemy_set_anim_auto(dummy_anim_auto);
+        }
+        /* Lock-on target: the nearest dummy, if it's within 25 m. */
         player.has_target = 0;
+        if (dummy_ready) enemy_select_nearest(player.x, player.z);
         if (dummy_ready && enemy_active()) {
             float e[3], dx, dz;
             enemy_position(e);
@@ -1867,11 +2025,16 @@ int main(int argc, char *argv[]) {
                 player.target_y = e[1];
                 player.target_z = e[2];
             }
+            /* Enemy Step's reach: the real test is against the enemy's collision spheres. */
+            player.enemy_close = dx * dx + dz * dz < 170.0f * 170.0f && fabsf(e[1] + 100.0f - player.y) < 250.0f;
+        } else {
+            player.enemy_close = 0;
         }
         apply_weapon_wheel(&input, &player);
         if (combat_ready && !anim.viewer) {
             MoveId before = combat.move;
-            combat_update(&combat, &player, &input, dt);
+            /* Devil Trigger runs him 1.1x as fast (HD Collection traces). */
+            combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);
             if ((autotest || recording) && (combat.move != before || input.melee || input.style_action)) {
                 /* COMBAT_TRACE.TXT: every move change, to check gate timings. */
                 static FILE *trace;
@@ -1903,10 +2066,17 @@ int main(int argc, char *argv[]) {
         }
         prev_x = player.x;
         prev_z = player.z;
-        player_update(&player, &camera, &input, dt);
+        player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
         player.wall_contact = stage_loaded() && stage_collide(&player.x, &player.z, player.y, PLAYER_RADIUS);
         if (dummy_ready) {
-            enemy_update(player.quicksilver ? dt * 0.25f : dt);
+            float from_x, from_z;
+            int heavy;
+            enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+            if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
+                float chest[3] = {player.x, player.y + 110.0f, player.z};
+                if (combat_player_hit(&combat, &player, from_x, from_z, heavy)) fx_hit_spark(chest);
+                else fx_guard_flash(chest);
+            }
             enemy_push_out(&player.x, &player.z, PLAYER_RADIUS);
         }
         if (input.style >= 0) style_switched = 1;
@@ -2001,6 +2171,7 @@ int main(int argc, char *argv[]) {
         last_frame_us = frame_us;
         if (!autotest && !recording && !tour && frames > 60) {
             perf_add(gap, skin_start - frame_start, skin_us);
+            bench_add(gap, skin_start - frame_start, skin_us);
             perf_second_us += gap;
             if (perf_second_us >= 1000000u && perf_count < PERF_SECONDS) {
                 perf_second_us = 0;
@@ -2040,36 +2211,82 @@ int main(int argc, char *argv[]) {
             }
         }
         if (focus && focus_cmp) {
-            if (frames == 1) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = -2.15f; coat_reset();
-                /* The real game's camera at this spot, so the same stick goes the same way. */
-                camera.x = player.x - 127.0f; camera.z = player.z + 448.0f; camera.y = player.y + 255.0f;
+            if (frames == 1) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = -1.985f; coat_reset();
+                /* The HD Collection test spot (tools/hd_ref.py), so the same stick goes the same way. */
+                camera.x = player.x - sinf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.z = player.z - cosf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.y = player.y + 255.0f;
                 camera.tx = player.x; camera.ty = player.y + 140.0f; camera.tz = player.z; camera.last_x = player.x; camera.last_z = player.z; camera.lead_x = camera.lead_z = 0.0f;
-                enemy_spawn(player.x + sinf(player.yaw) * (float)cmp_enemy_distance, player.z + cosf(player.yaw) * (float)cmp_enemy_distance); if (cmp_melee >= 0) player.melee_weapon = cmp_melee; if (cmp_gun >= 0) player.gun_weapon = cmp_gun; }
+                enemy_spawn_height(player.y); enemy_spawn(player.x + sinf(player.yaw) * (float)cmp_enemy_distance, player.z + cosf(player.yaw) * (float)cmp_enemy_distance); if (cmp_melee >= 0) player.melee_weapon = cmp_melee; if (cmp_gun >= 0) player.gun_weapon = cmp_gun; }
             {
                 static char cmp_name[32];
                 int shot;
                 for (shot = 0; shot < cmp_shot_count; ++shot)
                     if (frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }
             }
+            if (bench_step_frames > 0 && !bench_done) {
+                int into = (frames - 2) % bench_step_frames;
+                if (frames == 2) {
+                    enemy_set_count(0, player.x, player.z);
+                    enemy_set_attacks(bench_attack);
+                    enemy_set_anim_auto(bench_anim);
+                    bench_steps[0].dummies = bench_start;
+                    enemy_set_count(bench_start, player.x, player.z);
+                }
+                if (bench_quicksilver) player.quicksilver = 1;
+                if (bench_devil) player.devil = 1;
+                if (frames >= 2 && into == bench_step_frames / 2) {
+                    bench_measuring = 1;
+                    bench_began = sceKernelGetSystemTimeLow();
+                } else if (frames > 2 && into == 0) {
+                    BenchStep *b = &bench_steps[bench_count];
+                    float fps;
+                    bench_measuring = 0;
+                    b->elapsed = sceKernelGetSystemTimeLow() - bench_began;
+                    fps = b->elapsed ? (float)b->frames * 1000000.0f / (float)b->elapsed : 0.0f;
+                    bench_low_steps = fps < BENCH_MIN_FPS ? bench_low_steps + 1 : 0;
+                    ++bench_count;
+                    if (bench_low_steps >= BENCH_LOW_STEPS || b->dummies >= bench_max || bench_count > ENEMY_MAX) {
+                        bench_done = 1;
+                    } else {
+                        bench_steps[bench_count].dummies = b->dummies + 1;
+                        enemy_set_count(b->dummies + 1, player.x, player.z);
+                        /* Out of memory for another one: that's the limit. */
+                        if (enemy_count() < b->dummies + 1) bench_done = 1;
+                    }
+                }
+                cmp_frames = bench_done ? frames : frames + 1;
+            }
             if (frames < CMP_MAX_FRAMES) {
                 cmp_log[frames].x = player.x; cmp_log[frames].y = player.y; cmp_log[frames].z = player.z;
-                cmp_log[frames].yaw = player.yaw; cmp_log[frames].move = (short)combat.move;
+                cmp_log[frames].yaw = player.yaw; cmp_log[frames].move = (short)combat.move; cmp_log[frames].script = (short)combat.script;
             }
             if (frames >= cmp_frames) {
                 char path[320];
                 FILE *report;
                 int i;
+                if (bench_step_frames > 0) {
+                    path_in_game_dir(path, sizeof(path), "BENCH_OUT.TXT");
+                    report = fopen(path, "w");
+                    if (report) {
+                        for (i = 0; i < bench_count; ++i) {
+                            const BenchStep *b = &bench_steps[i];
+                            unsigned int n = b->frames ? b->frames : 1;
+                            fprintf(report, "%d %u %u %u %u %u %u %u %u %u\n", b->dummies, b->frames, b->late, b->gap_max, b->elapsed,
+                                    b->update / n, b->skin / n, b->draw / n, b->gpu / n, (unsigned int)enemy_poses_done());
+                        }
+                        fclose(report);
+                    }
+                }
                 path_in_game_dir(path, sizeof(path), "CMP_OUT.TXT");
                 report = fopen(path, "w");
                 if (report) {
-                    for (i = 0; i < cmp_frames; ++i)
-                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw,
+                    for (i = 0; i < cmp_frames && i < CMP_MAX_FRAMES; ++i)
+                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s %s\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw, combat_script_key(cmp_log[i].script),
                                 cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-");
                     fclose(report);
                 }
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
-                if (report) { fprintf(report, "cmp done, frames=%d\n", cmp_frames); fclose(report); }
+                if (report) { fprintf(report, "cmp done, frames=%d enemy_poses=%d\n", cmp_frames, enemy_poses_done()); fclose(report); }
                 running = 0;
             }
         } else
@@ -2200,7 +2417,7 @@ int main(int argc, char *argv[]) {
             dash_travel = sqrtf((player.x - dash_x) * (player.x - dash_x) + (player.z - dash_z) * (player.z - dash_z));
         }
         if (autotest && frames >= 1100 && frames < 1220 && player.y - player_spawn[1] > hike_height) hike_height = player.y - player_spawn[1];
-        if (autotest && combat.move == MOVE_TR_AIR_HIKE) hike_seen = 1;
+        if (autotest && player.air_kind == AIR_HIKE) hike_seen = 1;
         if (autotest && combat.move == MOVE_RG_BLOCK) block_frames++;
         if (autotest && frames == 1290) capture_frame(draw_buffer, "SHOT_BLOCK.BMP");
         if (autotest && frames == 1338) { input.reset = 1; player_reset(&player, &camera); }

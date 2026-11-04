@@ -78,6 +78,15 @@ Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-Wl,-zmax-page-size
 ))
 Invoke-Native "psp-fixup-imports.exe" @($Elf)
 
+# The same objects as a PRX, for PSPLINK: pspsh runs it straight from this folder over USB.
+$PrxElf = Join-Path $Build "testroom_prx.elf"
+Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-specs=$(Join-Path $SDK 'lib\prxspecs')", "-Wl,-q,-T$(Join-Path $SDK 'lib\linkfile.prx')", "-Wl,-zmax-page-size=128") + $ObjectFiles + @((Join-Path $SDK 'lib\prxexports.o'),
+    "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lm",
+    "-o", $PrxElf
+))
+Invoke-Native "psp-fixup-imports.exe" @($PrxElf)
+Invoke-Native "psp-prxgen.exe" @($PrxElf, (Join-Path $Build "testroom.prx"))
+
 # mksfo/pack-pbp are MSYS tools that mishandle Windows paths; run them with
 # relative paths from inside the build directory.
 $Eboot = Join-Path $Build "EBOOT.PBP"

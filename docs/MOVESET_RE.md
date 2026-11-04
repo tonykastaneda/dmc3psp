@@ -40,21 +40,62 @@ runs one input script on it and on the port. Real-game addresses: player 0x17E0A
 position, +0x84 yaw, +0x2AD4 health, +0x3C6C style, +0x3C74 style level, +0x24C6 motion,
 +0x2848 state); camera eye 0xEC6F60, aim 0xEC6F70. Numbers per 60 fps frame:
 
-- **Jump** (all kinds): 7 frames grounded and still, then 35.5 cm losing 2.5 a frame for 10
-  frames, then 3.0 losing 1.5 a frame until the floor; peak 247 cm. A landing with the stick
-  held stops him 6 frames, then the walk start runs again.
-- **In the air** the facing never changes. A running jump or lock-on flip carries about 5.45
-  cm, plus 2.0 from the stick (so 7.4 with it held, 3.5 against it). From a standing jump the
-  stick gives a flat 4.25. Late in the arc the carry fades.
+- **Jump, Air Hike, Enemy Step**: real states, from the table at 0x5a85c0 (row * 0xb4 +
+  column * 0x24): see "HD Collection" below. A tapped jump is 7 frames grounded, then 35.5
+  cm losing 2.5 a frame for 10 frames, then 3.0 losing 1.5; peak 247 cm.
 - **Lock-on + cross**: forward is the running jump's motion (0:5), back the backflip (0:9), both
   on the jump's arc; left and right are the rolls (0:7, 0:8). These are relative to his facing.
 - **Camera**: eye 255 cm above him on a slack 470 cm leash (240 to 565 seen), never swinging
   behind him by itself. Aim 140 cm up, leading by 14 frames of travel (120 cm at a run).
 - **Matches already**: run 8.5, walk start 3.5, turn 0x800, melee root motion, strafe 3.5, dash
   21.33 then 3.64, roll speeds.
-- **Air Hike** didn't fire with Trickster written to the style field in Mission 2, so its gate
-  and arc are unverified. Effect look: a spiked flash and lingering smoke per shot with no
-  visible bullet, a pale fan behind the blade, a streak behind a dash, no landing dust.
+- **Effect look**: a spiked flash and lingering smoke per shot with no visible bullet, a pale
+  fan behind the blade, a streak behind a dash, no landing dust.
+
+## HD Collection (a maxed save)
+
+The Steam `dmc3.exe` with the user's save (`tools/hd_ref.py`, `hd_trace.py`, `hd_video.py`). It
+runs **Turbo**: speeds 1.2x, accelerations 1.44x. All numbers here are normalised. Its state ids
+are the PS2's dispatch numbers (`FUN_002213e0`).
+
+- **Jump** (state 5, then 6, `FUN_002224a0`): CROSS still held at takeoff uses row 1 (54.75,
+  losing 4.75; peak about 400 cm), and a release in its first 5 frames adds a -10 frame. Below 18.5
+  cm/frame the loss is 1.5; 14 frames later it's the row's late value and the carry fades by 0.95.
+- **Air Hike** (state 7, `FUN_00222700`): one per airtime, hangs 7 frames, then row 2 (28) or
+  row 3 (34) if still held. The stick picks its direction. Rebellion, Agni & Rudra and Beowulf
+  have it. Nevan doesn't (measured); Cerberus doesn't by the code, not measured.
+- **Enemy Step** (state 33, `FUN_00228950`): any jump press with an enemy in reach comes first and
+  refills everything. Rows 6, 7. Its reach and cooldown (config +0x2dc) are estimates in the port.
+- **Sky Star** (state 23): one per airtime. Root motion to the script's flag, then 10 cm/frame
+  losing 0.38 and falling from rest at 0.95. Air Hike can cancel it from gate 8 (frame 24) on; Air Hike
+  can be cancelled into Sky Star at once.
+- **Air Trick**: after the warp, state 9: 4 forward losing 0.07, 8 up losing 1.
+- **Wall Hike** (state 31): stick into the wall. Ends with row 10 away from the wall.
+- **Rebellion**: Stinger's second level ends in 3:42, 3 frames of hold at 16 cm/frame. Held High
+  Time goes to 3:13, 30 up losing 1.35. Shredder runs a fixed 60 frames.
+- **Aerial Rave**: sinks at 1.17 + 0.14 a frame, restarted by each strike.
+- **Guns**: Ebony & Ivory in the air 8:32, 11 up, losing 1.25, and each press after 13 frames 5.5 up
+  more. Shotgun in the air 9:39, 13 up. Artemis fires on release: 4 frames of 10:3, then 10:4. Spiral
+  11:7 / 11:8, Kalina Ann 12:7 / 12:8 and 22:2 for 139 frames.
+- **Royalguard**: 24:0 for 70 frames, 24:30 while held, 24:31 on release. Air 24:5.
+- **Devil Trigger** runs him 1.1x as fast.
+- **Turbo**: one step every 60th of a second with a delta of 1.2. The air states step the same way in the port, so arcs match frame for frame at either speed and at 30 or 60 FPS (`tools/hd_score.py`).
+- **Wall Hike** checks four rays at +100 to +250 cm within a 25 degree limit. On the ground it stays a dash at every real wall tried, despite a ground branch in the code (+0xe0, 30 degrees); why is unknown.
+- **Port**: START opens a debug menu: game speed (Turbo is the default in play; test scenes run at normal
+  speed), dummies 0 to 4, stand or attack, animation viewer. Attacking dummies are a stand-in, not the real AI,
+  with one coming in at a time. Dante's hit reactions have no damage, knockback or knockdown yet.
+- **Keyboard**: K cross, L circle, J square, I triangle, WASD stick, Space R1, E melee, Q gun, N Devil
+  Trigger, M Start, Right Shift taunt. The pause menu holds Save Data; never send it blind keys.
+
+- **Quicksilver**: R1 + CIR toggles it; turning on plays 25:0 for about 50 frames, turning off nothing. The
+  world goes to a pale negative with Dante dark, and enemies all but stop. **Doppelganger**: R1 + CIR too,
+  turning on plays 0:58. **Devil Trigger**: L3 (key N), turning on plays 0:50.
+
+**Not matched yet**: the gauges those use, and what the Doppelganger's shadow does; ground Ebony & Ivory's length (real 17 frames unlocked,
+13 locked; the port is always 13); the shotgun's 10 frame draw 9:4; recoil of Spiral (68 cm, port 29) and
+Kalina Ann; Gunslinger's 18:0 / 18:4 pick; Cerberus 4:26's travel (86 cm, port 31); Beowulf's air kick
+7:12 runs longer than the real 24 frames; the Royalguard back move 24:10 / 24:11; Nevan's third strum 6:8. Air Hike's seal is red with Rebellion, orange with
+Agni & Rudra, white with Beowulf; Sky Star's is always red.
 
 ## Weapon motions
 

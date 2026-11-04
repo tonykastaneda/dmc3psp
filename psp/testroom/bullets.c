@@ -52,7 +52,7 @@ static Bullet *new_bullet(void) {
 
 /* Does the segment a-b pass through the dummy's upright capsule? Returns the
  * fraction along it, or -1. */
-static float enemy_segment_hit(const float a[3], const float b[3]) {
+static float one_enemy_segment_hit(const float a[3], const float b[3]) {
     float e[3], dx, dz, len2, t, cx, cz, y;
     if (!enemy_active()) return -1.0f;
     enemy_position(e);
@@ -67,6 +67,20 @@ static float enemy_segment_hit(const float a[3], const float b[3]) {
     y = a[1] + (b[1] - a[1]) * t - e[1];
     if (cx * cx + cz * cz > ENEMY_RADIUS * ENEMY_RADIUS || y < -20.0f || y > ENEMY_HEIGHT) return -1.0f;
     return t;
+}
+
+/* The first dummy along the segment, left selected for enemy_hit. */
+static float enemy_segment_hit(const float a[3], const float b[3]) {
+    int i, first = -1;
+    float best = -1.0f;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        float t;
+        enemy_select(i);
+        t = one_enemy_segment_hit(a, b);
+        if (t >= 0.0f && (best < 0.0f || t < best)) { best = t; first = i; }
+    }
+    if (first >= 0) enemy_select(first);
+    return best;
 }
 
 /* One instant shot: stops at a wall, hurts the dummy if it comes first. */

@@ -12,7 +12,7 @@
 #define TRAIL_POINTS 14
 #define TRAIL_SECONDS 0.14f
 
-typedef enum { MODE_BILLBOARD, MODE_FLAT, MODE_BEAM } SpriteMode;
+typedef enum { MODE_BILLBOARD, MODE_FLAT, MODE_BEAM, MODE_DISC } SpriteMode;  /* DISC faces along end[] */
 
 typedef struct {
     float pos[3], vel[3], end[3];
@@ -178,6 +178,36 @@ void fx_streak(const float from[3], const float to[3]) {
     memcpy(s->end, to, sizeof(s->end));
 }
 
+/* Air Hike: a flash and light going up from his feet, leaving a seal in the air that turns,
+ * widens and fades. In the weapon's colour. Hand-built from the real game's footage. */
+void fx_hike_seal(const float at[3], unsigned int color) {
+    static const float up[3] = {0.0f, 1.0f, 0.0f};
+    int i;
+    Sprite *s = spawn(FX_SHEET_SEAL, 2, 2, at, 70.0f, 165.0f, 0.6f, color);
+    s->mode = MODE_DISC;
+    memcpy(s->end, up, sizeof(s->end));
+    s->spin = 1.4f;
+    s = spawn(FX_SHEET_GLOW, 4, 0, at, 130.0f, 90.0f, 0.16f, color);
+    s->mode = MODE_DISC;
+    memcpy(s->end, up, sizeof(s->end));
+    for (i = 0; i < 3; ++i) {
+        float base[3] = {at[0] + (fx_rand() - 0.5f) * 50.0f, at[1], at[2] + (fx_rand() - 0.5f) * 50.0f};
+        s = spawn(FX_SHEET_FLARE, 2, 3, base, 34.0f, 12.0f, 0.2f, color);
+        s->mode = MODE_BEAM;
+        memcpy(s->end, base, sizeof(s->end));
+        s->end[1] += 210.0f + fx_rand() * 90.0f;
+    }
+}
+
+/* Sky Star: the same seal standing across his path, where he left from. */
+void fx_star_seal(const float at[3], const float direction[3], unsigned int color) {
+    Sprite *s = spawn(FX_SHEET_SEAL, 2, 2, at, 85.0f, 135.0f, 0.5f, color);
+    s->mode = MODE_DISC;
+    memcpy(s->end, direction, sizeof(s->end));
+    s->spin = -1.4f;
+    spawn(FX_SHEET_GLOW, 4, 0, at, 120.0f, 70.0f, 0.18f, color);
+}
+
 void fx_guard_flash(const float at[3]) {
     Sprite *s = spawn(FX_SHEET_GLOW, 4, 8, at, 40.0f, 150.0f, 0.18f, 0xffa0a0ffu);
     s->angle = 0.0f;
@@ -233,6 +263,30 @@ static void bind(int sheet) {
 }
 
 static void sprite_corners(const Sprite *s, const float eye[3], float c[4][3]) {
+    if (s->mode == MODE_DISC) {
+        /* Two axes across the facing direction, turned by the sprite's angle. */
+        float size = s->size1 + (s->size0 - s->size1) * (s->life / s->total);
+        float n[3] = {s->end[0], s->end[1], s->end[2]};
+        float helper[3] = {fabsf(n[1]) > 0.9f ? 1.0f : 0.0f, fabsf(n[1]) > 0.9f ? 0.0f : 1.0f, 0.0f};
+        float a0[3] = {n[1] * helper[2] - n[2] * helper[1], n[2] * helper[0] - n[0] * helper[2], n[0] * helper[1] - n[1] * helper[0]};
+        float len = sqrtf(a0[0] * a0[0] + a0[1] * a0[1] + a0[2] * a0[2]);
+        float a1[3], co = cosf(s->angle), si = sinf(s->angle), r[3], u[3];
+        int k;
+        if (len < 0.001f) len = 1.0f;
+        for (k = 0; k < 3; ++k) a0[k] /= len;
+        a1[0] = n[1] * a0[2] - n[2] * a0[1];
+        a1[1] = n[2] * a0[0] - n[0] * a0[2];
+        a1[2] = n[0] * a0[1] - n[1] * a0[0];
+        for (k = 0; k < 3; ++k) {
+            r[k] = (a0[k] * co + a1[k] * si) * size;
+            u[k] = (a1[k] * co - a0[k] * si) * size;
+            c[0][k] = s->pos[k] - r[k] - u[k];
+            c[1][k] = s->pos[k] + r[k] - u[k];
+            c[2][k] = s->pos[k] - r[k] + u[k];
+            c[3][k] = s->pos[k] + r[k] + u[k];
+        }
+        return;
+    }
     float t = 1.0f - s->life / s->total;
     float size = s->size0 + (s->size1 - s->size0) * t;
     float view[3] = {s->pos[0] - eye[0], s->pos[1] - eye[1], s->pos[2] - eye[2]};
@@ -389,6 +443,26 @@ void fx_screen_tint(unsigned int color) {
     sceGuEnable(GU_BLEND);
     sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
     sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, 0, v);
+    sceGuDisable(GU_BLEND);
+    sceGuEnable(GU_DEPTH_TEST);
+    sceGuEnable(GU_TEXTURE_2D);
+}
+
+/* Quicksilver's world on the real game: a pale negative of the picture. Drawn after the stage and
+ * enemies, before Dante. As a source factor, GU_ONE_MINUS_SRC_COLOR means one minus the destination. */
+void fx_screen_negative(void) {
+    FxPlainVertex *v = sceGuGetMemory(sizeof(FxPlainVertex) * 4);
+    v[0] = (FxPlainVertex){0xffffffffu, 0.0f, 0.0f, 0.0f};
+    v[1] = (FxPlainVertex){0xffffffffu, 480.0f, 272.0f, 0.0f};
+    v[2] = (FxPlainVertex){0xa0b0a8a0u, 0.0f, 0.0f, 0.0f};
+    v[3] = (FxPlainVertex){0xa0b0a8a0u, 480.0f, 272.0f, 0.0f};
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_ONE_MINUS_SRC_COLOR, GU_FIX, 0, 0);
+    sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, 0, v);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, 0, v + 2);
     sceGuDisable(GU_BLEND);
     sceGuEnable(GU_DEPTH_TEST);
     sceGuEnable(GU_TEXTURE_2D);

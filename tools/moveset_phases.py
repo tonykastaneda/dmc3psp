@@ -99,14 +99,15 @@ ACTIONS = {
     71: [P("15:8", adv="mash", loop="15:10", loop_start=68.0, btn="CIR"), P("15:9")],
     # Nevan (every ground move ends in the guitar stance, action 99)
     80: [P("6:3")] + NEVAN_END,
-    81: [P("6:9", adv="charge", btn="TRI", tiers=(("6:33", -1.0), ("6:33", -1.0), ("6:33", -1.0)))] + NEVAN_END,   # APPROX
-    82: [P("6:10", adv="charge", btn="TRI", tiers=(("6:30", -1.0), ("6:30", -1.0), ("6:30", -1.0)))] + NEVAN_END,  # APPROX
+    # HD Collection traces: a short strum, then the long one.
+    81: [P("6:5"), P("6:9")] + NEVAN_END,
+    82: [P("6:7"), P("6:10")] + NEVAN_END,
     83: [P("6:11", adv="mash", loop="6:41", loop_start=60.0), P("6:12")] + NEVAN_END,
     84: [P("6:16", adv="flag1"), P("6:17", adv="charge", tiers=(("6:36", -1.0), ("6:36", -1.0), ("6:36", -1.0)))] + NEVAN_END,
     85: [P("6:16", adv="flag1"), P("6:17", adv="charge", tiers=(("6:36", -1.0), ("6:36", -1.0), ("6:36", -1.0)))] + NEVAN_END,
     86: [P("6:21"), P("6:35", adv="timer", frames=30.0), P("6:20")] + NEVAN_END,
     87: [P("6:21"), P("6:19", adv="timer", frames=30.0), P("6:20")] + NEVAN_END,
-    88: [P("6:15", adv="charge", start=7.0, air=wcfg_air(0x43c, 0x444), tiers=(("6:34", -1.0), ("6:34", -1.0), ("6:34", -1.0)))],
+    88: [P("6:15", adv="timer", frames=19.0, air=wcfg_air(0x43c, 0x444)), P("6:34", adv="land", air=wcfg_air(0x43c, 0x444))],
     89: [P("16:0"), ] + NEVAN_END,
     90: [P("16:7", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3))],
     91: [P("16:8", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3))],
@@ -126,8 +127,8 @@ ACTIONS = {
     118: charge("7:14", "7:29", 99.0, "7:51", "7:52", 23.0, after=[P("7:15", adv="land", flag_air=vy_air(0x27c))]),
     119: [P("7:15", adv="land", flag_air=vy_air(0x27c))],
     120: [P("7:16", adv="land", air=vy_air(0x534)), P("7:17")],
-    121: [P("7:30", adv="flag1"), P("7:33", adv="charge", tiers=(("7:31", -1.0), ("7:53", -1.0), ("7:54", -1.0))), P("7:32")],
-    122: [P("7:30", adv="flag1"), P("7:33", adv="charge", tiers=(("7:31", -1.0), ("7:55", -1.0), ("7:56", -1.0))), P("7:32")],
+    121: [P("7:30", adv="flag1"), P("7:33", adv="charge", tiers=(("7:31", -1.0), ("7:53", -1.0), ("7:54", -1.0))), P("7:55")],
+    122: [P("7:30", adv="flag1"), P("7:33", adv="charge", tiers=(("7:31", -1.0), ("7:53", -1.0), ("7:54", -1.0))), P("7:55")],
     123: charge("17:0", "17:8", 96.0, "17:0", "17:0", 25.0),
     124: charge("17:1", "17:9", 108.0, "17:10", "17:11", 28.0),
     125: [P("17:2", adv="land", flag_air=wcfg_air(0x2a8, 0x2a0)), P("17:1", start=29.0)],
@@ -141,29 +142,31 @@ ACTIONS = {
     # Air, Gunslinger and Artemis fire counts are still APPROX.
     130: [P("8:6", adv="shot", frames=13.0, refire=7.0, shot=1, layered=True)],
     131: [P("8:6", adv="shot", frames=13.0, refire=7.0, shot=1, layered=True)],
-    132: [P("8:15", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
-    133: [P("8:15", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
+    # Air shots, HD Collection traces: a kick upward each, and more presses fire again (combat.c).
+    132: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
+    133: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
     134: [P("18:0", shot=2)],
-    135: [P("18:15"), P("18:16", adv="timer", frames=45.0, air=("raw", 0.0, 0.0, 0.0, 0.0), auto=7.0, shot=1), P("18:18", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3))],
+    135: [P("18:15"), P("18:16", adv="mash", loop="18:16", btn="CIR", air=("raw", 0.0, 0.0, 0.0, 0.0), auto=7.0, shot=1), P("18:17")],
     136: [P("8:33"), P("8:34", adv="mash", loop="8:34", btn="SQ", auto=7.0, shot=1), P("8:39")],
     # Shotgun (the motion runs to its end, FUN_0026be70)
     140: [P("9:6", shot=1, layered=True)], 141: [P("9:6", shot=1, layered=True)],
-    142: [P("9:15", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
-    143: [P("9:15", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
+    142: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)],
+    143: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)],
     144: [P("19:0", shot=1)],
     145: [P("19:1", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
     146: [P("19:2"), P("19:3", adv="timer", frames=20.0, shot=1), P("19:4")],
     147: [P("19:5", adv="mash", loop="19:5", btn="CIR", shot=1)],
     # Artemis
-    150: [P("10:3"), P("10:4", shot=1)], 152: [P("10:3"), P("10:4", shot=1)],
+    # Fires on release: a few frames of 10:3, then 10:4 (HD Collection traces).
+    150: [P("10:3", adv="timer", frames=4.0), P("10:4", shot=1)], 152: [P("10:3", adv="timer", frames=4.0), P("10:4", shot=1)],
     151: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)], 153: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
     154: [P("20:2", shot=1)],
     155: [P("20:3", adv="mash", loop="20:3", loop_start=69.0, btn="CIR", shot=1), P("20:4")],
     # Spiral / Kalina Ann (FUN_0026f480 / FUN_00270300 pick from the tables above)
-    160: [P("11:2", lock="11:6", shot=1)],
+    160: [P("11:7", lock="11:8", shot=1)],  # with a kick back of about 60 cm (HD Collection traces)
     161: [P("21:0", shot=1)], 162: [P("21:1", shot=1)],
-    170: [P("12:2", lock="12:6", shot=1)],
-    171: [P("22:2", shot=1), P("22:3")],
+    170: [P("12:7", lock="12:8", shot=1)],
+    171: [P("22:2", adv="timer", frames=139.0, shot=1), P("22:3")],
     172: [P("22:0"), P("22:1", shot=1)],
     # Royalguard release. APPROX: the gauge (player+0x3c86) picks among 13 scripts;
     # with no gauge in the test room this is the level-0 release.

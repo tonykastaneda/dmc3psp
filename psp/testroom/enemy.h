@@ -1,10 +1,13 @@
 #ifndef DMC3PSP_TESTROOM_ENEMY_H
 #define DMC3PSP_TESTROOM_ENEMY_H
 
-/* Training dummy: a Seven Hells enemy (GDATA slot 117, em000) standing in the
- * test street with infinite health. It never attacks; it idles, flinches,
- * gets knocked back, launched, juggled, knocked down and gets back up, all
- * with its own motions (hl-NN). */
+/* Training dummies: Seven Hells enemies (GDATA slot 117, em000) in the test street with
+ * infinite health. They idle, flinch, get knocked back, launched, juggled, knocked down and
+ * get back up, all with their own motions (hl-NN). The debug menu sets how many there are and
+ * whether they attack Dante.
+ *
+ * Calls that take no index act on the selected dummy: see enemy_select. */
+#define ENEMY_MAX 32
 
 typedef enum {
     HIT_LIGHT,    /* combo hits: flinch in place */
@@ -14,11 +17,25 @@ typedef enum {
     HIT_SLAM      /* Helm Breaker: smashed to the floor */
 } HitKind;
 
-typedef enum { ENEMY_IDLE, ENEMY_FLINCH, ENEMY_KNOCKBACK, ENEMY_LAUNCHED, ENEMY_AIRBORNE, ENEMY_DOWN, ENEMY_GETUP } EnemyState;
+typedef enum { ENEMY_IDLE, ENEMY_FLINCH, ENEMY_KNOCKBACK, ENEMY_LAUNCHED, ENEMY_AIRBORNE, ENEMY_DOWN, ENEMY_GETUP, ENEMY_WALK, ENEMY_SWING, ENEMY_JUMP } EnemyState;
 
 int enemy_init(void);
-void enemy_spawn(float x, float z);
-void enemy_update(float dt);
+void enemy_spawn(float x, float z);          /* one dummy, here, selected */
+void enemy_spawn_height(float y);            /* look for the floor from about here, not the roofs */
+/* Keep the ones there are; add new ones in a ring around (x, z) or remove the last ones. */
+void enemy_set_count(int count, float x, float z);
+int enemy_count(void);
+void enemy_select(int index);
+void enemy_select_nearest(float x, float z);
+void enemy_set_attacks(int attacks);
+/* Bones update less often the more dummies there are; their positions still move every frame. */
+void enemy_set_anim_auto(int on);
+int enemy_anim_rate(void);          /* poses a second each right now, 0 = every frame */
+int enemy_poses_done(void);         /* running total, to measure the saving */
+/* (px, py, pz) is Dante, whom they go for when attacking. */
+void enemy_update(float dt, float px, float py, float pz);
+/* An attack reached Dante this frame: returns 1 once per hit, from where, and if it's a heavy one. */
+int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
 /* Draw with the view/projection set, inside an open display list. */
 void enemy_draw(void);
 int enemy_active(void);

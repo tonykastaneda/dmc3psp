@@ -93,13 +93,130 @@ void player_reset(Player *player, FollowCamera *camera) {
 }
 
 /* Height above the take-off after t frames (see JUMP_* in player.h). */
-static float jump_height(float t) {
-    float u = t - JUMP_CROUCH_FRAMES, w;
-    if (u <= 0.0f) return 0.0f;
-    if (u <= JUMP_RISE_FRAMES) return JUMP_RISE_SPEED * u - JUMP_RISE_LOSS * 0.5f * u * (u - 1.0f);
-    w = u - JUMP_RISE_FRAMES;
-    return JUMP_RISE_SPEED * JUMP_RISE_FRAMES - JUMP_RISE_LOSS * 0.5f * JUMP_RISE_FRAMES * (JUMP_RISE_FRAMES - 1.0f)
-         + JUMP_FALL_SPEED * w - JUMP_FALL_LOSS * 0.5f * w * (w - 1.0f);
+/* Dante's table at 0x5a85c0, row * 0xb4 + column * 0x24: 0 jump, 1 jump held, 2 Air Hike,
+ * 3 Air Hike held, 6 Enemy Step, 7 Enemy Step held. Column 4 is the stick at rest: no
+ * carry and twice the drift. The carry's acceleration is zero in all of these rows. */
+static const struct { float speed, vy, g, late; } air_rows[11] = {
+    [0] = {5.5f, 35.5f, -2.5f, -1.5f},
+    [1] = {7.5f, 54.75f, -4.75f, -1.5f},
+    [2] = {5.5f, 28.0f, -1.5f, 0.0f},
+    [3] = {7.5f, 34.0f, -1.5f, 0.0f},
+    [6] = {5.5f, 21.5f, -1.5f, 0.0f},
+    [7] = {7.5f, 27.5f, -1.5f, 0.0f},
+    [10] = {12.5f, 18.0f, -1.3f, 0.0f},
+};
+
+float player_step_scale = 1.0f;
+
+/* FUN_002e2460 */
+static void air_arc(Player *player, int row) {
+    player->air_row = row;
+    player->air_speed = player->air_col == 4 ? 0.0f : air_rows[row].speed;
+    player->air_drift = player->air_col == 4 ? 4.25f : 2.125f;
+    player->air_vy = air_rows[row].vy;
+    player->air_g = air_rows[row].g;
+}
+
+/* Air Hike and Enemy Step start the same way: the stick picks the direction, or none. */
+static void air_kick(Player *player, int kind, const float stick[2]) {
+    int pushed = stick[0] != 0.0f || stick[1] != 0.0f;
+    int m = motion_find(kind == AIR_STEP ? "2-33" : "2-17");
+    player->air_kind = kind;
+    player->air_col = pushed ? 0 : 4;
+    if (pushed) player->yaw = player->air_yaw = atan2f(stick[0], stick[1]);
+    else player->air_yaw = player->yaw;
+    player->air_hold = (float)AIR_HIKE_HOLD_FRAMES;
+    player->air_accum = 0.0f;
+    player->air_stage = 0;
+    player->air_vy = player->air_g = player->air_speed = 0.0f;
+    player->vy = 0.0f;
+    player->jump_time = JUMP_CROUCH_FRAMES;
+    player->jump_motion = m;
+    player->jump_frame = 0.0f;
+    player->hike_fx = kind == AIR_STEP ? 2 : 1;
+}
+
+/* Wall Hike's kick off the wall (FUN_00227fb0 step 3): row 10, on the arc at once. */
+void player_wall_kick(Player *player, float away_yaw) {
+    int m = motion_find("2-40");
+    player->air_kind = AIR_HIKE;
+    player->air_col = 0;
+    player->air_hold = 0.0f;
+    player->air_yaw = away_yaw;
+    player->air_accum = 0.0f;
+    player->jump_time = JUMP_CROUCH_FRAMES;
+    air_arc(player, 10);
+    player->vy = 0.0f;
+    player->on_ground = 0;
+    if (m >= 0) { player->jump_motion = m; player->jump_frame = 0.0f; }
+}
+
+/* One 60 fps frame of the air states. */
+static void air_step(Player *player, const float stick[2], int held) {
+    float limit = player_room_limit, k = player_step_scale;
+    if (player->air_kind == AIR_JUMP) {
+        if (player->jump_time < JUMP_CROUCH_FRAMES) {
+            /* FUN_002222c0: on the ground, turning to the stick's direction over 5 frames. */
+            float left = 5.0f - player->jump_time;
+            if (left > 0.0f && player->air_col != 2) player->yaw = wrap_angle(player->yaw + wrap_angle(player->air_yaw - player->yaw) / left);
+            player->jump_time += k;
+            if (player->jump_time >= JUMP_CROUCH_FRAMES) {
+                air_arc(player, 0);
+                player->air_timer = 9.0f;
+                player->air_stage = 0;
+            }
+            return;
+        }
+        /* FUN_002224a0: holding the button past the takeoff jumps higher. A release in its
+         * first 5 frames cuts it short. After that the fall gets gentler, then the carry fades. */
+        switch (player->air_stage) {
+        case 0:
+            if (held) { air_arc(player, 1); player->air_timer = 5.0f; }
+            player->air_stage = 1;
+            break;
+        case 1:
+            player->air_timer -= k;
+            if (player->air_timer <= 0.0f) {
+                if (!held) player->air_g = -10.0f;
+                player->air_stage = 2;
+            }
+            break;
+        case 2:
+            if (player->air_vy < 18.5f) {
+                player->air_g = -1.5f;
+                player->air_timer = 14.0f;
+                player->air_stage = 3;
+            }
+            break;
+        case 3:
+            player->air_timer -= k;
+            if (player->air_timer < 0.0f) {
+                player->air_g = player->air_row == 0 && player->air_col == 0 ? -1.1f : air_rows[player->air_row].late;
+                player->air_stage = 4;
+            }
+            break;
+        default:
+            player->air_speed *= 0.95f;
+            break;
+        }
+    } else if (player->air_hold > 0.0f) {
+        /* FUN_00222700, FUN_00228950: he hangs where he was until the kick's motion ends. */
+        player->air_hold -= k;
+        if (player->air_hold <= 0.0f) {
+            player->air_hold = 0.0f;
+            int first = player->air_kind == AIR_STEP ? 6 : 2;
+            int m = motion_find(player->air_col == 4 ? "2-38" : "2-39");
+            air_arc(player, held ? first + 1 : first);
+            if (m >= 0) { player->jump_motion = m; player->jump_frame = 0.0f; }
+        }
+        return;
+    }
+    /* FUN_002e2710 and FUN_002e2560. */
+    player->x = clampf(player->x + (sinf(player->air_yaw) * player->air_speed + stick[0] * player->air_drift) * k, -limit, limit);
+    player->z = clampf(player->z + (cosf(player->air_yaw) * player->air_speed + stick[1] * player->air_drift) * k, -limit, limit);
+    player->y += player->air_vy * k;
+    player->air_vy += player->air_g * k;
+    if (player->air_vy < -70.0f) player->air_vy = -70.0f;
 }
 
 static void turn_toward(Player *player, float yaw, float max_turn) {
@@ -116,7 +233,7 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
         /* Falling without a jump: the drift of a standing jump, facing unchanged. */
         player->loco = LOCO_IDLE;
         player->running = 1;
-        player->speed = JUMP_DRIFT_SPEED * MOTION_FPS * magnitude;
+        player->speed = 4.25f * MOTION_FPS * magnitude;  /* column 4 of the air table */
         return stick_yaw;
     }
     if (player->loco == LOCO_IDLE) {
@@ -145,8 +262,10 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
         if (full_tilt) {
             player->loco_timer -= frames;
             if (player->loco_timer <= 0.0f) {
+                /* All at once: the walk, then the run, on the HD Collection's traces. */
                 player->running = 1;
-                player->accel = (PLAYER_RUN_SPEED - player->speed) / LOCO_ACCEL_FRAMES;
+                player->speed = PLAYER_RUN_SPEED;
+                player->accel = 0.0f;
             }
         } else {
             player->loco_timer = LOCO_RUN_HOLD_FRAMES;
@@ -245,27 +364,50 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         if (wants_flip && !player->flip_request) {
             /* lock-on + left / right + cross: combat.c rolls */
         } else {
-            int run_jump = player->speed > 50.0f;
-            int m = motion_find(player->flip_request < 0 ? "2-09" : player->flip_request > 0 || run_jump ? "2-05" : "2-04");
-            player->air_flip = player->flip_request != 0;
-            player->air_yaw = player->flip_request < 0 ? wrap_angle(player->yaw + 3.14159265f) : player->yaw;
-            player->air_carry = player->air_flip || run_jump ? JUMP_CARRY_SPEED : 0.0f;
+            int pushed = stick_world[0] != 0.0f || stick_world[1] != 0.0f;
+            int m = motion_find(player->flip_request < 0 ? "2-09" : player->flip_request > 0 || pushed ? "2-05" : "2-04");
+            /* Column 0 with the stick (forward), 2 for a back flip, 4 at rest. */
+            player->air_col = player->flip_request < 0 ? 2 : player->flip_request > 0 || pushed ? 0 : 4;
+            if (player->flip_request) player->air_yaw = player->flip_request < 0 ? wrap_angle(player->yaw + 3.14159265f) : player->yaw;
+            else player->air_yaw = pushed ? atan2f(stick_world[0], stick_world[1]) : player->yaw;
             player->flip_request = 0;
-            if (m >= 0) {
-                player->jump_motion = m;
-                player->jump_frame = 0.0f;
-                player->jump_time = 0.0f;
-                player->jump_base_y = player->y;
-                player->speed = 0.0f;
-            } else {
-                player->vy = PLAYER_JUMP_SPEED;
-            }
+            player->air_kind = AIR_JUMP;
+            player->air_accum = 0.0f;
+            player->air_vy = player->air_g = player->air_speed = 0.0f;
+            player->jump_motion = m;
+            player->jump_frame = 0.0f;
+            player->jump_time = 0.0f;
+            player->jump_base_y = player->y;
+            player->speed = 0.0f;
             player->on_ground = 0;
             set_action(player, ACTION_JUMP);
         }
+    } else if (input->jump && !player->on_ground && !player->attacking &&
+               (player->air_kind != AIR_JUMP || player->jump_time >= JUMP_CROUCH_FRAMES)) {
+        /* FUN_00242c60 comes first: an enemy close by gives an Enemy Step, which refills
+         * everything (FUN_0021e1a0 mode 4). Otherwise the one Air Hike. */
+        if (player->enemy_close && player->step_cooldown <= 0.0f) {
+            air_kick(player, AIR_STEP, stick_world);
+            player->step_cooldown = ENEMY_STEP_COOLDOWN;
+            player->air_hikes = 1;
+            player->air_stars = 1;
+        } else if (player->air_hikes > 0 && player->melee_weapon % 2 == 0) {
+            /* Rebellion, Agni & Rudra and Beowulf have it; Cerberus and Nevan don't (FUN_00222700,
+             * and Nevan checked on the HD Collection). */
+            air_kick(player, AIR_HIKE, stick_world);
+            --player->air_hikes;
+        }
+    }
+    if (player->step_cooldown > 0.0f) player->step_cooldown -= dt * MOTION_FPS;
+    if (player->on_ground) {
+        player->air_hikes = 1;
+        player->air_stars = 1;
     }
     /* Air moves (Air Hike, Sky Star, aerial attacks) take over from the jump arc. */
-    if (player->attacking && player->jump_motion >= 0 && !player->on_ground) player->jump_motion = -1;
+    if (player->attacking && player->jump_motion >= 0 && !player->on_ground) {
+        player->jump_motion = -1;
+        player->air_kind = AIR_NONE;
+    }
     {
         float ground;
         int has_ground;
@@ -273,21 +415,18 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             player->jump_frame += dt * MOTION_FPS;
             if (!player->on_ground) {
                 float prev_y = player->y;
-                player->jump_time += dt * MOTION_FPS;
+                const Motion *held_motion = motion_get(player->jump_motion);
                 /* The pose holds before the landing frames however long the fall is. */
-                if (player->jump_frame > JUMP_LAND_FRAME - 1.0f) player->jump_frame = JUMP_LAND_FRAME - 1.0f;
-                player->y = player->jump_base_y + jump_height(player->jump_time);
-                {
-                    /* Measured on the real game: see JUMP_CARRY_* in player.h. */
-                    float t = player->jump_time - JUMP_CROUCH_FRAMES, step = dt * MOTION_FPS, limit = player_room_limit;
-                    if (t >= 0.0f) {
-                        float carry = player->air_carry, stick = carry > 0.0f ? JUMP_STICK_SPEED : JUMP_DRIFT_SPEED;
-                        if (!player->air_flip) carry -= JUMP_CARRY_SLOWING * t;
-                        if (t > JUMP_CARRY_FADE_FRAME) carry -= JUMP_CARRY_FADE * (t - JUMP_CARRY_FADE_FRAME);
-                        if (carry < 0.0f || player->air_carry <= 0.0f) carry = 0.0f;
-                        player->x = clampf(player->x + (sinf(player->air_yaw) * carry + stick_world[0] * stick) * step, -limit, limit);
-                        player->z = clampf(player->z + (cosf(player->air_yaw) * carry + stick_world[1] * stick) * step, -limit, limit);
-                    }
+                if (player->air_kind == AIR_JUMP) {
+                    if (player->jump_frame > JUMP_LAND_FRAME - 1.0f) player->jump_frame = JUMP_LAND_FRAME - 1.0f;
+                } else if (player->jump_frame > held_motion->end_frame - 1.0f) {
+                    player->jump_frame = held_motion->end_frame - 1.0f;
+                }
+                /* One real game step every 60th of a second, however long this frame was. */
+                player->air_accum += dt * MOTION_FPS / player_step_scale;
+                while (player->air_accum >= 1.0f) {
+                    player->air_accum -= 1.0f;
+                    air_step(player, stick_world, input->jump_held);
                 }
                 player->vy = (player->y - prev_y) / (dt > 0.0f ? dt : 1.0f / 60.0f);
                 has_ground = floor_at(player->x, player->y, player->z, &ground);
@@ -296,9 +435,10 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
                     player->y = ground;
                     player->vy = 0.0f;
                     player->on_ground = 1;
-                    player->air_hiked = 0;
+                    player->air_kind = AIR_NONE;
                     player->land_stop = JUMP_LAND_STOP_FRAMES;
                     player->speed = 0.0f;
+                    player->jump_motion = motion_find("2-04");
                     player->jump_frame = JUMP_LAND_FRAME;
                 }
             }
@@ -321,7 +461,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             player->vy -= PLAYER_GRAVITY * dt;
             player->y += player->vy * dt;
             if (has_ground && player->y <= ground && player->vy <= 0.0f) {
-                player->y = ground; player->vy = 0.0f; player->on_ground = 1; player->air_hiked = 0;
+                player->y = ground; player->vy = 0.0f; player->on_ground = 1;
                 /* Every landing uses the jump motion's landing frames. */
                 if (!player->attacking) {
                     int m = motion_find("2-04");
