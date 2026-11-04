@@ -35,12 +35,16 @@
 enum {  /* The actions this enemy uses, by the game's numbers. */
     A_FLINCH_FRONT = 0, A_FLINCH_BACK = 1, A_LAUNCHED = 2, A_LAUNCHED_BACK = 3, A_LAUNCH_UP = 7, A_AIR_HIT_HEAVY = 8, A_AIR_HIT = 12,
     A_NONE = 14, A_WALK = 15, A_DEATH = 26, A_SWING = 16, A_SWING_WIDE = 17, A_LEAP = 21,
-    A_STEP_LEFT = 22, A_STEP_RIGHT = 23, A_STEP_BACK = 24, A_TAUNT_A = 58, A_TAUNT_B = 59
+    A_STEP_LEFT = 22, A_STEP_RIGHT = 23, A_STEP_BACK = 24, A_TAUNT_A = 58, A_TAUNT_B = 59,
+    /* The Sloth's and the Gluttony's (build/hdref/enemy_specs.md): warps to 900, 600 and 300 cm from Dante,
+     * the warp strike, the Gluttony's wind-up and its spew. */
+    A_WARP_FAR = 41, A_WARP_MID = 42, A_WARP_NEAR = 43, A_WARP_STRIKE = 57, A_WIND_UP = 56, A_SPEW = 31
 };
 enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't attack. */
     P_FLINCH_FRONT = 0, P_FLINCH_BACK = 1, P_LAUNCHED = 2, P_LAUNCHED_BACK = 3, P_LAUNCH_UP = 7, P_AIR_HIT_HEAVY = 8, P_AIR_HIT = 9,
     P_DEATH = 20, P_DECIDE = 23, P_WATCH = 24, P_SWING = 27, P_SWING_WIDE = 28, P_LEAP = 32, P_STEP_LEFT = 33, P_STEP_RIGHT = 34,
-    P_STEP_BACK = 35, P_TAUNT_A = 51, P_TAUNT_B = 52, PLAN_STAND = 200
+    P_STEP_BACK = 35, P_TAUNT_A = 51, P_TAUNT_B = 52, PLAN_STAND = 200,
+    P_SPEW = 37, P_SPEW_WOUND = 45, P_WARP_STRIKE = 46, P_WARP_FAR = 47, P_WARP_MID = 48, P_WARP_NEAR = 49
 };
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 
@@ -71,14 +75,16 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 #define ENEMY_YIELDS 0.8f
 /* Shoved further than this in a frame by another enemy, a watching enemy leaps (M[0x34] in plan 24). */
 #define PUSH_LEAPS 1.0f
-#define HAND_BONE 9                 /* -X hand holds the scythe */
-#define MAX_BONES 24
+#define HAND_BONE 9                 /* a Seven Hell's -X hand holds its scythe */
+#define ENIGMA_HAND_BONE 20         /* the Enigma's bow hand: a placeholder until its rig is read */
+#define MAX_BONES ENEMY_MAX_BONES
 
 typedef struct { float u, v; float nx, ny, nz; float x, y, z; } Vertex;
 typedef struct { float m[3][3]; } M3;
 
 typedef struct {
     int active;
+    int kind;                       /* EnemyKind: which model and logic */
     float pos[3], yaw, floor_y, frame, fall;
     int motion;
     /* Cross-fade between motions, over as many frames as the script says. */
@@ -87,6 +93,15 @@ typedef struct {
     /* The layers. */
     unsigned char plan, plan_step, action, step;
     unsigned char air, loop, done, stop_finish, pushed;
+    unsigned char hidden;           /* a Sloth mid-warp */
+    /* A second motion over some bones: the Enigma's bow arms. */
+    int overlay_motion;
+    float overlay_frame;
+    unsigned char overlay_lo, overlay_hi;
+    /* The Enigma's three bow-arm sets: a cooldown each, and the one shooting. */
+    float shoot_timer[3], shoot_t;
+    signed char shoot_set;
+    unsigned char shoot_fan, shoot_phase;
     signed char health;
     short script_at, stop;
     float gauge, timer, wake;
@@ -105,9 +120,11 @@ typedef struct {
 } Enemy;
 
 static int hl_motion[HL_MOTIONS];
-static Vertex *weapon_vertices;
-static unsigned short *indices, *weapon_indices;
-static void *textures[ENEMY_TEXTURE_COUNT];
+static Vertex *weapon_vertices[ENEMY_KIND_COUNT];
+static unsigned short *indices[ENEMY_KIND_COUNT], *weapon_indices[ENEMY_KIND_COUNT];
+static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
+/* Which bone holds the weapon, by kind. */
+static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE};
 static Enemy enemies[ENEMY_MAX];
 static Enemy *e = &enemies[0];
 static int hits, attacks_on;
@@ -116,6 +133,16 @@ static float landed_x, landed_z;
 static int landed_heavy;
 static float attack_token;
 static int mortal;
+static int dummy_kind;
+static float dante_y;   /* this frame's, for attacks that test his height in their action */
+/* Each kind's decision table: the Seven Hells share the rest of their logic. */
+static const EnemyAiClass *ai_class(void) {
+    switch (e->kind) {
+    case ENEMY_GLUTTONY: return &enemy_ai_classes[AI_CLASS_GLUTTONY];
+    case ENEMY_SLOTH: return &enemy_ai_classes[AI_CLASS_SLOTH];
+    default: return &enemy_ai_classes[AI_CLASS_PRIDE];
+    }
+}
 static int ai_only;
 /* For tests: every change of plan or action, and every attack landing. */
 typedef struct { int tick; short who, plan, action, motion, landed; float x, y, z, yaw, gauge, frame; } TraceRow;
@@ -151,6 +178,24 @@ static void m_euler(M3 *o, float x, float y, float z) {
     m_mul(&t, &ry, &rx); m_mul(o, &rz, &t);
 }
 
+/* The Enigma's own logic: see the section at the end. */
+static int enigma_init(void);
+static void enigma_spawn(void);
+static void enigma_update(float f, float px, float py, float pz);
+static void enigma_hit(HitKind kind, float from_x, float from_z);
+static void land_attack(int heavy);
+static void evaluate_pose(void);
+static void trace_row(int did_land);
+static void arrows_update(float f, float px, float py, float pz);
+static void arrows_draw(void);
+static void arrows_clear(int i);
+static int giga_init(void);
+static void giga_spawn(void);
+static void giga_part_update(float f, float px, float py, float pz);
+static void giga_hit(HitKind kind);
+static void giga_draw(void);
+#define ARROW_MAX_PUBLIC 24
+
 int enemy_init(void) {
     int i, k;
     for (i = 0; i < HL_MOTIONS; ++i) {
@@ -158,25 +203,33 @@ int enemy_init(void) {
         hl_motion[i] = motion_find(name);
         if (hl_motion[i] < 0) return 0;
     }
-    indices = memalign(16, sizeof(unsigned short) * ENEMY_INDEX_COUNT);
-    weapon_vertices = memalign(16, sizeof(Vertex) * ENEMY_WEAPON_VERTEX_COUNT);
-    weapon_indices = memalign(16, sizeof(unsigned short) * ENEMY_WEAPON_INDEX_COUNT);
-    if (!indices || !weapon_vertices || !weapon_indices) return 0;
-    memcpy(indices, enemy_indices, sizeof(unsigned short) * ENEMY_INDEX_COUNT);
-    memcpy(weapon_indices, enemy_weapon_indices, sizeof(unsigned short) * ENEMY_WEAPON_INDEX_COUNT);
-    for (k = 0; k < ENEMY_MAX; ++k) enemies[k].motion = enemies[k].prev_motion = -1;
-    for (i = 0; i < ENEMY_WEAPON_VERTEX_COUNT; ++i) {
-        Vertex *v = &weapon_vertices[i];
-        v->u = enemy_weapon_uvs[i].u; v->v = enemy_weapon_uvs[i].v;
-        v->nx = enemy_weapon_normals[i].x; v->ny = enemy_weapon_normals[i].y; v->nz = enemy_weapon_normals[i].z;
-        v->x = enemy_weapon_positions[i].x; v->y = enemy_weapon_positions[i].y; v->z = enemy_weapon_positions[i].z;
+    if (!enigma_init()) return 0;
+    if (!giga_init()) return 0;
+    for (k = 0; k < ENEMY_KIND_COUNT; ++k) {
+        const EnemyModel *m = &enemy_models[k];
+        indices[k] = memalign(16, sizeof(unsigned short) * m->index_count);
+        weapon_vertices[k] = memalign(16, sizeof(Vertex) * m->weapon_vertex_count);
+        weapon_indices[k] = memalign(16, sizeof(unsigned short) * m->weapon_index_count);
+        if (!indices[k] || !weapon_vertices[k] || !weapon_indices[k]) return 0;
+        memcpy(indices[k], m->indices, sizeof(unsigned short) * m->index_count);
+        memcpy(weapon_indices[k], m->weapon_indices, sizeof(unsigned short) * m->weapon_index_count);
+        for (i = 0; i < m->weapon_vertex_count; ++i) {
+            Vertex *v = &weapon_vertices[k][i];
+            v->u = m->weapon_uvs[i].u; v->v = m->weapon_uvs[i].v;
+            v->nx = m->weapon_normals[i].x; v->ny = m->weapon_normals[i].y; v->nz = m->weapon_normals[i].z;
+            v->x = m->weapon_positions[i].x; v->y = m->weapon_positions[i].y; v->z = m->weapon_positions[i].z;
+        }
     }
-    for (i = 0; i < ENEMY_TEXTURE_COUNT; ++i) {
-        size_t bytes = (size_t)enemy_textures[i].width * enemy_textures[i].height;
-        textures[i] = memalign(16, bytes);
-        if (!textures[i]) return 0;
-        memcpy(textures[i], enemy_textures[i].rgba, bytes);
-        if (!swizzle_texture8(textures[i], enemy_textures[i].width, enemy_textures[i].height)) return 0;
+    for (k = 0; k < ENEMY_MAX; ++k) enemies[k].motion = enemies[k].prev_motion = -1;
+    for (k = 0; k < ENEMY_TEXTURE_SET_COUNT; ++k) {
+        const EnemyTextureSet *set = &enemy_texture_sets[k];
+        for (i = 0; i < set->count && i < 8; ++i) {
+            size_t bytes = (size_t)set->textures[i].width * set->textures[i].height;
+            textures[k][i] = memalign(16, bytes);
+            if (!textures[k][i]) return 0;
+            memcpy(textures[k][i], set->textures[i].rgba, bytes);
+            if (!swizzle_texture8(textures[k][i], set->textures[i].width, set->textures[i].height)) return 0;
+        }
     }
     sceKernelDcacheWritebackAll();
     return 1;
@@ -192,14 +245,33 @@ void enemy_spawn_height(float y) { spawn_search_y = y + 100.0f; }
 
 static void script_play(int n);
 
-static void spawn_one(float x, float z) {
-    /* Each dummy's own skinned copy, the first time that slot is used. */
-    if (!e->vertices) {
-        int i;
-        e->vertices = memalign(16, sizeof(Vertex) * ENEMY_VERTEX_COUNT);
-        if (!e->vertices) return;
-        for (i = 0; i < ENEMY_VERTEX_COUNT; ++i) { e->vertices[i].u = enemy_uvs[i].u; e->vertices[i].v = enemy_uvs[i].v; }
+/* How much each takes, in units of a light hit. Estimates: the game's health and damage values aren't
+ * read yet. On the HD Collection a maxed Dante kills a Pride in about three to five hits on Easy. */
+static int kind_health(int kind) {
+    /* In proportion to the parameter blocks' health (inferred): Pride 250, Gluttony 700, Sloth 1200,
+     * Enigma 600 (build/hdref/enemy_specs.md). */
+    switch (kind) {
+    case ENEMY_GLUTTONY: return ENEMY_HEALTH * 700 / 250;
+    case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
+    case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
+    default: return ENEMY_HEALTH;
     }
+}
+
+
+static void spawn_one(int kind, float x, float z) {
+    const EnemyModel *m;
+    int i;
+    if (kind == ENEMY_GIGAPEDE) { giga_spawn(); return; }
+    if (kind < 0 || kind >= ENEMY_KIND_COUNT) kind = ENEMY_PRIDE;
+    m = &enemy_models[kind];
+    /* Each dummy's own skinned copy, the first time that slot is used; big enough for any kind. */
+    if (!e->vertices) {
+        e->vertices = memalign(16, sizeof(Vertex) * ENEMY_MAX_VERTICES);
+        if (!e->vertices) return;
+    }
+    e->kind = kind;
+    for (i = 0; i < m->vertex_count; ++i) { e->vertices[i].u = m->uvs[i].u; e->vertices[i].v = m->uvs[i].v; }
     e->pos[0] = x; e->pos[2] = z;
     e->pos[1] = 0.0f;
     if (!floor_under(x, spawn_search_y, z, &e->pos[1])) e->pos[1] = 0.0f;
@@ -215,29 +287,34 @@ static void spawn_one(float x, float z) {
     e->step = 0;
     e->plan = P_DECIDE;
     e->plan_step = 0;
-    e->health = ENEMY_HEALTH;
+    e->health = kind_health(kind);
+    e->posed_motion = -1;
+    e->overlay_motion = -1;
+    e->hidden = 0;
+    e->active = 1;
+    if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     script_play(0);
     e->fade = 0.0f;
-    e->posed_motion = -1;
-    e->active = 1;
 }
 
 void enemy_spawn(float x, float z) {
     int i;
     for (i = 1; i < ENEMY_MAX; ++i) enemies[i].active = 0;
     e = &enemies[0];
-    spawn_one(x, z);
+    spawn_one(dummy_kind, x, z);
 }
 
 void enemy_set_mortal(int on) { mortal = on; }
 
-int enemy_add(float x, float z) {
+int enemy_add(float x, float z) { return enemy_add_kind(ENEMY_PRIDE, x, z); }
+
+int enemy_add_kind(int kind, float x, float z) {
     Enemy *selected = e;
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (!enemies[i].active) {
             e = &enemies[i];
-            spawn_one(x, z);
+            spawn_one(kind, x, z);
             e = selected;
             return 1;
         }
@@ -270,13 +347,14 @@ int enemy_count(void) {
 
 void enemy_set_count(int count, float x, float z) {
     int i;
+    if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
             e->active = 0;
         } else if (!e->active) {
             float a = 0.785f * (float)i + 0.6f, r = spawn_ring + 60.0f * (float)(i / 8);
-            spawn_one(x + sinf(a) * r, z + cosf(a) * r);
+            spawn_one(dummy_kind, x + sinf(a) * r, z + cosf(a) * r);
         }
     }
     e = &enemies[0];
@@ -295,6 +373,17 @@ void enemy_select_nearest(float x, float z) {
 }
 
 void enemy_set_attacks(int attacks) { attacks_on = attacks; }
+void enemy_set_dummy_kind(int kind) { dummy_kind = kind >= 0 && kind < ENEMY_KIND_COUNT ? kind : ENEMY_PRIDE; }
+int enemy_kind(void) { return e->kind; }
+
+int enemy_kind_for_class(int spawn_class) {
+    /* EST spawn ids: a Seven Hell is 4 x its class number (0 Pride, 4 Gluttony, 8 Lust, 12 Sloth,
+     * 16 Wrath, 20 Greed), and 31 is the Enigma. Anything not ported yet stands in as a Pride. */
+    if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
+    if (spawn_class == 31) return ENEMY_ENIGMA;
+    if (spawn_class == 41) return ENEMY_GIGAPEDE;
+    return ENEMY_PRIDE;
+}
 void enemy_set_anim_auto(int on) { anim_auto = on; }
 void enemy_set_test(int no_texture, int no_lighting, float ring) {
     test_no_texture = no_texture;
@@ -533,8 +622,26 @@ static void action_enter(int a) {
     case A_STEP_BACK: script_play(10); break;
     case A_TAUNT_A: script_play(85); break;
     case A_TAUNT_B: script_play(86); break;
+    case A_WARP_FAR:
+    case A_WARP_MID:
+    case A_WARP_NEAR: script_play(68); e->timer = 0.0f; break;   /* hl-46 */
+    case A_WARP_STRIKE: script_play(66); e->timer = 0.0f; break; /* hl-60 */
+    case A_WIND_UP: script_play(71); break;                      /* hl-10 */
+    case A_SPEW: script_play(52); e->timer = 0.0f; break;        /* hl-52 */
     default: break;
     }
+    if (a != A_WARP_FAR && a != A_WARP_MID && a != A_WARP_NEAR && a != A_WARP_STRIKE) e->hidden = 0;
+}
+
+/* The Sloth reappears this far from Dante at a random angle, on the floor under him, facing him. */
+static void warp_to(float px, float pz, float r) {
+    float a = (float)(ai_random() & 0xffffu) * (2.0f * PI / 65536.0f), g;
+    e->pos[0] = px + sinf(a) * r;
+    e->pos[2] = pz + cosf(a) * r;
+    if (player_floor_fn && player_floor_fn(e->pos[0], dante_y + 400.0f, e->pos[2], 0.0f, &g)) e->pos[1] = g;
+    else e->pos[1] = dante_y;
+    e->floor_y = e->pos[1];
+    e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
 }
 
 static void lying_then_up(int get_up) {
@@ -679,6 +786,56 @@ static int action_update(float px, float pz, float f) {
     case A_TAUNT_B:
         if (e->done) action_enter(A_NONE);
         return 1;
+    case A_WARP_FAR:
+    case A_WARP_MID:
+    case A_WARP_NEAR:
+        /* hl-46: hidden from frame 44 to 54, moved at 45. */
+        e->timer += f;
+        if (e->step == 0 && e->timer >= 44.0f) { e->hidden = 1; e->step = 1; }
+        if (e->step == 1 && e->timer >= 45.0f) {
+            warp_to(px, pz, e->action == A_WARP_FAR ? 900.0f : e->action == A_WARP_MID ? 600.0f : 300.0f);
+            e->step = 2;
+        }
+        if (e->step == 2 && e->timer >= 54.0f) { e->hidden = 0; e->step = 3; }
+        if (e->done) { e->hidden = 0; action_enter(A_NONE); }
+        return 0;
+    case A_WARP_STRIKE:
+        /* hl-60, then from its frame 104 hidden and gone to 300 cm from Dante, where it comes out of the
+         * Pride's swing (script 87, hl-47) from frame 25, shown 9 frames later. */
+        e->timer += f;
+        if (e->step == 0 && e->timer >= 104.0f) {
+            e->hidden = 1;
+            warp_to(px, pz, 300.0f);
+            script_play(87);
+            e->frame += 25.0f;
+            e->step = 1;
+        }
+        if (e->step == 1 && e->timer >= 113.0f) { e->hidden = 0; e->step = 2; }
+        if (e->step == 2 && e->done) action_enter(A_NONE);
+        return e->step != 1;
+    case A_WIND_UP:
+        turn(px, pz, 0x100, f);
+        if (e->done) action_enter(A_SPEW);
+        return 1;
+    case A_SPEW:
+        /* Turns to him over frames 15 to 35, then at 129 a burst three spheres long (radius 100, out to
+         * 400 cm at mouth height) for about 3 frames. A heavy hit. */
+        e->timer += f;
+        if (e->timer >= 15.0f && e->timer <= 35.0f) turn(px, pz, ANGLE(546.0f), f);
+        if (e->step == 0 && e->timer >= 129.0f) {
+            float c = cosf(e->yaw), s = sinf(e->yaw);
+            int k;
+            for (k = 1; k <= 3; ++k) {
+                float d = k == 1 ? 100.0f : k == 2 ? 250.0f : 400.0f;
+                float x = e->pos[0] + s * d - px, z = e->pos[2] + c * d - pz, y = e->pos[1] + 100.0f;
+                float near_y = y < dante_y + DANTE_LOW ? dante_y + DANTE_LOW : y > dante_y + DANTE_HIGH ? dante_y + DANTE_HIGH : y;
+                float reach = 100.0f + DANTE_RADIUS;
+                if (x * x + (y - near_y) * (y - near_y) + z * z < reach * reach) { land_attack(1); break; }
+            }
+            e->step = 1;
+        }
+        if (e->done) action_enter(A_NONE);
+        return 1;
     default:
         return 0;
     }
@@ -695,9 +852,10 @@ static void decide(float distance) {
     float r, total = 0.0f;
     if (attack) attack_token = ATTACK_TOKEN_SECONDS;
     e->gauge = 0.0f;
-    while (band < ENEMY_AI_BANDS - 1 && distance >= enemy_ai_bands[band]) ++band;
-    while (column < 6 && enemy_ai_times[column] <= AI_RANK) ++column;
-    row = &enemy_ai_rows[attack ? 0 : 1][band][column];
+    const EnemyAiClass *ai = ai_class();
+    while (band < ai->band_count - 1 && distance >= ai->bands[band]) ++band;
+    while (column < 6 && ai->times[column] <= AI_RANK) ++column;
+    row = &ai->rows[attack ? 0 : 1][band][column];
     r = ai_unit() * 99.0f;
     for (i = 0; i < row->count; ++i) {
         total += row->picks[i].weight;
@@ -744,14 +902,17 @@ static void plan_update(float px, float pz, float f) {
             break;
         }
         d = angle_to(px, pz);
-        for (i = 0; i < ENEMY_AI_ZONES; ++i) {
-            if (distance < enemy_ai_zones[i][0] && fabsf(d) < enemy_ai_zones[i][1] * PI / 180.0f) {
-                e->gauge += enemy_ai_zones[i][2] * f;
-                break;
+        {
+            const EnemyAiClass *ai = ai_class();
+            for (i = 0; i < ai->zone_count; ++i) {
+                if (distance < ai->zones[i][0] && fabsf(d) < ai->zones[i][1] * PI / 180.0f) {
+                    e->gauge += ai->zones[i][2] * f;
+                    break;
+                }
             }
+            while (column < 6 && ai->times[column] <= AI_RANK) ++column;
+            if (e->gauge > ai->thresholds[column < 6 ? column : 5]) decide(distance);
         }
-        while (column < 6 && enemy_ai_times[column] <= AI_RANK) ++column;
-        if (e->gauge > enemy_ai_thresholds[column < 6 ? column : 5]) decide(distance);
         break;
     }
     case P_DEATH:
@@ -781,6 +942,16 @@ static void plan_update(float px, float pz, float f) {
     case P_STEP_BACK: plan_run_action(A_STEP_BACK); break;
     case P_TAUNT_A: plan_run_action(A_TAUNT_A); break;
     case P_TAUNT_B: plan_run_action(A_TAUNT_B); break;
+    case P_WARP_STRIKE: plan_run_action(A_WARP_STRIKE); break;
+    case P_WARP_FAR: plan_run_action(A_WARP_FAR); break;
+    case P_WARP_MID: plan_run_action(A_WARP_MID); break;
+    case P_WARP_NEAR: plan_run_action(A_WARP_NEAR); break;
+    case P_SPEW: plan_run_action(A_SPEW); break;
+    case P_SPEW_WOUND:
+        /* Winds up, then spews. */
+        if (e->plan_step == 0) { action_enter(A_WIND_UP); e->plan_step = 1; }
+        else if (e->action != A_WIND_UP && e->action != A_SPEW) plan_set(P_DECIDE);
+        break;
     default:
         /* A pick this enemy's lists can only reach at higher ranks, not ported yet. */
         plan_set(P_DECIDE);
@@ -807,6 +978,8 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         if (len > 1.0f) { at[0] += d[0] / len * 40.0f; at[2] += d[1] / len * 40.0f; }
         fx_hit_spark(at);
     }
+    if (e->kind == ENEMY_ENIGMA) { enigma_hit(kind, from_x, from_z); return; }
+    if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->plan == P_DEATH) return;
     if (mortal) {
         e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
@@ -852,6 +1025,7 @@ void enemy_push_out(float *x, float *z, float r) {
     Enemy *selected = e;
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
+        if (enemies[i].kind == ENEMY_GIGAPEDE) continue;
         const Enemy *o = &enemies[i];
         float dx, dz, d, min;
         e = &enemies[i];
@@ -978,6 +1152,9 @@ static void update_one(float dt, float px, float py, float pz) {
     float f = dt * MOTION_FPS, root[3];
     int plan_was = e->plan, action_was = e->action;
     if (!e->active) return;
+    dante_y = py;
+    if (e->kind == ENEMY_GIGAPEDE) { giga_part_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
         int use_root = action_update(px, pz, f);
@@ -1015,19 +1192,28 @@ void enemy_update(float dt, float px, float py, float pz) {
         e = &enemies[i];
         update_one(dt, px, py, pz);
     }
+    arrows_update(dt * MOTION_FPS, px, py, pz);
     e = selected;
 }
 
 /* Sample motion -> local rotations/offsets -> world transforms. */
 static void evaluate_pose(void) {
-    static MotionSample a, b;
+    static MotionSample a, b, over;
     M3 local;
     int i, k;
     motion_sample(motion_get(e->motion), e->frame, &a);
+    if (e->overlay_motion >= 0) {
+        motion_sample(motion_get(e->overlay_motion), e->overlay_frame, &over);
+        for (i = e->overlay_lo; i <= e->overlay_hi && i < MOTION_MAX_BONES; ++i) {
+            memcpy(a.rot[i], over.rot[i], sizeof(a.rot[i])); memcpy(a.has_rot[i], over.has_rot[i], sizeof(a.has_rot[i]));
+            memcpy(a.trans[i], over.trans[i], sizeof(a.trans[i])); memcpy(a.has_trans[i], over.has_trans[i], sizeof(a.has_trans[i]));
+        }
+    }
     if (e->fade > 0.0f && e->prev_motion >= 0) motion_sample(motion_get(e->prev_motion), e->prev_frame, &b);
-    for (i = 0; i < ENEMY_BONE_COUNT; ++i) {
-        float r[3], t[3] = {enemy_bone_local[i].x, enemy_bone_local[i].y, enemy_bone_local[i].z};
-        int p = enemy_bone_parent[i];
+    const EnemyModel *m = &enemy_models[e->kind];
+    for (i = 0; i < m->bone_count; ++i) {
+        float r[3], t[3] = {m->bone_local[i].x, m->bone_local[i].y, m->bone_local[i].z};
+        int p = m->bone_parent[i];
         for (k = 0; k < 3; ++k) {
             float ra = i < MOTION_MAX_BONES && a.has_rot[i][k] ? a.rot[i][k] : 0.0f;
             float ta = i < MOTION_MAX_BONES && a.has_trans[i][k] ? a.trans[i][k] : t[k];
@@ -1055,18 +1241,19 @@ static void evaluate_pose(void) {
 
 static void skin(void) {
     int i, k;
-    for (i = 0; i < ENEMY_VERTEX_COUNT; ++i) {
-        const Dmc3Vec3 *s = &enemy_positions[i], *n = &enemy_normals[i];
+    const EnemyModel *m = &enemy_models[e->kind];
+    for (i = 0; i < m->vertex_count; ++i) {
+        const Dmc3Vec3 *s = &m->positions[i], *n = &m->normals[i];
         float px = 0, py = 0, pz = 0, nx = 0, ny = 0, nz = 0;
         for (k = 0; k < 3; ++k) {
-            int w = enemy_weights[i][k], b;
+            int w = m->weights[i][k], b;
             float wf, dx, dy, dz;
             const float (*r)[3];
             if (!w) continue;
-            b = enemy_bones[i][k];
+            b = m->bones[i][k];
             wf = (float)w * (1.0f / 31.0f);
             r = world_rot[b].m;
-            dx = s->x - enemy_bone_rest[b].x; dy = s->y - enemy_bone_rest[b].y; dz = s->z - enemy_bone_rest[b].z;
+            dx = s->x - m->bone_rest[b].x; dy = s->y - m->bone_rest[b].y; dz = s->z - m->bone_rest[b].z;
             px += wf * (r[0][0] * dx + r[0][1] * dy + r[0][2] * dz + world_pos[b][0]);
             py += wf * (r[1][0] * dx + r[1][1] * dy + r[1][2] * dz + world_pos[b][1]);
             pz += wf * (r[2][0] * dx + r[2][1] * dy + r[2][2] * dz + world_pos[b][2]);
@@ -1077,7 +1264,7 @@ static void skin(void) {
         e->vertices[i].x = px; e->vertices[i].y = py; e->vertices[i].z = pz;
         e->vertices[i].nx = nx; e->vertices[i].ny = ny; e->vertices[i].nz = nz;
     }
-    sceKernelDcacheWritebackRange(e->vertices, sizeof(Vertex) * ENEMY_VERTEX_COUNT);
+    sceKernelDcacheWritebackRange(e->vertices, sizeof(Vertex) * m->vertex_count);
 }
 
 #define VTYPE (GU_TEXTURE_32BITF | GU_NORMAL_32BITF | GU_VERTEX_32BITF | GU_INDEX_16BIT | GU_TRANSFORM_3D)
@@ -1085,7 +1272,7 @@ static void skin(void) {
 /* Each dummy's bones update on its own turn, spread out over the frames so they don't all
  * cost the same frame. A new motion (a hit, say) always shows at once. */
 static void update_pose(float elapsed, float interval, int index, int count) {
-    int moved = e->motion != e->posed_motion || e->frame != e->posed_frame;
+    int moved = e->motion != e->posed_motion || e->frame != e->posed_frame || e->overlay_motion >= 0;
     if (!moved) return;
     e->anim_wait -= elapsed;
     if (interval > 0.0f && e->motion == e->posed_motion && e->anim_wait > 0.0f) return;
@@ -1095,13 +1282,17 @@ static void update_pose(float elapsed, float interval, int index, int count) {
     e->posed_frame = e->frame;
     evaluate_pose();
     skin();
-    memcpy(e->hand_rot, world_rot[HAND_BONE].m, sizeof(e->hand_rot));
-    memcpy(e->hand_pos, world_pos[HAND_BONE], sizeof(e->hand_pos));
+    memcpy(e->hand_rot, world_rot[kind_hand[e->kind]].m, sizeof(e->hand_rot));
+    memcpy(e->hand_pos, world_pos[kind_hand[e->kind]], sizeof(e->hand_pos));
     ++poses_done;
 }
 
 static void draw_one(void) {
     int i, bound = -1;
+    if (e->hidden) return;
+    const EnemyModel *m = &enemy_models[e->kind];
+    const EnemyTextureSet *set = &enemy_texture_sets[m->texture_set];
+    void *const *tex = textures[m->texture_set];
     if (!e->active) return;
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
@@ -1117,18 +1308,18 @@ static void draw_one(void) {
     sceGuTexMode(GU_PSM_T8, 0, 0, 1);     /* swizzled at load */
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
-    for (i = 0; i < ENEMY_OBJECT_COUNT; ++i) {
-        const Dmc3ModelObject *o = &enemy_objects[i];
+    for (i = 0; i < m->object_count; ++i) {
+        const Dmc3ModelObject *o = &m->objects[i];
         if ((int)o->texture != bound) {
             bound = (int)o->texture;
-            sceGuClutLoad(256 / 8, enemy_palettes[bound]);
-            sceGuTexImage(0, enemy_textures[bound].width, enemy_textures[bound].height, enemy_textures[bound].width, textures[bound]);
+            sceGuClutLoad(256 / 8, set->palettes[bound]);
+            sceGuTexImage(0, set->textures[bound].width, set->textures[bound].height, set->textures[bound].width, tex[bound]);
             sceGuTexFlush();
         }
-        sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices + o->index_start, e->vertices);
+        sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[e->kind] + o->index_start, e->vertices);
     }
-    {
-        /* Scythe in the -X hand. */
+    if (e->kind != ENEMY_ENIGMA) {
+        /* The weapon in its hand: a Seven Hell's scythe. The Enigma's bows are part of its body. */
         ScePspFMatrix4 mm;
         const float (*r)[3] = e->hand_rot;
         mm.x.x = r[0][0]; mm.x.y = r[1][0]; mm.x.z = r[2][0]; mm.x.w = 0.0f;
@@ -1137,11 +1328,11 @@ static void draw_one(void) {
         mm.w.x = e->hand_pos[0]; mm.w.y = e->hand_pos[1]; mm.w.z = e->hand_pos[2]; mm.w.w = 1.0f;
         sceGumPushMatrix();
         sceGumMultMatrix(&mm);
-        bound = ENEMY_WEAPON_TEXTURE;
-        sceGuClutLoad(256 / 8, enemy_palettes[bound]);
-        sceGuTexImage(0, enemy_textures[bound].width, enemy_textures[bound].height, enemy_textures[bound].width, textures[bound]);
+        bound = m->weapon_texture;
+        sceGuClutLoad(256 / 8, set->palettes[bound]);
+        sceGuTexImage(0, set->textures[bound].width, set->textures[bound].height, set->textures[bound].width, tex[bound]);
         sceGuTexFlush();
-        sceGumDrawArray(GU_TRIANGLES, VTYPE, ENEMY_WEAPON_INDEX_COUNT, weapon_indices, weapon_vertices);
+        sceGumDrawArray(GU_TRIANGLES, VTYPE, m->weapon_index_count, weapon_indices[e->kind], weapon_vertices[e->kind]);
         sceGumPopMatrix();
     }
 }
@@ -1158,10 +1349,563 @@ void enemy_draw(void) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (!e->active) continue;
+        if (e->kind == ENEMY_GIGAPEDE) { if (e->step == 0) giga_draw(); continue; }
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
     }
+    arrows_draw();
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     e = selected;
+}
+
+/* ---- The Enigma (CEm013): the archer on the walls (build/hdref/enemy_specs.md, rank 0). It never walks:
+ * it turns in place to face Dante, and each of its three pairs of bow arms (bones 5-15, 16-26, 27-37) has
+ * its own cooldown. When one runs out and the attack token is free (the same 3 seconds as the Seven Hells'),
+ * that pair shoots: one arrow, or a fan of three. Arrows home on Dante when he's near and are lobbed onto
+ * his feet when he's far. Simplified: no hops, no ledge falls, no statue spawns; the token is taken per
+ * volley as the game does. The aim lasts about two loops of the arms' motion, as decoded; not measured. */
+#define ENIGMA_WAKE 9000.0f
+#define ENIGMA_NEAR 1000.0f
+#define ARROW_MAX 24
+#define ARROW_LIFE 240.0f
+#define ARROW_SPEED 35.0f
+#define ARROW_TOP_SPEED 65.0f
+#define ARROW_RADIUS 30.0f
+/* type 0 an Enigma's arrow; 1 the Gigapede's homing sphere; 2 its orb that drops, then rolls. */
+typedef struct { int active, homing, type; float pos[3], vel[3], life, lift, goal[2]; } Arrow;
+static Arrow arrows[ARROW_MAX];
+static int enigma_motion_idle, enigma_motion_flinch, enigma_motion_heavy, enigma_motion_death;
+static int enigma_motion_aim, enigma_motion_release, enigma_motion_fan;
+static const unsigned char arm_lo[3] = {5, 16, 27}, arm_hi[3] = {15, 26, 37}, arm_hand[3] = {9, 20, 31};
+static const float arm_far_base[3] = {80.0f, 100.0f, 120.0f}, arm_near_base[3] = {230.0f, 200.0f, 250.0f};
+
+static int enigma_init(void) {
+    enigma_motion_idle = motion_find("ea01");      /* 374 frames, loops */
+    enigma_motion_flinch = motion_find("eb00");    /* 100: light flinch */
+    enigma_motion_heavy = motion_find("eb02");     /* 102: heavier */
+    enigma_motion_death = motion_find("eb23");     /* 123 */
+    enigma_motion_aim = motion_find("ec00");       /* 300: draw and aim, loops on 82 frames */
+    enigma_motion_release = motion_find("ec01");   /* 301: release, 20 frames */
+    enigma_motion_fan = motion_find("ec02");       /* 302: the fan */
+    memset(arrows, 0, sizeof(arrows));
+    return enigma_motion_idle >= 0;
+}
+
+static void enigma_play(int motion) {
+    if (motion < 0) return;
+    e->prev_motion = e->motion;
+    e->prev_frame = e->frame;
+    e->fade = e->motion >= 0 ? 1.0f : 0.0f;
+    e->fade_rate = 1.0f / 10.0f;
+    e->motion = motion;
+    e->frame = 0.0f;
+    e->done = 0;
+}
+
+static void enigma_spawn(void) {
+    int k;
+    e->plan = P_WATCH;
+    e->action = A_NONE;
+    e->motion = -1;
+    enigma_play(enigma_motion_idle);
+    e->fade = 0.0f;
+    e->loop = 1;
+    e->shoot_set = -1;
+    /* The first volley uses the far base alone. */
+    for (k = 0; k < 3; ++k) e->shoot_timer[k] = arm_far_base[k];
+}
+
+static void fire_arrow(float px, float py, float pz, float offset) {
+    int i;
+    float hand[3], c = cosf(e->yaw), s = sinf(e->yaw), dx, dy, dz, d;
+    const float *h = e->hand_pos;   /* set by the last pose: kind_hand isn't per arm, so use the arm's own */
+    (void)h;
+    evaluate_pose();
+    {
+        const float *w = world_pos[arm_hand[e->shoot_set >= 0 ? e->shoot_set : 0]];
+        hand[0] = e->pos[0] + w[0] * c + w[2] * s;
+        hand[1] = e->pos[1] + w[1];
+        hand[2] = e->pos[2] + w[2] * c - w[0] * s;
+    }
+    for (i = 0; i < ARROW_MAX && arrows[i].active; ++i) {}
+    if (i >= ARROW_MAX) return;
+    trace_row(5);   /* for tests: an arrow let go */
+    dx = px - hand[0]; dy = py + 100.0f - hand[1]; dz = pz - hand[2];
+    d = sqrtf(dx * dx + dz * dz);
+    arrows[i].active = 1;
+    arrows[i].type = 0;
+    arrows[i].life = ARROW_LIFE;
+    memcpy(arrows[i].pos, hand, sizeof(hand));
+    if (d < ENIGMA_NEAR) {
+        /* Straight at him, steering after him. */
+        float l = sqrtf(dx * dx + dy * dy + dz * dz) + 0.01f;
+        arrows[i].homing = 1;
+        arrows[i].vel[0] = dx / l * ARROW_SPEED; arrows[i].vel[1] = dy / l * ARROW_SPEED; arrows[i].vel[2] = dz / l * ARROW_SPEED;
+        arrows[i].lift = 0.2f;
+    } else {
+        /* Lobbed onto his feet, a little short or long, falling 0.1 a frame each frame. */
+        float tx = px + dx / d * offset, tz = pz + dz / d * offset, time = (d + offset) / 30.0f;
+        if (time < 20.0f) time = 20.0f;
+        arrows[i].homing = 0;
+        arrows[i].vel[0] = (tx - hand[0]) / time;
+        arrows[i].vel[2] = (tz - hand[2]) / time;
+        arrows[i].vel[1] = (py - hand[1] + 0.5f * 0.1f * time * time) / time;
+    }
+}
+
+static void arrows_clear(int i) { arrows[i].active = 0; }
+
+static void arrows_update(float f, float px, float py, float pz) {
+    int i;
+    for (i = 0; i < ARROW_MAX; ++i) {
+        Arrow *a = &arrows[i];
+        float g, dx, dy, dz;
+        if (!a->active) continue;
+        a->life -= f;
+        if (a->life <= 0.0f) { a->active = 0; continue; }
+        if (a->type == 1) {
+            /* The Gigapede's sphere: accelerates at him (chest height plus a little), up to 30 a frame. */
+            float tx = px - a->pos[0], ty = py + 150.0f - a->pos[1], tz = pz - a->pos[2];
+            float tl = sqrtf(tx * tx + ty * ty + tz * tz) + 0.01f, v;
+            a->vel[0] += tx / tl * f; a->vel[1] += ty / tl * f; a->vel[2] += tz / tl * f;
+            v = sqrtf(a->vel[0] * a->vel[0] + a->vel[1] * a->vel[1] + a->vel[2] * a->vel[2]);
+            if (v > 30.0f) { float k = 30.0f / v; a->vel[0] *= k; a->vel[1] *= k; a->vel[2] *= k; }
+        } else if (a->type == 2) {
+            /* Falls 10 a frame to the floor's height, then rolls at 30 a frame toward where Dante was. */
+            float g2;
+            if (a->lift > 0.0f) {
+                a->vel[0] = a->vel[2] = 0.0f; a->vel[1] = -10.0f;
+                if (player_floor_fn && player_floor_fn(a->pos[0], a->pos[1], a->pos[2], 0.0f, &g2) && a->pos[1] < g2 + 60.0f) {
+                    float dx2 = a->goal[0] - a->pos[0], dz2 = a->goal[1] - a->pos[2], l2 = sqrtf(dx2 * dx2 + dz2 * dz2) + 0.01f;
+                    a->lift = 0.0f; a->pos[1] = g2 + 60.0f;
+                    a->vel[0] = dx2 / l2 * 30.0f; a->vel[1] = 0.0f; a->vel[2] = dz2 / l2 * 30.0f;
+                }
+            }
+        } else if (a->homing) {
+            /* Turn toward his chest, and the small upward steer that fades. */
+            float tx = px - a->pos[0], ty = py + 100.0f - a->pos[1], tz = pz - a->pos[2];
+            float tl = sqrtf(tx * tx + ty * ty + tz * tz) + 0.01f, v;
+            a->vel[0] += tx / tl * 2.0f * f; a->vel[1] += ty / tl * 2.0f * f + a->lift * f; a->vel[2] += tz / tl * 2.0f * f;
+            a->lift -= 0.1f * f; if (a->lift < 0.0f) a->lift = 0.0f;
+            v = sqrtf(a->vel[0] * a->vel[0] + a->vel[1] * a->vel[1] + a->vel[2] * a->vel[2]);
+            if (v > ARROW_TOP_SPEED) { float k = ARROW_TOP_SPEED / v; a->vel[0] *= k; a->vel[1] *= k; a->vel[2] *= k; }
+        } else {
+            a->vel[1] -= 0.1f * f;
+        }
+        a->pos[0] += a->vel[0] * f; a->pos[1] += a->vel[1] * f; a->pos[2] += a->vel[2] * f;
+        /* Dante: his capsule. */
+        dx = a->pos[0] - px; dz = a->pos[2] - pz;
+        dy = a->pos[1] < py + DANTE_LOW ? a->pos[1] - (py + DANTE_LOW) : a->pos[1] > py + DANTE_HIGH ? a->pos[1] - (py + DANTE_HIGH) : 0.0f;
+        {
+            float r = a->type ? 50.0f : ARROW_RADIUS;
+            if (dx * dx + dy * dy + dz * dz >= (r + DANTE_RADIUS) * (r + DANTE_RADIUS)) goto missed;
+        }
+        {
+            trace_row(1);
+            landed = 1;
+            landed_x = a->pos[0] - a->vel[0];
+            landed_z = a->pos[2] - a->vel[2];
+            landed_heavy = 0;
+            a->active = 0;
+            continue;
+        }
+missed:
+        /* The floor (the Gigapede's orbs keep going: they're on it, or come down to it). */
+        if (a->type == 0 && player_floor_fn && player_floor_fn(a->pos[0], a->pos[1] + 50.0f, a->pos[2], 0.0f, &g) && a->pos[1] < g) a->active = 0;
+    }
+}
+
+static void arrows_draw(void) {
+    int i, n = 0;
+    struct { unsigned int color; float x, y, z; } *v;
+    for (i = 0; i < ARROW_MAX; ++i) n += arrows[i].active;
+    if (!n) return;
+    v = sceGuGetMemory(sizeof(*v) * 2 * (unsigned)n);
+    n = 0;
+    for (i = 0; i < ARROW_MAX; ++i) {
+        const Arrow *a = &arrows[i];
+        float l;
+        if (!a->active) continue;
+        l = sqrtf(a->vel[0] * a->vel[0] + a->vel[1] * a->vel[1] + a->vel[2] * a->vel[2]) + 0.01f;
+        if (a->type) {
+            /* A glowing orb, drawn as a short vertical streak with a trail. */
+            v[n].color = a->type == 1 ? 0xffff60c0u : 0xffffd060u; v[n].x = a->pos[0]; v[n].y = a->pos[1] + 50.0f; v[n].z = a->pos[2]; ++n;
+            v[n].color = a->type == 1 ? 0xff801060u : 0xff806010u; v[n].x = a->pos[0] - a->vel[0] / l * 120.0f; v[n].y = a->pos[1] - 50.0f; v[n].z = a->pos[2] - a->vel[2] / l * 120.0f; ++n;
+            continue;
+        }
+        v[n].color = 0xff60d0ffu; v[n].x = a->pos[0]; v[n].y = a->pos[1]; v[n].z = a->pos[2]; ++n;
+        v[n].color = 0xff2060a0u; v[n].x = a->pos[0] - a->vel[0] / l * 90.0f; v[n].y = a->pos[1] - a->vel[1] / l * 90.0f; v[n].z = a->pos[2] - a->vel[2] / l * 90.0f; ++n;
+    }
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuDisable(GU_LIGHTING);
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadIdentity();
+    sceGumDrawArray(GU_LINES, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
+}
+
+static void enigma_update(float f, float px, float py, float pz) {
+    float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz);
+    int k, near = d < ENIGMA_NEAR;
+    const Motion *m;
+    if (e->plan == P_DEATH) {
+        e->overlay_motion = -1;
+        if (e->motion >= 0) {
+            m = motion_get(e->motion);
+            e->frame += f;
+            if (e->frame >= m->end_frame) { e->frame = m->end_frame; e->timer += f; }
+        }
+        if (e->timer > 20.0f) e->active = 0;
+        return;
+    }
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    /* Body: idle, or a reaction playing out. */
+    m = motion_get(e->motion);
+    e->frame += f;
+    if (e->motion == enigma_motion_idle) e->frame = motion_wrap(m, e->frame);
+    else if (e->frame >= m->end_frame) enigma_play(enigma_motion_idle);
+    if (d > ENIGMA_WAKE || !attacks_on) return;
+    /* Turn in place. */
+    turn(px, pz, 0x100, f);
+    /* Shooters. */
+    if (e->shoot_set < 0) {
+        for (k = 0; k < 3; ++k) {
+            e->shoot_timer[k] -= f;
+            if (e->shoot_timer[k] > 0.0f) continue;
+            e->shoot_timer[k] = (near ? arm_near_base[k] + 200.0f * ai_unit() : arm_far_base[k] + 100.0f * ai_unit());
+            if (attack_token > 0.0f) continue;
+            attack_token = ATTACK_TOKEN_SECONDS;
+            e->shoot_set = (signed char)k;
+            e->shoot_fan = ai_unit() * 100.0f >= (near ? 80.0f : 60.0f);
+            e->shoot_phase = 0;
+            e->shoot_t = 0.0f;
+            e->overlay_motion = e->shoot_fan ? enigma_motion_fan : enigma_motion_aim;
+            e->overlay_frame = 0.0f;
+            e->overlay_lo = arm_lo[k];
+            e->overlay_hi = arm_hi[k];
+            break;
+        }
+        return;
+    }
+    e->shoot_t += f;
+    if (e->overlay_motion >= 0) {
+        const Motion *om = motion_get(e->overlay_motion);
+        e->overlay_frame += f;
+        if (e->shoot_phase == 0) e->overlay_frame = motion_wrap(om, e->overlay_frame);
+    }
+    switch (e->shoot_phase) {
+    case 0:
+        /* Aim for about two loops, then 20 frames, then let go. */
+        if (e->shoot_t >= (e->shoot_fan ? 130.0f : 164.0f) + 20.0f) {
+            e->shoot_phase = 1;
+            e->shoot_t = 0.0f;
+            e->overlay_motion = enigma_motion_release;
+            e->overlay_frame = 0.0f;
+            if (e->shoot_fan) {
+                fire_arrow(px, py, pz, -200.0f);
+                fire_arrow(px + cosf(e->yaw) * 150.0f, py, pz - sinf(e->yaw) * 150.0f, 0.0f);
+                fire_arrow(px - cosf(e->yaw) * 150.0f, py, pz + sinf(e->yaw) * 150.0f, 200.0f);
+            } else {
+                static const float offsets[4] = {200.0f, -150.0f, 100.0f, 0.0f};
+                fire_arrow(px, py, pz, offsets[ai_random() & 3u]);
+            }
+        }
+        break;
+    default:
+        if (e->shoot_t >= 20.0f) { e->overlay_motion = -1; e->shoot_set = -1; }
+        break;
+    }
+}
+
+static void enigma_hit(HitKind kind, float from_x, float from_z) {
+    (void)from_x; (void)from_z;
+    ++hits;
+    {
+        float at[3] = {e->pos[0], e->pos[1] + 200.0f, e->pos[2]};
+        fx_hit_spark(at);
+    }
+    if (e->plan == P_DEATH) return;
+    if (mortal) {
+        e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        if (e->health <= 0) {
+            e->plan = P_DEATH;
+            e->timer = 0.0f;
+            e->overlay_motion = -1;
+            e->shoot_set = -1;
+            enigma_play(enigma_motion_death);
+            return;
+        }
+    }
+    /* A light hit doesn't stop it shooting; a heavier one does. */
+    if (kind == HIT_LIGHT || kind == HIT_AIR) enigma_play(enigma_motion_flinch);
+    else { enigma_play(enigma_motion_heavy); e->overlay_motion = -1; e->shoot_set = -1; }
+}
+
+/* ---- The Gigapede (CEm023), Mission 4's boss (build/hdref/enemy_specs.md section C, rank 0). Its head
+ * runs the game's routes of movement paths through room 111's walls, holes and ceiling, the 7 segments
+ * trailing 500 cm apart along the same track. Each segment is an enemy slot, so Dante's attacks, lock-on and
+ * the room's fight work as for any enemy; damage goes to one shared pool. Attacks at the routes' own path
+ * frames: event 1 and 2, a homing sphere from each segment; 3 and 4, an orb that drops, then rolls at where
+ * Dante was. Simplified: drawn rigid (its motions aren't played), no shells, no rolls or shake-off, no beams
+ * or head orb. Health is the spec's 2800 against the Pride's 250. */
+#include "gigapede_runtime.h"
+#define GIGA_PARTS 8               /* the head and 7 segments */
+#define GIGA_SPACING 500.0f
+#define GIGA_HISTORY 512
+#define GIGA_HEALTH (ENEMY_HEALTH * 2800 / 250)
+typedef struct { signed char path; float speed; short at[2]; signed char event[2]; } GigaStep;
+/* Rank 0 routes: 11 the entrance, then 1, 4, 7 by phase. Where a route has two choices by Dante's height,
+ * these are the ones for him on the floor. */
+static const GigaStep giga_route[4][4] = {
+    {{14, 1.0f, {-1, -1}, {0, 0}}, {0, 1.0f, {-1, -1}, {0, 0}}, {-1, 0, {0}, {0}}},
+    {{3, 1.0f, {2000, -1}, {1, 0}}, {1, 2.0f, {1200, -1}, {1, 0}}, {-1, 0, {0}, {0}}},
+    {{11, 1.0f, {1200, 1700}, {3, 3}}, {9, 1.0f, {1100, 2200}, {2, 0}}, {-1, 0, {0}, {0}}},
+    {{3, 1.0f, {1300, -1}, {2, 0}}, {6, 0.8f, {1550, -1}, {1, 0}}, {16, 1.0f, {1200, -1}, {2, 0}}, {-1, 0, {0}, {0}}},
+};
+static struct {
+    int active, health, route, step, dying;
+    float frame, rate, dead_time;
+    float history[GIGA_HISTORY][3];
+    int history_head, history_count;
+    float pos[GIGA_PARTS][3], dir[GIGA_PARTS][3];
+    unsigned char fired[2];
+} giga;
+static unsigned short *giga_head_idx, *giga_body_idx;
+static Vertex *giga_head_v, *giga_body_v;
+static void *giga_tex[GIGA_TEXTURE_COUNT];
+
+static int path_enter(int p) { return p == 1 ? 200 : (p == 3 || p == 15 || p == 16 || p == 17) ? 300 : 100; }
+static int path_margin(int p) { return p == 14 ? 0 : p == 15 ? 250 : p == 17 ? 300 : 100; }
+static int path_frames(int p) { return (giga_path_start[p + 1] - giga_path_start[p] - 1) * GIGA_PATH_STEP; }
+static void path_at(int p, float frame, float out[3]) {
+    int n = giga_path_start[p + 1] - giga_path_start[p], i;
+    float u = frame / (float)GIGA_PATH_STEP, k;
+    const float (*pt)[3] = &giga_path_points[giga_path_start[p]];
+    if (n <= 0) { out[0] = out[1] = out[2] = 0.0f; return; }
+    if (u < 0.0f) u = 0.0f;
+    i = (int)u;
+    if (i >= n - 1) { memcpy(out, pt[n - 1], sizeof(float) * 3); return; }
+    k = u - (float)i;
+    out[0] = pt[i][0] + (pt[i + 1][0] - pt[i][0]) * k;
+    out[1] = pt[i][1] + (pt[i + 1][1] - pt[i][1]) * k;
+    out[2] = pt[i][2] + (pt[i + 1][2] - pt[i][2]) * k;
+}
+
+static void giga_init_mesh(Vertex **v, unsigned short **idx, const Dmc3Vec3 *p, const Dmc3Vec3 *n, const Dmc3Uv *uv, int vc,
+                           const unsigned short *src, int ic) {
+    int i;
+    *v = memalign(16, sizeof(Vertex) * vc);
+    *idx = memalign(16, sizeof(unsigned short) * ic);
+    if (!*v || !*idx) return;
+    for (i = 0; i < vc; ++i) {
+        Vertex *o = &(*v)[i];
+        o->u = uv[i].u; o->v = uv[i].v; o->nx = n[i].x; o->ny = n[i].y; o->nz = n[i].z; o->x = p[i].x; o->y = p[i].y; o->z = p[i].z;
+    }
+    memcpy(*idx, src, sizeof(unsigned short) * ic);
+}
+
+static int giga_init(void) {
+    int i;
+    giga_init_mesh(&giga_head_v, &giga_head_idx, giga_head_positions, giga_head_normals, giga_head_uvs, GIGA_HEAD_VERTEX_COUNT, giga_head_indices, GIGA_HEAD_INDEX_COUNT);
+    giga_init_mesh(&giga_body_v, &giga_body_idx, giga_body_positions, giga_body_normals, giga_body_uvs, GIGA_BODY_VERTEX_COUNT, giga_body_indices, GIGA_BODY_INDEX_COUNT);
+    if (!giga_head_v || !giga_body_v || !giga_head_idx || !giga_body_idx) return 0;
+    for (i = 0; i < GIGA_TEXTURE_COUNT; ++i) {
+        size_t bytes = (size_t)giga_textures[i].width * giga_textures[i].height;
+        giga_tex[i] = memalign(16, bytes);
+        if (!giga_tex[i]) return 0;
+        memcpy(giga_tex[i], giga_textures[i].rgba, bytes);
+        if (!swizzle_texture8(giga_tex[i], giga_textures[i].width, giga_textures[i].height)) return 0;
+    }
+    return 1;
+}
+
+static void giga_begin_step(void) {
+    const GigaStep *s = &giga_route[giga.route][giga.step];
+    giga.frame = (float)path_enter(s->path);
+    giga.fired[0] = giga.fired[1] = 0;
+}
+
+/* A claimed slot per part: the head is the slot that was spawned. */
+static void giga_spawn(void) {
+    Enemy *head = e;
+    int k, found = 1, i;
+    float p[3];
+    memset(&giga, 0, sizeof(giga));
+    giga.active = 1;
+    giga.health = GIGA_HEALTH;
+    giga.route = 0;
+    giga.step = 0;
+    giga.rate = 1.4f;
+    giga_begin_step();
+    path_at(giga_route[0][0].path, giga.frame, p);
+    for (i = 0; i < GIGA_HISTORY; ++i) memcpy(giga.history[i], p, sizeof(p));
+    giga.history_count = GIGA_HISTORY;
+    head->kind = ENEMY_GIGAPEDE; head->step = 0; head->active = 1; head->plan = P_WATCH; head->hidden = 1;
+    for (k = 0; k < ENEMY_MAX && found < GIGA_PARTS; ++k) {
+        Enemy *o = &enemies[k];
+        if (o->active || o == head) continue;
+        o->kind = ENEMY_GIGAPEDE; o->step = (unsigned char)found++; o->active = 1; o->plan = P_WATCH; o->hidden = 1;
+        o->health = 1; o->overlay_motion = -1;
+        memcpy(o->pos, p, sizeof(p));
+    }
+    memcpy(head->pos, p, sizeof(p));
+}
+
+static void giga_record(const float p[3]) {
+    const float *last = giga.history[giga.history_head];
+    float dx = p[0] - last[0], dy = p[1] - last[1], dz = p[2] - last[2];
+    if (dx * dx + dy * dy + dz * dz < 25.0f * 25.0f) return;
+    giga.history_head = (giga.history_head + 1) % GIGA_HISTORY;
+    memcpy(giga.history[giga.history_head], p, sizeof(float) * 3);
+}
+
+/* The point this far behind the head along where it's been. */
+static void giga_behind(float distance, float out[3]) {
+    int i, at = giga.history_head;
+    float left = distance;
+    for (i = 0; i < GIGA_HISTORY - 1; ++i) {
+        int prev = (at + GIGA_HISTORY - 1) % GIGA_HISTORY;
+        const float *a = giga.history[at], *b = giga.history[prev];
+        float dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], l = sqrtf(dx * dx + dy * dy + dz * dz);
+        if (l >= left && l > 0.0f) {
+            float k = left / l;
+            out[0] = a[0] + dx * k; out[1] = a[1] + dy * k; out[2] = a[2] + dz * k;
+            return;
+        }
+        left -= l;
+        at = prev;
+    }
+    memcpy(out, giga.history[at], sizeof(float) * 3);
+}
+
+static void giga_orb(const float from[3], int kind, float px, float py, float pz);
+
+static void giga_event(int ev, float px, float py, float pz) {
+    int k;
+    if (ev == 1 || ev == 2) for (k = 1; k < GIGA_PARTS; ++k) giga_orb(giga.pos[k], 0, px, py, pz);
+    if (ev == 3 || ev == 4) for (k = 2; k < GIGA_PARTS; k += 2) giga_orb(giga.pos[k], 1, px, py, pz);
+}
+
+static void giga_update(float f, float px, float py, float pz) {
+    const GigaStep *s;
+    float target, p[3];
+    int k, near = 0, i;
+    if (!giga.active) return;
+    if (giga.dying) {
+        giga.dead_time += f;
+        if (giga.dead_time > 90.0f) {
+            for (i = 0; i < ENEMY_MAX; ++i) if (enemies[i].kind == ENEMY_GIGAPEDE) enemies[i].active = 0;
+            giga.active = 0;
+        }
+        return;
+    }
+    s = &giga_route[giga.route][giga.step];
+    /* Rate: the step's speed x 1.4 (x 1.8 in its last phase), doubled when no part is near Dante. */
+    for (k = 0; k < GIGA_PARTS; ++k) {
+        float dx = giga.pos[k][0] - px, dz = giga.pos[k][2] - pz;
+        if (dx * dx + dz * dz < 1000.0f * 1000.0f) near = 1;
+    }
+    target = s->speed * (giga.health < GIGA_HEALTH * 500 / 2800 ? 1.8f : 1.4f) * (near ? 1.0f : 2.0f);
+    if (s->path == 14) target = s->speed * 2.8f;
+    giga.rate += (target - giga.rate) * 0.01f * f;
+    giga.frame += giga.rate * f;
+    for (k = 0; k < 2; ++k)
+        if (!giga.fired[k] && s->at[k] >= 0 && giga.frame >= (float)s->at[k]) { giga.fired[k] = 1; if (s->event[k]) giga_event(s->event[k], px, py, pz); }
+    if (giga.frame >= (float)(path_frames(s->path) - path_margin(s->path))) {
+        ++giga.step;
+        if (giga_route[giga.route][giga.step].path < 0) {
+            /* The next route, by phase: under 2000 of 2800 the second, under 500 the third. */
+            giga.route = giga.health < GIGA_HEALTH * 500 / 2800 ? 3 : giga.health < GIGA_HEALTH * 2000 / 2800 ? 2 : 1;
+            giga.step = 0;
+        }
+        giga_begin_step();
+        s = &giga_route[giga.route][giga.step];
+    }
+    path_at(s->path, giga.frame, p);
+    giga_record(p);
+    memcpy(giga.pos[0], p, sizeof(p));
+    for (k = 1; k < GIGA_PARTS; ++k) giga_behind(GIGA_SPACING * (float)k, giga.pos[k]);
+    for (k = 0; k < GIGA_PARTS; ++k) {
+        float ahead[3], dx, dy, dz, l;
+        if (k == 0) giga_behind(-0.0f, ahead), giga_behind(60.0f, ahead), dx = p[0] - ahead[0], dy = p[1] - ahead[1], dz = p[2] - ahead[2];
+        else { dx = giga.pos[k - 1][0] - giga.pos[k][0]; dy = giga.pos[k - 1][1] - giga.pos[k][1]; dz = giga.pos[k - 1][2] - giga.pos[k][2]; }
+        l = sqrtf(dx * dx + dy * dy + dz * dz);
+        if (l > 1.0f) { giga.dir[k][0] = dx / l; giga.dir[k][1] = dy / l; giga.dir[k][2] = dz / l; }
+    }
+}
+
+static void giga_part_update(float f, float px, float py, float pz) {
+    if (e->step == 0) giga_update(f, px, py, pz);
+    memcpy(e->pos, giga.pos[e->step < GIGA_PARTS ? e->step : 0], sizeof(e->pos));
+    e->floor_y = e->pos[1];
+    e->plan = giga.dying ? P_DEATH : P_WATCH;
+}
+
+static void giga_hit(HitKind kind) {
+    float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
+    ++hits;
+    fx_hit_spark(at);
+    if (!mortal || giga.dying) return;
+    giga.health -= (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
+    if (giga.health <= 0) { giga.dying = 1; giga.dead_time = 0.0f; }
+}
+
+static void giga_draw_part(const float pos[3], const float dir[3], int head) {
+    ScePspFMatrix4 m;
+    float fx = dir[0], fy = dir[1], fz = dir[2], rx, ry, rz, ux, uy, uz, l;
+    int i, bound = -1;
+    const Dmc3ModelObject *objects = head ? giga_head_objects : giga_body_objects;
+    int count = head ? GIGA_HEAD_OBJECT_COUNT : GIGA_BODY_OBJECT_COUNT;
+    /* Right = up x forward, then up = forward x right. */
+    rx = fz; ry = 0.0f; rz = -fx; l = sqrtf(rx * rx + rz * rz);
+    if (l < 0.01f) { rx = 1.0f; rz = 0.0f; l = 1.0f; }
+    rx /= l; rz /= l;
+    ux = fy * rz - fz * ry; uy = fz * rx - fx * rz; uz = fx * ry - fy * rx;
+    m.x.x = rx; m.x.y = ry; m.x.z = rz; m.x.w = 0.0f;
+    m.y.x = ux; m.y.y = uy; m.y.z = uz; m.y.w = 0.0f;
+    m.z.x = fx; m.z.y = fy; m.z.z = fz; m.z.w = 0.0f;
+    m.w.x = pos[0]; m.w.y = pos[1]; m.w.z = pos[2]; m.w.w = 1.0f;
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadMatrix(&m);
+    for (i = 0; i < count; ++i) {
+        const Dmc3ModelObject *o = &objects[i];
+        if ((int)o->texture != bound) {
+            bound = (int)o->texture;
+            sceGuClutLoad(256 / 8, giga_palettes[bound]);
+            sceGuTexImage(0, giga_textures[bound].width, giga_textures[bound].height, giga_textures[bound].width, giga_tex[bound]);
+            sceGuTexFlush();
+        }
+        sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, (head ? giga_head_idx : giga_body_idx) + o->index_start, head ? giga_head_v : giga_body_v);
+    }
+}
+
+static void giga_draw(void) {
+    int k;
+    if (!giga.active) return;
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_LIGHTING);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
+    sceGuTexMode(GU_PSM_T8, 0, 0, 1);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    for (k = GIGA_PARTS - 1; k >= 0; --k) {
+        if (giga.dying && ((int)giga.dead_time / 4) % 2) continue;   /* flickers out */
+        giga_draw_part(giga.pos[k], giga.dir[k], k == 0);
+    }
+}
+
+static void giga_orb(const float from[3], int kind, float px, float py, float pz) {
+    int i;
+    (void)py;
+    for (i = 0; i < ARROW_MAX && arrows[i].active; ++i) {}
+    if (i >= ARROW_MAX) return;
+    memset(&arrows[i], 0, sizeof(arrows[i]));
+    arrows[i].active = 1;
+    arrows[i].type = kind ? 2 : 1;
+    arrows[i].life = 300.0f;
+    memcpy(arrows[i].pos, from, sizeof(arrows[i].pos));
+    arrows[i].lift = 1.0f;
+    arrows[i].goal[0] = px;
+    arrows[i].goal[1] = pz;
 }

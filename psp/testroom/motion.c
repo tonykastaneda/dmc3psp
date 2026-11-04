@@ -18,7 +18,7 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
     int bones;
     if (blob->size < 0x34 || memcmp(d + 4, "MOT", 4) != 0) return 0;
     header = rd32(d);   /* 0x30 / 0x40 for weapons' few bones, 0x50, or 0x60 for more than 24 */
-    if ((header != 0x30 && header != 0x40 && header != 0x50 && header != 0x60) || blob->size < header + 4) return 0;
+    if (header < 0x30 || header > 0x80 || (header & 0xf) || blob->size < header + 4) return 0;   /* 0x80: the Enigma's 42 bones */
     declared = rd32(d + header);
     offset = header + 4;
     m->name = blob->name;

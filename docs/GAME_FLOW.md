@@ -66,27 +66,63 @@ Measured on the HD Collection with Dante's health held up. Classes come from the
 
 Each stage's data slot has its doors as text (box, next room, which player start, press or walk through, and
 mission conditions), `POS` for the player starts, and `EST`, the encounter scripts. `tools/gen_rooms.py` reads them.
-In `EST`, sets of ops follow `12[set]`: `2[class, ?]` then `3[x, y, z]` spawns, `9[1, n]` waits n frames, and
-`9[0, n, f]` waits until n or fewer are alive. A set's number isn't its mission: which set a room uses in a
-mission is chosen in `MISSIONS` by matching what the HD Collection spawned, and the game's own rule isn't read.
 
-| Mission | Rooms | How sure |
+`EST` ends in a table of n groups x 5 difficulties (Easy, Normal, Hard, Very Hard, DMD), each an offset into the
+ops: `2[class, ?]` then `3[x, y, z]` spawns, `9[1, n]` waits n frames, `9[0, n, f]` waits until n or fewer are
+alive. Easy and Normal each get their own column. Which groups a room runs in a mission comes from that
+mission's event script (`EventTbl0N.bin`, GDATA 238 + N), decoded in `docs/EVENT_SCRIPTS.md`: op `3e g` starts
+group g. Spawn classes are decoded from the game's factory table (`docs/ENEMY_SPECS.md`): 0-3 Pride, 4-7
+Gluttony, 8-11 Lust, 12-15 Sloth, 16-19 Wrath, 20-23 Greed, 26 Hell Vanguard, 31 Enigma, 41 Gigapede, 43 Cerberus.
+
+A stage's `# GAME` text holds its gimmicks (`SET n LIFT`, `SWITCH`, `SEAL`, `COLLISION`, `STAY` models).
+`gen_rooms.py` reads the LIFT and SWITCH of room 103.
+
+The areas' names and what happens in them are from a walkthrough (`MISSIONwalkthrough.md` in the repo's root);
+the room numbers are matched to them through the event scripts.
+
+### Mission 3: "The Devils' tower"
+
+| Room | Area (event script and walkthrough) | What runs |
 | --- | --- | --- |
-| 1 | 000 | Its door to 001 is commented out on the disc, so clearing the room ends it |
-| 2 | 001 | Clearing the script ends it, as the Vanguard fight isn't in |
-| 3 | 002, 009, then 003 to 006, ending at the door to 100 | Mission 4 starts in 100, and every door checks out as reachable on foot. Fights in 002 and 009 match the HD census by class |
-| 4 | 100, 110, 111, 112, ending at the door to 113 | **Partly stand-in.** See below |
+| 002 | 66 Slum Avenue | Groups 2 (2 Enigmas on the ledges), 1, 0, then 3 (Prides, a Lust and a Wrath) |
+| 009 | (off the street) | Group 2 |
+| 003 | Bullseye | No fight. The blue seal puzzle and Shotgun aren't in |
+| 004 | Love Planet | Doors sealed; groups 1 then 0: Hell Sloths and Prides |
+| 005 | 13th Avenue | No fight |
+| 006 | Ice Guardian's Chamber | Cerberus (class 43) isn't ported, so no fight. Its door to 100 ends the mission |
 
-Mission 4, "Find the key to the stars", isn't right yet:
+The Enigmas' spawn points and timing match the HD Collection's census of 002 (2150, 2330 and 2750, 2200,
+2.5 s apart). Love Planet couldn't be checked there: the teleporting route can't pass Bullseye's blue seal.
 
-- The door from 112 to 113 is on a ledge at about y=3500. A flood over the collision, allowing steps up to 400 cm between neighbouring cells, gets no higher than 3130 from the room's start. That could be a jump across a gap, which the flood doesn't try, or something unported. 113's door to 120 is at y=5500 with the flood topping out at 150. The temporary end triggers under the door at any height.
-- The HD route went on through 113, 120, 121 and 122, and its true end isn't known. Teleporting through missed the key pickup and whatever else the mission needs.
-- The HD census saw no enemies in those rooms in the few seconds spent in each, so the port's fights (sets in 110 and 111) are stand-ins.
-- There are no key items and no bosses.
+### Mission 4: "Find the key to the stars"
+
+From its event script: 100 Chamber of Echoes -> 101 Entranceway -> 102 Living Statue Room -> 103 Silence
+Statuary -> (its lift) -> 110 Incandescent Space -> 100 2nd floor -> 112 Endless Infernum, falling into
+104 Chamber of Sins -> back to 112 -> 111 Giantwalker Chamber (Gigapede) -> 110, where the Astronomical Board
+(item 36, at the spot in 110's `ITM` chunk) ends it.
+
+| Room | What runs |
+| --- | --- |
+| 101 | Group 0 (6 Prides). The script has no section for 101, so this group is a guess |
+| 102 | Group 1: 6 Enigmas, and Prides (Easy) or Lusts (Normal) |
+| 103 | The lift. Strike its switch (or press O by it), then stand on it: it carries Dante up to the door into 110 |
+| 110 | Group 0: 6 Gluttonies, 2 Sloths. After the Gigapede, the Astronomical Board: O by it ends the mission |
+| 104 | Group 0: Sloths, Lusts and Wraths. The walkthrough says Gluttony; the decoded classes say otherwise |
+| 111 | The Gigapede |
+
+Doors held shut as the script's flags do (`GATES` in `gen_rooms.py`): 100's way to 112 opens after 110, 112's
+to 111 after 104, 110's to 111 never (it's entered from 112), and 112's to 113 isn't in this mission.
+
+Stand-ins: the lift and its switch are plain blocks, and the board a gold one, because their models aren't
+converted. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
+in the stage collision), the room gets a pad at that height. 112's stairs don't collapse: the pit is open,
+and falling in is what takes Dante to 104.
 
 Stage geometry: some stages' scene nodes are relative to their root, others (002, 009, 011) absolute, with the root
-elsewhere. `choose_scm` in `prepare_stage.py` picks by comparing with the collision. A few stray objects in 002
-sit far outside the room and aren't explained.
+elsewhere. `choose_scm` in `prepare_stage.py` picks by comparing with the collision. Scenery far outside the
+collision's bounds (backdrops tens of km across, as in 110) is cut into pieces as long as 0.3 of its distance from
+the play area instead of 500 cm, and stays out of the floor grid. That took room 110 from 29 MB to 3.9 MB, and
+it holds 30 FPS on the PSP with its fight on (it was 20).
 
 Cameras are the port's follow camera, not the game's. Its `CAM` zones aren't read. In tight rooms it can start
 inside scenery, as at Mission 3's start, where the first view is poor.
@@ -97,9 +133,13 @@ Working: the stage, spawn points from the measurements above, waves, enemies dyi
 
 Stand-ins and estimates:
 
-- **All enemies are Prides.** Every class in a script spawns one, including flying `CEm013`. `CEm002`, `CEm004` and the Hell Vanguard spawn points hold Prides. `CEm002` and `CEm004` have bodies in the same pack (slots [8] and [18] of GDATA 117) and AI tables already mapped (`docs/ENEMY_AI.md`), so they're the next step. The Vanguard is its own work.
-- **Encounters run from the game's scripts**, but difficulty isn't applied: Easy and Normal get the same set.
-- **Enemy health** is 6 light hits, chosen by eye. Their real health and Dante's real damage aren't read.
+- **Enemies:** each of the six Seven Hells has its own model. The Pride, Sloth and Gluttony use their own
+  decision tables, the Sloth warps and the Gluttony spews (`docs/ENEMY_AI.md`). The Lust, Wrath and Greed use
+  the Pride's table, so the Wrath doesn't explode yet. The Enigma and the Gigapede have their own logic. Classes
+  not ported (the Hell Vanguard, Cerberus and others) spawn as Prides, except Cerberus, whose room has no fight.
+- **Encounters run from the game's scripts**, with Easy and Normal each using their own column.
+- **Enemy health** is the Pride's 6 light hits (chosen by eye), and the others in proportion to their parameter
+  blocks' health. Dante's real damage isn't read.
 - **Dante can't die.** His health falls by the attack records' damage and stops at 1.
 - **Doors** open once a room's fight is over. The game's seals and door models aren't drawn.
 - **Real-time cutscenes** aren't in, Mission 2's intro among them.
@@ -108,11 +148,11 @@ Stand-ins and estimates:
 
 ## Next steps, in order
 
-1. `CEm002` and `CEm004`: bodies and AI tables.
-2. Read the mission event scripts for real waves, doors, triggers and real-time cutscenes.
-3. Enemy health and Dante's damage from the game, then dying and Game Over.
-4. Result screen values and ranks.
-5. Hell Vanguard.
+1. The Lust's, Wrath's and Greed's own tables and moves (the Wrath's explosion).
+2. Gimmick models: 103's lift, its switch, the seals, the Astronomical Board.
+3. Cerberus and the Hell Vanguard.
+4. Enemy health and Dante's damage from the game, then dying and Game Over.
+5. Result screen values and ranks.
 6. Customize, Options, Load and Save.
 7. Music and sound effects.
 

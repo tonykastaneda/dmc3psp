@@ -106,3 +106,28 @@ python tools/psp_bench.py ramp draw100                 # 100 on the PSP, drawn
 ```
 
 Hit kinds: 0 light, 1 heavy, 2 launch, 3 air, 4 slam.
+
+## The other kinds (2026-11-04)
+
+From the class set-ups and the factory table, decoded in `docs/ENEMY_SPECS.md`:
+
+- **Every Seven Hell** shares this code, the scripts (chunk 38) and the `hl-NN` motions. Each has its own body
+  (em000.pac [1] Pride, [5] Gluttony, [8] Lust, [13] Sloth, [18] Wrath, [19] Greed) and decision table.
+  `tools/gen_enemy_ai.py` reads the Pride's, Gluttony's (`0x5ab9d0`) and Sloth's (`0x5b0e60`) tables.
+- **Hell Sloth:** plans 46 to 49. Warps (actions 41, 42, 43) hide it from frame 44 to 54 of `hl-46` and put it
+  900, 600 or 300 cm from Dante at a random angle. The warp strike (57) reappears 300 cm away into the Pride's
+  swing from its frame 25.
+- **Hell Gluttony:** plan 45 winds up (action 56) and spews (31): at frame 129 of `hl-52`, a burst of three
+  spheres of radius 100 reaching 400 cm ahead, a heavy hit.
+- **Enigma** (CEm013, em013.pac): turns in place. Its three pairs of bow arms each have a cooldown (rank 0
+  tables). Each volley takes the same 3-second token and is one arrow or a fan of three. An arrow homes when
+  Dante is within 1000 cm (35 a frame, up to 65, 240 frames), and is lobbed onto his feet otherwise.
+  The arms' motions play over their own bones only. Hops, ledge falls and statue spawns aren't in.
+- **Gigapede** (CEm023, em023.pac): see `docs/GAME_FLOW.md` and `tools/prepare_gigapede.py`. Head and 7 segments,
+  each an enemy slot, following the routes of its 18 baked paths, with homing and rolling orbs.
+- **Health** in light hits is the Pride's 6 scaled by the parameter blocks' (inferred) health: Gluttony 700,
+  Sloth 1200, Enigma 600, Gigapede 2800, against the Pride's 250.
+
+Tested on the PSP with `CMP_SCRIPT.TXT` options `kind n` (the dummies' kind), `lineup 1` (one of each) and
+`aitrace 1`. In a run on the PSP the Enigma let go 5 arrows in 23 seconds, all landing on a standing Dante. The
+Sloth chose plans 46 to 49, and the Gluttony 45.

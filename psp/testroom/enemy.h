@@ -8,6 +8,13 @@
  * Calls that take no index act on the selected dummy: see enemy_select. */
 #define ENEMY_MAX 100
 
+/* The kinds there are models for, in tools/prepare_skinned_model.py's ENEMY_KINDS order. */
+typedef enum {
+    ENEMY_PRIDE, ENEMY_GLUTTONY, ENEMY_LUST, ENEMY_SLOTH, ENEMY_WRATH, ENEMY_GREED, ENEMY_ENIGMA, ENEMY_KIND_TOTAL
+} EnemyKind;
+/* Not a model kind: the Gigapede's head and segments, which take one enemy slot each. */
+#define ENEMY_GIGAPEDE 100
+
 typedef enum {
     HIT_LIGHT,    /* combo hits: flinch in place */
     HIT_HEAVY,    /* finishers, Stinger: knock back */
@@ -24,6 +31,11 @@ void enemy_spawn_height(float y);            /* look for the floor from about he
 void enemy_set_mortal(int on);
 /* Add one here. Returns 0 if every slot is taken. */
 int enemy_add(float x, float z);
+int enemy_add_kind(int kind, float x, float z);
+/* The kind for a room script's spawn class (the EST chunk's ids). */
+int enemy_kind_for_class(int spawn_class);
+int enemy_kind(void);                  /* the selected one's */
+void enemy_set_dummy_kind(int kind);   /* what the debug menu's dummies are */
 int enemy_alive_count(void);          /* those not yet dead */
 void enemy_kill_all(void);            /* for tests */
 /* Keep the ones there are; add new ones in a ring around (x, z) or remove the last ones. */

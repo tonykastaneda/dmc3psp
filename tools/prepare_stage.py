@@ -151,14 +151,30 @@ def lerp_vertex(a, b):
     return tuple((x + y) * 0.5 for x, y in zip(a, b))
 
 
-def subdivide(tri):
-    """tri = 3 vertices (x, y, z, u, v, r, g, b); split the longest edge until short."""
+PLAY_MARGIN = 300.0       # cm around the collision's bounds
+FAR_EDGE = 0.3            # past the play area, edges may be this fraction of their distance from it
+
+
+def play_distance(point, play):
+    """How far a point is outside the box Dante can reach (the collision's bounds), 0 inside it."""
+    if play is None:
+        return 0.0
+    return math.sqrt(sum(max(play[0][k] - point[k], 0.0, point[k] - play[1][k]) ** 2 for k in range(3)))
+
+
+def subdivide(tri, play=None):
+    """tri = 3 vertices (x, y, z, u, v, r, g, b); split the longest edge until short. Near the play area
+    short means MAX_EDGE; scenery far outside it (the sky and backdrops some rooms are wrapped in, tens of
+    km across) only needs edges short against its distance from the camera, which can't leave the area."""
     out, stack = [], [tri]
     while stack:
         t = stack.pop()
         edges = [(math.dist(t[i][:3], t[(i + 1) % 3][:3]), i) for i in range(3)]
         length, i = max(edges)
-        if length <= MAX_EDGE:
+        limit = MAX_EDGE
+        if play is not None:
+            limit = max(MAX_EDGE, FAR_EDGE * min(play_distance(v, play) for v in t))
+        if length <= limit:
             out.append(t)
             continue
         a, b, c = t[i], t[(i + 1) % 3], t[(i + 2) % 3]
@@ -254,6 +270,9 @@ def main() -> None:
     scm = choose_scm(stage[2], hits)
     hit_walls = [t for t in hits if abs(t[10]) < 0.5]
     hit_floors = [t for t in hits if t[10] >= 0.5]
+    # Where Dante can be: the collision's bounds, a little enlarged.
+    play = ([min(t[k + 3 * j] for t in hits for j in range(3)) - PLAY_MARGIN for k in range(3)],
+            [max(t[k + 3 * j] for t in hits for j in range(3)) + PLAY_MARGIN for k in range(3)])
 
     # Player start: first POS record (x, y, z at +4, yaw in degrees at +16).
     pos = next(c for c in stage_data if c[:4] == b"POS\0")
@@ -276,7 +295,7 @@ def main() -> None:
             tris = []
             for f in sub["faces"]:
                 tri = tuple(sub["positions"][i] + sub["uvs"][i] + sub["colors"][i] for i in f)
-                tris.extend(subdivide(tri))
+                tris.extend(subdivide(tri, play))
             if tris:
                 kind = 2 if sub["texture"] in blend_textures else (1 if sub["texture"] in alpha_textures else 0)
                 batches.append([sub["texture"], kind, tris, 0])
@@ -300,6 +319,8 @@ def main() -> None:
     floor = []
     for _, _, tris, _ in batches:
         for t in tris:
+            if play_distance(t[0], play) > 0 and play_distance(t[1], play) > 0 and play_distance(t[2], play) > 0:
+                continue  # backdrop: nothing stands there
             if face_normal(t)[1] >= FLOOR_MIN_NY or face_normal(t)[1] <= -FLOOR_MIN_NY:
                 floor.append(tuple(t[i][k] for i in range(3) for k in range(3)))
     xs = [v for t in floor for v in t[0::3]]

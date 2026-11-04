@@ -61,6 +61,12 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_ru
     Invoke-Native $Python @((Join-Path $Root "tools\gen_rooms.py"), $Iso.FullName, "--output", $Build, "--header", (Join-Path $Generated "rooms_runtime.h"))
 }
 
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "gigapede_runtime.h"))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    $Python = (Get-Command python -ErrorAction Stop).Source
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_gigapede.py"), $Iso.FullName, "--output", (Join-Path $Generated "gigapede_runtime.h"))
+}
+
 $MenuBin = Join-Path $Build "MENU.BIN"
 if ($Regenerate -or -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1

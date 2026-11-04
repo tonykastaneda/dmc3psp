@@ -502,11 +502,13 @@ static void draw_text(int x, int y, const char *text) {
 /* START: the debug menu. The game stops while it's open. Turbo is the real game's mode:
  * everything runs 1.2x as fast. It's the default in play; test scenes run at normal speed. */
 #define TURBO_SPEED 1.2f
-enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_ACTION, DEBUG_ANIM, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
+enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
 static int dummy_anim_auto = 1;
+static void mission_gimmicks_draw(void);
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
-static int dummy_count = 1, dummy_attacks;
+static int dummy_count = 1, dummy_attacks, dummy_kind;
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 
 /* Returns 1 when the animation viewer should toggle. */
@@ -523,6 +525,12 @@ static int debug_menu_update(unsigned int pressed) {
     if (debug_cursor == DEBUG_DUMMIES) {
         if (pressed & (PSP_CTRL_CROSS | PSP_CTRL_RIGHT)) dummy_count = (dummy_count + 1) % (ENEMY_MAX + 1);
         if (pressed & PSP_CTRL_LEFT) dummy_count = (dummy_count + ENEMY_MAX) % (ENEMY_MAX + 1);
+    }
+    if (debug_cursor == DEBUG_KIND && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) {
+        /* A new kind: the dummies there are go, and come back as that kind. */
+        dummy_kind = (dummy_kind + ((pressed & PSP_CTRL_LEFT) ? ENEMY_KIND_TOTAL - 1 : 1)) % ENEMY_KIND_TOTAL;
+        enemy_set_dummy_kind(dummy_kind);
+        if (!mission_mode) { enemy_set_count(0, 0.0f, 0.0f); }
     }
     if (debug_cursor == DEBUG_ACTION && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) dummy_attacks = !dummy_attacks;
     if (debug_cursor == DEBUG_ANIM && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) dummy_anim_auto = !dummy_anim_auto;
@@ -947,6 +955,7 @@ static void draw_debug_menu(int viewer) {
     int i, x = SCR_WIDTH / 2 - 88, y = SCR_HEIGHT / 2 - 46;
     snprintf(lines[DEBUG_SPEED], sizeof(lines[0]), "Game speed     %s", game_turbo ? "TURBO" : "NORMAL");
     snprintf(lines[DEBUG_DUMMIES], sizeof(lines[0]), "Dummies        %d", dummy_count);
+    snprintf(lines[DEBUG_KIND], sizeof(lines[0]), "Dummy kind     %s", kind_names[dummy_kind % ENEMY_KIND_TOTAL]);
     snprintf(lines[DEBUG_ACTION], sizeof(lines[0]), "Dummy action   %s", dummy_attacks ? "ATTACK" : "STAND");
     if (dummy_anim_auto) snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     AUTO %d", enemy_anim_rate());
     else snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     FULL");
@@ -1014,6 +1023,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuDisable(GU_ALPHA_TEST);
     if (stage_loaded()) {
         if (!bench_no_stage) stage_draw();
+        mission_gimmicks_draw();
     {
         /* The real game's soft shadow: on the floor under him, fading as he rises. */
         float floor_y;
@@ -1591,7 +1601,7 @@ static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the
  * to CMP_OUT.TXT, to line up with the same script on the real game (tools/ref_compare.py). */
 static int focus_cmp;
 #define CMP_MAX_EVENTS 64
-#define CMP_MAX_FRAMES 1200
+#define CMP_MAX_FRAMES 3000
 static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
 static int cmp_event_count, cmp_frames;
 static int cmp_game_shots[32];   /* saved by the game itself: works on the PSP and sees only its own picture */
@@ -1626,14 +1636,15 @@ static void bench_add(unsigned int gap, unsigned int update, unsigned int skin) 
     b->draw += perf_draw_us;
     b->gpu += perf_gpu_us;
 }
-static int cmp_melee = -1, cmp_gun = -1;
+static int cmp_melee = -1, cmp_gun = -1, cmp_lineup;
 /* "mkey button frame" and "mshot frame" drive and picture the menus, for tests. */
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at;
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
-static int cmp_goto[16][2], cmp_goto_count;   /* "gotoroom frame number": Dante to that door, its room cleared */
+static int cmp_goto[16][2], cmp_goto_count;
+static int cmp_place_frame[8], cmp_place_count; static float cmp_place[8][5];   /* "place frame x y z yaw [press]": Dante there (and O pressed if press is 1) */   /* "gotoroom frame number": Dante to that door, its room cleared */
 static unsigned int menu_button(const char *name) {
     static const struct { const char *name; unsigned int button; } names[] = {
         {"cross", PSP_CTRL_CROSS}, {"circle", PSP_CTRL_CIRCLE}, {"square", PSP_CTRL_SQUARE}, {"up", PSP_CTRL_UP},
@@ -1680,6 +1691,10 @@ static void cmp_load(void) {
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
+        else if (strncmp(line, "place ", 6) == 0) {
+            if (cmp_place_count < 8 && sscanf(line + 6, "%d %f %f %f %f %f", &cmp_place_frame[cmp_place_count], &cmp_place[cmp_place_count][0], &cmp_place[cmp_place_count][1],
+                                               &cmp_place[cmp_place_count][2], &cmp_place[cmp_place_count][3], &cmp_place[cmp_place_count][4]) >= 5) ++cmp_place_count;
+        }
         else if (strncmp(line, "gotoroom ", 9) == 0) {
             if (cmp_goto_count < 16 && sscanf(line + 9, "%d %d", &cmp_goto[cmp_goto_count][0], &cmp_goto[cmp_goto_count][1]) == 2) ++cmp_goto_count;
         }
@@ -1702,6 +1717,8 @@ static void cmp_load(void) {
         }
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
+        else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
+        else if (strncmp(line, "kind ", 5) == 0) { dummy_kind = atoi(line + 5) % ENEMY_KIND_TOTAL; enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
     }
@@ -1880,7 +1897,7 @@ static void start_camera(const Player *player, FollowCamera *camera) {
 static int mission_room = ROOM_NONE, script_at;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
-static unsigned int rooms_cleared;   /* this mission: a room's fight doesn't come back */
+static unsigned long long rooms_cleared;   /* this mission: a room's fight doesn't come back */
 static float mission_clear_wait;
 static int mission_stage;
 static MenuChoice mission_choice;
@@ -1919,12 +1936,98 @@ static void play_movie(const char *name) {
     if (report) { fprintf(report, "%s shown=%d late=%d decode_max_us=%d error=%08x elapsed=%ums audio=%ums\n", name, shown, late, decode_max, (unsigned int)movie_last_error(), elapsed_ms, audio_ms); fclose(report); }
 }
 
+/* ---- A room's gimmicks in a mission: its lift, the mission's goal item, doors held shut by the event
+ * script's flags. See tools/gen_rooms.py. */
+static int lift_index = -1, lift_on;   /* this room's lift, and whether its switch has been struck */
+static float lift_y;
+/* Where a start point has no floor under it (110's, at the top of 103's lift shaft, stands on a gimmick
+ * that isn't in the stage's collision): a pad there, at the start's height. */
+static int pad_on;
+static float pad[3];
+#define PAD_RADIUS 220.0f
+#define LIFT_SPEED 400.0f              /* cm a second: an estimate, the game's isn't read */
+#define LIFT_STEP 60.0f
+static const RoomLift *room_lift(void) { return lift_index >= 0 ? &room_lifts[lift_index] : 0; }
+/* Is (x, z) over the lift's top? */
+static int over_lift(const RoomLift *l, float x, float z) {
+    float a = -l->yaw * 0.0174533f, dx = x - l->x, dz = z - l->z;
+    float lx = dx * cosf(a) - dz * sinf(a), lz = dx * sinf(a) + dz * cosf(a);
+    return fabsf(lx) < l->half_x && fabsf(lz) < l->half_z;
+}
+/* The stage's floor, or the lift's top when that's higher and under the feet. */
+static int mission_floor(float x, float y, float z, float step, float *out) {
+    const RoomLift *l = room_lift();
+    int found = stage_floor(x, y, z, step, out);
+    if (l && over_lift(l, x, z) && lift_y <= y + step + LIFT_STEP && (!found || lift_y > *out)) { *out = lift_y; found = 1; }
+    if (pad_on && (x - pad[0]) * (x - pad[0]) + (z - pad[2]) * (z - pad[2]) < PAD_RADIUS * PAD_RADIUS && pad[1] <= y + step + LIFT_STEP
+        && (!found || pad[1] > *out)) { *out = pad[1]; found = 1; }
+    return found;
+}
+static int door_gated(const RoomDoor *d) {
+    int i;
+    for (i = 0; i < DOOR_GATE_COUNT; ++i) {
+        const DoorGate *g = &door_gates[i];
+        if (g->mission != mission_choice.mission || g->room != mission_room || g->next_number != d->number) continue;
+        if (g->needs_room >= 64 || !(rooms_cleared >> g->needs_room & 1ull)) return 1;
+    }
+    return 0;
+}
+static void draw_box(float x, float y0, float y1, float z, float hx, float hz, float yaw, unsigned int top, unsigned int side) {
+    float a = yaw * 0.0174533f, c = cosf(a), s = sinf(a), px[4], pz[4];
+    static const float cx[4] = {-1, 1, 1, -1}, cz[4] = {-1, -1, 1, 1};
+    int i, n = 0;
+    ColorVertex *o = (ColorVertex *)sceGuGetMemory(sizeof(ColorVertex) * 30);
+    for (i = 0; i < 4; ++i) {
+        float lx = cx[i] * hx, lz = cz[i] * hz;
+        px[i] = x + lx * c + lz * s;
+        pz[i] = z - lx * s + lz * c;
+    }
+    {
+        int q[6] = {0, 1, 2, 0, 2, 3};
+        for (i = 0; i < 6; ++i) o[n++] = (ColorVertex){top, px[q[i]], y1, pz[q[i]]};
+    }
+    for (i = 0; i < 4; ++i) {
+        int j = (i + 1) % 4;
+        o[n++] = (ColorVertex){side, px[i], y1, pz[i]};
+        o[n++] = (ColorVertex){side, px[j], y1, pz[j]};
+        o[n++] = (ColorVertex){side, px[j], y0, pz[j]};
+        o[n++] = (ColorVertex){side, px[i], y1, pz[i]};
+        o[n++] = (ColorVertex){side, px[j], y0, pz[j]};
+        o[n++] = (ColorVertex){side, px[i], y0, pz[i]};
+    }
+    sceGumDrawArray(GU_TRIANGLES, COLOR_VTYPE, n, 0, o);
+}
+/* Stand-ins for their models, which aren't converted yet: the lift as a stone block, its switch as a
+ * red glow until struck, the goal item as a turning gold block. */
+static float goal_spin;
+static void mission_gimmicks_draw(void) {
+    const RoomLift *l;
+    const MissionInfo *info;
+    if (!mission_mode || mission_room == ROOM_NONE) return;
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuDisable(GU_LIGHTING);
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadIdentity();
+    l = room_lift();
+    if (l) {
+        draw_box(l->x, l->low - 20.0f, lift_y, l->z, l->half_x, l->half_z, l->yaw, 0xff6a7078u, 0xff40464cu);
+        draw_box(l->switch_pos[0], l->switch_pos[1], l->switch_pos[1] + 90.0f, l->switch_pos[2], 30.0f, 30.0f, 45.0f,
+                 lift_on ? 0xffffc040u : 0xff2020ffu, lift_on ? 0xffa07020u : 0xff1010a0u);
+    }
+    info = &missions[mission_choice.mission - 1];
+    if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull)) {
+        goal_spin += 3.0f;
+        draw_box(info->goal[0], info->goal[1] + 60.0f, info->goal[1] + 120.0f, info->goal[2], 25.0f, 25.0f, goal_spin, 0xff40e0ffu, 0xff2090c0u);
+    }
+    sceGuEnable(GU_TEXTURE_2D);
+}
+
 #define DOOR_MARGIN 40.0f      /* Dante stops at a wall about this far short of a door's box */
 #define DOOR_BELOW 100.0f
 
 /* One step of this room's script: spawns, waits. Returns 1 once it has finished. */
 static int script_run(float dt, float floor_y) {
-    const RoomScript *script = &missions[mission_choice.mission - 1].scripts[mission_room];
+    const RoomScript *script = &missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][mission_room];
     while (script_at < script->count) {
         const RoomOp *op = &script->ops[script_at];
         if (script_wait > 0.0f) {
@@ -1935,8 +2038,9 @@ static int script_run(float dt, float floor_y) {
         }
         switch (op->op) {
         case ROOM_OP_SPAWN:
-            enemy_spawn_height(floor_y);
-            enemy_add((float)op->b, (float)op->d);
+            /* From the script's own height: Enigmas stand on ledges and walls. */
+            enemy_spawn_height((float)op->c > floor_y ? (float)op->c : floor_y);
+            enemy_add_kind(enemy_kind_for_class(op->a), (float)op->b, (float)op->d);
             break;
         case ROOM_OP_WAIT:
             script_wait = (float)op->a;
@@ -1962,8 +2066,22 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     stage_load(path);
     mission_room = room;
     doors_armed = 0;
+    {
+        int i;
+        lift_index = -1;
+        lift_on = 0;
+        for (i = 0; i < ROOM_LIFT_COUNT; ++i) if (room_lifts[i].room == room && room_lifts[i].high > room_lifts[i].low) lift_index = i;
+        if (lift_index >= 0) lift_y = room_lifts[lift_index].low;
+    }
+    {
+        float g;
+        pad_on = 0;
+        if (!stage_floor(s[0], s[1] + 50.0f, s[2], 0.0f, &g) || g < s[1] - 100.0f) {
+            pad_on = 1; pad[0] = s[0]; pad[1] = s[1]; pad[2] = s[2];
+        }
+    }
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
-    script_at = (rooms_cleared >> room & 1u) ? missions[mission_choice.mission - 1].scripts[room].count : 0;
+    script_at = (rooms_cleared >> room & 1ull) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
     script_wait = 0.0f;
     script_waiting_alive = -1;
     player_spawn[0] = s[0];
@@ -1984,7 +2102,34 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
     int done = script_run(dt, player->y), i, in_a_box = 0;
+    const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
+    if (lift) {
+        /* The switch: strike it or press O by it. Then the lift carries him up while he stands on it, and
+         * comes back down when he's off it. */
+        float sx = player->x - lift->switch_pos[0], sz = player->z - lift->switch_pos[2];
+        int on = over_lift(lift, player->x, player->z) && fabsf(player->y - lift_y) < 40.0f;
+        if (!lift_on && sx * sx + sz * sz < 220.0f * 220.0f && fabsf(player->y - lift->switch_pos[1]) < 250.0f) {
+            door_prompt_time = 1.0f;
+            if (pressed & (PSP_CTRL_CIRCLE | PSP_CTRL_SQUARE | PSP_CTRL_TRIANGLE)) lift_on = 1;
+        }
+        if (lift_on && on && lift_y < lift->high) {
+            lift_y += LIFT_SPEED * dt;
+            if (lift_y > lift->high) lift_y = lift->high;
+            player->y = lift_y;
+        } else if (lift_on && !on && lift_y > lift->low) {
+            lift_y -= LIFT_SPEED * dt;
+            if (lift_y < lift->low) lift_y = lift->low;
+        }
+    }
+    if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull) && done && enemy_alive_count() == 0) {
+        /* The mission's item: walk up to it and press O. */
+        float gx = player->x - info->goal[0], gz = player->z - info->goal[2];
+        if (gx * gx + gz * gz < 160.0f * 160.0f && fabsf(player->y - info->goal[1]) < 300.0f) {
+            door_prompt_time = 1.0f;
+            if (pressed & PSP_CTRL_CIRCLE) return 1;
+        }
+    }
     if (!done || enemy_alive_count() > 0) {
         /* Shut until the fight's over: push him back out of a door's box. */
         for (i = 0; doors_armed && i < rooms[mission_room].door_count; ++i) {
@@ -2000,14 +2145,15 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             int inside = 0;
             for (i = 0; i < rooms[mission_room].door_count; ++i) {
                 const RoomDoor *d = &rooms[mission_room].doors[i];
-                if (fabsf(player->x - d->box[0]) < d->box[3] * 0.5f + DOOR_MARGIN && fabsf(player->z - d->box[2]) < d->box[5] * 0.5f + DOOR_MARGIN) inside = 1;
+                if (fabsf(player->x - d->box[0]) < d->box[3] * 0.5f + DOOR_MARGIN && fabsf(player->z - d->box[2]) < d->box[5] * 0.5f + DOOR_MARGIN
+                && player->y > d->box[1] - 400.0f && player->y < d->box[1] + d->box[4]) inside = 1;
             }
             if (!inside) doors_armed = 1;
         }
         return 0;
     }
-    rooms_cleared |= 1u << mission_room;
-    if (info->end_room == ROOM_NONE) {
+    rooms_cleared |= 1ull << mission_room;
+    if (info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE) {
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
@@ -2015,6 +2161,8 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         const RoomDoor *d = &rooms[mission_room].doors[i];
         float mx = d->box[3] * 0.5f + DOOR_MARGIN, mz = d->box[5] * 0.5f + DOOR_MARGIN;
         if (mission_choice.mission < d->low || mission_choice.mission > d->high) continue;
+        if (door_gated(d)) continue;
+        if (player->y < d->box[1] - 400.0f || player->y > d->box[1] + d->box[4]) continue;   /* a door on another floor */
         if (player->x < d->box[0] - mx || player->x > d->box[0] + mx || player->z < d->box[2] - mz || player->z > d->box[2] + mz) continue;
         /* Dante often arrives standing in the door he came through: it waits until he's stepped out
          * sideways, since he can land and bounce through its height. */
@@ -2046,6 +2194,7 @@ static void play_intro(int mission) {
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     game_turbo = choice->turbo;
+    player_floor_fn = mission_floor;
     combat_reset(&combat);
     player_reset(player, camera);
     dummy_attacks = 1;
@@ -2352,12 +2501,25 @@ int main(int argc, char *argv[]) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
             {
                 int g, k;
+                for (g = 0; g < cmp_place_count; ++g) {
+                    if (frames != cmp_place_frame[g]) continue;
+                    player.x = cmp_place[g][0]; player.y = cmp_place[g][1]; player.z = cmp_place[g][2]; player.yaw = cmp_place[g][3] * 0.0174533f;
+                    if (cmp_place[g][4] > 0.5f) debug_pressed |= PSP_CTRL_CIRCLE;
+                    start_camera(&player, &camera);
+                }
                 for (g = 0; g < cmp_goto_count; ++g) {
                     if (cmp_goto[g][0] != frames) continue;
-                    script_at = missions[mission_choice.mission - 1].scripts[mission_room].count;
+                    script_at = missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][mission_room].count;
                     script_wait = 0.0f;
                     enemy_kill_all();
                     enemy_set_count(0, player.x, player.z);
+                    if (cmp_goto[g][1] < 0) {
+                        /* "gotoroom frame -1": to the mission's goal item, and press O. */
+                        const MissionInfo *gi = &missions[mission_choice.mission - 1];
+                        rooms_cleared |= 1ull << mission_room;
+                        player.x = gi->goal[0]; player.y = gi->goal[1] + 10.0f; player.z = gi->goal[2];
+                        debug_pressed |= PSP_CTRL_CIRCLE;
+                    }
                     for (k = 0; k < rooms[mission_room].door_count; ++k) {
                         const RoomDoor *d = &rooms[mission_room].doors[k];
                         if (d->number == cmp_goto[g][1]) {
@@ -2592,7 +2754,20 @@ int main(int argc, char *argv[]) {
                 /* The HD Collection test spot (tools/hd_ref.py), so the same stick goes the same way. */
                 camera.x = player.x - sinf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.z = player.z - cosf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.y = player.y + 255.0f;
                 camera.tx = player.x; camera.ty = player.y + 140.0f; camera.tz = player.z; camera.last_x = player.x; camera.last_z = player.z; camera.lead_x = camera.lead_z = 0.0f;
-                enemy_spawn_height(player.y); enemy_spawn(player.x + sinf(player.yaw) * (float)cmp_enemy_distance, player.z + cosf(player.yaw) * (float)cmp_enemy_distance); if (cmp_melee >= 0) player.melee_weapon = cmp_melee; if (cmp_gun >= 0) player.gun_weapon = cmp_gun; }
+                enemy_spawn_height(player.y); enemy_spawn(player.x + sinf(player.yaw) * (float)cmp_enemy_distance, player.z + cosf(player.yaw) * (float)cmp_enemy_distance);
+                if (bench_trace) enemy_trace_start();
+                enemy_set_attacks(bench_attack);
+                if (cmp_lineup) {
+                    /* One of each kind in a row across the view, for pictures of the models. */
+                    int k;
+                    float fx = sinf(player.yaw), fz = cosf(player.yaw), d = (float)cmp_enemy_distance;
+                    enemy_set_count(0, 0.0f, 0.0f);
+                    for (k = 0; k < ENEMY_KIND_TOTAL; ++k) {
+                        float side = ((float)k - (ENEMY_KIND_TOTAL - 1) * 0.5f) * 150.0f;
+                        enemy_add_kind(k, player.x + fx * d + fz * side, player.z + fz * d - fx * side);
+                    }
+                }
+                if (cmp_melee >= 0) player.melee_weapon = cmp_melee; if (cmp_gun >= 0) player.gun_weapon = cmp_gun; }
             {
                 static char cmp_name[32];
                 int shot;

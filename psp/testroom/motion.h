@@ -6,7 +6,7 @@
  * X first (R = Rz * Ry * Rx); channels 6-8 replace the bone's rest offset.
  * Bone 0 translation is root motion. */
 
-#define MOTION_MAX_BONES 32
+#define MOTION_MAX_BONES 48
 #define MOTION_FPS 60.0f
 
 #define MOTION_IDLE 0  /* "2-00" */

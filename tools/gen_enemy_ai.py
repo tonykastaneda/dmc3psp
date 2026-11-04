@@ -8,6 +8,8 @@ import struct
 
 SCRIPT_CHUNK, CAP_CHUNK, SHAPE_CHUNK = 38, 39, 40
 AI_TABLE = 0x5A8300
+# Per class, from their set-ups (build/hdref/enemy_specs.md): the Pride, the Gluttony (CEm001), the Sloth (CEm003).
+CLASS_TABLES = (("pride", 0x5A8300), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60))
 HIT_SCRIPTS = 0x5A7A80   # the list states name their hit reactions through
 HIT_SCRIPT_COUNT = 28
 SCRIPT_COUNT = 100
@@ -203,4 +205,36 @@ def write_header(path, pack, executable):
             lines.append("    {" + ",".join(cells) + "},")
         lines.append("  },")
     lines.append("};")
+    # Each Seven Hell's own decision table (the rest of the AI is shared): see build/hdref/enemy_specs.md.
+    classes = []
+    for name, address in CLASS_TABLES:
+        b, l = read_rows(elf, address)
+        tm = floats(elf, elf.word(address + 0x10), 6)
+        th = floats(elf, elf.word(address + 0x14), 6)
+        zs, a = [], elf.word(address + 0x18)
+        while elf.real(a) > 0.0:
+            zs.append(floats(elf, a, 3))
+            a += 12
+        classes.append((name, b, l, tm, th, zs))
+    most = max(len(b) + 1 for _, b, *_ in classes)
+    lines += [f"#define ENEMY_AI_MAX_BANDS {most}",
+              "typedef struct { short band_count, zone_count; const float *bands, *times, *thresholds; "
+              "const float (*zones)[3]; const EnemyAiRow (*rows)[ENEMY_AI_MAX_BANDS][7]; } EnemyAiClass;"]
+    for name, b, l, tm, th, zs in classes:
+        lines += [f"static const float ai_{name}_bands[] = {{" + ",".join(map(real, b + [0.0])) + "};",
+                  f"static const float ai_{name}_times[] = {{" + ",".join(map(real, tm)) + "};",
+                  f"static const float ai_{name}_thresholds[] = {{" + ",".join(map(real, th)) + "};",
+                  f"static const float ai_{name}_zones[][3] = {{" + ",".join("{" + ",".join(map(real, z)) + "}" for z in zs) + "};",
+                  f"static const EnemyAiRow ai_{name}_rows[2][ENEMY_AI_MAX_BANDS][7] = {{"]
+        for table in l:
+            lines.append("  {")
+            for band in table:
+                cells = ["{%d,{%s}}" % (len(row), ",".join("{%d,%s}" % (p_, real(w)) for p_, w in row)) for row in band]
+                lines.append("    {" + ",".join(cells) + "},")
+            lines.append("  },")
+        lines.append("};")
+    lines.append("static const EnemyAiClass enemy_ai_classes[] = {" + ",".join(
+        f"{{{len(b) + 1},{len(zs)},ai_{n}_bands,ai_{n}_times,ai_{n}_thresholds,ai_{n}_zones,ai_{n}_rows}}"
+        for n, b, l, tm, th, zs in classes) + "};")
+    lines.append("enum { " + ", ".join(f"AI_CLASS_{n.upper()}" for n, *_ in classes) + " };")
     path.write_text("\n".join(lines) + "\n")

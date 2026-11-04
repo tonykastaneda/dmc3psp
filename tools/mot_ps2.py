@@ -27,7 +27,7 @@ Channel records follow, ordered by bone then by channel bit:
 
 import struct
 
-HEADER_SIZES = (0x30, 0x40, 0x50, 0x60)  # by bone count: weapons have few
+HEADER_SIZES = (0x30, 0x40, 0x50, 0x60, 0x70, 0x80)  # by bone count: weapons have few, the Enigma 42
 
 
 def parse_mot(data: bytes):
