@@ -119,6 +119,11 @@ public class ExportDmc3Inventory extends GhidraScript {
             Address address = toAddr(Long.parseUnsignedLong(args[i].replaceFirst("^(0x|0X)", ""), 16));
             Function function = currentProgram.getFunctionManager().getFunctionAt(address);
             if (function == null) function = currentProgram.getFunctionManager().getFunctionContaining(address);
+            // Reached only through vtables, so auto-analysis never made these functions.
+            if (function == null) {
+                disassemble(address);
+                function = createFunction(address, null);
+            }
             if (function != null) {
                 decompile(function, new File(output, "decompiled/" + function.getEntryPoint() + "_" +
                     function.getName().replaceAll("[^A-Za-z0-9_.-]", "_") + ".c"));
