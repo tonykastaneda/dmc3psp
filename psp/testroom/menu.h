@@ -5,8 +5,10 @@
  * CSceneStartMenu (title), CSceneMisSelect (mission select), CSceneMisStart (briefing).
  * See docs/GAME_FLOW.md. */
 
+/* Mission Select's Debug Room: the empty Mission 2 street with the training dummies. */
+#define MENU_DEBUG_ROOM 99
 typedef struct {
-    int mission;      /* 1 to 4 */
+    int mission;      /* 1 to 4, or MENU_DEBUG_ROOM */
     int difficulty;   /* 0 Easy, 1 Normal */
     int turbo;
 } MenuChoice;

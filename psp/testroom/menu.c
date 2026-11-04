@@ -41,6 +41,9 @@ enum { TITLE_NEW, TITLE_LOAD, TITLE_OPTIONS, TITLE_ITEMS };
 enum { LABEL_NORMAL = 1, LABEL_EASY = 12 };
 enum { TAG_TURBO = 0 };
 enum { ROWS_SHOWN = 2 };
+/* Mission Select's rows: Easy and Normal, then Bloody Palace (a placeholder, not in yet) and the Debug Room. */
+enum { ROW_EASY, ROW_NORMAL, ROW_PALACE, ROW_DEBUG, SELECT_ROWS };
+enum { LABEL_BLOODY_PALACE = 14, ROWBAR_THIRD = 2, ROWBAR_FOURTH = 8 };
 /* The briefing strip holds the bar and both labels on one texture and one quad; the labels' places
  * are read off the HD Collection. */
 static const float BRIEFING_BAR[8] = {0.0f, 0.0f, 1.0f, 0.494f, -269.0f, -203.0f, 265.0f, -117.0f};
@@ -211,6 +214,23 @@ static void draw_missions(const MenuChoice *c, int row) {
         draw_quad_offset(GROUP_MISSION_DIGITS, c->mission - 1, color, 0.0f, -row_height * (float)i, 0);
     }
     if (c->turbo) draw_quad(GROUP_MISSION_TAGS, TAG_TURBO, BRIGHT);
+    {
+        /* Bloody Palace, greyed out, on the third row; the Debug Room on the fourth, in plain text. */
+        const Quad *label = group_quad(GROUP_MISSION_LABELS, LABEL_BLOODY_PALACE), *third = group_quad(GROUP_MISSION_ROWS, ROWBAR_THIRD);
+        const Quad *fourth = group_quad(GROUP_MISSION_ROWS, ROWBAR_FOURTH);
+        const Quad *normal = group_quad(GROUP_MISSION_LABELS, labels[1]);
+        draw_quad(GROUP_MISSION_ROWS, ROWBAR_THIRD, BRIGHT);
+        draw_quad_offset(GROUP_MISSION_LABELS, LABEL_BLOODY_PALACE, row == ROW_PALACE ? 0xa0ffffff : LOCKED,
+                         normal->x0 - label->x0, (third->y0 + third->y1 - label->y0 - label->y1) * 0.5f, 0);
+        draw_quad(GROUP_MISSION_ROWS, ROWBAR_FOURTH, BRIGHT);
+        if (menu_text) {
+            float centre = normal->x0 * SPREAD;
+            int x = (int)(SCR_W / 2.0f + centre * UNIT), y = (int)(SCR_H / 2.0f - (fourth->y0 + fourth->y1) * 0.5f * UNIT) - 4;
+            if (row == ROW_PALACE) menu_text(x + 150, (int)(SCR_H / 2.0f - (third->y0 + third->y1) * 0.5f * UNIT) - 4, "coming soon", 0xff9090ffu);
+            menu_text(x, y, "DEBUG ROOM", row == ROW_DEBUG ? 0xffffffffu : 0xff909090u);
+            begin_2d();
+        }
+    }
 }
 
 static void draw_briefing(const MenuChoice *c, int cursor) {
@@ -223,8 +243,9 @@ static void draw_briefing(const MenuChoice *c, int cursor) {
 static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after_frame) {
     static SceCtrlData data;
     unsigned int held = 0xffffffffu;   /* a button down when this starts isn't a press */
-    int frame = 0, title_cursor = TITLE_NEW, row = c->difficulty, fade = FADE_FRAMES, leaving = 0, briefing_cursor = 0;
+    int frame = 0, title_cursor = TITLE_NEW, row = c->difficulty & 1, fade = FADE_FRAMES, leaving = 0, briefing_cursor = 0;
     Screen next = screen;
+    if (c->mission < 1 || c->mission > MENU_MISSIONS) c->mission = 1;   /* back from the Debug Room */
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
     while (screen != SCREEN_DONE) {
@@ -251,7 +272,10 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 }
                 break;
             case SCREEN_MISSIONS:
-                if (pressed & (PSP_CTRL_UP | PSP_CTRL_DOWN)) row = !row;
+                if (pressed & PSP_CTRL_UP) row = (row + SELECT_ROWS - 1) % SELECT_ROWS;
+                if (pressed & PSP_CTRL_DOWN) row = (row + 1) % SELECT_ROWS;
+                if ((pressed & PSP_CTRL_CROSS) && row == ROW_DEBUG) { c->mission = MENU_DEBUG_ROOM; next = SCREEN_DONE; leaving = 1; break; }
+                if ((pressed & PSP_CTRL_CROSS) && row == ROW_PALACE) break;   /* not in yet */
                 if (pressed & PSP_CTRL_LEFT) c->mission = c->mission > 1 ? c->mission - 1 : MENU_MISSIONS;
                 if (pressed & PSP_CTRL_RIGHT) c->mission = c->mission < MENU_MISSIONS ? c->mission + 1 : 1;
                 if (pressed & PSP_CTRL_SQUARE) c->turbo = !c->turbo;

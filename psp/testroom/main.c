@@ -520,7 +520,7 @@ static void menu_text_hook(int x, int y, const char *text, unsigned int color) {
 /* START: the debug menu. The game stops while it's open. Turbo is the real game's mode:
  * everything runs 1.2x as fast. It's the default in play; test scenes run at normal speed. */
 #define TURBO_SPEED 1.2f
-enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_ORBS, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
+enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_ORBS, DEBUG_QUIT, DEBUG_VIEWER, DEBUG_RESUME, DEBUG_ITEMS };
 static int dummy_anim_auto = 1;
 static void mission_gimmicks_draw(void);
 static ShopState shop_state;   /* the Red Orbs and what's been bought, for this session */
@@ -529,6 +529,7 @@ static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
 static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
+static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 
 /* Returns 1 when the animation viewer should toggle. */
 static int debug_menu_update(unsigned int pressed) {
@@ -557,6 +558,7 @@ static int debug_menu_update(unsigned int pressed) {
     if (debug_cursor == DEBUG_ANIM && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_LEFT | PSP_CTRL_RIGHT))) dummy_anim_auto = !dummy_anim_auto;
     if (debug_cursor == DEBUG_VIEWER && (pressed & PSP_CTRL_CROSS)) toggle_viewer = 1;
     if (debug_cursor == DEBUG_RESUME && (pressed & PSP_CTRL_CROSS)) debug_open = 0;
+    if (debug_cursor == DEBUG_QUIT && (pressed & PSP_CTRL_CROSS)) { debug_open = 0; debug_quit = 1; }
     return toggle_viewer;
 }
 
@@ -978,6 +980,7 @@ static void draw_debug_menu(int viewer) {
     snprintf(lines[DEBUG_DUMMIES], sizeof(lines[0]), "Dummies        %d", dummy_count);
     snprintf(lines[DEBUG_KIND], sizeof(lines[0]), "Dummy kind     %s", kind_names[dummy_kind % ENEMY_KIND_TOTAL]);
     snprintf(lines[DEBUG_ORBS], sizeof(lines[0]), "Red orbs +10k  %d", shop_state.red_orbs);
+    snprintf(lines[DEBUG_QUIT], sizeof(lines[0]), "Quit to menu");
     snprintf(lines[DEBUG_ACTION], sizeof(lines[0]), "Dummy action   %s", dummy_attacks ? "ATTACK" : "STAND");
     if (dummy_anim_auto) snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     AUTO %d", enemy_anim_rate());
     else snprintf(lines[DEBUG_ANIM], sizeof(lines[0]), "Dummy anim     FULL");
@@ -2229,7 +2232,40 @@ static void play_intro(int mission) {
     if (mission == 3) { play_movie("MOVIES/M3_INTRO_A.MOV"); play_movie("MOVIES/M3_INTRO_B.MOV"); }
 }
 
+/* Mission Select's Debug Room: the Mission 2 street (STAGE.BIN), empty, with the debug menu's dummies. */
+static int from_menu;   /* the Debug Room was chosen from the menu: the debug menu can go back to it */
+static void start_debug_room(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    char path[320];
+    game_turbo = choice->turbo;
+    mission_mode = 0;
+    mission_room = ROOM_NONE;
+    lift_index = -1;
+    pad_on = 0;
+    from_menu = 1;
+    menu_show_loading();
+    enemy_set_count(0, player->x, player->z);
+    path_in_game_dir(path, sizeof(path), "STAGE.BIN");
+    if (stage_load(path)) {
+        const StageInfo *si = stage_info();
+        player_spawn[0] = si->spawn[0];
+        player_spawn[1] = si->spawn[1];
+        player_spawn[2] = si->spawn[2];
+        player_spawn[3] = si->spawn_yaw;
+    }
+    player_floor_fn = stage_floor;
+    camera_auto_follow = 1;
+    combat_reset(&combat);
+    player_reset(player, camera);
+    enemy_set_mortal(0);
+    enemy_set_attacks(dummy_attacks);
+    enemy_set_anim_auto(dummy_anim_auto);
+    coat_reset();
+    start_camera(player, camera);
+}
+
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    if (choice->mission == MENU_DEBUG_ROOM) { start_debug_room(choice, player, camera); return; }
+    mission_mode = 1;
     game_turbo = choice->turbo;
     player_floor_fn = mission_floor;
     combat_reset(&combat);
@@ -2534,6 +2570,16 @@ int main(int argc, char *argv[]) {
             input.stick_x = input.stick_y = 0.0f;
             input.style = -1;
             input.jump = 0;
+        }
+        if (debug_quit) {
+            /* The debug menu's Quit to menu: back to Mission Select. */
+            debug_quit = 0;
+            menu_draw_buffer = draw_buffer;
+            menu_run_from_mission_select(&mission_choice, NULL, NULL);
+            play_intro(mission_choice.mission);
+            start_mission(&mission_choice, &player, &camera);
+            draw_buffer = menu_draw_buffer;
+            last_time = sceKernelGetSystemTimeLow();
         }
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
