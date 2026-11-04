@@ -1,0 +1,54 @@
+# LOCATIONS
+
+# VSH, ms0:/seplugins/
+
+# GAME, ms0:/seplugins/
+
+# POPS, ms0:/seplugins/
+
+
+
+
+
+#TempAR(CHEATS)
+
+GAME, ms0:/seplugins/TempAR/tempar.prx, on
+
+POPS, ms0:/seplugins/TempAR/tempar_lite.prx, on
+
+
+#Game Category Lite
+
+VSH, ms0:/seplugins/category_lite.prx, on
+
+
+#HOLD Plus
+
+VSH, ms0:/seplugins/hold.prx, off
+
+GAME, ms0:/seplugins/hold.prx, off
+
+POPS, ms0:/seplugins/hold.prx, off
+
+
+#POPSloader
+
+POPS, ms0:/seplugins/popsloader/popsloader.prx, on
+
+POPS, ms0:/seplugins/popsloader/cdda_enabler.prx, on
+
+
+#NpLoader DLC Patcher
+
+GAME, ms0:/seplugins/nploader/nploader.prx, on
+
+POPS, ms0:/seplugins/nploader/nploader.prx, on
+
+
+
+#AntiUpdate UMD Icon Hider
+
+VSH, ms0:/seplugins/anti.prx, on
+
+# MH3rd English
+GAME, ms0:/seplugins/mhp3rd_loader/mhp3patch.prx, on
