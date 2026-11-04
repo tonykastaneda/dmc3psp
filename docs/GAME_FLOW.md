@@ -15,7 +15,7 @@ The port follows the scenes named in the executable's RTTI. Only Easy and Normal
 Things measured on the HD Collection that shaped this:
 
 - Choosing Mission 1 plays the opening movie and the Mission 1 intro, 326 s in all, and they can't be skipped. Only then comes the briefing, with Customize highlighted. The port lets you skip.
-- Mission 2 plays its own in-engine-looking movie, about 81 s, before Now Loading.
+- Mission 2 opens with about a minute of "you guys wrecked my shop", then Now Loading. No movie on the disc shows it, so it's taken to be a real-time scripted event (GDATA has 22 `EVT` entries, not read yet). The port has no intro for Mission 2 until those run.
 - The pause menu is Status, Save Data, Quit the Mission, Restart the Mission, Options, Exit. Restart goes back to the briefing on the real game. In the port it restarts straight away, without the movie. Status and Save Data are locked, and the debug toggles live under Options.
 
 ## Purpose-built for 16:9
@@ -42,9 +42,9 @@ Everything comes off the player's disc when building:
 | Mission 2's stage | `st001`, slot 276, with its data in 277 |
 | Movies | MDATA1.AFS and MDATA2.AFS: MPEG-2 at 512x320, ADX sound, about 45 minutes and 2.2 GB |
 
-Which movie is which, so far: MDATA2 0 the opening, 1 the Mission 1 intro, 2 Temen-ni-gru rising, 3 Lady. MDATA1 13 is taken to be the Mission 2 intro from its length and thumbnail. That one still needs checking by eye.
+Which movie is which, so far: MDATA2 0 the opening, 1 the Mission 1 intro, 2 Temen-ni-gru rising, 3 Lady. Later story scenes are the rest of MDATA2. MDATA1 11 to 17 include trailers and making-of footage.
 
-Movies are converted for the PSP's hardware JPEG decoder (`tools/prepare_movies.py`, `psp/testroom/movie.c`): 480x272 JPEG frames at 30 FPS with IMA ADPCM sound, about 200 to 330 KB/s. The three in use come to 114 MB. Conversion runs at install time, so it needs ffmpeg on the player's PC.
+Movies are converted for the PSP's hardware JPEG decoder (`tools/prepare_movies.py`, `psp/testroom/movie.c`): 480x272 JPEG frames at 30 FPS with IMA ADPCM sound, about 200 to 300 KB/s, playing at a true 30 FPS on the PSP. The two in use come to 88 MB. Conversion runs at install time, so it needs ffmpeg on the player's PC.
 
 ## Enemies in each mission
 
@@ -74,13 +74,14 @@ Stand-ins and estimates:
 - **Enemy health** is 6 light hits, chosen by eye. Their real health and Dante's real damage aren't read.
 - **Dante can't die.** His health falls by the attack records' damage and stops at 1.
 - **Doors and leaving the room** aren't in, so Mission 1 ends when its enemies do. The real mission goes on from there.
+- **Real-time cutscenes** aren't in, Mission 2's intro among them.
 - **Sound** is only in movies. There's no music or effects in menus or the game.
 - **No saves.**
 
 ## Next steps, in order
 
 1. `CEm002` and `CEm004`: bodies and AI tables.
-2. Read the mission event scripts for real waves, doors and triggers.
+2. Read the mission event scripts for real waves, doors, triggers and real-time cutscenes.
 3. Enemy health and Dante's damage from the game, then dying and Game Over.
 4. Result screen values and ranks.
 5. Hell Vanguard.

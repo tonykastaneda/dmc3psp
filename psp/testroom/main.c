@@ -2139,7 +2139,7 @@ int main(int argc, char *argv[]) {
             menu_draw_buffer = draw_buffer;
             play_movie("MOVIES/OPENING.MOV");
             menu_run(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
-            play_movie(mission_choice.mission == 1 ? "MOVIES/M1_INTRO.MOV" : "MOVIES/M2_INTRO.MOV");
+            if (mission_choice.mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
             start_mission(&mission_choice, &player, &camera);
             draw_buffer = menu_draw_buffer;
         }
@@ -2202,7 +2202,7 @@ int main(int argc, char *argv[]) {
                     pause_active = 0;
                     menu_draw_buffer = draw_buffer;
                     menu_run_from_mission_select(&mission_choice, NULL, NULL);
-                    play_movie(mission_choice.mission == 1 ? "MOVIES/M1_INTRO.MOV" : "MOVIES/M2_INTRO.MOV");
+                    if (mission_choice.mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
                     start_mission(&mission_choice, &player, &camera);
                     draw_buffer = menu_draw_buffer;
                     last_time = sceKernelGetSystemTimeLow();
@@ -2249,7 +2249,7 @@ int main(int argc, char *argv[]) {
                 menu_draw_buffer = draw_buffer;
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 menu_run_from_mission_select(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
-                play_movie(mission_choice.mission == 1 ? "MOVIES/M1_INTRO.MOV" : "MOVIES/M2_INTRO.MOV");
+                if (mission_choice.mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
                 start_mission(&mission_choice, &player, &camera);
                 draw_buffer = menu_draw_buffer;
                 last_time = sceKernelGetSystemTimeLow();

@@ -3,6 +3,7 @@
 #include <pspaudio.h>
 #include <pspctrl.h>
 #include <pspdisplay.h>
+#include <pspge.h>
 #include <pspgu.h>
 #include <pspiofilemgr.h>
 #include <pspjpeg.h>
@@ -21,7 +22,6 @@ typedef struct {
 typedef struct { unsigned int offset, adpcm, jpeg; } MovieIndex;
 
 #define OUT_STRIDE 512
-#define SHOWN_WIDTH 480.0f
 #define OUT_ROWS 272
 #define READ_MAX (512 * 1024)
 #define AUDIO_CHUNK 1024              /* stereo sample pairs handed over at a time */
@@ -114,26 +114,12 @@ static int decoder_ready(unsigned int width, unsigned int height) {
 
 /* ---- Playing. ---- */
 
+/* A straight copy into the frame: a texture this size, unswizzled, costs the GPU far more than the
+ * decoding does (15 FPS against 7 ms a frame). */
 static void show(const void *pixels, const MovieHeader *h, void **draw_buffer) {
-    float left = (480.0f - SHOWN_WIDTH) * 0.5f;
-    struct { float u, v; float x, y, z; } *v;
     sceGuStart(GU_DIRECT, list);
-    sceGuClearColor(0xff000000);
-    sceGuClear(GU_COLOR_BUFFER_BIT);
-    sceGuDisable(GU_DEPTH_TEST);
-    sceGuDisable(GU_BLEND);
-    sceGuDisable(GU_LIGHTING);
-    sceGuDisable(GU_ALPHA_TEST);
-    sceGuEnable(GU_TEXTURE_2D);
-    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
-    sceGuTexFunc(GU_TFX_REPLACE, GU_TCC_RGBA);
-    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
-    sceGuTexImage(0, 512, 512, (int)h->width, pixels);  /* the decoder writes rows at its own width */
-    sceGuTexFlush();
-    v = sceGuGetMemory(sizeof(*v) * 2);
-    v[0].u = 0.0f; v[0].v = 0.0f; v[0].x = left; v[0].y = 0.0f; v[0].z = 0.0f;
-    v[1].u = (float)h->width; v[1].v = (float)h->height; v[1].x = left + SHOWN_WIDTH; v[1].y = (float)h->height; v[1].z = 0.0f;
-    sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, 0, v);
+    sceGuCopyImage(GU_PSM_8888, 0, 0, (int)h->width, (int)h->height, (int)h->width, (void *)pixels, 0, 0, OUT_STRIDE,
+                   (void *)((unsigned int)sceGeEdramGetAddr() + (unsigned int)*draw_buffer));
     sceGuFinish();
     sceGuSync(0, 0);
     sceDisplayWaitVblankStart();
