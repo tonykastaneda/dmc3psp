@@ -17,16 +17,41 @@ differences:
 * The node block is a scene hierarchy: table0 = parent per node (order
   arbitrary: parents may follow children), table1 = node -> record remap,
   table2 = record -> object index (255 = group node), table3 = per-record
-  translation (no rotation). Object k is placed at the world position of
-  the record that table2 maps to k.
+  32 bytes: float3 translation, its distance from the origin, float3
+  rotation (radians), 0. Object k is placed by the record that table2 maps
+  to k. parse_scm(transform=True) applies the whole chain of translations
+  and rotations (Z, then Y, then X: R = Rz Ry Rx); the default reading sums
+  the translations only, which is right for most stages, where the
+  rotations are zero or cancel. st002 (Mission 3's street) needs them: its
+  root is turned 180 degrees about (5000, 0, 6000).
 """
 
+import math
 import struct
 
 from mod_skeleton import strip_faces
 
 
-def parse_scm(data: bytes, root_xz: bool = True):
+def _matrix(record):
+    x, y, z, _, rx, ry, rz, _ = record
+    cx, sx, cy, sy, cz, sz = math.cos(rx), math.sin(rx), math.cos(ry), math.sin(ry), math.cos(rz), math.sin(rz)
+    # Rz * Ry * Rx, with the translation
+    r = [[cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
+         [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
+         [-sy, cy * sx, cy * cx]]
+    return [r[0] + [x], r[1] + [y], r[2] + [z]]
+
+
+def _compose(a, b):
+    out = []
+    for i in range(3):
+        row = [sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)]
+        row.append(sum(a[i][k] * b[k][3] for k in range(3)) + a[i][3])
+        out.append(row)
+    return out
+
+
+def parse_scm(data: bytes, root_xz: bool = True, transform: bool = False):
     if data[:4] != b"SCM ":
         raise ValueError("Not an SCM")
     object_count, node_count, texture_count = data[0x10], data[0x11], data[0x12]
@@ -35,7 +60,8 @@ def parse_scm(data: bytes, root_xz: bool = True):
     hier = data[block + tables[0]:block + tables[0] + node_count]
     remap = data[block + tables[1]:block + tables[1] + node_count]
     objmap = data[block + tables[2]:block + tables[2] + node_count]
-    local = [struct.unpack_from("<3f", data, block + tables[3] + r * 32) for r in range(node_count)]
+    records = [struct.unpack_from("<8f", data, block + tables[3] + r * 32) for r in range(node_count)]
+    local = [r[:3] for r in records]
     parent = [-1] * node_count
     for node in range(node_count):
         parent[remap[node]] = -1 if hier[node] == 0xFF else hier[node]
@@ -63,6 +89,19 @@ def parse_scm(data: bytes, root_xz: bool = True):
 
     for record in range(node_count):
         resolve(record)
+    matrices = [None] * node_count
+
+    def chain(record, depth=0):
+        if depth > node_count:
+            raise ValueError("Cycle in SCM node hierarchy")
+        if matrices[record] is None:
+            m = _matrix(records[record])
+            matrices[record] = m if parent[record] < 0 else _compose(chain(parent[record], depth + 1), m)
+        return matrices[record]
+
+    if transform:
+        for record in range(node_count):
+            chain(record)
     object_node = {}
     for record, obj in enumerate(objmap):
         if obj != 0xFF:
@@ -86,6 +125,11 @@ def parse_scm(data: bytes, root_xz: bool = True):
             positions = [tuple(v + o for v, o in zip(struct.unpack_from("<3f", data, ptrs[2] + i * 12), offset))
                          for i in range(vc)]
             normals = [struct.unpack_from("<3f", data, ptrs[3] + i * 12) for i in range(vc)]
+            if transform and index in object_node:
+                m = matrices[object_node[index]]
+                raw = [struct.unpack_from("<3f", data, ptrs[2] + i * 12) for i in range(vc)]
+                positions = [tuple(m[r][0] * p[0] + m[r][1] * p[1] + m[r][2] * p[2] + m[r][3] for r in range(3)) for p in raw]
+                normals = [tuple(m[r][0] * q[0] + m[r][1] * q[1] + m[r][2] * q[2] for r in range(3)) for q in normals]
             uvs = [tuple(c / 4096.0 for c in struct.unpack_from("<2h", data, ptrs[4] + i * 4)) for i in range(vc)]
             colors = [data[ptrs[7] + i * 4:ptrs[7] + i * 4 + 4] for i in range(vc)]
             faces = strip_faces([bool(c[3] & 2) for c in colors])

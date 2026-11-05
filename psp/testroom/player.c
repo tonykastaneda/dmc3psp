@@ -489,29 +489,40 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         camera->tx = player->x + camera->lead_x;
         camera->tz = player->z + camera->lead_z;
         camera->ty += (player->y + CAMERA_TARGET_HEIGHT - camera->ty) * (1.0f - expf(-8.0f * dt));
-        dx = camera->x - player->x;
-        dz = camera->z - player->z;
+        /* The free position: set somewhere else (a new room, a test), or not set yet, it starts from where the
+         * camera is. */
+        {
+            float fx = camera->free_x - camera->x, fz = camera->free_z - camera->z;
+            if (camera->clip <= 0.0f || fx * fx + fz * fz > 1500.0f * 1500.0f) {
+                camera->free_x = camera->x; camera->free_z = camera->z; camera->clip = 1.0f;
+            }
+        }
+        dx = camera->free_x - player->x;
+        dz = camera->free_z - player->z;
         h = sqrtf(dx * dx + dz * dz);
         if (h > 1.0f) {
             float next = h + (CAMERA_DISTANCE - h) * (1.0f - expf(-CAMERA_LEASH_RATE * dt));
-            camera->x = player->x + dx / h * next;
-            camera->z = player->z + dz / h * next;
+            camera->free_x = player->x + dx / h * next;
+            camera->free_z = player->z + dz / h * next;
         }
         camera->y += (player->y + CAMERA_HEIGHT - camera->y) * (1.0f - expf(-8.0f * dt));
-        if (stage_loaded()) {
-            /* Pulled in when a wall comes between them, as on the real game near walls. */
+        {
+            /* Pulled in when a wall comes between them, as on the real game near walls: quickly in, slowly
+             * back out. */
             float from[3] = {player->x, player->y + CAMERA_TARGET_HEIGHT, player->z};
-            float to[3] = {camera->x, camera->y, camera->z}, t;
-            if (stage_raycast(from, to, &t) && t < 1.0f) {
-                float reach = sqrtf((to[0] - from[0]) * (to[0] - from[0]) + (to[2] - from[2]) * (to[2] - from[2]));
-                t *= 0.92f;
+            float to[3] = {camera->free_x, camera->y, camera->free_z}, t, allowed = 1.0f;
+            float reach = sqrtf((to[0] - from[0]) * (to[0] - from[0]) + (to[2] - from[2]) * (to[2] - from[2]));
+            if (stage_loaded() && stage_raycast(from, to, &t) && t < 1.0f) {
+                allowed = t * 0.92f;
                 /* It never comes closer than this on the real game. */
-                if (reach * t < CAMERA_MIN_DISTANCE && reach > 0.0f) t = CAMERA_MIN_DISTANCE / reach;
-                if (t < 1.0f) {
-                    camera->x = from[0] + (to[0] - from[0]) * t;
-                    camera->z = from[2] + (to[2] - from[2]) * t;
-                }
+                if (reach * allowed < CAMERA_MIN_DISTANCE && reach > 0.0f) allowed = CAMERA_MIN_DISTANCE / reach;
+                if (allowed > 1.0f) allowed = 1.0f;
             }
+            if (allowed < camera->clip) camera->clip += (allowed - camera->clip) * (1.0f - expf(-25.0f * dt));
+            else camera->clip += (allowed - camera->clip) * (1.0f - expf(-2.5f * dt));
+            if (camera->clip < allowed - 0.35f) camera->clip = allowed - 0.35f;   /* never far behind a wall's edge */
+            camera->x = from[0] + (to[0] - from[0]) * camera->clip;
+            camera->z = from[2] + (to[2] - from[2]) * camera->clip;
         }
         camera->yaw = atan2f(camera->tx - camera->x, camera->tz - camera->z);
     }

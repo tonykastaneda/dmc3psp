@@ -129,6 +129,9 @@ typedef struct {
     float x, y, z;     /* smoothed eye position */
     float tx, ty, tz;  /* smoothed look-at target */
     float lead_x, lead_z, last_x, last_z;  /* aim point's run ahead of him */
+    /* Where it would be with nothing in the way, and how much of that it may use now (0-1): walls pull it in
+     * quickly and it eases back out, so an edge the line to him keeps grazing doesn't make it jump. */
+    float free_x, free_z, clip;
 } FollowCamera;
 
 typedef struct {

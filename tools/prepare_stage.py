@@ -192,9 +192,41 @@ def face_normal(t):
     return tuple(c / length for c in n)
 
 
+def _surface_cells(hits, size=50.0):
+    """The 50 cm cells the collision's surfaces pass through."""
+    cells = set()
+    for t in hits:
+        a, b, c = t[0:3], t[3:6], t[6:9]
+        n = max(2, int(max(math.dist(a, b), math.dist(a, c)) / 25))
+        for i in range(n + 1):
+            for j in range(n + 1 - i):
+                u, v = i / n, j / n
+                cells.add(tuple(int((a[k] + (b[k] - a[k]) * u + (c[k] - a[k]) * v) // size) for k in range(3)))
+    return cells
+
+
+def _fit(obj, cells, size=50.0):
+    """The share of an object's vertices (a sample) within a cell of the collision's surfaces; None if empty."""
+    points = [p for s in obj["submeshes"] for p in s["positions"]]
+    if not points:
+        return None
+    points = points[::max(1, len(points) // 60)]
+    hit = 0
+    for p in points:
+        x, y, z = (int(v // size) for v in p)
+        if any((x + i, y + j, z + k) in cells for i in (-1, 0, 1) for j in (-1, 0, 1) for k in (-1, 0, 1)):
+            hit += 1
+    return hit / len(points)
+
+
 def choose_scm(scm_data, hits):
-    """Whichever reading of the root's offset lines the visuals up with the collision, which is in world
-    coordinates: compare the middle of each one's vertices with the middle of the collision's."""
+    """How the scene's objects are placed, checked against the collision, which is in world coordinates.
+
+    First whichever reading of the root's offset lines the visuals up with the collision (the middle of each
+    one's vertices against the collision's). Then the nodes' full transforms (their rotations too) against
+    that, object by object: the stage takes whichever fits the collision better overall, and an object takes
+    the other reading only where it fits clearly better. Most stages' rotations are zero or cancel and nothing
+    changes; st002's (Mission 3's street) are what turn its pieces the right way round."""
     def middle(values):
         values = sorted(values)
         return values[len(values) // 2] if values else 0.0
@@ -206,6 +238,27 @@ def choose_scm(scm_data, hits):
         error = abs(middle([p[0] for p in points]) - target[0]) + abs(middle([p[2] for p in points]) - target[1])
         if best is None or error < best_error:
             best, best_error = scm, error
+    full = parse_scm(scm_data, True, transform=True)
+    cells = _surface_cells(hits)
+    fits = [(_fit(a, cells), _fit(b, cells)) for a, b in zip(best["objects"], full["objects"])]
+    plain_total = sum(f[0] or 0.0 for f in fits)
+    full_total = sum(f[1] or 0.0 for f in fits)
+    prefer_full = full_total > plain_total + 0.5
+    objects, switched = [], 0
+    for (plain_fit, full_fit), a, b in zip(fits, best["objects"], full["objects"]):
+        use_full = prefer_full
+        if plain_fit is not None and full_fit is not None:
+            if full_fit > plain_fit + 0.1:
+                use_full = True
+            elif plain_fit > full_fit + 0.1:
+                use_full = False
+        if use_full != prefer_full or use_full:
+            switched += use_full != prefer_full
+        objects.append(b if use_full else a)
+    print(f"scene placement: {'full transforms' if prefer_full else 'translations'} "
+          f"(collision fit {plain_total:.1f} translations, {full_total:.1f} full), {switched} objects the other way")
+    best = dict(best)
+    best["objects"] = objects
     return best
 
 
@@ -223,11 +276,100 @@ def parse_hits(data: bytes):
     return tris
 
 
-def build_grid(tris, x0, z0, cell, w, h):
+def _floor_heights(floors, x, z):
+    out = []
+    for t in floors:
+        x0, y0, z0, x1, y1, z1, x2, y2, z2 = t[:9]
+        d = (z1 - z2) * (x0 - x2) + (x2 - x1) * (z0 - z2)
+        if abs(d) < 1e-6:
+            continue
+        a = ((z1 - z2) * (x - x2) + (x2 - x1) * (z - z2)) / d
+        b = ((z2 - z0) * (x - x2) + (x0 - x2) * (z - z2)) / d
+        if min(a, b, 1 - a - b) >= -1e-4:
+            out.append(a * y0 + b * y1 + (1 - a - b) * y2)
+    return out
+
+
+def _wall_near(walls, mx, mz, y):
+    """A collision wall within 40 cm of (mx, mz), standing over the height just above the floor."""
+    for t in walls:
+        xs, ys, zs = t[0:9:3], t[1:9:3], t[2:9:3]
+        if max(ys) < y + 20 or min(ys) > y + 150:
+            continue
+        for i in range(3):
+            ax, az, bx, bz = xs[i], zs[i], xs[(i + 1) % 3], zs[(i + 1) % 3]
+            dx, dz = bx - ax, bz - az
+            l2 = dx * dx + dz * dz
+            u = 0 if l2 < 1e-6 else max(0, min(1, ((mx - ax) * dx + (mz - az) * dz) / l2))
+            if math.hypot(mx - (ax + u * dx), mz - (az + u * dz)) < 40:
+                return True
+    return False
+
+
+EDGE_WALL_HEIGHT = 2000.0   # cm above the edge: past any jump, Air Hike and Sky Star
+
+
+def open_edge_walls(floors, walls):
+    """Walls for the collision floor's open edges: an edge of the walkable floor with no collision wall on it and
+    no lower floor beyond it to drop to. The disc's collision leaves these open (room 100's courtyard rim, the
+    end of Mission 3's street); in the game Dante never goes over them, so the port stands a wall there. Each is a
+    quad from below the edge to EDGE_WALL_HEIGHT above it, or to just under a floor higher up over it, facing the
+    floor. Edges with a floor below them (ledges he drops from) are left open."""
+    edges = {}
+    for t in floors:
+        pts = [tuple(t[k * 3:k * 3 + 3]) for k in range(3)]
+        cx, cz = sum(p[0] for p in pts) / 3, sum(p[2] for p in pts) / 3
+        for i in range(3):
+            a, b = pts[i], pts[(i + 1) % 3]
+            k = tuple(sorted((tuple(round(v) for v in a), tuple(round(v) for v in b))))
+            edges.setdefault(k, []).append((a, b, cx, cz))
+    out = []
+    for v in edges.values():
+        if len(v) != 1:
+            continue
+        a, b, cx, cz = v[0]
+        length = math.dist((a[0], a[2]), (b[0], b[2]))
+        if length < 1.0:
+            continue
+        y = max(a[1], b[1])
+        nx, nz = -(b[2] - a[2]) / length, (b[0] - a[0]) / length   # a horizontal normal; flip it to face the floor
+        mx, mz = (a[0] + b[0]) / 2, (a[2] + b[2]) / 2
+        if (cx - mx) * nx + (cz - mz) * nz < 0:
+            nx, nz = -nx, -nz
+        if _wall_near(walls, mx, mz, y):
+            continue
+        # beyond the edge, at its middle and near both ends: a lower floor to land on means it's a ledge
+        probes = [(mx - nx * 30, mz - nz * 30)]
+        if length > 80:
+            for f in (0.15, 0.85):
+                probes.append((a[0] + (b[0] - a[0]) * f - nx * 30, a[2] + (b[2] - a[2]) * f - nz * 30))
+        below = False
+        top = y + EDGE_WALL_HEIGHT
+        for px, pz in probes:
+            for h in _floor_heights(floors, px, pz):
+                if h < y + 60:
+                    below = True     # a ledge to drop from, or floor carrying on (a T-junction in the mesh)
+                elif h > y + 250:
+                    top = min(top, h - 20)
+        if below:
+            continue
+        lo = min(a[1], b[1]) - 100
+        d = -(nx * mx + nz * mz)
+        a0, a1 = (a[0], lo, a[2]), (a[0], top, a[2])
+        b0, b1 = (b[0], lo, b[2]), (b[0], top, b[2])
+        out.append(a0 + b0 + b1 + (nx, 0.0, nz, d))
+        out.append(a0 + b1 + a1 + (nx, 0.0, nz, d))
+    return out
+
+
+def build_grid(tris, x0, z0, cell, w, h, margin=0.0):
+    """Each triangle in every cell its XZ box, grown by margin, touches. The walls' margin is past Dante's radius:
+    stage_collide looks only in the cell his centre is in, and a wall on a cell's edge (Mission 3's bar, x 3000)
+    must be found from the cell beside it too."""
     cells = [[] for _ in range(w * h)]
     for ti, t in enumerate(tris):
-        cx0 = max(0, int((min(t[0:9:3]) - x0) // cell)); cx1 = min(w - 1, int((max(t[0:9:3]) - x0) // cell))
-        cz0 = max(0, int((min(t[2:9:3]) - z0) // cell)); cz1 = min(h - 1, int((max(t[2:9:3]) - z0) // cell))
+        cx0 = max(0, int((min(t[0:9:3]) - margin - x0) // cell)); cx1 = min(w - 1, int((max(t[0:9:3]) + margin - x0) // cell))
+        cz0 = max(0, int((min(t[2:9:3]) - margin - z0) // cell)); cz1 = min(h - 1, int((max(t[2:9:3]) + margin - z0) // cell))
         for cz in range(cz0, cz1 + 1):
             for cx in range(cx0, cx1 + 1):
                 cells[cz * w + cx].append(ti)
@@ -270,6 +412,8 @@ def main() -> None:
     scm = choose_scm(stage[2], hits)
     hit_walls = [t for t in hits if abs(t[10]) < 0.5]
     hit_floors = [t for t in hits if t[10] >= 0.5]
+    edge_walls = open_edge_walls(hit_floors, hit_walls)
+    hit_walls += edge_walls
     # Where Dante can be: the collision's bounds, a little enlarged.
     play = ([min(t[k + 3 * j] for t in hits for j in range(3)) - PLAY_MARGIN for k in range(3)],
             [max(t[k + 3 * j] for t in hits for j in range(3)) + PLAY_MARGIN for k in range(3)])
@@ -422,8 +566,8 @@ def main() -> None:
     hits_offset = align(blob)
     for t in hit_walls + hit_floors:
         blob += struct.pack("<13f", *t)
-    wall_grid = write_grid(blob, build_grid(hit_walls, gx0, gz0, GRID_CELL, gw, gh))
-    hfloor_grid = write_grid(blob, build_grid(hit_floors, gx0, gz0, GRID_CELL, gw, gh))
+    wall_grid = write_grid(blob, build_grid(hit_walls, gx0, gz0, GRID_CELL, gw, gh, margin=60.0))
+    hfloor_grid = write_grid(blob, build_grid(hit_floors, gx0, gz0, GRID_CELL, gw, gh, margin=1.0))
     align(blob)
 
     all_x = [v[0] for b in batches for t in b[2] for v in t]
@@ -443,7 +587,7 @@ def main() -> None:
     print(f"{args.output}: {name}, {len(textures)} textures (mipmapped), {len(batches)} batches in {len(chunks)} chunks, "
           f"{tri_count} triangles after subdividing to {MAX_EDGE:.0f} cm, {len(floor)} floor triangles "
           f"({gw}x{gh} grid), {len(shared)} shared planes -> {decal_batches} decal batches, "
-          f"collision {len(hit_walls)} walls / {len(hit_floors)} floors, "
+          f"collision {len(hit_walls)} walls ({len(edge_walls)} on open floor edges) / {len(hit_floors)} floors, "
           f"cut-out textures {sorted(alpha_textures)}, translucent {sorted(blend_textures)}, "
           f"spawn ({sx:.0f}, {sy:.1f}, {sz:.0f}) yaw {syaw:.0f}, {len(blob):,} bytes")
 
