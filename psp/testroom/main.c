@@ -1708,6 +1708,7 @@ static int cmp_walk_count;
 static float cmp_px, cmp_pz, cmp_cam_yaw;   /* where he is and the camera's yaw, for walkto */
 static int cmp_event_count, cmp_frames;
 static int cmp_game_shots[256];   /* saved by the game itself: works on the PSP and sees only its own picture */
+static int cmp_video_first = -1, cmp_video_last = -1;
 static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_yaw, cmp_turbo, cmp_fps = 60, cmp_face_yaw = 9999, cmp_spot_x = 2750, cmp_spot_z = 2450;   /* "spot x z": where Dante starts */   /* "faceyaw deg": Dante's facing at the start */
 
 /* The dummy ramp (tools/psp_bench.py): one more dummy every step until the frame rate has clearly
@@ -1790,6 +1791,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "qs ", 3) == 0) bench_quicksilver = atoi(line + 3);
         else if (strncmp(line, "nostage ", 8) == 0) bench_no_stage = atoi(line + 8);
         else if (strncmp(line, "psp_shot ", 9) == 0) { if (cmp_shot_count < 256) cmp_game_shots[cmp_shot_count++] = atoi(line + 9); }
+        else if (strncmp(line, "psp_video ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_video_first, &cmp_video_last);
         else if (strncmp(line, "notex ", 6) == 0) bench_no_texture = atoi(line + 6);
         else if (strncmp(line, "nolight ", 8) == 0) bench_no_lighting = atoi(line + 8);
         else if (strncmp(line, "ring ", 5) == 0) bench_ring = atoi(line + 5);
@@ -2819,7 +2821,8 @@ int main(int argc, char *argv[]) {
     last_time = sceKernelGetSystemTimeLow();
 
     /* Scenes that measure things compare with normalised numbers. */
-    if (((focus && !(focus_cmp && cmp_turbo)) || autotest || recording || tour) && !cmp_menu) game_turbo = 0;
+    if (focus_cmp) game_turbo = cmp_turbo != 0;
+    else if ((focus || autotest || recording || tour) && !cmp_menu) game_turbo = 0;
     while (running) {
         unsigned int frame_start = sceKernelGetSystemTimeLow();
         unsigned int frame_us, skin_start, skin_us, gap = frame_start - last_time;
@@ -3238,6 +3241,10 @@ int main(int argc, char *argv[]) {
             {
                 static char cmp_name[32];
                 int shot;
+                if (frames >= cmp_video_first && frames <= cmp_video_last) {
+                    snprintf(cmp_name, sizeof(cmp_name), "SHOT_%d.BMP", frames);
+                    capture_frame(draw_buffer, cmp_name);
+                }
                 for (shot = 0; shot < cmp_shot_count; ++shot)
                     if (frames == cmp_game_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "SHOT_%d.BMP", frames); capture_frame(draw_buffer, cmp_name); }
                     else if (shot < 32 && frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }
