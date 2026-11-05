@@ -119,7 +119,7 @@ def build_moves(rows, weapon_cfg):
         return i
 
     for action, phases in sorted(ACTIONS.items()):
-        w = weapon_of(rows, action)
+        w = weapon_of(rows, action) if action < 250 else 5   # 250-252: Twosome Time's ways (Ebony & Ivory)
         name = WEAPON_NAMES.get(w, "ROYALGUARD" if action >= 190 else "MOVE")
         is_gun = w >= 5
         ids = []

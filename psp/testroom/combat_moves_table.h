@@ -247,6 +247,9 @@
     [MOVE_G_244] = {.script = "24:20", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
     [MOVE_G_245] = {.script = "24:52", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
     [MOVE_G_246] = {.script = "24:58", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
+    [MOVE_G_247] = {.script = "18:1", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
+    [MOVE_G_248] = {.script = "18:2", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
+    [MOVE_G_249] = {.script = "18:3", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
 #else
 static MoveId gen_action_move(int action) {
     switch (action) {
@@ -359,8 +362,11 @@ static MoveId gen_action_move(int action) {
     case 195: return MOVE_G_244;
     case 196: return MOVE_G_245;
     case 197: return MOVE_G_246;
+    case 250: return MOVE_G_247;
+    case 251: return MOVE_G_248;
+    case 252: return MOVE_G_249;
     default: return MOVE_NONE;
     }
 }
-static const unsigned char gen_actions[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 130, 131, 132, 133, 134, 135, 136, 140, 141, 142, 143, 144, 145, 146, 147, 150, 151, 152, 153, 154, 155, 160, 161, 162, 170, 171, 172, 190, 191, 192, 193, 194, 195, 196, 197};
+static const unsigned char gen_actions[] = {30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 130, 131, 132, 133, 134, 135, 136, 140, 141, 142, 143, 144, 145, 146, 147, 150, 151, 152, 153, 154, 155, 160, 161, 162, 170, 171, 172, 190, 191, 192, 193, 194, 195, 196, 197, 250, 251, 252};
 #endif

@@ -993,6 +993,16 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             MoveId first = action_move(action);
             if (player->locked_on && player->has_target && moves[first].lock_move != MOVE_NONE && moves[first].lock_move)
                 first = moves[first].lock_move;
+            /* Twosome Time with R1 goes the stick's way against his facing (FUN_0026b0d0, table 0x595550): back
+             * 18:2, left 18:3, right 18:1 (the generated actions 251 / 252 / 250); forward or neutral stays 18:0. */
+            if (action == 134 && player->locked_on) {
+                float sy = player->yaw;
+                if (stick_yaw(player, input, &sy)) {
+                    float d = wrap_pi(sy - player->yaw);
+                    if (fabsf(d) >= 2.356f) first = action_move(251);
+                    else if (fabsf(d) > 0.785f) first = action_move(d > 0.0f ? 252 : 250);
+                }
+            }
             start_move(c, first, action);
         }
     } else if (c->move == MOVE_NONE) {
