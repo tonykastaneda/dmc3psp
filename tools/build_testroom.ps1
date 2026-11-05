@@ -67,6 +67,12 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "gigapede
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_gigapede.py"), $Iso.FullName, "--output", (Join-Path $Generated "gigapede_runtime.h"))
 }
 
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "ICON0.PNG"))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    $Python = (Get-Command python -ErrorAction Stop).Source
+    Invoke-Native $Python @((Join-Path $Root "tools\prepare_xmb.py"), $Iso.FullName, "--output", $Build, "--focus", "0.6", "--top", "0.02")
+}
+
 $MenuBin = Join-Path $Build "MENU.BIN"
 if ($Regenerate -or -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
@@ -120,7 +126,10 @@ Push-Location -LiteralPath $Build
 try {
     Invoke-Native "mksfoex.exe" @("-d", "MEMSIZE=1", "Devil May Cry 3 Portable", "PARAM.SFO")
     Invoke-Native "psp-strip.exe" @("testroom.elf", "-o", "testroom_strip.elf")
-    Invoke-Native "pack-pbp.exe" @("EBOOT.PBP", "PARAM.SFO", "NULL", "NULL", "NULL", "NULL", "NULL", "testroom_strip.elf", "NULL")
+    # The XMB's icon and background (tools/prepare_xmb.py), when they've been made.
+    $Icon0 = if (Test-Path -LiteralPath "ICON0.PNG") { "ICON0.PNG" } else { "NULL" }
+    $Pic1 = if (Test-Path -LiteralPath "PIC1.PNG") { "PIC1.PNG" } else { "NULL" }
+    Invoke-Native "pack-pbp.exe" @("EBOOT.PBP", "PARAM.SFO", $Icon0, "NULL", "NULL", $Pic1, "NULL", "testroom_strip.elf", "NULL")
 }
 finally { Pop-Location }
 Write-Log ("Test room build completed: {0} ({1:N0} bytes)" -f $Eboot, (Get-Item -LiteralPath $Eboot).Length)
