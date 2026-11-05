@@ -19,6 +19,9 @@ int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
  * leaves *out untouched if there is no floor below. */
 int stage_floor(float x, float y, float z, float step, float *out);
+/* A breakable prop's triangles (tagged with its number by tools/prepare_stage.py) aren't drawn once it's
+ * broken. Loading a stage shows them all again. */
+void stage_hide_group(int number);
 /* Push a vertical capsule (feet at y, height ~180) out of the stage's
  * collision walls; returns 1 if it moved. */
 int stage_collide(float *x, float *z, float y, float radius);

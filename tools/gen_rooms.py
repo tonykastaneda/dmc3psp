@@ -26,6 +26,12 @@ from pathlib import Path
 
 from dmc3_image import AfsArchive, Iso9660
 from prepare_stage import pac_entries
+import gimmicks
+
+# How many light hits a breakable takes: its vital over about what one light hit does (a Pride's 250 is 6 hits,
+# an estimate already). Red orb crystals give some orbs a hit, then shatter: not read from the game yet.
+VITAL_PER_HIT = 42.0
+CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 
 # Stage slots (stNNN.pac); the room's data is the next slot.
 SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292, "006": 296, "009": 308,
@@ -177,7 +183,8 @@ def main():
             stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
             game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
             rooms[name] = dict(doors=parse_doors(data[0].decode("latin1").replace("\r", "")), starts=parse_starts(data),
-                               groups=parse_groups(data), lifts=parse_lifts(game))
+                               groups=parse_groups(data), lifts=parse_lifts(game),
+                               breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [])
     for name, slot in SLOTS.items():
         out = args.output / f"ROOM_{name}.BIN"
         if not out.exists():
@@ -242,6 +249,23 @@ def main():
     lines.append("typedef struct { short room; float x, y, z; } RoomShop;")
     lines.append(f"#define ROOM_SHOP_COUNT {len(shops)}")
     lines.append("static const RoomShop room_shops[] = {" + (",".join(shops) or "{0}") + "};")
+    lines.append("/* A room's breakable prop: its number (the stage batches' tag), where, how big, hits it takes, and up to")
+    lines.append(" * two red orb rolls (amount, % chance), or a red orb crystal paying orbs each hit. tools/gimmicks.py. */")
+    lines.append("typedef struct { short room, number; float x, y, z, radius, height; short hits, crystal, orbs[2], chance[2]; } RoomBreakable;")
+    cells = []
+    for name in names:
+        for number, s, (x, y, z), radius, height in rooms[name]["breakables"]:
+            crystal = s["kind"] == "ORBREAK"
+            hits = CRYSTAL_HITS if crystal else max(1, round((s["vital"] or 1) / VITAL_PER_HIT))
+            rolls = [(a, ch) for item, a, ch in s["items"] if item == "RED_ORB"][:2]
+            if crystal:
+                rolls = [(CRYSTAL_ORBS, 100)]
+            rolls += [(0, 0)] * (2 - len(rolls))
+            cells.append(f"{{{index[name]},{number},{x:.1f}f,{y:.1f}f,{z:.1f}f,{radius:.1f}f,{height:.1f}f,{hits},{int(crystal)},"
+                         f"{{{rolls[0][0]},{rolls[1][0]}}},{{{rolls[0][1]},{rolls[1][1]}}}}}")
+    lines.append(f"#define ROOM_BREAKABLE_COUNT {len(cells)}")
+    lines.append("static const RoomBreakable room_breakables[] = {" + (",".join(cells) or "{0}") + "};")
+    print(f"{len(cells)} breakables")
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")

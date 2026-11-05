@@ -38,11 +38,14 @@ typedef struct { unsigned int offset, walls, floors, wall_grid, floor_grid; } Hi
 static unsigned char *blob;
 static const Header *header;
 static const HitsHeader *hits;
+static unsigned char group_hidden[256];   /* by breakable number */
+void stage_hide_group(int number) { if (number > 0 && number < 256) group_hidden[number] = 1; }
 static StageInfo info;
 static unsigned char *chunk_visible;   /* per chunk, this frame */
 static unsigned int chunk_total;
 
 int stage_load(const char *path) {
+    memset(group_hidden, 0, sizeof(group_hidden));
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
     int size, got;
     if (fd < 0) return 0;
@@ -167,6 +170,7 @@ void stage_draw(void) {
     for (i = 0; i < header->batches; ++i) {
         const Batch *b = &batches[i];
         unsigned int k, visible = 0;
+        if (b->pad[0] && b->pad[0] < 256 && group_hidden[b->pad[0]]) continue;   /* a broken prop */
         for (k = 0; k < b->chunk_count; ++k) visible += chunk_visible[b->chunk_first + k];
         if (!visible) continue;
         if ((int)b->texture != bound) {

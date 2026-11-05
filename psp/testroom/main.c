@@ -2091,6 +2091,42 @@ static void draw_box(float x, float y0, float y1, float z, float hx, float hz, f
 /* Stand-ins for their models, which aren't converted yet: the lift as a stone block, its switch as a
  * red glow until struck, the goal item as a turning gold block. */
 static float goal_spin;
+/* Breakable props (rooms_runtime.h's room_breakables): hits left each, and broken ones stay broken this mission. */
+static short breakable_hits[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+static unsigned char breakable_broken[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+static void breakables_reset(void) {
+    int i;
+    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) { breakable_hits[i] = room_breakables[i].hits; breakable_broken[i] = 0; }
+}
+static void breakables_enter(int room) {
+    int i;
+    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i)
+        if (room_breakables[i].room == room && breakable_broken[i]) stage_hide_group(room_breakables[i].number);
+}
+static void breakable_hit(const Player *player, float reach, int kind) {
+    int i, k;
+    float fx = sinf(player->yaw), fz = cosf(player->yaw);
+    if (!mission_mode || mission_room == ROOM_NONE) return;
+    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
+        const RoomBreakable *b = &room_breakables[i];
+        float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
+        if (b->room != mission_room || breakable_broken[i]) continue;
+        if (d > reach + b->radius || dy < -200.0f || dy > b->height + 100.0f) continue;
+        if (d > 1.0f && (dx * fx + dz * fz) / d < 0.2f) continue;    /* in front of him, as for enemies */
+        {
+            float at[3] = {b->x, b->y + b->height * 0.5f, b->z};
+            fx_hit_spark(at);
+        }
+        breakable_hits[i] -= kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2;
+        if (b->crystal) orbs_burst(b->x, b->y + b->height * 0.5f, b->z, b->orbs[0]);   /* a crystal pays each hit */
+        if (breakable_hits[i] > 0) continue;
+        breakable_broken[i] = 1;
+        stage_hide_group(b->number);
+        if (!b->crystal)
+            for (k = 0; k < 2; ++k)
+                if (b->orbs[k] > 0 && rand() % 100 < b->chance[k]) orbs_burst(b->x, b->y, b->z, b->orbs[k]);
+    }
+}
 static int shop_closed;   /* the shop had its own frames: the game's clock starts again */
 static void mission_gimmicks_draw(void) {
     const RoomLift *l;
@@ -2157,6 +2193,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     orbs_clear();
     path_in_game_dir(path, sizeof(path), rooms[room].file);
     stage_load(path);
+    breakables_enter(room);
     mission_room = room;
     doors_armed = 0;
     {
@@ -2342,6 +2379,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     enemy_set_mortal(1);
     mission_clear_wait = 0.0f;
     rooms_cleared = 0;
+    breakables_reset();
     enter_room(missions[choice->mission - 1].first_room, 0, player, camera);
 }
 
@@ -2528,6 +2566,7 @@ int main(int argc, char *argv[]) {
         menu_debug = debug_modal;
         orbs_set_counter(&shop_state.red_orbs);
         enemy_died_fn = enemy_died;
+        combat_hit_fn = breakable_hit;
         menu_shop = &shop_state;
         if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;

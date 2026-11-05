@@ -162,4 +162,8 @@ int combat_selftest(int *total, int *failed_action, int *fallbacks);
  * and posture set, as the pad does; returns how many started a move of that weapon. */
 int combat_selftest_inputs(int *total, int *first_failed_action);
 
+/* Each time one of Dante's attacks lands its hit frame: where he is, its reach, the HitKind. The missions use
+ * it for breakable props. */
+extern void (*combat_hit_fn)(const Player *player, float reach, int kind);
+
 #endif

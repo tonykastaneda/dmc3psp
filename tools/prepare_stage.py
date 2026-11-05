@@ -336,6 +336,22 @@ def main() -> None:
             for cx in range(cx0, cx1 + 1):
                 cells[cz * gw + cx].append(ti)
 
+    # The room's props (tools/gimmicks.py): breakables and static pieces, one batch per (prop, texture), each
+    # breakable's tagged with its number so the runtime can stop drawing it once it's broken. Not floor.
+    import gimmicks
+    game_text = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1")
+    numbers = {id(s): n for n, s, *_ in gimmicks.breakables(game_text, stage[5])} if len(stage) > 5 else {}
+    prop_batches = 0
+    for s, kind, tris in (gimmicks.placed(game_text, stage[5]) if len(stage) > 5 else []):
+        by_texture = {}
+        for tri, texture in tris:
+            by_texture.setdefault(texture, []).extend(subdivide(tri, play))
+        for texture, subdivided in by_texture.items():
+            texture = min(texture, len(textures) - 1)
+            kind_flag = 2 if texture in blend_textures else (1 if texture in alpha_textures else 0)
+            batches.append([texture, kind_flag, subdivided, 0, numbers.get(id(s), 0)])
+            prop_batches += 1
+
     # ---- write the blob
     blob = bytearray(256)  # header placeholder
     tex_table = align(blob)
@@ -362,7 +378,8 @@ def main() -> None:
     first = 0
     chunks = []  # (first vertex, vertex count, min xyz, max xyz)
     for slot, bi in enumerate(order):
-        texture, kind, tris, decal = batches[bi]
+        texture, kind, tris, decal = batches[bi][:4]
+        group = batches[bi][4] if len(batches[bi]) > 4 else 0
         # Group the batch's triangles by XZ chunk (centre), keeping order inside.
         groups = {}
         for t in tris:
@@ -382,9 +399,9 @@ def main() -> None:
                            min(v[0] for v in pts), min(v[1] for v in pts), min(v[2] for v in pts),
                            max(v[0] for v in pts), max(v[1] for v in pts), max(v[2] for v in pts)))
             first += len(g) * 3
-        struct.pack_into("<6I", blob, batch_table + 32 * slot, texture, batch_first, first - batch_first,
+        struct.pack_into("<7I", blob, batch_table + 32 * slot, texture, batch_first, first - batch_first,
                          (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0),
-                         chunk_first, len(chunks) - chunk_first)
+                         chunk_first, len(chunks) - chunk_first, group)
     chunk_table = align(blob)
     for c in chunks:
         blob += struct.pack("<2I6f", *c)
@@ -409,9 +426,9 @@ def main() -> None:
     hfloor_grid = write_grid(blob, build_grid(hit_floors, gx0, gz0, GRID_CELL, gw, gh))
     align(blob)
 
-    all_x = [v[0] for _, _, tris, _ in batches for t in tris for v in t]
-    all_y = [v[1] for _, _, tris, _ in batches for t in tris for v in t]
-    all_z = [v[2] for _, _, tris, _ in batches for t in tris for v in t]
+    all_x = [v[0] for b in batches for t in b[2] for v in t]
+    all_y = [v[1] for b in batches for t in b[2] for v in t]
+    all_z = [v[2] for b in batches for t in b[2] for v in t]
     struct.pack_into("<4I", blob, 0x80, hits_offset, len(hit_walls), len(hit_floors), wall_grid)
     struct.pack_into("<I", blob, 0x90, hfloor_grid)
     struct.pack_into("<4s7I4f6f6I2f2I", blob, 0, b"STG1", 3,

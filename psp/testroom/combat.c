@@ -617,10 +617,13 @@ static int run_events(Combat *c) {
     return hits;
 }
 
+void (*combat_hit_fn)(const Player *player, float reach, int kind);
+
 static void deal_hit(Combat *c, const Player *player) {
     const MoveDef *d = &moves[c->move];
     int i;
     if (d->hit_kind < 0) return;
+    if (combat_hit_fn) combat_hit_fn(player, d->reach, d->hit_kind);
     for (i = 0; i < ENEMY_MAX; ++i) {
         float e[3], dx, dz, dist, facing, dy;
         enemy_select(i);
