@@ -1,4 +1,5 @@
 #include "hud.h"
+#include "enemy.h"
 
 #include <pspgu.h>
 #include <pspkernel.h>
@@ -137,6 +138,17 @@ void hud_draw(const Player *player) {
     rect(BAR_LEFT, BAR_TOP, BAR_LEFT + BAR_WIDTH, BAR_TOP + BAR_HEIGHT, 0xc0201808u, 0xc0100c04u);
     rect(BAR_LEFT, BAR_TOP, BAR_LEFT + BAR_WIDTH * tail, BAR_TOP + BAR_HEIGHT, 0xff3030e0u, 0xff1818a0u);
     rect(BAR_LEFT, BAR_TOP, BAR_LEFT + BAR_WIDTH * health, BAR_TOP + BAR_HEIGHT, 0xff60e878u, 0xff208838u);
+    {
+        float boss_hp,boss_max;
+        if(enemy_boss_health(&boss_hp,&boss_max)) {
+            float fraction=boss_max>0?boss_hp/boss_max:0;
+            if(fraction<0)fraction=0;
+            if(fraction>1)fraction=1;
+            rect(89,257,391,266,0xe0000000u,0xe0000000u);
+            rect(90,258,390,265,0xff201820u,0xff100810u);
+            rect(90,258,90+300*fraction,265,0xff7050e8u,0xff302080u);
+        }
+    }
     {
         /* Devil Trigger: a thin row of segments under the bar. */
         float top = BAR_TOP + BAR_HEIGHT + 2.0f, each = (DEVIL_WIDTH - (DEVIL_SEGMENTS - 1)) / DEVIL_SEGMENTS;

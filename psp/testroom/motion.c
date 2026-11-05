@@ -4,8 +4,10 @@
 #include <string.h>
 
 #include "motion_runtime.h"
+#include "vanguard_motions.h"
 
-static Motion motions[DMC3_MOTION_COUNT];
+#define TOTAL_MOTIONS (DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT)
+static Motion motions[TOTAL_MOTIONS];
 
 static unsigned int rd16(const unsigned char *p) { return (unsigned int)p[0] | ((unsigned int)p[1] << 8); }
 static unsigned int rd32(const unsigned char *p) { return rd16(p) | (rd16(p + 2) << 16); }
@@ -72,20 +74,22 @@ int motion_init(void) {
     for (i = 0; i < DMC3_MOTION_COUNT; ++i) {
         if (!parse(&dmc3_motions[i], &motions[i])) return -(i + 1);
     }
-    return DMC3_MOTION_COUNT;
+    for (i = 0; i < VANGUARD_MOTION_COUNT; ++i)
+        if (!parse(&vg_motion_blobs[i], &motions[DMC3_MOTION_COUNT + i])) return -(DMC3_MOTION_COUNT + i + 1);
+    return TOTAL_MOTIONS;
 }
 
-int motion_count(void) { return DMC3_MOTION_COUNT; }
+int motion_count(void) { return TOTAL_MOTIONS; }
 
 int motion_find(const char *name) {
     int i;
-    for (i = 0; i < DMC3_MOTION_COUNT; ++i)
+    for (i = 0; i < TOTAL_MOTIONS; ++i)
         if (strcmp(motions[i].name, name) == 0) return i;
     return -1;
 }
 
 const Motion *motion_get(int index) {
-    if (index < 0 || index >= DMC3_MOTION_COUNT) return 0;
+    if (index < 0 || index >= TOTAL_MOTIONS) return 0;
     return &motions[index];
 }
 

@@ -15,6 +15,7 @@
 #include "motion.h"
 #include "player.h"
 #include "stage.h"
+#include "vanguard.h"
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "swizzle.h"
@@ -193,6 +194,7 @@ static void arrows_update(float f, float px, float py, float pz);
 static void arrows_draw(void);
 static void arrows_clear(int i);
 static int giga_init(void);
+static unsigned int ai_random(void);
 static void giga_spawn(void);
 static void giga_part_update(float f, float px, float py, float pz);
 static void giga_hit(HitKind kind);
@@ -208,6 +210,7 @@ int enemy_init(void) {
     }
     if (!enigma_init()) return 0;
     if (!giga_init()) return 0;
+    if (!vanguard_init()) return 0;
     for (k = 0; k < ENEMY_KIND_COUNT; ++k) {
         const EnemyModel *m = &enemy_models[k];
         indices[k] = memalign(16, sizeof(unsigned short) * m->index_count);
@@ -266,6 +269,13 @@ static void spawn_one(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
     if (kind == ENEMY_GIGAPEDE) { giga_spawn(); return; }
+    if (kind == ENEMY_VANGUARD) {
+        float y=0;
+        floor_under(x,spawn_search_y,z,&y);
+        e->kind=kind;e->pos[0]=x;e->pos[1]=y;e->pos[2]=z;e->floor_y=y;
+        e->active=1;e->plan=P_WATCH;e->air=e->hidden=0;
+        vanguard_spawn(x,y,z);return;
+    }
     if (kind < 0 || kind >= ENEMY_KIND_COUNT) kind = ENEMY_PRIDE;
     m = &enemy_models[kind];
     /* Each dummy's own skinned copy, the first time that slot is used; big enough for any kind. */
@@ -335,6 +345,7 @@ void enemy_kill_all(void) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
+            if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
             Enemy *was = e;
             e = &enemies[i];
             if (e->kind != ENEMY_GIGAPEDE) died();   /* their orbs, as if Dante had done it */
@@ -350,6 +361,13 @@ int enemy_count(void) {
     int i, n = 0;
     for (i = 0; i < ENEMY_MAX; ++i) n += enemies[i].active;
     return n;
+}
+void enemy_clear_minions(void) {
+    Enemy *selected=e;int i;
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind<ENEMY_KIND_COUNT && enemies[i].plan!=P_DEATH) {
+        e=&enemies[i];e->plan=P_DEATH;e->plan_step=0;e->air=0;died();
+    }
+    e=selected;
 }
 
 void enemy_set_count(int count, float x, float z) {
@@ -375,12 +393,12 @@ void enemy_select_nearest(float x, float z) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *o = &enemies[i];
         float dx = o->pos[0] - x, dz = o->pos[2] - z, d = dx * dx + dz * dz;
-        if (o->active && d < best) { best = d; e = &enemies[i]; }
+        if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && vanguard_hidden()) && d < best) { best = d; e = &enemies[i]; }
     }
 }
 
 void enemy_set_attacks(int attacks) { attacks_on = attacks; }
-void enemy_set_dummy_kind(int kind) { dummy_kind = kind >= 0 && kind < ENEMY_KIND_COUNT ? kind : ENEMY_PRIDE; }
+void enemy_set_dummy_kind(int kind) { dummy_kind = kind == ENEMY_VANGUARD || (kind >= 0 && kind < ENEMY_KIND_COUNT) ? kind : ENEMY_PRIDE; }
 int enemy_kind(void) { return e->kind; }
 
 int enemy_kind_for_class(int spawn_class) {
@@ -389,10 +407,12 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
+    if (spawn_class == 26) return ENEMY_VANGUARD;
     return ENEMY_PRIDE;
 }
 void enemy_set_anim_auto(int on) { anim_auto = on; }
 void enemy_set_test(int no_texture, int no_lighting, float ring) {
+    vanguard_render_test(no_texture,no_lighting);
     test_no_texture = no_texture;
     test_no_lighting = no_lighting;
     spawn_ring = ring;
@@ -415,10 +435,18 @@ int enemy_attack_landed(float *from_x, float *from_z, int *heavy) {
     return 1;
 }
 
-int enemy_active(void) { return e->active; }
+int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()); }
 void enemy_position(float out[3]) { memcpy(out, e->pos, sizeof(e->pos)); }
 float enemy_height(void) { return e->pos[1] - e->floor_y; }
 int enemy_hits_taken(void) { return hits; }
+int enemy_boss_health(float *health, float *maximum) {
+    int i;
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VANGUARD) {
+        *health=vanguard_health();*maximum=vanguard_max_health();return 1;
+    }
+    return 0;
+}
+unsigned int enemy_ai_random(void) {return ai_random();}
 
 /* The game's random numbers: its Mersenne Twister, tempered the same way. */
 static unsigned int mt[624];
@@ -977,6 +1005,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     float toward;
     int behind;
     if (!e->active) return;
+    if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     ++hits;  /* infinite health: hits only cause reactions */
     {
         /* On the side facing the attacker, at chest height. */
@@ -987,6 +1016,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     }
     if (e->kind == ENEMY_ENIGMA) { enigma_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
+    if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
     if (mortal) {
         e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
@@ -1034,6 +1064,7 @@ void enemy_push_out(float *x, float *z, float r) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].kind == ENEMY_GIGAPEDE) continue;
+        if (enemies[i].kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) continue;
         const Enemy *o = &enemies[i];
         float dx, dz, d, min;
         e = &enemies[i];
@@ -1162,6 +1193,15 @@ static void update_one(float dt, float px, float py, float pz) {
     if (!e->active) return;
     dante_y = py;
     if (e->kind == ENEMY_GIGAPEDE) { giga_part_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_VANGUARD) {
+        float ground;
+        if(vanguard_update(f,px,py,pz,attacks_on,e->pos,&e->active))land_attack(1);
+        if(floor_under(e->pos[0],e->pos[1],e->pos[2],&ground))e->floor_y=ground;
+        else e->floor_y=e->pos[1];
+        e->air=e->pos[1]>e->floor_y+5;e->hidden=vanguard_hidden();
+        if(vanguard_dying())e->plan=P_DEATH;
+        return;
+    }
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
@@ -1374,6 +1414,7 @@ void enemy_draw(void) {
         e = &enemies[i];
         if (!e->active) continue;
         if (e->kind == ENEMY_GIGAPEDE) { if (e->step == 0) giga_draw(); continue; }
+        if (e->kind == ENEMY_VANGUARD) {vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
     }

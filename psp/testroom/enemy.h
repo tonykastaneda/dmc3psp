@@ -14,6 +14,7 @@ typedef enum {
 } EnemyKind;
 /* Not a model kind: the Gigapede's head and segments, which take one enemy slot each. */
 #define ENEMY_GIGAPEDE 100
+#define ENEMY_VANGUARD 101
 
 typedef enum {
     HIT_LIGHT,    /* combo hits: flinch in place */
@@ -40,6 +41,7 @@ int enemy_kind(void);                  /* the selected one's */
 void enemy_set_dummy_kind(int kind);   /* what the debug menu's dummies are */
 int enemy_alive_count(void);          /* those not yet dead */
 void enemy_kill_all(void);            /* for tests */
+void enemy_clear_minions(void);      /* tests: retain the boss and the script's alive-count gates */
 /* Keep the ones there are; add new ones in a ring around (x, z) or remove the last ones. */
 void enemy_set_count(int count, float x, float z);
 int enemy_count(void);
@@ -67,6 +69,8 @@ int enemy_active(void);
 void enemy_position(float out[3]);   /* feet */
 float enemy_height(void);            /* feet height above its floor (air time) */
 int enemy_hits_taken(void);
+/* Current boss pool for the HUD; zero when there is no active boss. */
+int enemy_boss_health(float *health, float *maximum);
 /* Apply a hit from a point (Dante's position) -- knock-back direction. */
 void enemy_hit(HitKind kind, float from_x, float from_z);
 /* Keep Dante (cylinder radius r at x,z) out of the dummy. */

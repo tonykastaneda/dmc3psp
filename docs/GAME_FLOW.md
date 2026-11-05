@@ -136,10 +136,12 @@ Stand-ins and estimates:
 - **Enemies:** each of the six Seven Hells has its own model. The Pride, Sloth and Gluttony use their own
   decision tables, the Sloth warps and the Gluttony spews (`docs/ENEMY_AI.md`). The Lust, Wrath and Greed use
   the Pride's table, so the Wrath doesn't explode yet. The Enigma and the Gigapede have their own logic. Classes
-  not ported (the Hell Vanguard, Cerberus and others) spawn as Prides, except Cerberus, whose room has no fight.
+  not ported spawn as Prides, except Cerberus, whose room has no fight. Mission 2 now runs groups 0 and 1,
+  then the Hell Vanguard in group 3; his health bar, teleport attacks and death lead into Mission Clear
+  (`docs/VANGUARD_SPEC.md`).
 - **Encounters run from the game's scripts**, with Easy and Normal each using their own column.
 - **Enemy health** is the Pride's 6 light hits (chosen by eye), and the others in proportion to their parameter
-  blocks' health. Dante's real damage isn't read.
+  blocks' health. Vanguard uses his decoded 3000 base health. Dante's real damage isn't read.
 - **Dante can't die.** His health falls by the attack records' damage and stops at 1.
 - **Doors** open once a room's fight is over. The game's seals and door models aren't drawn.
 - **Real-time cutscenes** aren't in, Mission 2's intro among them.
@@ -150,7 +152,7 @@ Stand-ins and estimates:
 
 1. The Lust's, Wrath's and Greed's own tables and moves (the Wrath's explosion).
 2. Gimmick models: 103's lift, its switch, the seals, the Astronomical Board.
-3. Cerberus and the Hell Vanguard.
+3. Cerberus; Vanguard fidelity improvements are listed in VANGUARD_SPEC.md.
 4. Enemy health and Dante's damage from the game, then dying and Game Over.
 5. Result screen values and ranks.
 6. Customize, Options, Load and Save.

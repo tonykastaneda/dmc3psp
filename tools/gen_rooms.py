@@ -47,7 +47,9 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
-    2: ("001", None, {"001": [0]}),
+    # EventTbl02: clear group 0, then group 1, then the ground-level Vanguard (group 3).
+    # Group 2 is the rooftop cinematic actor; group 4 is the cutscene-skip alternative to group 3.
+    2: ("001", None, {"001": [0, 1, 3]}),
     # 002 66 Slum Avenue: the Enigmas, then the Seven Hells; 009 Bullseye; 004 Love Planet, the Hell Sloths.
     # 006's only group is one class-43 enemy (Cerberus, not ported), so it has no fight yet.
     # From its event script (EventTbl03): 002 runs groups 2, 1, 0 as Dante moves along it, then 3 (the main
@@ -162,13 +164,15 @@ def parse_groups(data):
              for d in range(5)] for g in range(count)]
 
 
-def compile_script(groups, wanted, difficulty):
+def compile_script(groups, wanted, difficulty, group_delays=None):
     """The groups in order, threads one after another: the first thread of a group spawns who's there at
     the start, its next the timed waves."""
     out, pending = [], None
     for g in wanted:
         if g >= len(groups):
             continue
+        if group_delays and g in group_delays:
+            out.append((OP_WAIT_ALIVE, 0, group_delays[g], 0, 0))
         for op, args in groups[g][difficulty]:
             if op == 2:
                 pending = args[0]
@@ -238,7 +242,7 @@ def main():
     for mission, (first, end, sets) in MISSIONS.items():
         for room, wanted in sets.items():
             for difficulty in (0, 1):
-                ops = compile_script(rooms[room]["groups"], wanted, difficulty)
+                ops = compile_script(rooms[room]["groups"], wanted, difficulty, {1: 40, 3: 30} if mission == 2 else None)
                 print(f"mission {mission} {'EN'[difficulty]} room {room} groups {wanted}: {len(ops)} ops, "
                       f"{sum(1 for o in ops if o[0] == OP_SPAWN)} spawns")
                 lines.append(f"static const RoomOp m{mission}_{difficulty}_{room}_ops[] = {{" +

@@ -35,6 +35,7 @@
 #include "stage.h"
 #include "swizzle.h"
 #include "enemy.h"
+#include "vanguard.h"
 #include "bullets.h"
 #include "fx.h"
 #include "hud.h"
@@ -537,6 +538,7 @@ static int kind_max_health(int kind) {
     case ENEMY_GREED: return 1000;
     case ENEMY_ENIGMA: return 600;
     case ENEMY_GIGAPEDE: return 2800;
+    case ENEMY_VANGUARD: return (int)vanguard_max_health();
     default: return 250;
     }
 }
@@ -1225,6 +1227,11 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             char text[24];
             float since = orbs_since_collected(), k = since < 2.0f ? 1.0f : since < 3.0f ? 3.0f - since : 0.0f;
             unsigned int alpha = (unsigned int)(150.0f + 105.0f * k);
+            float boss_hp,boss_max;
+            if(enemy_boss_health(&boss_hp,&boss_max)) {
+                const char *name="HELL VANGUARD";
+                menu_font_draw((SCR_WIDTH-menu_font_width(16.0f,name))*0.5f,237.0f,16.0f,name,0xffddddffu);
+            }
             snprintf(text, sizeof(text), "%d", shop_state.red_orbs);
             menu_font_draw(SCR_WIDTH - 10 - menu_font_width(20.0f, text), 24.0f, 20.0f, text, alpha << 24 | 0x3c3cffu);
             sceGuDisable(GU_BLEND);
@@ -1736,6 +1743,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup;
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at;
+static int cmp_fastwaves, cmp_clear_minions;
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
 static int cmp_goto[16][2], cmp_goto_count;
@@ -1790,6 +1798,8 @@ static void cmp_load(void) {
         else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
+        else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
+        else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
         else if (strncmp(line, "place ", 6) == 0) {
             if (cmp_place_count < 8 && sscanf(line + 6, "%d %f %f %f %f %f", &cmp_place_frame[cmp_place_count], &cmp_place[cmp_place_count][0], &cmp_place[cmp_place_count][1],
@@ -1825,7 +1835,7 @@ static void cmp_load(void) {
         }
         else if (strncmp(line, "startroom ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_start_room, &cmp_start_pos);
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
-        else if (strncmp(line, "kind ", 5) == 0) { dummy_kind = atoi(line + 5) % ENEMY_KIND_TOTAL; enemy_set_dummy_kind(dummy_kind); }
+        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
     }
@@ -2358,7 +2368,7 @@ static int script_run(float dt, float floor_y) {
         if (script_wait > 0.0f) {
             if (script_waiting_alive >= 0 && enemy_alive_count() > script_waiting_alive) return 0;
             script_waiting_alive = -1;
-            script_wait -= dt * 60.0f;
+            script_wait -= focus_cmp && cmp_fastwaves ? script_wait : dt * 60.0f;
             if (script_wait > 0.0f) return 0;
         }
         switch (op->op) {
@@ -2684,7 +2694,7 @@ int main(int argc, char *argv[]) {
         focus_hud = strncmp(text, "hud", 3) == 0;
         focus_weapons = strncmp(text, "weapons", 7) == 0;
         focus_cmp = strncmp(text, "cmp", 3) == 0;
-        if (focus_cmp) cmp_load();
+        if (focus_cmp) {cmp_load();path_in_game_dir(path,sizeof(path),"VANGUARD_LOG.TXT");vanguard_trace(path);vanguard_render_test(bench_no_texture,bench_no_lighting);}
     }
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
@@ -2927,6 +2937,7 @@ int main(int argc, char *argv[]) {
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
+            if (focus_cmp && cmp_clear_minions && frames%cmp_clear_minions==0) enemy_clear_minions();
             {
                 int g, k;
                 for (g = 0; g < cmp_place_count; ++g) {
@@ -2962,6 +2973,7 @@ int main(int argc, char *argv[]) {
             }
             if (shop_closed) { shop_closed = 0; last_time = sceKernelGetSystemTimeLow(); }
             if (mission_update(dt, debug_pressed, &player, &camera)) {
+                if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 menu_run_from_mission_select(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
@@ -3062,8 +3074,13 @@ int main(int argc, char *argv[]) {
             }
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit(&combat, &player, from_x, from_z, heavy)) fx_hit_spark(chest);
-                else fx_guard_flash(chest);
+                if (combat_player_hit(&combat, &player, from_x, from_z, heavy)) {
+                    fx_hit_spark(chest);
+                    if(focus_cmp)vanguard_note("player_hurt",player.health);
+                } else {
+                    fx_guard_flash(chest);
+                    if(focus_cmp)vanguard_note("player_guard",player.health);
+                }
             }
             enemy_push_out(&player.x, &player.z, PLAYER_RADIUS);
         }
