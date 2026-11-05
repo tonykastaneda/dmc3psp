@@ -1700,7 +1700,7 @@ static int cmp_walk_count;
 static float cmp_px, cmp_pz, cmp_cam_yaw;   /* where he is and the camera's yaw, for walkto */
 static int cmp_event_count, cmp_frames;
 static int cmp_game_shots[32];   /* saved by the game itself: works on the PSP and sees only its own picture */
-static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_yaw, cmp_turbo, cmp_fps = 60, cmp_face_yaw = 9999;   /* "faceyaw deg": Dante's facing at the start */
+static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_yaw, cmp_turbo, cmp_fps = 60, cmp_face_yaw = 9999, cmp_spot_x = 2750, cmp_spot_z = 2450;   /* "spot x z": where Dante starts */   /* "faceyaw deg": Dante's facing at the start */
 
 /* The dummy ramp (tools/psp_bench.py): one more dummy every step until the frame rate has clearly
  * gone, measuring the second half of each step, on the real PSP. Options in CMP_SCRIPT.TXT. */
@@ -1754,7 +1754,7 @@ static unsigned int menu_script_pad(int frame) {
     for (i = 0; i < menu_key_count; ++i) if (frame >= menu_keys[i].frame && frame < menu_keys[i].frame + 3) held |= menu_keys[i].button;
     return held;
 }
-static struct { float x, y, z, yaw, dt, floor; short move, script, ground, room; } cmp_log[CMP_MAX_FRAMES];
+static struct { float x, y, z, yaw, dt, floor, cframe; short move, script, ground, room; } cmp_log[CMP_MAX_FRAMES];
 static int cmp_realdt;   /* "realdt 1": the real clock, as in play, not a fixed step */
 static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": for a test, the mission begins in that room */
 static void cmp_load(void) {
@@ -1769,6 +1769,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "enemy ", 6) == 0) cmp_enemy_distance = atoi(line + 6);
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "faceyaw ", 8) == 0) cmp_face_yaw = atoi(line + 8);
+        else if (strncmp(line, "spot ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_spot_x, &cmp_spot_z);
         else if (strncmp(line, "camlock ", 8) == 0) player_stick_yaw_lock = atoi(line + 8) ? (float)cmp_camera_yaw * 0.0174533f : 1000.0f;
         else if (strncmp(line, "turbo ", 6) == 0) cmp_turbo = atoi(line + 6);
         else if (strncmp(line, "ramp ", 5) == 0) bench_step_frames = atoi(line + 5);
@@ -3036,7 +3037,7 @@ int main(int argc, char *argv[]) {
             }
         }
         if (focus && focus_cmp) {
-            if (frames == 1 && !cmp_menu) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = cmp_face_yaw != 9999 ? (float)cmp_face_yaw * 0.0174533f : -1.985f; coat_reset();
+            if (frames == 1 && !cmp_menu) { float gy; player.x = (float)cmp_spot_x; player.z = (float)cmp_spot_z; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = cmp_face_yaw != 9999 ? (float)cmp_face_yaw * 0.0174533f : -1.985f; coat_reset();
                 /* The HD Collection test spot (tools/hd_ref.py), so the same stick goes the same way. */
                 camera.x = player.x - sinf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.z = player.z - cosf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.y = player.y + 255.0f;
                 camera.tx = player.x; camera.ty = player.y + 140.0f; camera.tz = player.z; camera.last_x = player.x; camera.last_z = player.z; camera.lead_x = camera.lead_z = 0.0f;
@@ -3106,7 +3107,7 @@ int main(int argc, char *argv[]) {
             if (frames < CMP_MAX_FRAMES) {
                 cmp_log[frames].x = player.x; cmp_log[frames].y = player.y; cmp_log[frames].z = player.z;
                 cmp_log[frames].yaw = player.yaw; cmp_log[frames].move = (short)combat.move; cmp_log[frames].script = (short)combat.script;
-                cmp_log[frames].dt = dt; cmp_log[frames].ground = (short)player.on_ground;
+                cmp_log[frames].dt = dt; cmp_log[frames].ground = (short)player.on_ground; cmp_log[frames].cframe = combat.frame;
                 {
                     float g = -99999.0f;
                     if (!player_floor_fn || !player_floor_fn(player.x, player.y + 45.0f, player.z, 0.0f, &g)) g = -99999.0f;
@@ -3139,8 +3140,8 @@ int main(int argc, char *argv[]) {
                 report = fopen(path, "w");
                 if (report) {
                     for (i = 0; i < cmp_frames && i < CMP_MAX_FRAMES; ++i)
-                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s %s %.4f %d %d %.1f\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw, combat_script_key(cmp_log[i].script),
-                                cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-", cmp_log[i].dt, cmp_log[i].ground, cmp_log[i].room, cmp_log[i].floor);
+                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s %s %.4f %d %d %.1f %.1f\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw, combat_script_key(cmp_log[i].script),
+                                cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-", cmp_log[i].dt, cmp_log[i].ground, cmp_log[i].room, cmp_log[i].floor, cmp_log[i].cframe);
                     fclose(report);
                 }
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");

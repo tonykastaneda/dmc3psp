@@ -33,6 +33,34 @@ FLIP_STICK = {"lup": "ldown", "ldown": "lup", "lleft": "lright", "lright": "llef
 def flipped(events):
     return [(FLIP_STICK.get(b, b), a, c) for b, a, c in events]
 
+
+# The test dummy, unless a script says otherwise: 15 m ahead, inside the port's 25 m lock-on and the PS2's, and
+# clear of the longest moves. Both games get one there.
+DUMMY_DISTANCE = 1500
+
+
+def with_dummy(events, distance=None):
+    return events if any(b == "enemy" for b, a, c in events) else events + [("enemy", distance or DUMMY_DISTANCE, 0)]
+
+
+# Where a script runs. "open": the open street above, camera in front of Dante, stick turned round. "behind",
+# for anything with R1: with lock-on the PS2 reads the stick against the camera (FUN_00254180) and the port
+# against Dante's facing, the same only with the camera behind him, so these run at (1800, 3000), where the
+# PS2's zone camera settles at -60 deg, about 7 m clear ahead; the dummy 6 m ahead.
+SETUPS = {
+    "open": dict(x=2750.0, z=2450.0, face=FACE_YAW, cam=CAMERA_YAW, flip=True, dummy=DUMMY_DISTANCE, settle=0.6),
+    "behind": dict(x=1800.0, z=3000.0, face=-60, cam=-60, flip=False, dummy=600, settle=2.5),
+}
+
+
+def setup_for(events):
+    return SETUPS["behind" if any(b == "r1" for b, a, c in events) else "open"]
+
+
+def prepared(events):
+    s = setup_for(events)
+    return with_dummy(flipped(events) if s["flip"] else list(events), s["dummy"]), s
+
 SCRIPTS = {
     "lod_auto": (640, [("enemy", 300, 0), ("menu_start", 10, 10), ("menu_down", 13, 13), ("menu_right", 16, 16), ("menu_right", 18, 18), ("menu_right", 20, 20), ("menu_right", 22, 22), ("menu_right", 24, 24), ("menu_right", 26, 26), ("menu_right", 28, 28), ("menu_start", 33, 33), ("shot", 300, 0), ("shot", 303, 0), ("shot", 306, 0)]),
     "lod_full": (640, [("enemy", 300, 0), ("menu_start", 10, 10), ("menu_down", 13, 13), ("menu_right", 16, 16), ("menu_right", 18, 18), ("menu_right", 20, 20), ("menu_right", 22, 22), ("menu_right", 24, 24), ("menu_right", 26, 26), ("menu_right", 28, 28), ("menu_down", 33, 33), ("menu_down", 35, 35), ("menu_cross", 37, 37), ("menu_start", 40, 40), ("shot", 300, 0)]),
@@ -127,8 +155,8 @@ for _n in ("w_u", "w_d", "w_l", "w_r", "w_au", "w_aa", "d_n", "d_u", "d_d", "d_l
 def write_port_script(name):
     frames, events = SCRIPTS[name]
     # Option lines: ("shot", frame, 0), ("enemy", cm, 0), ("melee", n, 0), ("gun", n, 0).
-    events = flipped(events)
-    text = f"frames {frames}\nfaceyaw {FACE_YAW}\ncamyaw {CAMERA_YAW}\ncamlock 1\n" +"".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
+    events, s = prepared(events)
+    text = f"frames {frames}\nspot {int(s['x'])} {int(s['z'])}\nfaceyaw {s['face']}\ncamyaw {s['cam']}\ncamlock 1\n" +"".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
     (GAME_DIR / "CMP_SCRIPT.TXT").write_text(text, encoding="ascii")
 
 
@@ -154,7 +182,7 @@ def record_ps2(name, state_key=0x72):
     r.key(state_key, True)
     time.sleep(0.05)
     r.key(state_key, False)
-    events = flipped(events)
+    events, s = prepared(events)
     time.sleep(2.5)   # writes too soon after a state load have crashed PCSX2
     for button in r.KEYS:
         r.release(button)
@@ -162,9 +190,17 @@ def record_ps2(name, state_key=0x72):
     # them by their class vtables), so nothing hits or pushes him while he's placed or during the test.
     import ps2_enemies
     parked = [a for a, _ in ps2_enemies.scan(p) if abs(struct.unpack("<f", p.read(a + 0x50, 4))[0]) > 100.0]
+    # One enemy stands where the port puts its test dummy (the script's "enemy" distance, else 3000, ahead along
+    # FACE_YAW from the test spot) and is held there, so lock-on and Air Trick have the same target on both. The
+    # rest go far off sideways as well as up: Enemy Step's reach and lock-on ignore height (a jump press next to
+    # an enemy 50 m overhead became an Enemy Step, state 33).
+    dist = next((float(a) for b, a, c in events if b == "enemy"), float(DUMMY_DISTANCE))
+    dummy = (s["x"] + math.sin(math.radians(s["face"])) * dist, -3.0, s["z"] + math.cos(math.radians(s["face"])) * dist)
     def park():
-        for a in parked:
-            p.write32(a + 0x54, struct.unpack("<I", struct.pack("<f", 5000.0))[0])
+        for i, a in enumerate(parked):
+            spot = dummy if i == 0 else (-30000.0 - 1000.0 * i, 5000.0, -30000.0)
+            for k3, v in enumerate(spot):
+                p.write32(a + 0x50 + 4 * k3, struct.unpack("<I", struct.pack("<f", v))[0])
     park()
     # Style: player+0x3c6c, in the game's order (0 Swordmaster, 1 Gunslinger, 2 Trickster, 3 Royalguard).
     # The port's order is Trickster, Swordmaster, Gunslinger, Royalguard.
@@ -172,16 +208,15 @@ def record_ps2(name, state_key=0x72):
     for b, a, c in events:
         if b.startswith("style"):
             p.write8(PLAYER + 0x3C6C, game_style[int(b[5:])])
-    # The test spot, facing FACE_YAW, held for 0.6 s (the zone camera stays at CAMERA_YAW).
-    yaw = math.radians(FACE_YAW)
-    t_end = time.perf_counter() + 0.6
+    # The setup's spot and facing, held while the zone camera settles.
+    t_end = time.perf_counter() + s["settle"]
     while time.perf_counter() < t_end:
         park()
-        p.writef(PLAYER + 0x50, 2750.0)
+        p.writef(PLAYER + 0x50, s["x"])
         p.writef(PLAYER + 0x54, 30.0)
-        p.writef(PLAYER + 0x58, 2450.0)
+        p.writef(PLAYER + 0x58, s["z"])
         # The facing is the u16 angle at +0x90 (FUN_00225c90; 0 = +z, toward +x as in the port); +0x84 follows it.
-        p.write16(PLAYER + 0x90, int(round(FACE_YAW / 360.0 * 65536.0)) & 0xFFFF)
+        p.write16(PLAYER + 0x90, int(round(s["face"] / 360.0 * 65536.0)) & 0xFFFF)
         time.sleep(0.03)
     keys = [(b, a, c) for b, a, c in events if not b.startswith("style") and b not in ("shot", "enemy", "melee", "gun")]
     pending = sorted([(a, True, b) for b, a, c in keys] + [(c + 1, False, b) for b, a, c in keys], key=lambda e: e[0])

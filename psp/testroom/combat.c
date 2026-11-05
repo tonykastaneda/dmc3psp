@@ -578,7 +578,9 @@ static int walk_commands(Combat *c, const Player *player, const PlayerInput *inp
             if (!is_trickster(c->move) || !(cmd->flags & 0x200)) continue;
             ok = conditions(c, cmd);
             if (ok == 2) return cmd->action;
-            if (ok == 1 && !c->pending) c->pending = cmd->action;
+            /* No pending press here: on the PS2 a second dash pressed while gate 8 is only buffering (motion
+             * frames 20-24 of 23:24) is dropped, not kept for when it opens; only one pressed within the last
+             * frames counts (build/hdref/sweep_dash.py). */
             continue;
         }
         if (!(cmd->flags & 0x200) || cmd->action == c->action) continue;
