@@ -14,6 +14,7 @@
 
 #include "motion.h"
 #include "player.h"
+#include "stage.h"
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "swizzle.h"
@@ -1196,8 +1197,24 @@ void enemy_update(float dt, float px, float py, float pz) {
     ++trace_tick;
     if (attack_token > 0.0f) attack_token -= dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f);
     for (i = 0; i < ENEMY_MAX; ++i) {
+        float was_x, was_z;
         e = &enemies[i];
+        was_x = e->pos[0]; was_z = e->pos[2];
         update_one(dt, px, py, pz);
+        /* The room's walls, as for Dante: swept along everything that moved it this frame (its walk, root
+         * motion, knockback, being pushed by him or the others), in steps of at most 15 cm, so a launch or a
+         * shove can't carry it through. A spawn or a jump past 6 m is a placement, not a move: checked where it
+         * lands. The Gigapede flies its own paths. */
+        if (e->active && e->kind < ENEMY_KIND_COUNT && stage_loaded()) {
+            float mx = e->pos[0] - was_x, mz = e->pos[2] - was_z, cx = was_x, cz = was_z, l = sqrtf(mx * mx + mz * mz);
+            int steps = l > 600.0f ? 1 : (int)(l / 15.0f) + 1, s;
+            if (l > 600.0f) { cx = e->pos[0]; cz = e->pos[2]; mx = mz = 0.0f; }
+            for (s = 1; s <= steps; ++s) {
+                cx += mx / (float)steps; cz += mz / (float)steps;
+                stage_collide(&cx, &cz, e->pos[1], ENEMY_RADIUS);
+            }
+            e->pos[0] = cx; e->pos[2] = cz;
+        }
     }
     arrows_update(dt * MOTION_FPS, px, py, pz);
     e = selected;

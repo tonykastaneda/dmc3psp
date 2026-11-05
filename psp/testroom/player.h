@@ -164,6 +164,7 @@ void player_wall_kick(Player *player, float away_yaw);
 /* What one game step counts for: 1 at normal speed, 1.2 in Turbo. The real game runs one step
  * every 60th of a second with this as its delta, whatever the frame rate here. */
 extern float player_step_scale;
+extern float player_stick_yaw_lock;
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt);
 const char *player_style_name(Style style);
 const char *player_action_name(Action action);

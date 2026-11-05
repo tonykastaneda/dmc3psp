@@ -1700,7 +1700,7 @@ static int cmp_walk_count;
 static float cmp_px, cmp_pz, cmp_cam_yaw;   /* where he is and the camera's yaw, for walkto */
 static int cmp_event_count, cmp_frames;
 static int cmp_game_shots[32];   /* saved by the game itself: works on the PSP and sees only its own picture */
-static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_yaw, cmp_turbo, cmp_fps = 60;
+static int cmp_shots[32], cmp_shot_count, cmp_enemy_distance = 3000, cmp_camera_yaw, cmp_turbo, cmp_fps = 60, cmp_face_yaw = 9999;   /* "faceyaw deg": Dante's facing at the start */
 
 /* The dummy ramp (tools/psp_bench.py): one more dummy every step until the frame rate has clearly
  * gone, measuring the second half of each step, on the real PSP. Options in CMP_SCRIPT.TXT. */
@@ -1768,6 +1768,8 @@ static void cmp_load(void) {
         else if (strncmp(line, "shot ", 5) == 0) { if (cmp_shot_count < 32) cmp_shots[cmp_shot_count++] = atoi(line + 5); }
         else if (strncmp(line, "enemy ", 6) == 0) cmp_enemy_distance = atoi(line + 6);
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
+        else if (strncmp(line, "faceyaw ", 8) == 0) cmp_face_yaw = atoi(line + 8);
+        else if (strncmp(line, "camlock ", 8) == 0) player_stick_yaw_lock = atoi(line + 8) ? (float)cmp_camera_yaw * 0.0174533f : 1000.0f;
         else if (strncmp(line, "turbo ", 6) == 0) cmp_turbo = atoi(line + 6);
         else if (strncmp(line, "ramp ", 5) == 0) bench_step_frames = atoi(line + 5);
         else if (strncmp(line, "rampfrom ", 9) == 0) bench_start = atoi(line + 9);
@@ -3034,7 +3036,7 @@ int main(int argc, char *argv[]) {
             }
         }
         if (focus && focus_cmp) {
-            if (frames == 1 && !cmp_menu) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = -1.985f; coat_reset();
+            if (frames == 1 && !cmp_menu) { float gy; player.x = 2750.0f; player.z = 2450.0f; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = cmp_face_yaw != 9999 ? (float)cmp_face_yaw * 0.0174533f : -1.985f; coat_reset();
                 /* The HD Collection test spot (tools/hd_ref.py), so the same stick goes the same way. */
                 camera.x = player.x - sinf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.z = player.z - cosf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.y = player.y + 255.0f;
                 camera.tx = player.x; camera.ty = player.y + 140.0f; camera.tz = player.z; camera.last_x = player.x; camera.last_z = player.z; camera.lead_x = camera.lead_z = 0.0f;

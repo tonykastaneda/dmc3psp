@@ -20,6 +20,18 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "analysis" / "ref"
 GAME_DIR = Path(r"E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3TESTROOM")
 PLAYER = 0x17E0A40
+CAMERA_EYE, CAMERA_TARGET = 0xEC6F60, 0xEC6F70
+# Both games start at the test spot (2750, 2450). The PS2's street camera there looks along CAMERA_YAW (degrees
+# from +z toward +x; it is a zone camera that writes can't move); the port's is put the same way. The open street,
+# about 18 m clear, is the other way, so Dante faces FACE_YAW and every script's stick is turned round
+# (FLIP_STICK: up <-> down, left <-> right) on both games: "forward" in a script runs into the open street.
+CAMERA_YAW = 122
+FACE_YAW = -58
+FLIP_STICK = {"lup": "ldown", "ldown": "lup", "lleft": "lright", "lright": "lleft"}
+
+
+def flipped(events):
+    return [(FLIP_STICK.get(b, b), a, c) for b, a, c in events]
 
 SCRIPTS = {
     "lod_auto": (640, [("enemy", 300, 0), ("menu_start", 10, 10), ("menu_down", 13, 13), ("menu_right", 16, 16), ("menu_right", 18, 18), ("menu_right", 20, 20), ("menu_right", 22, 22), ("menu_right", 24, 24), ("menu_right", 26, 26), ("menu_right", 28, 28), ("menu_start", 33, 33), ("shot", 300, 0), ("shot", 303, 0), ("shot", 306, 0)]),
@@ -95,10 +107,28 @@ SCRIPTS = {
 }
 
 
+def _from_hd(name, style=None):
+    """One of tools/hd_trace.py's key scripts (seconds, Space = R1) as frames at 60, for the PS2 and the port."""
+    import hd_trace
+    seconds, keys = hd_trace.SCRIPTS[name]
+    events = [({"space": "r1"}.get(k, k), int(a * 60) + 6, int(b * 60) + 6) for k, a, b in keys if k not in ("tp", "wall")]
+    if style is not None:
+        events.insert(0, (f"style{style}", 2, 3))
+    return (int(seconds * 60) + 20, events)
+
+
+# Rebellion's attacks and Trickster's dashes (style 0 = Trickster in the port's order), from the HD scripts.
+for _n in ("r_1", "r_2", "r_3", "r_4", "r_gap", "r_gapl", "r_st", "r_ht", "r_hth", "r_helm", "r_ms", "r_rise"):
+    SCRIPTS.setdefault(_n, _from_hd(_n))
+for _n in ("w_u", "w_d", "w_l", "w_r", "w_au", "w_aa", "d_n", "d_u", "d_d", "d_l", "d_r", "t_air", "t_airb", "dash3"):
+    SCRIPTS.setdefault(_n, _from_hd(_n, style=0))
+
+
 def write_port_script(name):
     frames, events = SCRIPTS[name]
     # Option lines: ("shot", frame, 0), ("enemy", cm, 0), ("melee", n, 0), ("gun", n, 0).
-    text = f"frames {frames}\n" + "".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
+    events = flipped(events)
+    text = f"frames {frames}\nfaceyaw {FACE_YAW}\ncamyaw {CAMERA_YAW}\ncamlock 1\n" +"".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
     (GAME_DIR / "CMP_SCRIPT.TXT").write_text(text, encoding="ascii")
 
 
@@ -124,20 +154,36 @@ def record_ps2(name, state_key=0x72):
     r.key(state_key, True)
     time.sleep(0.05)
     r.key(state_key, False)
-    time.sleep(1.2)
+    events = flipped(events)
+    time.sleep(2.5)   # writes too soon after a state load have crashed PCSX2
     for button in r.KEYS:
         r.release(button)
-    # Away from the fight: the open street, where the port's test spot is.
-    p.writef(PLAYER + 0x50, 2750.0)
-    p.writef(PLAYER + 0x54, 30.0)
-    p.writef(PLAYER + 0x58, 2450.0)
+    # The street's enemies first, held 50 m up out of reach for the whole run (build/hdref/ps2_enemies.py finds
+    # them by their class vtables), so nothing hits or pushes him while he's placed or during the test.
+    sys.path.insert(0, str(ROOT / "build" / "hdref"))
+    import ps2_enemies
+    parked = [a for a, _ in ps2_enemies.scan(p) if abs(struct.unpack("<f", p.read(a + 0x50, 4))[0]) > 100.0]
+    def park():
+        for a in parked:
+            p.write32(a + 0x54, struct.unpack("<I", struct.pack("<f", 5000.0))[0])
+    park()
     # Style: player+0x3c6c, in the game's order (0 Swordmaster, 1 Gunslinger, 2 Trickster, 3 Royalguard).
     # The port's order is Trickster, Swordmaster, Gunslinger, Royalguard.
     game_style = {0: 2, 1: 0, 2: 1, 3: 3}
     for b, a, c in events:
         if b.startswith("style"):
             p.write8(PLAYER + 0x3C6C, game_style[int(b[5:])])
-    time.sleep(0.6)
+    # The test spot, facing FACE_YAW, held for 0.6 s (the zone camera stays at CAMERA_YAW).
+    yaw = math.radians(FACE_YAW)
+    t_end = time.perf_counter() + 0.6
+    while time.perf_counter() < t_end:
+        park()
+        p.writef(PLAYER + 0x50, 2750.0)
+        p.writef(PLAYER + 0x54, 30.0)
+        p.writef(PLAYER + 0x58, 2450.0)
+        # The facing is the u16 angle at +0x90 (FUN_00225c90; 0 = +z, toward +x as in the port); +0x84 follows it.
+        p.write16(PLAYER + 0x90, int(round(FACE_YAW / 360.0 * 65536.0)) & 0xFFFF)
+        time.sleep(0.03)
     keys = [(b, a, c) for b, a, c in events if not b.startswith("style") and b not in ("shot", "enemy", "melee", "gun")]
     pending = sorted([(a, True, b) for b, a, c in keys] + [(c + 1, False, b) for b, a, c in keys], key=lambda e: e[0])
     t0 = time.perf_counter()
@@ -152,6 +198,7 @@ def record_ps2(name, state_key=0x72):
         x, y, z = struct.unpack("<3f", d)
         samples.append((now, x, y, z, p.f32(PLAYER + 0x84), p.u16(PLAYER + 0x24C6), p.u16(PLAYER + 0x2848)))
         p.writef(PLAYER + 0x2AD4, 5300.0)
+        park()
         if now >= frames:
             break
     rows, s = [], 0

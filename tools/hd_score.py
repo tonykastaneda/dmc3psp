@@ -25,6 +25,9 @@ TESTS = {
     "Hike, air dash": "hikestar", "Air dash, hike": "starhike", "2nd air dash refused": "hikestarstar",
     "Ground dash": "dash", "Dash chain": "dash3",
     "Lock-on dash fwd": "d_u", "Lock-on dash back": "d_d", "Lock-on dash left": "d_l", "Lock-on dash right": "d_r",
+    "Rebellion 1": "r_1", "Rebellion 1-2": "r_2", "Rebellion 1-2-3": "r_3", "Rebellion 1-2-3-4": "r_4",
+    "Rebellion pause combo": "r_gap", "Stinger": "r_st", "High Time": "r_ht", "High Time (held)": "r_hth",
+    "Helm Breaker": "r_helm", "Million Stab": "r_ms",
 }
 
 

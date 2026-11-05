@@ -108,6 +108,7 @@ static const struct { float speed, vy, g, late; } air_rows[11] = {
 };
 
 float player_step_scale = 1.0f;
+float player_stick_yaw_lock = 1000.0f;   /* radians, or >= 100: unlocked */
 
 /* FUN_002e2460 */
 static void air_arc(Player *player, int row) {
@@ -327,6 +328,9 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     /* The stick is read against the camera as it is now (FUN_00254670), so it
      * always means the same direction on screen, even while the camera turns. */
     player->camera_yaw = camera->yaw;
+    /* A comparison test with the real game's fixed zone camera reads the stick against that, not the follow
+     * camera (main.c "camlock"). */
+    if (player_stick_yaw_lock < 100.0f) player->camera_yaw = player_stick_yaw_lock;
     wants_flip = player->locked_on && magnitude > 0.0f;
     stick_world[0] = stick_world[1] = 0.0f;
     if (magnitude > 0.0f) {

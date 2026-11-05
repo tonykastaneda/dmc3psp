@@ -23,6 +23,7 @@
 #define DANCE_STAB_PLAYS 2   /* action 207's handler (0x267000) replays 3:52 twice, then 3:53 */
 #define BUFFER_SECONDS 0.05f                      /* the real game drops a press made before its gate opens */
 #define MAX_DASHES 3          /* FUN_00245f10: dashes in a row < 3 at the top style level */
+#define TRICKSTER_LEVEL 2     /* player+0x3c75, 0 = Lv1: the full moveset is Lv3 */
 #define SNAP_DASH 0.349f      /* 0xe39 = 20 deg: a dash this close to the target aims at it */
 #define SNAP_SKY_STAR 0.175f  /* 0x71c = 10 deg (Sky Star) */
 /* Air Trick (FUN_00226550, player config chunk 9): the warp lasts +0x290 = 10
@@ -100,7 +101,11 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_HIGH_TIME] = {S("3:11"), "HIGH TIME", MOVE_NONE, 0, 0, 0, 230, HIT_LAUNCH},
     /* FUN_00265950: at its flag, 30 cm/frame up losing 1.35 (HD Collection traces). */
     [MOVE_HIGH_TIME_RISE] = {S("3:13"), "HIGH TIME", MOVE_NONE, 0, 0, 0, 230, HIT_LAUNCH, .flag_air = 1, .flag_v = {0.0f, 0.0f, 30.0f, -1.35f}},
-    [MOVE_HELM_BREAKER] = {S("3:10"), "HELM BREAKER", MOVE_NONE, 0, 0, 1, 260, HIT_SLAM},
+    /* FUN_00264b90: vy and gravity from Rebellion's config (pl000 chunk 11, player+0x2844) +0x60/+0x64 at the
+     * start, then at the flip (script window +0x24d5 = 1) +0x74/+0x78, capped at -70 (FUN_002e2560). That's
+     * the variant under 500 cm above the floor (+0x6c); 3:40 / 3:41 with +0x7c.. / +0x84.. above aren't in. */
+    [MOVE_HELM_BREAKER] = {S("3:10"), "HELM BREAKER", MOVE_NONE, 0, 0, 0, 260, HIT_SLAM,
+                           .air = 1, .air_v = {0.0f, 0.0f, -2.0f, -0.5f}, .flag_air = 1, .flag_v = {0.0f, 0.0f, -27.5f, -2.5f}},
     [MOVE_ROUND_TRIP] = {S("3:17"), "ROUND TRIP", MOVE_ROUND_TRIP_CATCH, 0, 0, 0, 500, HIT_LIGHT},
     [MOVE_ROUND_TRIP_CATCH] = {S("3:19"), "ROUND TRIP", MOVE_NONE, 0, 0, 0, 500, HIT_LIGHT},
     [MOVE_SM_SWORD_PIERCE] = {S("13:0"), "SWORD PIERCE", MOVE_NONE, 0, 0, 0, 600, HIT_HEAVY},
@@ -820,8 +825,12 @@ static void start_trickster(Combat *c, Player *player, const PlayerInput *input,
             else if (fabsf(d) >= 2.356f) sector = 1;
             else sector = d > 0.0f ? 3 : 2;   /* yaw grows toward Dante's right */
         }
-        base = c->dashes >= 2 ? MOVE_TR_DASH2 : MOVE_TR_DASH;
-        if (sector == 0 && c->dashes == 2 && prev == MOVE_TR_DASH) base = MOVE_TR_DASH_CHAIN;
+        /* FUN_00225c90: the script is table 0x5911d0 {0,1,2,3, 24,25,26,27}[4 * (style level >= Lv3) + way];
+         * at Lv3 a forward dash begun while a forward dash plays (motion 0x1700) is 23:17 instead. The style
+         * level is player+0x3c75 (0 = Lv1); the full moveset is Lv3. */
+        base = TRICKSTER_LEVEL >= 2 ? MOVE_TR_DASH2 : MOVE_TR_DASH;
+        if (sector == 0 && TRICKSTER_LEVEL == 2 && (prev == MOVE_TR_DASH || prev == MOVE_TR_DASH2 || prev == MOVE_TR_DASH_CHAIN))
+            base = MOVE_TR_DASH_CHAIN;
         else base = (MoveId)(base + sector);
         if (sector == 0) {
             if (pushed) player->yaw = sy;
