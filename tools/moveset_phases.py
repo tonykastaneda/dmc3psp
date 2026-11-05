@@ -154,12 +154,12 @@ ACTIONS = {
     # Air shots, HD Collection traces: a kick upward each, and more presses fire again (combat.c).
     132: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
     133: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
-    134: [P("18:0", shot=2)],
+    134: [P("18:0", shot=2, adv="timer", frames=13.0)],   # FUN_0026b1d0: back to the stance 13 frames in
     # Twosome Time's way with R1 (FUN_0026b0d0 / FUN_0026af60): table 0x595550 by FUN_00254180's sector:
     # forward 18:0, left 18:3, back 18:2, right 18:1. Not commands: combat.c swaps them in for action 134.
-    250: [P("18:1", shot=2)],
-    251: [P("18:2", shot=2)],
-    252: [P("18:3", shot=2)],
+    250: [P("18:1", shot=2, adv="timer", frames=13.0)],
+    251: [P("18:2", shot=2, adv="timer", frames=13.0)],
+    252: [P("18:3", shot=2, adv="timer", frames=13.0)],
     # Rain Storm (FUN_0026b8b0): vy / gravity from the config +0x18c / +0x190 (5, -0.35) at the start, then
     # +0x1a0 / +0x1a4 (0, -0.5) in the loop; the end keeps falling on those.
     135: [P("18:15", air=("vy", 0x18C, 0x190)), P("18:16", adv="mash", loop="18:16", btn="CIR", air=("vy", 0x1A0, 0x1A4), auto=7.0, shot=1), P("18:17")],

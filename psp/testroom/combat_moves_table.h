@@ -197,7 +197,7 @@
     [MOVE_G_194] = {.script = "8:6", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 9, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .layered = 1, .refire = 7.0000f, .frames = 13.0000f},
     [MOVE_G_195] = {.script = "8:32", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 11.0000f, -1.2500f}},
     [MOVE_G_196] = {.script = "8:32", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 11.0000f, -1.2500f}},
-    [MOVE_G_197] = {.script = "18:0", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
+    [MOVE_G_197] = {.script = "18:0", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2, .frames = 13.0000f},
     [MOVE_G_198] = {.script = "18:15", .name = "EBONY & IVORY", .next = MOVE_G_199, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .air = 1, .air_v = {0.0000f, 0.0000f, 5.0000f, -0.3500f}},
     [MOVE_G_199] = {.script = "18:16", .name = "EBONY & IVORY", .next = MOVE_G_200, .next_on = 5, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 1, .auto_fire = 7.0000f, .btn = BTN_CIR, .loop_move = MOVE_G_201, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.5000f}},
     [MOVE_G_200] = {.script = "18:17", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1},
@@ -247,9 +247,9 @@
     [MOVE_G_244] = {.script = "24:20", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
     [MOVE_G_245] = {.script = "24:52", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
     [MOVE_G_246] = {.script = "24:58", .name = "ROYALGUARD", .next = MOVE_NONE, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .air = 1, .air_v = {0.0000f, 0.0000f, 0.0000f, -0.3000f}},
-    [MOVE_G_247] = {.script = "18:1", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
-    [MOVE_G_248] = {.script = "18:2", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
-    [MOVE_G_249] = {.script = "18:3", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2},
+    [MOVE_G_247] = {.script = "18:1", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2, .frames = 13.0000f},
+    [MOVE_G_248] = {.script = "18:2", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2, .frames = 13.0000f},
+    [MOVE_G_249] = {.script = "18:3", .name = "EBONY & IVORY", .next = MOVE_NONE, .next_on = 7, .start = -1.0000f, .reach = 0.0f, .hit_kind = -1, .gun = 1, .shot = 2, .frames = 13.0000f},
 #else
 static MoveId gen_action_move(int action) {
     switch (action) {
