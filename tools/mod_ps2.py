@@ -21,8 +21,9 @@ def parse_mod(data: bytes, split_submeshes: bool = False):
     header (u16 vertex count, u16 texture, pointers) at mesh_offset + 0x30*k,
     and the object record's vertex count is their sum. (Without it, the legacy
     behaviour reads such objects as one mesh, which is wrong for k > 1.)"""
-    if len(data) < 0x30 or data[:4] != b"MOD ":
-        raise ValueError("Not a PS2 DMC3 MOD file")
+    # em008's EFM body uses the same mesh/skeleton streams. Its effect behaviour is separate.
+    if len(data) < 0x30 or data[:4] not in (b"MOD ", b"EFM "):
+        raise ValueError("Not a PS2 DMC3 MOD/EFM file")
     version = struct.unpack_from("<f", data, 4)[0]
     object_count, bone_count, texture_count = struct.unpack_from("<BBB", data, 0x10)
     skeleton_offset = struct.unpack_from("<I", data, 0x1C)[0]
