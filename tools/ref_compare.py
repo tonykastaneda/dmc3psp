@@ -158,9 +158,8 @@ def record_ps2(name, state_key=0x72):
     time.sleep(2.5)   # writes too soon after a state load have crashed PCSX2
     for button in r.KEYS:
         r.release(button)
-    # The street's enemies first, held 50 m up out of reach for the whole run (build/hdref/ps2_enemies.py finds
+    # The street's enemies first, held 50 m up out of reach for the whole run (tools/ps2_enemies.py finds
     # them by their class vtables), so nothing hits or pushes him while he's placed or during the test.
-    sys.path.insert(0, str(ROOT / "build" / "hdref"))
     import ps2_enemies
     parked = [a for a, _ in ps2_enemies.scan(p) if abs(struct.unpack("<f", p.read(a + 0x50, 4))[0]) > 100.0]
     def park():
