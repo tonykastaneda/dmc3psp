@@ -2014,6 +2014,14 @@ static void start_camera(const Player *player, FollowCamera *camera) {
     camera->x = player->x - sinf(best_yaw) * CAMERA_DISTANCE;
     camera->z = player->z - cosf(best_yaw) * CAMERA_DISTANCE;
     camera->y = player->y + CAMERA_HEIGHT;
+    /* A room change or scripted placement must discard the previous room's camera leash. */
+    camera->free_x = camera->x;
+    camera->free_z = camera->z;
+    camera->clip = 1.0f;
+    camera->tx = camera->last_x = player->x;
+    camera->tz = camera->last_z = player->z;
+    camera->ty = player->y + CAMERA_TARGET_HEIGHT;
+    camera->lead_x = camera->lead_z = 0.0f;
 }
 
 /* The game's encounter scripts run here. All classes are Prides for now: CEm002, CEm004, CEm013 and the
@@ -2088,8 +2096,102 @@ static int mission_floor(float x, float y, float z, float step, float *out) {
         && (!found || pad[1] > *out)) { *out = pad[1]; found = 1; }
     return found;
 }
+/* A crest switch and the seal it takes down (CStageSetSwitch, CStageSetSeal; docs/BAR_CRANK_SPEC.md). Sword
+ * damage spins the switch up (300), then lights its 8 flames (70 each); 2 s without a hit and it runs down.
+ * Lit, it sets the room's flag and the seal fades, its wall gone at once. Once open it stays open this mission
+ * (the event script's counter 1 = 2). */
+#define SEAL_TAG 255                /* a stage box tag no stage batch uses */
+static int seal_index = -1, sw_lit;
+static int sw_log_state = -1;
+static float sw_log_at;
+static float sw_charge, sw_wing, sw_flames, sw_window, sw_spin, sw_spin2, seal_alpha, seal_time;
+static unsigned int seal_open_bits;
+static const RoomSwitchSeal *room_seal(void) { return seal_index >= 0 ? &room_switch_seals[seal_index] : 0; }
+static void seal_enter(int room) {
+    const RoomSwitchSeal *w;
+    int i, open;
+    seal_index = -1;
+    for (i = 0; i < ROOM_SWITCH_SEAL_COUNT; ++i)
+        if (room_switch_seals[i].mission == mission_choice.mission && room_switch_seals[i].room == room) seal_index = i;
+    w = room_seal();
+    if (!w) return;
+    sw_log_state = -1;
+    sw_log_at = 0.0f;
+    seal_time = sw_spin = sw_spin2 = 0.0f;
+    open = seal_open_bits >> seal_index & 1u;
+    sw_lit = open;
+    sw_charge = open ? SWITCH_CHARGE : 0.0f;
+    sw_wing = open ? 200.0f : 0.0f;
+    sw_flames = open ? SWITCH_FLAMES : 0.0f;
+    sw_window = 0.0f;
+    seal_alpha = open ? 0.0f : 1.0f;
+    if (!open) stage_add_box(w->box[0], w->box[1], w->box[2], w->box[3], w->box[4], w->box[5], w->box[6], SEAL_TAG);
+}
+/* FUN_00306000: a melee hit adds its damage (the port's 42 a light hit, 84 a heavy one: Dante's real damage
+ * isn't read), to the charge until it's spun up, then to the flames. */
+static void switch_hit(const Player *player, float reach, int kind) {
+    const RoomSwitchSeal *w = room_seal();
+    float dx, dz, dy, d, amount;
+    if (!w || sw_lit) return;
+    dx = w->hit[0] - player->x; dz = w->hit[2] - player->z; dy = w->hit[1] - player->y;
+    d = sqrtf(dx * dx + dz * dz);
+    if (d > reach + w->hit[3] || dy < -w->hit[3] || dy > w->hit[3] + 200.0f) return;
+    if (d > 1.0f && (dx * sinf(player->yaw) + dz * cosf(player->yaw)) / d < 0.2f) return;
+    amount = kind == HIT_LIGHT || kind == HIT_AIR ? 42.0f : 84.0f;
+    if (sw_charge < SWITCH_CHARGE) {
+        sw_charge = fminf(sw_charge + amount, SWITCH_CHARGE + 1.0f);
+        if (sw_charge > 100.0f) sw_wing = fminf(sw_wing + amount, 201.0f);
+    } else {
+        sw_flames = fminf(sw_flames + amount, SWITCH_FLAMES + 1.0f);
+    }
+    sw_window = SWITCH_WINDOW;
+    {
+        float at[3] = {w->hit[0], w->hit[1], w->hit[2]};
+        fx_hit_spark(at);
+    }
+}
+/* FUN_00305820 each frame (frames = game frames this step). */
+static void seal_update(float frames) {
+    const RoomSwitchSeal *w = room_seal();
+    if (!w) return;
+    seal_time += frames;
+    if (!sw_lit) {
+        if (sw_window > 0.0f) sw_window -= frames;
+        else {
+            float drain = SWITCH_DRAIN * frames;
+            sw_charge = fmaxf(sw_charge - drain, 0.0f);
+            sw_wing = fmaxf(sw_wing - drain, 0.0f);
+            if (sw_charge <= 100.0f) sw_flames = fmaxf(sw_flames - drain, 0.0f);
+        }
+        if (sw_charge >= SWITCH_CHARGE && sw_flames >= SWITCH_FLAMES) {
+            sw_lit = 1;
+            seal_open_bits |= 1u << seal_index;
+            stage_hide_group(SEAL_TAG);   /* FUN_0031d420: the wall goes as the fade starts */
+        }
+    }
+    if (focus_cmp) {
+        /* Tests: flame transitions plus periodic samples, including after the gauges reach zero. */
+        int now = sw_lit ? 99 : (int)(sw_flames / SWITCH_PER_FLAME) + ((int)(sw_charge / 100.0f) << 4);
+        if (now != sw_log_state || seal_time >= sw_log_at) {
+            char path[320];
+            FILE *f;
+            path_in_game_dir(path, sizeof(path), "SEAL_LOG.TXT");
+            f = fopen(path, "a");
+            if (f) { fprintf(f, "room=%d t=%.0f charge=%.0f flames=%.0f lit=%d\n", mission_room, seal_time, sw_charge, sw_flames, sw_lit); fclose(f); }
+            sw_log_state = now;
+            sw_log_at = seal_time + 60.0f;
+        }
+    }
+    sw_spin += 60.0f * sw_charge / SWITCH_CHARGE * frames;
+    sw_spin2 += 20.0f * sw_wing / 200.0f * frames;
+    if (sw_lit && seal_alpha > 0.0f) seal_alpha = fmaxf(seal_alpha - frames / 32.0f, 0.0f);
+}
 static int door_gated(const RoomDoor *d) {
     int i;
+    {
+        const RoomSwitchSeal *w = room_seal();
+        if (w && !sw_lit && d->number == w->next_number) return 1;   /* the seal's door: flag 33 */
+    }
     for (i = 0; i < DOOR_GATE_COUNT; ++i) {
         const DoorGate *g = &door_gates[i];
         if (g->mission != mission_choice.mission || g->room != mission_room || g->next_number != d->number) continue;
@@ -2152,6 +2254,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;
     float fx = sinf(player->yaw), fz = cosf(player->yaw);
     if (!mission_mode || mission_room == ROOM_NONE) return;
+    switch_hit(player, reach, kind);
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
         float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
@@ -2173,6 +2276,54 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     }
 }
 static int shop_closed;   /* the shop had its own frames: the game's clock starts again */
+/* Stand-ins until model 20 and the seal's board are drawn: the switch's hub, 8 blades turning with the charge
+ * and its 8 flames on a 108 cm circle (red once lit, FUN_00305dd0); the seal as a blue, shimmering board. */
+static void seal_draw(void) {
+    const RoomSwitchSeal *w = room_seal();
+    int i;
+    if (!w) return;
+    {
+        float a = w->disc[3] * 0.0174533f, ux = sinf(a), uz = cosf(a);   /* the disc's normal; its plane is (side, up) */
+        float sx = uz, sz = -ux, px = w->disc[0] + ux * 8.0f, py = w->disc[1], pz = w->disc[2] + uz * 8.0f;
+        draw_box(w->disc[0], py - 22.0f, py + 22.0f, w->disc[2], 22.0f, 22.0f, w->disc[3], 0xff505860u, 0xff30363cu);
+        for (i = 0; i < 8; ++i) {
+            float b = (sw_spin + 45.0f * i) * 0.0174533f, r = 50.0f;
+            draw_box(px + sx * sinf(b) * r, py + cosf(b) * r - 8.0f, py + cosf(b) * r + 8.0f, pz + sz * sinf(b) * r, 8.0f, 8.0f,
+                     w->disc[3], 0xff8090a0u, 0xff506070u);
+        }
+        for (i = 0; i < 8; ++i) {
+            float b = 45.0f * i * 0.0174533f, r = 108.0f;
+            int lit = sw_flames >= SWITCH_PER_FLAME * (i + 1);
+            draw_box(px + sx * sinf(b) * r, py + cosf(b) * r - 9.0f, py + cosf(b) * r + 9.0f, pz + sz * sinf(b) * r, 9.0f, 9.0f,
+                     w->disc[3], lit ? 0xff3050ffu : 0xff202028u, lit ? 0xff2030c0u : 0xff101018u);
+        }
+    }
+    if (seal_alpha > 0.0f) {
+        /* CStageSetSeal: the board tinted by the colour (1 blue: RGB 0x30 0x40 0x80), alpha up to 0x40, shimmering. */
+        float c = cosf(w->board[6]), sn = sinf(w->board[6]), hw = w->board[3], y0 = w->board[4], y1 = w->board[5];
+        float x0 = w->board[0] - c * hw, z0 = w->board[2] + sn * hw, x1 = w->board[0] + c * hw, z1 = w->board[2] - sn * hw;
+        float shimmer = 0.85f + 0.15f * sinf(seal_time * 0.21f);
+        unsigned int alpha = (unsigned int)(150.0f * seal_alpha * shimmer), edge = (unsigned int)(230.0f * seal_alpha);
+        unsigned int fill = w->colour == 0 ? 0x003040ffu : w->colour == 2 ? 0x00ff3080u : 0x00ff6030u;
+        unsigned int col = alpha << 24 | fill, rim = edge << 24 | (fill | 0x00404040u);
+        ColorVertex *o = (ColorVertex *)sceGuGetMemory(sizeof(ColorVertex) * 12);
+        ColorVertex *e = (ColorVertex *)sceGuGetMemory(sizeof(ColorVertex) * 8);
+        o[0] = (ColorVertex){col, x0, y0, z0}; o[1] = (ColorVertex){col, x1, y0, z1}; o[2] = (ColorVertex){col, x1, y1, z1};
+        o[3] = (ColorVertex){col, x0, y0, z0}; o[4] = (ColorVertex){col, x1, y1, z1}; o[5] = (ColorVertex){col, x0, y1, z0};
+        for (i = 0; i < 6; ++i) o[6 + i] = o[5 - i];   /* both faces */
+        e[0] = (ColorVertex){rim, x0, y0, z0}; e[1] = (ColorVertex){rim, x1, y0, z1};
+        e[2] = (ColorVertex){rim, x1, y0, z1}; e[3] = (ColorVertex){rim, x1, y1, z1};
+        e[4] = (ColorVertex){rim, x1, y1, z1}; e[5] = (ColorVertex){rim, x0, y1, z0};
+        e[6] = (ColorVertex){rim, x0, y1, z0}; e[7] = (ColorVertex){rim, x0, y0, z0};
+        sceGuDepthMask(GU_TRUE);
+        sceGuEnable(GU_BLEND);
+        sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+        sceGumDrawArray(GU_TRIANGLES, COLOR_VTYPE, 12, 0, o);
+        sceGumDrawArray(GU_LINES, COLOR_VTYPE, 8, 0, e);
+        sceGuDisable(GU_BLEND);
+        sceGuDepthMask(GU_FALSE);
+    }
+}
 static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
@@ -2187,6 +2338,7 @@ static void mission_gimmicks_draw(void) {
         draw_box(l->switch_pos[0], l->switch_pos[1], l->switch_pos[1] + 90.0f, l->switch_pos[2], 30.0f, 30.0f, 45.0f,
                  lift_on ? 0xffffc040u : 0xff2020ffu, lift_on ? 0xffa07020u : 0xff1010a0u);
     }
+    seal_draw();
     info = &missions[mission_choice.mission - 1];
     if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull)) {
         goal_spin += 3.0f;
@@ -2239,6 +2391,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     path_in_game_dir(path, sizeof(path), rooms[room].file);
     stage_load(path);
     breakables_enter(room);
+    seal_enter(room);
     mission_room = room;
     doors_armed = 0;
     {
@@ -2279,6 +2432,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     int done = script_run(dt, player->y), i, in_a_box = 0;
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
+    seal_update(dt * 60.0f);
     if (lift) {
         /* The switch: strike it or press O by it. Then the lift carries him up while he stands on it, and
          * comes back down when he's off it. */
@@ -2424,6 +2578,8 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     enemy_set_mortal(1);
     mission_clear_wait = 0.0f;
     rooms_cleared = 0;
+    seal_open_bits = 0;
+    seal_index = -1;
     breakables_reset();
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */

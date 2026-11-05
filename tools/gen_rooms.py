@@ -18,6 +18,7 @@ Which groups a room runs in a mission isn't read from the game yet: MISSIONS bel
 matching what the HD Collection spawned and the walkthrough. See docs/GAME_FLOW.md.
 """
 import argparse
+import math
 import re
 import struct
 import subprocess
@@ -76,6 +77,13 @@ GATES = [
     (4, "110", "111", "111"),   # the Giantwalker Chamber is entered from 112's side
     (4, "112", "113", "999"),   # not part of Mission 4
 ]
+# Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
+# room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
+# seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
+SWITCH_SEALS = [(3, "003", 100, 200, "004", 1)]
+SWITCH_HIT = ((0.0, 0.0, -20.0), 60.0)                  # sphere: local centre, radius (CStageSetSwitch +0x7c0)
+SEAL_BOX = ((0.0, 0.0, -50.0), (200.0, 180.0, 50.0))   # local centre, half sizes (CStageSetSeal +0xfc0, layout inferred)
+SEAL_BOARD = (154.8, -218.1, 203.7)                     # model 17: half width, bottom, top
 
 
 def parse_doors(text):
@@ -191,7 +199,7 @@ def main():
             rooms[name] = dict(doors=parse_doors(data[0].decode("latin1").replace("\r", "")), starts=parse_starts(data),
                                groups=parse_groups(data), lifts=parse_lifts(game),
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
-                               story=gimmicks.story_tags(game))
+                               story=gimmicks.story_tags(game), sets={g["number"]: g for g in gimmicks.parse_game(game)})
             tags = {s["index"]: n for n, s, *_ in rooms[name]["breakables"]}
             rooms[name]["boxes"] = gimmicks.collision_boxes(game, tags)
     for name, slot in SLOTS.items():
@@ -296,6 +304,33 @@ def main():
                     cells.append(f"{{{index[name]},{tag},{first},{last}}}")
     lines.append(f"#define ROOM_STORY_COUNT {len(cells)}")
     lines.append("static const RoomStory room_story[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("/* A crest switch and the seal it takes down: the switch's hit sphere (x y z r) and place (x y z yaw), the")
+    lines.append(" * seal's wall (centre, half sizes, yaw radians) and board (centre x y z, half width, bottom, top, yaw). */")
+    lines.append("typedef struct { short mission, room, next_number, colour; float hit[4], disc[4], box[7], board[7]; } RoomSwitchSeal;")
+    cells = []
+    for mission, name, sw_n, seal_n, door, colour in SWITCH_SEALS:
+        if name not in index:
+            continue
+        sw, seal = rooms[name]["sets"][sw_n], rooms[name]["sets"][seal_n]
+        def world(g, local):
+            r, p = gimmicks._rotation(g["rot"]), g["pos"]
+            return tuple(p[i] + sum(r[i][k] * local[k] for k in range(3)) for i in range(3))
+        hit = world(sw, SWITCH_HIT[0])
+        box = world(seal, SEAL_BOX[0])
+        yaw = math.radians(seal["rot"][1])
+        board = tuple(seal["pos"]) + (SEAL_BOARD[0], seal["pos"][1] + SEAL_BOARD[1], seal["pos"][1] + SEAL_BOARD[2], yaw)
+        f = lambda v: ",".join(f"{float(x):.1f}f" for x in v)
+        cells.append(f"{{{mission},{index[name]},{int(door)},{colour},{{{f(hit + (SWITCH_HIT[1],))}}},"
+                     f"{{{f(tuple(sw['pos']) + (sw['rot'][1],))}}},{{{f(box + SEAL_BOX[1])},{yaw:.4f}f}},"
+                     f"{{{f(board[:6])},{yaw:.4f}f}}}}")
+        print(f"room {name}: switch {sw_n} hit {hit}, seal {seal_n} wall {box} +- {SEAL_BOX[1]}, door to {door}")
+    lines.append(f"#define ROOM_SWITCH_SEAL_COUNT {len(cells)}")
+    lines.append("static const RoomSwitchSeal room_switch_seals[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("#define SWITCH_CHARGE 300.0f      /* CStageSetSwitch: damage to spin it up, */")
+    lines.append("#define SWITCH_FLAMES 560.0f      /* then to light all 8 flames, */")
+    lines.append("#define SWITCH_PER_FLAME 70.0f")
+    lines.append("#define SWITCH_WINDOW 120.0f      /* frames after a hit before it runs down, */")
+    lines.append("#define SWITCH_DRAIN 2.0f         /* by this a frame */")
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")

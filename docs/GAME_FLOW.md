@@ -86,7 +86,7 @@ the room numbers are matched to them through the event scripts.
 | --- | --- | --- |
 | 002 | 66 Slum Avenue | Groups 2 (2 Enigmas on the ledges), 1, 0, then 3 (Prides, a Lust and a Wrath) |
 | 009 | (off the street) | Group 2 |
-| 003 | Bullseye | No fight. The blue seal puzzle and Shotgun aren't in |
+| 003 | Bullseye | No fight. Sword hits charge the crest switch behind the dart machines and open the blue seal to Love Planet. The Shotgun pickup isn't in |
 | 004 | Love Planet | Doors sealed; groups 1 then 0: Hell Sloths and Prides |
 | 005 | 13th Avenue | No fight |
 | 006 | Ice Guardian's Chamber | Cerberus (class 43) isn't ported, so no fight. Its door to 100 ends the mission |

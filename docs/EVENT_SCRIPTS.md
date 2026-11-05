@@ -175,7 +175,7 @@ Room names below come from the walkthrough and the door graph (002↔003↔004�
 - Per visit, if counter 1 == 1 and flag 32 (the device is fully lit): cutscene that **unlocks door 1**, counter 1 = 2.
 - Once, if you have no item 29: in area 0 (touch), or in area 3 and examine → **give item 29 ×1** (the Shotgun,
   identity from the walkthrough [ctx]), gimmick 300 off, areas 2/5 off, tip 10 (switch firearms).
-- Examine texts: area 1 with flag 33 clear → message 10003; area 2 with flag 32 set → message 10004.
+- Examine texts: area 1 with flag 33 clear → message 10003; area 2 with flag 32 clear (switch not yet lit) → message 10004. See BAR_CRANK_SPEC.md.
 
 **Room 4: Love Planet** (EST: 3 groups)
 - On enter: red seals 200/201 on doors 0 and 1 (no flags).

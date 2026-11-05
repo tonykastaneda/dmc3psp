@@ -36,6 +36,7 @@ float3 normal, float d} with n.p + d = 0.
 
 import argparse
 import math
+import re
 import struct
 from pathlib import Path
 
@@ -300,7 +301,7 @@ def _wall_near(walls, mx, mz, y):
 EDGE_WALL_HEIGHT = 2000.0   # cm above the edge: past any jump, Air Hike and Sky Star
 
 
-def open_edge_walls(floors, walls):
+def open_edge_walls(floors, walls, rendered_floors=(), door_boxes=()):
     """Walls for the collision floor's open edges: an edge of the walkable floor with no collision wall on it and
     no lower floor beyond it to drop to. The disc's collision leaves these open (room 100's courtyard rim, the
     end of Mission 3's street); in the game Dante never goes over them, so the port stands a wall there. Each is a
@@ -329,6 +330,22 @@ def open_edge_walls(floors, walls):
             nx, nz = -nx, -nz
         if _wall_near(walls, mx, mz, y):
             continue
+        # HITS sometimes ends at an arch while the rendered floor continues to the door (Bullseye).
+        # Preserve that approach; sealing it here would survive the puzzle's dynamic wall removal.
+        doorway = False
+        for dx, dy, dz, dw, dh, dd in door_boxes:
+            vx, vz = dx - mx, dz - mz
+            outward = -(vx * nx + vz * nz)
+            lateral = abs(vx * nz - vz * nx)
+            if not (0 < outward <= 600 and lateral <= max(dw, dd) * 0.5 + 40 and dy - 80 <= y <= dy + dh):
+                continue
+            # Require a floor along the entire approach, not merely a door beyond a drop.
+            if all(any(abs(h - y) < 60 for h in _floor_heights(rendered_floors, mx + vx * f, mz + vz * f))
+                   for f in (0.1, 0.5, 0.9)):
+                doorway = True
+                break
+        if doorway:
+            continue
         # beyond the edge, at its middle and near both ends: a lower floor to land on means it's a ledge
         probes = [(mx - nx * 30, mz - nz * 30)]
         if length > 80:
@@ -340,7 +357,7 @@ def open_edge_walls(floors, walls):
             for h in _floor_heights(floors, px, pz):
                 if h < y + 60:
                     below = True     # a ledge to drop from, or floor carrying on (a T-junction in the mesh)
-                elif h > y + 250:
+                elif h >= y + 60:
                     top = min(top, h - 20)
         if below:
             continue
@@ -403,8 +420,6 @@ def main() -> None:
     scm = choose_scm(stage[2], hits)
     hit_walls = [t for t in hits if abs(t[10]) < 0.5]
     hit_floors = [t for t in hits if t[10] >= 0.5]
-    edge_walls = open_edge_walls(hit_floors, hit_walls)
-    hit_walls += edge_walls
     # Where Dante can be: the collision's bounds, a little enlarged.
     play = ([min(t[k + 3 * j] for t in hits for j in range(3)) - PLAY_MARGIN for k in range(3)],
             [max(t[k + 3 * j] for t in hits for j in range(3)) + PLAY_MARGIN for k in range(3)])
@@ -458,6 +473,11 @@ def main() -> None:
                 continue  # backdrop: nothing stands there
             if face_normal(t)[1] >= FLOOR_MIN_NY or face_normal(t)[1] <= -FLOOR_MIN_NY:
                 floor.append(tuple(t[i][k] for i in range(3) for k in range(3)))
+    door_boxes = [tuple(map(float, m)) for m in re.findall(
+        r"^BoxIn\s+\S+\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)",
+        stage_data[0].decode("latin1").replace("\r", ""), re.M)]
+    edge_walls = open_edge_walls(hit_floors, hit_walls, floor, door_boxes)
+    hit_walls += edge_walls
     xs = [v for t in floor for v in t[0::3]]
     zs = [v for t in floor for v in t[2::3]]
     gx0, gz0 = math.floor(min(xs) / GRID_CELL) * GRID_CELL, math.floor(min(zs) / GRID_CELL) * GRID_CELL
