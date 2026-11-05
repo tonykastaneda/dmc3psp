@@ -150,6 +150,11 @@ for _n in ("r_1", "r_2", "r_3", "r_4", "r_gap", "r_gapl", "r_st", "r_ht", "r_hth
     SCRIPTS.setdefault(_n, _from_hd(_n))
 for _n in ("w_u", "w_d", "w_l", "w_r", "w_au", "w_aa", "d_n", "d_u", "d_d", "d_l", "d_r", "t_air", "t_airb", "dash3"):
     SCRIPTS.setdefault(_n, _from_hd(_n, style=0))
+# The circle button's style moves (the HD's s_* scripts) in Swordmaster (1), Gunslinger (2) and Royalguard (3).
+STYLE_MOVES = ("s_1", "s_2", "s_3", "s_mash", "s_hold", "s_air", "s_airm", "s_lf", "s_lb", "s_lfm", "s_lbm", "s_lh", "s_airs")
+for _style, _tag in ((1, "sm"), (2, "gs"), (3, "rg")):
+    for _n in STYLE_MOVES:
+        SCRIPTS.setdefault(f"{_tag}_{_n[2:]}", _from_hd(_n, style=_style))
 
 
 def write_port_script(name):
@@ -176,6 +181,15 @@ def record_port(name):
 def record_ps2(name, state_key=0x72):
     import pcsx2_ref as r
     frames, events = SCRIPTS[name]
+    # The style's own state in slot 1 (build/hdref/make_style_state.py: chosen in Customize, which writing the style
+    # byte doesn't do); scripts without a style use Trickster's. Port order: 0 TR, 1 SM, 2 GS, 3 RG.
+    style = next((int(b[5:]) for b, a, c in events if b.startswith("style")), 0)
+    import glob
+    import shutil
+    source = ROOT / "build" / "refemu" / "sstates" / f"style_{['tr', 'sm', 'gs', 'rg'][style]}.p2s"
+    slot1 = glob.glob(str(ROOT / "build" / "refemu" / "sstates" / "SLUS-21361 (*).01.p2s"))
+    if source.exists() and slot1:
+        shutil.copy(source, slot1[0])
     p = r.Pine()
     r.focus()
     time.sleep(0.2)
