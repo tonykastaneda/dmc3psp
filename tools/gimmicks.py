@@ -55,7 +55,8 @@ def parse_game(text):
         number = int(head[2]) if len(head) > 2 and head[2].isdigit() else -1
         s = {"index": len(sets), "number": number, "comment": comment,
              "kind": head[3] if len(head) > 3 else "", "model": None, "bmodel": None, "pos": (0.0, 0.0, 0.0),
-             "rot": (0.0, 0.0, 0.0), "scale": (1.0, 1.0, 1.0), "vital": None, "items": []}
+             "rot": (0.0, 0.0, 0.0), "scale": (1.0, 1.0, 1.0), "vital": None, "items": [],
+             "box": None, "hit_rot": (0.0, 0.0, 0.0), "hitattr": []}
         for l in lines[1:]:
             if not l:
                 continue
@@ -71,6 +72,16 @@ def parse_game(text):
             elif key == "vital":
                 n = _numbers(rest)
                 s["vital"] = n[0] if n else None
+            elif key == "hit" and rest.split() and rest.split()[0] == "box":
+                n = _numbers(rest)
+                if len(n) >= 6:
+                    s["box"] = tuple(n[:6])   # centre (relative to pos for props), then half sizes
+            elif key == "hit_rot":
+                n = _numbers(rest)
+                if len(n) >= 3:
+                    s["hit_rot"] = tuple(n[:3])
+            elif key == "hitattr":
+                s["hitattr"].append(" ".join(rest.split()))
             elif key == "item":
                 parts = rest.split()
                 n = _numbers(" ".join(parts[1:]))
@@ -161,3 +172,37 @@ def story_tag(s):
 def story_tags(game_text):
     """{set index: tag} for every taggable set (see story_tag)."""
     return {s["index"]: story_tag(s) for s in parse_game(game_text) if story_tag(s)}
+
+
+def collision_boxes(game_text, tags, include_stay=False):
+    """The sets that stop Dante and the enemies: [(tag, centre (x, y, z), half sizes (x, y, z), yaw radians)].
+    COLLISION sets are invisible walls in world space; BREAK props are solid until broken; STAY pieces only when
+    they hit characters ("hitattr charhit"). A prop's box is relative to its pos and turned with it; hit_rot
+    turns the box itself. tags: {set index: the stage batch tag that hides it}, 0 = always there."""
+    out = []
+    for s in parse_game(game_text):
+        if s["box"] is None:
+            continue
+        attrs = s["hitattr"]
+        if "off charhit" in attrs:
+            continue
+        if s["kind"] == "COLLISION":
+            solid = True
+        elif s["kind"] in BREAKABLE:
+            solid = True
+        elif s["kind"] == "STAY":
+            # Off by default: st006's ice "boxes" are 40 m across around the room's start, not the ice's shape,
+            # so these aren't the pieces' outlines (camera / attack volumes?).
+            solid = include_stay and "charhit" in attrs
+        else:
+            solid = False
+        if not solid:
+            continue
+        ox, oy, oz, hx, hy, hz = s["box"]
+        r, p = _rotation(s["rot"]), s["pos"]
+        centre = (p[0] + r[0][0] * ox + r[0][1] * oy + r[0][2] * oz,
+                  p[1] + r[1][0] * ox + r[1][1] * oy + r[1][2] * oz,
+                  p[2] + r[2][0] * ox + r[2][1] * oy + r[2][2] * oz)
+        yaw = math.radians(s["rot"][1] + s["hit_rot"][1])
+        out.append((tags.get(s["index"], 0), centre, (abs(hx), abs(hy), abs(hz)), yaw))
+    return out

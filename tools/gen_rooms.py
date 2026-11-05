@@ -192,6 +192,8 @@ def main():
                                groups=parse_groups(data), lifts=parse_lifts(game),
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
                                story=gimmicks.story_tags(game))
+            tags = {s["index"]: n for n, s, *_ in rooms[name]["breakables"]}
+            rooms[name]["boxes"] = gimmicks.collision_boxes(game, tags)
     for name, slot in SLOTS.items():
         out = args.output / f"ROOM_{name}.BIN"
         if not out.exists():
@@ -273,6 +275,16 @@ def main():
     lines.append(f"#define ROOM_BREAKABLE_COUNT {len(cells)}")
     lines.append("static const RoomBreakable room_breakables[] = {" + (",".join(cells) or "{0}") + "};")
     print(f"{len(cells)} breakables")
+    lines.append("/* A room's solid boxes (tools/gimmicks.py collision_boxes): its COLLISION walls and breakable props, centre,")
+    lines.append(" * half sizes and yaw; tag = a breakable's number (gone once broken), 0 = always. */")
+    lines.append("typedef struct { short room, tag; float x, y, z, hx, hy, hz, yaw; } RoomBox;")
+    cells = []
+    for name in names:
+        for tag, (x, y, z), (hx, hy, hz), yaw in rooms[name]["boxes"]:
+            cells.append(f"{{{index[name]},{tag},{x:.1f}f,{y:.1f}f,{z:.1f}f,{hx:.1f}f,{hy:.1f}f,{hz:.1f}f,{yaw:.4f}f}}")
+    lines.append(f"#define ROOM_BOX_COUNT {len(cells)}")
+    lines.append("static const RoomBox room_boxes[] = {" + (",".join(cells) or "{0}") + "};")
+    print(f"{len(cells)} solid boxes")
     lines.append("/* A room's story pieces hidden in a span of missions (tag = the stage batches', from tools/gimmicks.py). */")
     lines.append("typedef struct { short room, tag, first, last; } RoomStory;")
     cells = []

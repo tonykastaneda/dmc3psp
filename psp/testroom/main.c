@@ -2136,6 +2136,12 @@ static void breakables_enter(int room) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i)
         if (room_breakables[i].room == room && breakable_broken[i]) stage_hide_group(room_breakables[i].number);
+    /* The room's solid boxes: its invisible walls and breakable props (tools/gimmicks.py collision_boxes). */
+    stage_clear_boxes();
+    for (i = 0; i < ROOM_BOX_COUNT; ++i)
+        if (room_boxes[i].room == room)
+            stage_add_box(room_boxes[i].x, room_boxes[i].y, room_boxes[i].z, room_boxes[i].hx, room_boxes[i].hy,
+                          room_boxes[i].hz, room_boxes[i].yaw, room_boxes[i].tag);
     /* Story pieces, as the room's event script sets them for where the story is: 006 from Mission 4 is the
      * room after Cerberus is beaten (tools/gen_rooms.py STORY). */
     for (i = 0; i < ROOM_STORY_COUNT; ++i)

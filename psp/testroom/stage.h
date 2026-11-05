@@ -22,6 +22,8 @@ int stage_floor(float x, float y, float z, float step, float *out);
 /* A breakable prop's triangles (tagged with its number by tools/prepare_stage.py) aren't drawn once it's
  * broken. Loading a stage shows them all again. */
 void stage_hide_group(int number);
+void stage_clear_boxes(void);
+void stage_add_box(float x, float y, float z, float hx, float hy, float hz, float yaw, int tag);
 /* Push a vertical capsule (feet at y, height ~180) out of the stage's
  * collision walls; returns 1 if it moved. */
 int stage_collide(float *x, float *z, float y, float radius);

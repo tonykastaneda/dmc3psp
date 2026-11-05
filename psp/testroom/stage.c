@@ -46,6 +46,7 @@ static unsigned int chunk_total;
 
 int stage_load(const char *path) {
     memset(group_hidden, 0, sizeof(group_hidden));
+    stage_clear_boxes();   /* main.c adds the new room's */
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
     int size, got;
     if (fd < 0) return 0;
@@ -274,6 +275,50 @@ static void closest_on_triangle(const float *p, const float *a, const float *b, 
     for (k = 0; k < 3; ++k) out[k] = a[k] + ab[k] * v + ac[k] * w;
 }
 
+/* The room's solid boxes (COLLISION walls, breakable props; main.c from rooms_runtime.h): turned rectangles in
+ * XZ over a height range. A box whose tag is hidden (a broken prop) doesn't stop anything. */
+#define STAGE_BOX_MAX 96
+static struct { float x, y, z, hx, hy, hz, c, s; int tag; } boxes[STAGE_BOX_MAX];
+static int box_count;
+void stage_clear_boxes(void) { box_count = 0; }
+void stage_add_box(float x, float y, float z, float hx, float hy, float hz, float yaw, int tag) {
+    if (box_count >= STAGE_BOX_MAX) return;
+    boxes[box_count].x = x; boxes[box_count].y = y; boxes[box_count].z = z;
+    boxes[box_count].hx = hx; boxes[box_count].hy = hy; boxes[box_count].hz = hz;
+    boxes[box_count].c = cosf(yaw); boxes[box_count].s = sinf(yaw); boxes[box_count].tag = tag;
+    ++box_count;
+}
+
+/* Out of the boxes: the circle's centre against each box in its own frame (world = Ry * local, as the sets
+ * place props: x = c*lx + s*lz, z = -s*lx + c*lz). */
+static int collide_boxes(float *x, float *z, float y, float radius) {
+    int i, moved = 0;
+    for (i = 0; i < box_count; ++i) {
+        float dx = *x - boxes[i].x, dz = *z - boxes[i].z, lx, lz, qx, qz, ex, ez, d2;
+        if (boxes[i].tag > 0 && boxes[i].tag < 256 && group_hidden[boxes[i].tag]) continue;
+        if (y + 160.0f < boxes[i].y - boxes[i].hy || y + 20.0f > boxes[i].y + boxes[i].hy) continue;
+        lx = boxes[i].c * dx - boxes[i].s * dz;
+        lz = boxes[i].s * dx + boxes[i].c * dz;
+        if (fabsf(lx) >= boxes[i].hx + radius || fabsf(lz) >= boxes[i].hz + radius) continue;
+        qx = lx < -boxes[i].hx ? -boxes[i].hx : (lx > boxes[i].hx ? boxes[i].hx : lx);
+        qz = lz < -boxes[i].hz ? -boxes[i].hz : (lz > boxes[i].hz ? boxes[i].hz : lz);
+        ex = lx - qx; ez = lz - qz; d2 = ex * ex + ez * ez;
+        if (d2 > 1e-6f) {
+            float l = sqrtf(d2);
+            if (l >= radius) continue;
+            lx = qx + ex / l * radius; lz = qz + ez / l * radius;
+        } else if (boxes[i].hx - fabsf(lx) < boxes[i].hz - fabsf(lz)) {
+            lx = (lx < 0.0f ? -1.0f : 1.0f) * (boxes[i].hx + radius);   /* inside: out the nearer side */
+        } else {
+            lz = (lz < 0.0f ? -1.0f : 1.0f) * (boxes[i].hz + radius);
+        }
+        *x = boxes[i].x + boxes[i].c * lx + boxes[i].s * lz;
+        *z = boxes[i].z - boxes[i].s * lx + boxes[i].c * lz;
+        moved = 1;
+    }
+    return moved;
+}
+
 int stage_collide(float *x, float *z, float y, float radius) {
     static const float heights[3] = {45.0f, 105.0f, 160.0f};
     int moved = 0, iteration, h;
@@ -309,6 +354,7 @@ int stage_collide(float *x, float *z, float y, float radius) {
                 break;
             }
         }
+        if (collide_boxes(x, z, y, radius)) pushed = moved = 1;
         if (!pushed) break;
     }
     return moved;

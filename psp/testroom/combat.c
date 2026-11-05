@@ -30,12 +30,12 @@
  * frames and stops +0x298 = 120 cm short of the target, at most +0x294 =
  * 500 cm across and +0x29c = 500 cm up or down. It aims at the lock-on point
  * (player+0x3c40), which the test room doesn't have: the dummy's feet plus
- * AIR_TRICK_LOCK_HEIGHT (estimate). */
+ * AIR_TRICK_LOCK_HEIGHT, a Hell Pride's lock point on the PS2 (158.1 over feet at 13). */
 #define AIR_TRICK_FRAMES 10.0f
 #define AIR_TRICK_SHORT 120.0f
 #define AIR_TRICK_MAX_XZ 500.0f
 #define AIR_TRICK_MAX_Y 500.0f
-#define AIR_TRICK_LOCK_HEIGHT 200.0f
+#define AIR_TRICK_LOCK_HEIGHT 145.0f
 #define AIR_TRICK_AIR_WAIT 8.0f   /* from the air the warp starts at frame 8 */
 
 enum { BTN_NONE, BTN_TRI, BTN_CIR, BTN_SQ };
@@ -888,7 +888,7 @@ static int air_trick_update(Combat *c, Player *player, float dt) {
         player->y += c->warp_step[1] * step;
         player->z += c->warp_step[2] * step;
         c->warp_time -= dt;
-        if (c->warp_time <= 0.0f) {
+        if (c->warp_time <= 1.0e-4f) {   /* ten 60th steps exactly, as the PS2's +0x2870 countdown (not eleven by rounding) */
             /* State 9, HD Collection traces: 4 cm/frame forward and 8 up, losing 0.07 and 1. */
             static const float fall[4] = {4.0f, -0.07f, 8.0f, -1.0f};
             player->vy = 0.0f;
