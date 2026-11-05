@@ -835,7 +835,7 @@ static void start_trickster(Combat *c, Player *player, const PlayerInput *input,
             float d = wrap_pi(sy - player->yaw);
             if (fabsf(d) <= 0.785f) sector = 0;
             else if (fabsf(d) >= 2.356f) sector = 1;
-            else sector = d > 0.0f ? 3 : 2;   /* yaw grows toward Dante's right */
+            else sector = d > 0.0f ? 2 : 3;   /* PS2: the stick toward yaw +90 is the left dash (23:2 / 23:26, motion 02) */
         }
         /* FUN_00225c90: the script is table 0x5911d0 {0,1,2,3, 24,25,26,27}[4 * (style level >= Lv3) + way];
          * at Lv3 a forward dash begun while a forward dash plays (motion 0x1700) is 23:17 instead. The style
