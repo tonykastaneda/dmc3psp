@@ -134,6 +134,7 @@ typedef struct {
     float warp_time, warp_step[3];  /* Air Trick warp (FUN_00226550 state 1-2) */
     int held_tri, held_sq, held_cir;
     float air_accum;
+    int hover_done;        /* a hover phase's wait is over */
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */

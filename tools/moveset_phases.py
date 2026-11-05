@@ -42,6 +42,9 @@ class P:
     auto: float = 0.0           # frames between further shots during the phase
     refire: float = 0.0         # adv="shot": frames before another press fires again
     layered: bool = False       # upper-body shot over the legs (FUN_0021e620 with param_4 = 1)
+    flag_g: float = 0.0         # at flag 1 only the gravity changes to this (the air swings' -1.5)
+    stop_below: float = 0.0     # forward speed under this stops (FUN_002e3f50(0, 0))
+    hover: bool = False         # the air velocities wait (no movement, no gravity) until flag 1 or the motion's end
 
 
 def wcfg_air(spd, vy):
@@ -87,7 +90,8 @@ ACTIONS = {
     58: [P("5:20"), P("5:21")],
     59: [P("5:20"), P("5:21", adv="flag2"), P("5:22")],
     60: [P("5:20"), P("5:21", adv="flag2"), P("5:22", adv="flag2"), P("5:23")],
-    61: [P("5:17", adv="land", air=wcfg_air(0x338, 0x340))],
+    # FUN_002737d0: gravity -1.5 from the flag (+0x24d5 = 1), forward speed under 2 stops.
+    61: [P("5:17", adv="land", air=wcfg_air(0x338, 0x340), flag_g=-1.5, stop_below=2.0)],
     62: single("5:18"),
     63: [P("5:19", adv="land", flag_air=vy_air(0x350))],
     64: [P("5:11", adv="mash", loop="5:30", loop_start=201.0), P("5:26")],
@@ -107,7 +111,10 @@ ACTIONS = {
     85: [P("6:16", adv="flag1"), P("6:17", adv="charge", tiers=(("6:36", -1.0), ("6:36", -1.0), ("6:36", -1.0)))] + NEVAN_END,
     86: [P("6:21"), P("6:35", adv="timer", frames=30.0), P("6:20")] + NEVAN_END,
     87: [P("6:21"), P("6:19", adv="timer", frames=30.0), P("6:20")] + NEVAN_END,
-    88: [P("6:15", adv="timer", frames=19.0, air=wcfg_air(0x43c, 0x444)), P("6:34", adv="land", air=wcfg_air(0x43c, 0x444))],
+    # FUN_00276ac0 (a tap): 6:15 once with speed 3 / -0.05 and vy 1.5 / -0.24, then 6:34 on the same
+    # 6:34 hovers (its state doesn't move him) until its flag or end, then gravity -1.5. 6:15 ends at its loop
+    # point, 19 frames (held, it loops up to config +0x5c0 = 4 times).
+    88: [P("6:15", adv="timer", frames=19.0, air=wcfg_air(0x43c, 0x444)), P("6:34", adv="land", hover=True, flag_g=-1.5)],
     89: [P("16:0"), ] + NEVAN_END,
     90: [P("16:7", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3))],
     91: [P("16:8", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3))],

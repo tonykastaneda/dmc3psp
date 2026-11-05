@@ -305,6 +305,12 @@ def main():
             f.append(f".shot = {p.shot}")
         if p.layered:
             f.append(".layered = 1")
+        if p.flag_g:
+            f.append(f".flag_g = {fl(p.flag_g)}")
+        if p.stop_below:
+            f.append(f".stop_below = {fl(p.stop_below)}")
+        if p.hover:
+            f.append(".hover = 1")
         if p.auto:
             f.append(f".auto_fire = {fl(p.auto)}")
         if p.refire:

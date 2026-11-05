@@ -85,6 +85,7 @@ typedef struct {
     int layered;           /* upper-body shot: the legs walk under it */
     float flag_g;          /* at flag 1 only the gravity changes to this (Aerial Rave: -1.5), 0 = no */
     float stop_below;      /* forward speed under this stops (FUN_002e3f60; Aerial Rave: 2) */
+    int hover;             /* the air velocities wait, no movement or gravity, until flag 1 or the end (Nevan 6:34) */
 } MoveDef;
 
 #define S(key) key, NULL
@@ -376,6 +377,7 @@ static void start_move(Combat *c, MoveId move, int action) {
     c->pending = 0;
     c->active = 0;
     c->phase_time = 0.0f;
+    c->hover_done = 0;
     memset(c->gates, 0, sizeof(c->gates));
     /* The script's first segments run at once even when they wait for frames
      * before the start frame (the game only waits for frames still ahead). */
@@ -1050,6 +1052,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         c->air = 1;
     }
     if (d->flag_g != 0.0f && c->flag == 1 && c->air) c->air_v[3] = d->flag_g;
+    if (d->hover && (c->flag == 1 || c->frame >= m->end_frame)) c->hover_done = 1;
     /* Beowulf's dive kick (FUN_00267d20): with a target the dive aims at it, the angle clamped to 40-75 deg
      * (config +0x55c / +0x560), speed 45 (+0x558); without one it's 45 deg (the generated flag velocities). */
     if (c->flag == 1 && c->air && c->script >= 0 && !strcmp(script_data[c->script].key, "7:12") && player->has_target) {
@@ -1125,6 +1128,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         player->on_ground = 0;
         /* One real game step every 60th of a second, however long this frame was. */
         c->air_accum += dt * MOTION_FPS / k;
+        if (d->hover && !c->hover_done) c->air_accum = 0.0f;   /* waiting: he stays where he is */
         while (c->air_accum >= 1.0f) {
             c->air_accum -= 1.0f;
             player->x += s * c->air_v[0] * k;
@@ -1187,7 +1191,9 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             break;
         case NEXT_FLAG2: go = c->flag == 2 || at_end; break;
         case NEXT_LAND:
-            /* Airborne until the floor (above); hold the motion's last frame. */
+            /* Airborne until the floor (above); hold the motion's last frame. A swing whose gravity turns at
+             * its flag turns at its end at the latest (FUN_00276ac0: "end || +0x24d5 == 1"). */
+            if (at_end && d->flag_g != 0.0f && c->air) c->air_v[3] = d->flag_g;
             if (at_end) {
                 if (!c->air && player->on_ground) go = 1;
                 else c->frame = m->end_frame;
