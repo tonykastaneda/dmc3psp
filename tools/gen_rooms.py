@@ -34,6 +34,12 @@ VITAL_PER_HIT = 42.0
 CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 
 # Stage slots (stNNN.pac); the room's data is the next slot.
+# Which of a room's story pieces (gimmicks.story_tag) show, by mission: {room: [(first mission, last mission,
+# sets shown)]}; the room's other tagged sets are hidden then. From the event scripts' on-enter switches
+# (EventTbl03 room 6: all off, then on by its counter). 006 before Cerberus wakes: his ice (102), the upper fence
+# (104) and the ice (109). After he's beaten (counter 2): the entrance ice (100), his broken ice (103), the fence.
+# Mission 4's script has no room 6, so the room stays as Mission 3 left it.
+STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
 SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292, "006": 296, "009": 308,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428}
@@ -184,7 +190,8 @@ def main():
             game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
             rooms[name] = dict(doors=parse_doors(data[0].decode("latin1").replace("\r", "")), starts=parse_starts(data),
                                groups=parse_groups(data), lifts=parse_lifts(game),
-                               breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [])
+                               breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
+                               story=gimmicks.story_tags(game))
     for name, slot in SLOTS.items():
         out = args.output / f"ROOM_{name}.BIN"
         if not out.exists():
@@ -266,6 +273,17 @@ def main():
     lines.append(f"#define ROOM_BREAKABLE_COUNT {len(cells)}")
     lines.append("static const RoomBreakable room_breakables[] = {" + (",".join(cells) or "{0}") + "};")
     print(f"{len(cells)} breakables")
+    lines.append("/* A room's story pieces hidden in a span of missions (tag = the stage batches', from tools/gimmicks.py). */")
+    lines.append("typedef struct { short room, tag, first, last; } RoomStory;")
+    cells = []
+    for name in names:
+        tags = rooms[name]["story"]
+        for first, last, shown in STORY.get(name, []):
+            for tag in sorted(set(tags.values())):
+                if tag - gimmicks.STORY_TAG + 100 not in shown:
+                    cells.append(f"{{{index[name]},{tag},{first},{last}}}")
+    lines.append(f"#define ROOM_STORY_COUNT {len(cells)}")
+    lines.append("static const RoomStory room_story[] = {" + (",".join(cells) or "{0}") + "};")
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")

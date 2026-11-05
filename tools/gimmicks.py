@@ -45,9 +45,16 @@ def parse_game(text):
     for block in re.split(r"\n(?=# SET)", text.replace("\r", "")):
         if not block.startswith("# SET"):
             continue
+        first = block.split("\n")[0]
+        try:   # the comments are Shift-JIS; the text arrives read as Latin-1
+            comment = first.split(";", 1)[1].strip().encode("latin1").decode("shift_jis") if ";" in first else ""
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            comment = ""
         lines = [l.split(";")[0].strip() for l in block.split("\n")]
         head = lines[0].split()
-        s = {"kind": head[3] if len(head) > 3 else "", "model": None, "bmodel": None, "pos": (0.0, 0.0, 0.0),
+        number = int(head[2]) if len(head) > 2 and head[2].isdigit() else -1
+        s = {"index": len(sets), "number": number, "comment": comment,
+             "kind": head[3] if len(head) > 3 else "", "model": None, "bmodel": None, "pos": (0.0, 0.0, 0.0),
              "rot": (0.0, 0.0, 0.0), "scale": (1.0, 1.0, 1.0), "vital": None, "items": []}
         for l in lines[1:]:
             if not l:
@@ -136,3 +143,21 @@ def breakables(game_text, pnst):
         radius = max(30.0, max(hi[0] - lo[0], hi[2] - lo[2]) / 2)
         out.append((len(out) + 1, s, centre, radius, max(40.0, hi[1] - lo[1])))
     return out
+
+
+# Story pieces: a room's static sets (STAY) that its event script switches on and off by the story's state (ops
+# 36 "all off" and 37 "on", docs/EVENT_SCRIPTS.md). Each drawn STAY set numbered 100 and up is tagged STORY_TAG +
+# (number - 100), above the breakables' numbers; tools/gen_rooms.py says which are shown when.
+STORY_TAG = 128
+
+
+def story_tag(s):
+    """The stage batch tag for a set, or 0."""
+    if s["kind"] == "STAY" and 100 <= s["number"] < 100 + 256 - STORY_TAG:
+        return STORY_TAG + s["number"] - 100
+    return 0
+
+
+def story_tags(game_text):
+    """{set index: tag} for every taggable set (see story_tag)."""
+    return {s["index"]: story_tag(s) for s in parse_game(game_text) if story_tag(s)}

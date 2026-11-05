@@ -2133,6 +2133,11 @@ static void breakables_enter(int room) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i)
         if (room_breakables[i].room == room && breakable_broken[i]) stage_hide_group(room_breakables[i].number);
+    /* Story pieces, as the room's event script sets them for where the story is: 006 from Mission 4 is the
+     * room after Cerberus is beaten (tools/gen_rooms.py STORY). */
+    for (i = 0; i < ROOM_STORY_COUNT; ++i)
+        if (room_story[i].room == room && mission_choice.mission >= room_story[i].first && mission_choice.mission <= room_story[i].last)
+            stage_hide_group(room_story[i].tag);
 }
 static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;

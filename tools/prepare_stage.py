@@ -484,7 +484,10 @@ def main() -> None:
     # breakable's tagged with its number so the runtime can stop drawing it once it's broken. Not floor.
     import gimmicks
     game_text = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1")
-    numbers = {id(s): n for n, s, *_ in gimmicks.breakables(game_text, stage[5])} if len(stage) > 5 else {}
+    # Keyed by the set's place in the room's list: each call parses the text afresh.
+    numbers = {s["index"]: n for n, s, *_ in gimmicks.breakables(game_text, stage[5])} if len(stage) > 5 else {}
+    for index, tag in gimmicks.story_tags(game_text).items():
+        numbers.setdefault(index, tag)
     prop_batches = 0
     for s, kind, tris in (gimmicks.placed(game_text, stage[5]) if len(stage) > 5 else []):
         by_texture = {}
@@ -493,7 +496,7 @@ def main() -> None:
         for texture, subdivided in by_texture.items():
             texture = min(texture, len(textures) - 1)
             kind_flag = 2 if texture in blend_textures else (1 if texture in alpha_textures else 0)
-            batches.append([texture, kind_flag, subdivided, 0, numbers.get(id(s), 0)])
+            batches.append([texture, kind_flag, subdivided, 0, numbers.get(s["index"], 0)])
             prop_batches += 1
 
     # ---- write the blob
