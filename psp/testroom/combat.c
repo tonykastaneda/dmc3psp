@@ -23,6 +23,7 @@
 #define DANCE_STAB_PLAYS 2   /* action 207's handler (0x267000) replays 3:52 twice, then 3:53 */
 #define BUFFER_SECONDS 0.05f                      /* the real game drops a press made before its gate opens */
 #define MAX_DASHES 3          /* FUN_00245f10: dashes in a row < 3 at the top style level */
+#define STARTUP_FRAMES 2.0f
 #define TRICKSTER_LEVEL 2     /* player+0x3c75, 0 = Lv1: the full moveset is Lv3 */
 #define SNAP_DASH 0.349f      /* 0xe39 = 20 deg: a dash this close to the target aims at it */
 #define SNAP_SKY_STAR 0.175f  /* 0x71c = 10 deg (Sky Star) */
@@ -1022,7 +1023,9 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
     if (d->layered) update_gun_layers(c, player, input, dt);
     m = motion_get(c->motion);
-    c->frame += dt * MOTION_FPS;
+    /* A new script starts counting STARTUP_FRAMES late, as on the PS2: its handler's state 0 requests the motion
+     * and the script runs from the frame after (measured: the PS2's gates open two frames later than ours). */
+    if (c->phase_time >= STARTUP_FRAMES / MOTION_FPS) c->frame += dt * MOTION_FPS;
     c->phase_time += dt;
 
     /* Mash loops (Million Stab, Shredder, Crazy Dance) and held guards replay
