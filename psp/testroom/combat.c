@@ -1194,7 +1194,14 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
                 int nb = moves[d->next].btn;
                 int nheld = nb == BTN_TRI ? input->melee_held : nb == BTN_SQ ? input->gun_held : input->style_held;
                 if (c->flag == 1 && nheld) go = 1;
-                else if (at_end) { end_move(c, player); return; }
+                else if (at_end) {
+                    /* The tap's own follow-on, as after a released charge (FUN_0027a1f0: 7:7 then 7:8). */
+                    MoveId tier = moves[d->next].tiers[0];
+                    MoveId after = tier != MOVE_NONE ? moves[tier].next : MOVE_NONE;
+                    if (after != MOVE_NONE) start_move(c, after, 0);
+                    else end_move(c, player);
+                    return;
+                }
             } else {
                 go = c->flag == 1 || at_end;
             }
