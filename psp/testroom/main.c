@@ -183,7 +183,7 @@ static int game_file_exists(const char *name) {
 static void save_bmp(const char *name, const unsigned int *pixels) {
     char path[320];
     unsigned char header[54];
-    static unsigned char row[SCR_WIDTH * 3];
+    static unsigned char image[SCR_WIDTH * 3 * SCR_HEIGHT];
     unsigned int data_size = SCR_WIDTH * 3 * SCR_HEIGHT;
     unsigned int file_size = 54 + data_size;
     int w = SCR_WIDTH, h = SCR_HEIGHT;
@@ -205,6 +205,7 @@ static void save_bmp(const char *name, const unsigned int *pixels) {
     memcpy(&header[34], &data_size, 4);
     fwrite(header, 1, sizeof(header), file);
     for (y = SCR_HEIGHT - 1; y >= 0; --y) {
+        unsigned char *row = image + (SCR_HEIGHT - 1 - y) * SCR_WIDTH * 3;
         const unsigned int *source = pixels + y * BUF_WIDTH;
         int x;
         for (x = 0; x < SCR_WIDTH; ++x) {
@@ -213,8 +214,8 @@ static void save_bmp(const char *name, const unsigned int *pixels) {
             row[x * 3 + 1] = (unsigned char)(pixel >> 8);  /* G */
             row[x * 3 + 2] = (unsigned char)pixel;         /* R */
         }
-        fwrite(row, 1, sizeof(row), file);
     }
+    fwrite(image, 1, sizeof(image), file);
     fclose(file);
 }
 
@@ -3239,7 +3240,7 @@ int main(int argc, char *argv[]) {
                 int shot;
                 for (shot = 0; shot < cmp_shot_count; ++shot)
                     if (frames == cmp_game_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "SHOT_%d.BMP", frames); capture_frame(draw_buffer, cmp_name); }
-                    else if (frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }
+                    else if (shot < 32 && frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }
             }
             if (bench_step_frames > 0 && !bench_done) {
                 int into = (frames - 2) % bench_step_frames;
