@@ -38,6 +38,7 @@
 #include "bullets.h"
 #include "fx.h"
 #include "hud.h"
+#include "orbs.h"
 #include "rebellion_runtime.h"
 #include "ebony_runtime.h"
 #include "ivory_runtime.h"
@@ -524,6 +525,25 @@ enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_O
 static int dummy_anim_auto = 1;
 static void mission_gimmicks_draw(void);
 static ShopState shop_state;   /* the Red Orbs and what's been bought, for this session */
+/* Each kind's max health, from the class parameter blocks (docs/ENEMY_SPECS.md, docs/SHOP.md): what its red
+ * orbs are worked out from. Lust, Wrath and Greed are inferred. */
+static int kind_max_health(int kind) {
+    switch (kind) {
+    case ENEMY_PRIDE: return 250;
+    case ENEMY_GLUTTONY: return 700;
+    case ENEMY_LUST: return 750;
+    case ENEMY_SLOTH: return 1200;
+    case ENEMY_WRATH: return 500;
+    case ENEMY_GREED: return 1000;
+    case ENEMY_ENIGMA: return 600;
+    case ENEMY_GIGAPEDE: return 2800;
+    default: return 250;
+    }
+}
+static int mission_difficulty(void);
+static void enemy_died(int kind, float x, float y, float z) {
+    orbs_burst(x, y, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
+}
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
@@ -1190,6 +1210,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     } else {
         enemy_draw();
     }
+    orbs_draw();
     {
         float eye[3] = {camera->x, camera->y, camera->z};
         fx_draw(eye);
@@ -1199,6 +1220,15 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
 
     if (!anim.viewer) {
         hud_draw(player);
+        if (mission_mode && menu_loaded()) {
+            /* The Red Orbs held, top right: brighter for a moment when one's collected. */
+            char text[24];
+            float since = orbs_since_collected(), k = since < 2.0f ? 1.0f : since < 3.0f ? 3.0f - since : 0.0f;
+            unsigned int alpha = (unsigned int)(150.0f + 105.0f * k);
+            snprintf(text, sizeof(text), "%d", shop_state.red_orbs);
+            menu_font_draw(SCR_WIDTH - 10 - menu_font_width(20.0f, text), 24.0f, 20.0f, text, alpha << 24 | 0x3c3cffu);
+            sceGuDisable(GU_BLEND);
+        }
         draw_lock_on_reticle(player, camera);
     }
     draw_hud(hud);
@@ -1961,6 +1991,7 @@ static unsigned long long rooms_cleared;   /* this mission: a room's fight doesn
 static float mission_clear_wait;
 static int mission_stage;
 static MenuChoice mission_choice;
+static int mission_difficulty(void) { return mission_choice.difficulty; }
 static void menu_test_shot(int frame) {
     int i;
     for (i = 0; i < menu_shot_count; ++i) {
@@ -2123,6 +2154,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     const float *s = rooms[room].starts[start];
     menu_show_loading();
     enemy_set_count(0, player->x, player->z);
+    orbs_clear();
     path_in_game_dir(path, sizeof(path), rooms[room].file);
     stage_load(path);
     mission_room = room;
@@ -2494,6 +2526,8 @@ int main(int argc, char *argv[]) {
         path_in_game_dir(path, sizeof(path), "MENU.BIN");
         menu_text = menu_text_hook;
         menu_debug = debug_modal;
+        orbs_set_counter(&shop_state.red_orbs);
+        enemy_died_fn = enemy_died;
         menu_shop = &shop_state;
         if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;
@@ -2736,6 +2770,7 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+                orbs_update(dt, player.x, player.y, player.z);
                 bench_ai_us = sceKernelGetSystemTimeLow() - ai_start;
             }
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {

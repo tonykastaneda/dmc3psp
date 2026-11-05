@@ -134,6 +134,8 @@ static int landed_heavy;
 static float attack_token;
 static int mortal;
 static int dummy_kind;
+void (*enemy_died_fn)(int kind, float x, float y, float z);
+static void died(void) { if (enemy_died_fn) enemy_died_fn(e->kind, e->pos[0], e->pos[1], e->pos[2]); }
 static float dante_y;   /* this frame's, for attacks that test his height in their action */
 /* Each kind's decision table: the Seven Hells share the rest of their logic. */
 static const EnemyAiClass *ai_class(void) {
@@ -332,6 +334,10 @@ void enemy_kill_all(void) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
+            Enemy *was = e;
+            e = &enemies[i];
+            if (e->kind != ENEMY_GIGAPEDE) died();   /* their orbs, as if Dante had done it */
+            e = was;
             enemies[i].plan = P_DEATH;
             enemies[i].plan_step = 0;
             enemies[i].air = 0;
@@ -986,6 +992,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         if (e->health <= 0) {
             e->air = 0;
             plan_set(P_DEATH);
+            died();
             return;
         }
     }
@@ -1629,6 +1636,7 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
         e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->plan = P_DEATH;
+            died();
             e->timer = 0.0f;
             e->overlay_motion = -1;
             e->shoot_set = -1;
@@ -1847,7 +1855,7 @@ static void giga_hit(HitKind kind) {
     fx_hit_spark(at);
     if (!mortal || giga.dying) return;
     giga.health -= (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
-    if (giga.health <= 0) { giga.dying = 1; giga.dead_time = 0.0f; }
+    if (giga.health <= 0) { giga.dying = 1; giga.dead_time = 0.0f; died(); }
 }
 
 static void giga_draw_part(const float pos[3], const float dir[3], int head) {

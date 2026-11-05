@@ -29,6 +29,8 @@ void enemy_spawn(float x, float z);          /* one dummy, here, selected */
 void enemy_spawn_height(float y);            /* look for the floor from about here, not the roofs */
 /* In a mission enemies can die; the dummies of the debug menu have infinite health. */
 void enemy_set_mortal(int on);
+/* Called once as each enemy dies of its wounds in a mission (not for tests' kill-alls): its kind, its feet. */
+extern void (*enemy_died_fn)(int kind, float x, float y, float z);
 /* Add one here. Returns 0 if every slot is taken. */
 int enemy_add(float x, float z);
 int enemy_add_kind(int kind, float x, float z);
