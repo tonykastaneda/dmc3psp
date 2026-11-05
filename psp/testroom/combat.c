@@ -1050,6 +1050,15 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         c->air = 1;
     }
     if (d->flag_g != 0.0f && c->flag == 1 && c->air) c->air_v[3] = d->flag_g;
+    /* Beowulf's dive kick (FUN_00267d20): with a target the dive aims at it, the angle clamped to 40-75 deg
+     * (config +0x55c / +0x560), speed 45 (+0x558); without one it's 45 deg (the generated flag velocities). */
+    if (c->flag == 1 && c->air && c->script >= 0 && !strcmp(script_data[c->script].key, "7:12") && player->has_target) {
+        float dx = player->target_x - player->x, dz = player->target_z - player->z;
+        float a = atan2f(player->y - player->target_y, sqrtf(dx * dx + dz * dz));
+        if (a < 0.698132f) a = 0.698132f;
+        if (a > 1.308997f) a = 1.308997f;
+        c->air_v[0] = 45.0f * cosf(a); c->air_v[1] = 0.0f; c->air_v[2] = -45.0f * sinf(a); c->air_v[3] = 0.0f;
+    }
     if (d->next_on == NEXT_CHARGE) c->charge_frames += dt * MOTION_FPS;
     while (hits-- > 0) deal_hit(c, player);
 
@@ -1073,7 +1082,6 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         if (c->script >= 0) {
             const char *key = script_data[c->script].key;
             if (!strcmp(key, "7:31")) speed = 43.0f;       /* Beowulf's Straight */
-            else if (!strcmp(key, "7:12")) speed = 5.2f;   /* Beowulf's air kick */
         }
         player->x += sinf(player->yaw) * speed * dt * MOTION_FPS;
         player->z += cosf(player->yaw) * speed * dt * MOTION_FPS;
@@ -1165,7 +1173,18 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         float since = d->btn == BTN_TRI ? c->since_tri : d->btn == BTN_SQ ? c->since_sq : c->since_cir;
         int held = d->btn == BTN_TRI ? input->melee_held : d->btn == BTN_SQ ? input->gun_held : input->style_held;
         switch (d->next_on) {
-        case NEXT_FLAG1: go = c->flag == 1 || at_end; break;
+        case NEXT_FLAG1:
+            if (d->next != MOVE_NONE && moves[d->next].next_on == NEXT_CHARGE) {
+                /* Into a charge only with its button still held at the flag (FUN_002794d0 state 1: +0x24d5 == 1
+                 * and TRI held); a tap plays the whole swing, its root motion with it, then back to neutral. */
+                int nb = moves[d->next].btn;
+                int nheld = nb == BTN_TRI ? input->melee_held : nb == BTN_SQ ? input->gun_held : input->style_held;
+                if (c->flag == 1 && nheld) go = 1;
+                else if (at_end) { end_move(c, player); return; }
+            } else {
+                go = c->flag == 1 || at_end;
+            }
+            break;
         case NEXT_FLAG2: go = c->flag == 2 || at_end; break;
         case NEXT_LAND:
             /* Airborne until the floor (above); hold the motion's last frame. */

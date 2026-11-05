@@ -122,7 +122,9 @@ ACTIONS = {
     113: charge("7:7", "7:27", 158.0, "7:47", "7:48", 84.0, after=[P("7:8")]),
     114: charge("7:9", "7:28", 253.0, "7:49", "7:50", 154.0),
     115: [P("7:10", adv="mash", loop="7:40", loop_start=232.0), P("7:11")],
-    116: [P("7:12", adv="land", flag_air=("raw", 0.0, 0.0, -8.0, -0.1)), P("7:13")],
+    # Beowulf's dive kick (FUN_00267d20): at the flag, speed +0x558 (45) along +0x554 (45 deg) down, no gravity,
+    # until the floor; with a target the angle aims at it, clamped to +0x55c..+0x560 (40-75; not ported yet).
+    116: [P("7:12", adv="land", flag_air=("raw", 31.8198, 0.0, -31.8198, 0.0)), P("7:13")],
     117: charge("7:14", "7:29", 99.0, "7:51", "7:52", 23.0),
     118: charge("7:14", "7:29", 99.0, "7:51", "7:52", 23.0, after=[P("7:15", adv="land", flag_air=vy_air(0x27c))]),
     119: [P("7:15", adv="land", flag_air=vy_air(0x27c))],

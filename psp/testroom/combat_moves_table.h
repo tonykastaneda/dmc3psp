@@ -147,7 +147,7 @@
     [MOVE_G_144] = {.script = "7:10", .name = "BEOWULF", .next = MOVE_G_145, .next_on = 5, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_146},
     [MOVE_G_145] = {.script = "7:11", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_146] = {.script = "7:40", .name = "BEOWULF", .next = MOVE_G_145, .next_on = 5, .start = 232.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .loop_move = MOVE_G_146},
-    [MOVE_G_147] = {.script = "7:12", .name = "BEOWULF", .next = MOVE_G_148, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {0.0000f, 0.0000f, -8.0000f, -0.1000f}},
+    [MOVE_G_147] = {.script = "7:12", .name = "BEOWULF", .next = MOVE_G_148, .next_on = 4, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .flag_air = 1, .flag_v = {31.8198f, 0.0000f, -31.8198f, 0.0000f}},
     [MOVE_G_148] = {.script = "7:13", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 0, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_149] = {.script = "7:14", .name = "BEOWULF", .next = MOVE_G_150, .next_on = 2, .start = -1.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0},
     [MOVE_G_150] = {.script = "7:29", .name = "BEOWULF", .next = MOVE_NONE, .next_on = 6, .start = 99.0000f, .reach = 260.0f, .hit_kind = HIT_LIGHT, .gun = 0, .btn = BTN_TRI, .tiers = {MOVE_G_151, MOVE_G_152, MOVE_G_153}},
