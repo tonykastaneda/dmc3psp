@@ -2636,7 +2636,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(boot, sizeof(boot), "BOOT_MISSION.TXT");
                 bf = fopen(boot, "r");
                 if (bf) { if (fscanf(bf, "%d %d", &boot_mission, &boot_difficulty) < 1) boot_mission = 0; fclose(bf); }
-                if (boot_mission >= 1 && boot_mission <= MISSION_COUNT) {
+                if ((boot_mission >= 1 && boot_mission <= MISSION_COUNT) || boot_mission == MENU_DEBUG_ROOM) {   /* 99: the Debug Room */
                     mission_choice.mission = boot_mission;
                     mission_choice.difficulty = boot_difficulty & 1;
                 } else {
