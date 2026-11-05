@@ -179,8 +179,12 @@ def main():
 
     # Gun stance tables (FUN_00222e00): row = direction of travel against the aim
     # (FUN_00223e80: 0 fwd, 1 / 4 sides, 2 / 3 back, 5 still). Column 6 is the idle
-    # with no target, 2 the level aim with one, 3 the level shot. A script's layer 1
-    # is the upper body, layer 0 the legs.
+    # with no target, 2 the level aim, 3 the level shot. FUN_00223fe0 picks 0 / 1
+    # (target above) or 4 / 5 (below) by the pitch to the target and FUN_00222e00
+    # plays it on the main track (+0x24c6 shows it) with column 2 on a second
+    # track, blended by +0x2430: near 0 at a level target, so the pose is column 2.
+    # (The up / down blend isn't ported.) A script's layer 1 is the upper body,
+    # layer 0 the legs.
     elf = (a.moveset.parent / "disc/SLUS_213.61").read_bytes()
     phoff = struct.unpack_from("<I", elf, 0x1C)[0]
     _, seg_off, seg_va = struct.unpack_from("<III", elf, phoff)
@@ -189,16 +193,16 @@ def main():
         by = {l["layer"]: runtime_name(l["file"], l["index"]) for l in layers}
         return by.get(1, by[0]), by[0]
     L += ["/* [gun 0-4: E&I, shotgun, Artemis, Spiral, Kalina Ann][row]. */",
-          "typedef struct { const char *idle, *aim, *shot, *legs; } GunStanceRow;",
+          "typedef struct { const char *idle, *aim, *shot, *legs, *aim_legs; } GunStanceRow;",
           "static const GunStanceRow gun_stance_rows[5][6] = {"]
     for bank, table in ((8, 0x594420), (9, 0x5944D0), (10, 0x594580), (11, 0x594630), (12, 0x5946E0)):
         L.append("    {")
         for r in range(6):
             cols = struct.unpack_from("<7I", elf, seg_off + table + r * 0x1C - seg_va)
             idle, legs = script_motions(f"{bank}:{cols[6]}")
-            aim, _ = script_motions(f"{bank}:{cols[2]}")
+            aim, aim_legs = script_motions(f"{bank}:{cols[2]}")
             shot, _ = script_motions(f"{bank}:{cols[3]}")
-            L.append(f'        {{"{idle}", "{aim}", "{shot}", "{legs}"}},')
+            L.append(f'        {{"{idle}", "{aim}", "{shot}", "{legs}", "{aim_legs}"}},')
         L.append("    },")
     L += ["};", ""]
     # Weapon placement (FUN_00293910): each weapon's table of records by state.

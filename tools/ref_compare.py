@@ -7,6 +7,7 @@
 Scripts are "button first last" lines, in 60 fps frames from the start.
 """
 import json
+import os
 import math
 import struct
 import subprocess
@@ -199,6 +200,10 @@ def record_port(name):
     print("port", name, len(rows))
 
 
+# PS2_EXTRA=0x24a0,0x80 also samples that block of the player each frame (hex).
+EXTRA = tuple(int(v, 0) for v in os.environ["PS2_EXTRA"].split(",")) if os.environ.get("PS2_EXTRA") else None
+
+
 def record_ps2(name, state_key=0x72):
     import pcsx2_ref as r
     frames, events = SCRIPTS[name]
@@ -270,7 +275,8 @@ def record_ps2(name, state_key=0x72):
             i += 1
         d = p.read(PLAYER + 0x50, 12)
         x, y, z = struct.unpack("<3f", d)
-        samples.append((now, x, y, z, p.f32(PLAYER + 0x84), p.u16(PLAYER + 0x24C6), p.u16(PLAYER + 0x2848)))
+        samples.append((now, x, y, z, p.f32(PLAYER + 0x84), p.u16(PLAYER + 0x24C6), p.u16(PLAYER + 0x2848),
+                        p.read(PLAYER + EXTRA[0], EXTRA[1]).hex() if EXTRA else ""))
         p.writef(PLAYER + 0x2AD4, 5300.0)
         park()
         if now >= frames:
@@ -280,7 +286,7 @@ def record_ps2(name, state_key=0x72):
         while s + 1 < len(samples) and samples[s + 1][0] <= f:
             s += 1
         a = samples[s]
-        rows.append({"f": f, "x": a[1], "y": a[2], "z": a[3], "yaw": a[4], "m": f"{a[5]:04x}/{a[6]}"})
+        rows.append({"f": f, "x": a[1], "y": a[2], "z": a[3], "yaw": a[4], "m": f"{a[5]:04x}/{a[6]}", "extra": a[7]})
     (OUT / f"cmp_ps2_{name}.json").write_text(json.dumps(rows))
     print("ps2", name, len(rows), "samples", len(samples))
 

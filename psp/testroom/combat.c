@@ -49,7 +49,7 @@ enum { NEXT_END, NEXT_TIME, NEXT_FLAG1, NEXT_FLAG2, NEXT_LAND, NEXT_MASH, NEXT_C
 #define GUN_STANCE_AUTO_AIM 50.0f  /* FUN_00246d40: a neutral-stick shot that found a target */
 #define GUN_FIRST_AIM_FRAMES 10.0f /* FUN_002688c0: the first shot from outside the stance */
 
-static int gun_rows[5][6][4];      /* motion indices: idle, aim, shot, legs */
+static int gun_rows[5][6][5];      /* motion indices: idle, aim, shot, legs, legs aiming */
 
 #define CHARGE_TIER_FRAMES 30.0f   /* weapon config +0x504: charge below this is the plain release */
 #define STYLE_ANY 0xFF
@@ -243,7 +243,8 @@ int combat_init(void) {
             gun_rows[g][r][1] = motion_find(row->aim);
             gun_rows[g][r][2] = motion_find(row->shot);
             gun_rows[g][r][3] = motion_find(row->legs);
-            for (m = 0; m < 4; ++m) if (gun_rows[g][r][m] < 0) return 0;
+            gun_rows[g][r][4] = motion_find(row->aim_legs);
+            for (m = 0; m < 5; ++m) if (gun_rows[g][r][m] < 0) return 0;
         }
     }
     return 1;
@@ -718,7 +719,7 @@ static void gun_walk(Combat *c, Player *player, const PlayerInput *input, float 
         c->walking = 0;
     }
     c->gun_row = row;
-    legs = gun_rows[gun_index(player)][row][3];
+    legs = gun_rows[gun_index(player)][row][has_aim ? 4 : 3];
     if (legs != c->lower_motion) {
         if (c->lower_motion >= 0) {
             c->lower_fade_motion = c->lower_motion;
@@ -791,12 +792,10 @@ static void update_gun_layers(Combat *c, Player *player, const PlayerInput *inpu
         c->aim_target = player->has_target && (player->locked_on || neutral);
         if (c->aim_target && !player->locked_on) c->stance_timer = GUN_STANCE_AUTO_AIM;
         /* Odd shots play the motion from its start, even ones from 15: the two guns. */
-        if (d_is_alternating(c)) {
-            /* The maxed guns on the HD Collection play 8:7 and 8:8 in turn. */
-            int alt = motion_find((c->shot_count & 1) ? "s28-07" : "s28-08");
-            if (alt >= 0) { c->motion = alt; c->frame = 0.0f; }
-            else c->frame = (c->shot_count & 1) ? 0.0f : 15.0f;
-        }
+        /* Every shot is the row's level shot (column 3). The HD Collection's
+         * 8:7 / 8:8 are the standing row's up and down shots (columns 1 and 5),
+         * the main track FUN_00222e00 blends over the level one, not two guns. */
+        if (d_is_alternating(c)) c->frame = (c->shot_count & 1) ? 0.0f : 15.0f;
         else c->frame = motion_get(c->motion)->loop_start;
         c->next_event = 0;
         c->since_fire = 0.0f;
