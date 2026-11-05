@@ -146,7 +146,9 @@ ACTIONS = {
     132: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
     133: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
     134: [P("18:0", shot=2)],
-    135: [P("18:15"), P("18:16", adv="mash", loop="18:16", btn="CIR", air=("raw", 0.0, 0.0, 0.0, 0.0), auto=7.0, shot=1), P("18:17")],
+    # Rain Storm (FUN_0026b8b0): vy / gravity from the config +0x18c / +0x190 (5, -0.35) at the start, then
+    # +0x1a0 / +0x1a4 (0, -0.5) in the loop; the end keeps falling on those.
+    135: [P("18:15", air=("vy", 0x18C, 0x190)), P("18:16", adv="mash", loop="18:16", btn="CIR", air=("vy", 0x1A0, 0x1A4), auto=7.0, shot=1), P("18:17")],
     136: [P("8:33"), P("8:34", adv="mash", loop="8:34", btn="SQ", auto=7.0, shot=1), P("8:39")],
     # Shotgun (the motion runs to its end, FUN_0026be70)
     140: [P("9:6", shot=1, layered=True)], 141: [P("9:6", shot=1, layered=True)],

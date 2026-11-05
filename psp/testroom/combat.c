@@ -82,6 +82,8 @@ typedef struct {
     float auto_fire;       /* frames between further shots during the phase */
     float refire;          /* NEXT_SHOT: frames before another press fires again */
     int layered;           /* upper-body shot: the legs walk under it */
+    float flag_g;          /* at flag 1 only the gravity changes to this (Aerial Rave: -1.5), 0 = no */
+    float stop_below;      /* forward speed under this stops (FUN_002e3f60; Aerial Rave: 2) */
 } MoveDef;
 
 #define S(key) key, NULL
@@ -124,10 +126,12 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_SM_CRAZY_DANCE] = {S("13:18"), "CRAZY DANCE", MOVE_SM_CRAZY_FINISH, 0, BTN_CIR, 0, 260, HIT_LIGHT},
     [MOVE_SM_CRAZY_FINISH] = {S("13:20"), "CRAZY DANCE", MOVE_NONE, 0, 0, 0, 280, HIT_HEAVY},
     /* Aerial Rave sinks slowly, each strike starting the sink again (HD Collection traces). */
-    [MOVE_SM_RAVE_1] = {S("13:7"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_AIR, .air = 1, .air_v = {0.0f, 0.0f, -1.17f, -0.14f}},
-    [MOVE_SM_RAVE_2] = {S("13:8"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_AIR, .air = 1, .air_v = {0.0f, 0.0f, -1.17f, -0.14f}},
-    [MOVE_SM_RAVE_3] = {S("13:9"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_AIR, .air = 1, .air_v = {0.0f, 0.0f, -1.17f, -0.14f}},
-    [MOVE_SM_RAVE_4] = {S("13:10"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_SLAM, .air = 1, .air_v = {0.0f, 0.0f, -1.17f, -0.14f}},
+    /* FUN_00268270 / 8400 / 8590 / 8720: speed, its change, vy and gravity from Rebellion's config (pl000 chunk 11)
+     * +0xe0 / +0xf0 / +0x100 / +0x110; gravity -1.5 from the flip on (+0x24d5 = 1); speed under 2 stops. */
+    [MOVE_SM_RAVE_1] = {S("13:7"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_AIR, .air = 1, .air_v = {5.0f, -1.0f, -1.3f, -0.14f}, .flag_g = -1.5f, .stop_below = 2.0f},
+    [MOVE_SM_RAVE_2] = {S("13:8"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_AIR, .air = 1, .air_v = {5.0f, -1.0f, -1.2f, -0.14f}, .flag_g = -1.5f, .stop_below = 2.0f},
+    [MOVE_SM_RAVE_3] = {S("13:9"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_AIR, .air = 1, .air_v = {5.0f, -1.0f, -1.2f, -0.14f}, .flag_g = -1.5f, .stop_below = 2.0f},
+    [MOVE_SM_RAVE_4] = {S("13:10"), "AERIAL RAVE", MOVE_NONE, 0, 0, 0, 240, HIT_SLAM, .air = 1, .air_v = {5.0f, -1.0f, -1.2f, -0.14f}, .flag_g = -1.5f, .stop_below = 2.0f},
     /* Trickster: no attack; root motion carries Dante (dash 400 cm, Sky Star
      * 580 cm, Wall Hike 462 cm up). */
     [MOVE_TR_DASH] = {S("23:0"), "DASH", MOVE_NONE, 0, 0, 0, 0, -1},
@@ -153,7 +157,8 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_RG_BLOCK] = {S("24:0"), "ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 1},
     [MOVE_RG_HOLD] = {S("24:30"), "ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 1},
     [MOVE_RG_END] = {S("24:31"), "ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_RG_AIR_BLOCK] = {S("24:5"), "AIR ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 1},
+    /* physics: the jump's arc carries on under it (PS2: 30 frames in the air in all, as a plain jump). */
+    [MOVE_RG_AIR_BLOCK] = {S("24:5"), "AIR ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 1, 0, 1},
     [MOVE_TAUNT] = {S("2:0"), "TAUNT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DEVIL_ON] = {H("2-50"), "DEVIL TRIGGER", MOVE_NONE, 0, 0, 0, 0, -1},
     /* Ground motions seen on the HD Collection (state 44). Their roots say which way each throws
@@ -302,6 +307,8 @@ static void end_move(Combat *c, Player *player) {
     memset(c->gates, 0, sizeof(c->gates));
     c->dashes = 0;        /* FUN_0021f500 (back to neutral) clears the dash count */
     c->warp_time = 0.0f;
+    /* Still in the air: the fall carries on from the move's vertical speed (FUN_0021df00 is handed +0x64). */
+    if (c->air && !player->on_ground) player->vy = c->air_v[2] * MOTION_FPS;
     c->air = 0;
     /* Shots hand over to the stance; anything else leaves the legs to it too. */
     if (moves[c->last_move_for_end].layered) c->stance_timer = c->stance_timer > GUN_STANCE_AFTER_SHOT ? c->stance_timer : GUN_STANCE_AFTER_SHOT;
@@ -1039,6 +1046,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         memcpy(c->air_v, d->flag_v, sizeof(c->air_v));
         c->air = 1;
     }
+    if (d->flag_g != 0.0f && c->flag == 1 && c->air) c->air_v[3] = d->flag_g;
     if (d->next_on == NEXT_CHARGE) c->charge_frames += dt * MOTION_FPS;
     while (hits-- > 0) deal_hit(c, player);
 
@@ -1113,6 +1121,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             player->y += c->air_v[2] * k;
             c->air_v[0] += c->air_v[1] * k;
             if (c->air_v[0] < 0.0f) c->air_v[0] = 0.0f;
+            if (d->stop_below > 0.0f && c->air_v[0] < d->stop_below) c->air_v[0] = 0.0f;
             c->air_v[2] += c->air_v[3] * k;
             if (c->air_v[2] < -70.0f) c->air_v[2] = -70.0f;   /* FUN_002e2560's fall limit */
         }

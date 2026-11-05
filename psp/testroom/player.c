@@ -409,7 +409,9 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         player->air_stars = 1;
     }
     /* Air moves (Air Hike, Sky Star, aerial attacks) take over from the jump arc. */
-    if (player->attacking && player->jump_motion >= 0 && !player->on_ground) {
+    /* A move that keeps physics (Royalguard's air block, 24:5) leaves the jump's own arc running: on the PS2 the
+     * fall under it is the jump's, 30 frames in the air in all, not a slower generic one. */
+    if (player->attacking && !player->free_fall && player->jump_motion >= 0 && !player->on_ground) {
         player->jump_motion = -1;
         player->air_kind = AIR_NONE;
     }

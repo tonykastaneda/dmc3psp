@@ -72,8 +72,9 @@ def curves(rows):
             start = a["f"]
             break
     if start is None:
+        # From the starting spot, not frame to frame: slow moves (Prop, about 2 cm a frame) must count too.
         for a, b in zip(rows, rows[1:]):
-            if math.hypot(b["x"] - a["x"], b["z"] - a["z"]) > 2.5:
+            if math.hypot(b["x"] - rows[0]["x"], b["z"] - rows[0]["z"]) > 2.5:
                 start = a["f"]
                 break
     if start is None:
