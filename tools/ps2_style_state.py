@@ -11,6 +11,9 @@ rows, name = int(sys.argv[1]), sys.argv[2]
 # Optional: a melee weapon for the first slot, rows down from Cerberus on the Devil Arms page (0 Cerberus,
 # 1 Agni & Rudra, 2 Nevan, 3 Beowulf); without it, Rebellion stays.
 melee = int(sys.argv[3]) if len(sys.argv) > 3 else -1
+# Optional: a gun for the first slot, rows down from the Shotgun on the guns page (0 Shotgun, 1 Artemis,
+# 2 Spiral, 3 Kalina Ann); -1 keeps Ebony & Ivory.
+gun = int(sys.argv[4]) if len(sys.argv) > 4 else -1
 P = 0x17E0A40
 SLOT1 = glob.glob('build/refemu/sstates/SLUS-21361 (*).01.p2s')
 DEFAULT_BUTTONS = [0x1000, 0x4000, 0x2000, 0x8000, 0x10, 0x40, 0x20, 0x80, 4, 1, 0x200, 8, 2, 0x400, 0x100]
@@ -55,6 +58,14 @@ if melee >= 0:
     press('cross', 2.5)
     shot('5equip')
     press('triangle', 4)                                      # back to Customize
+if gun >= 0:
+    press('down', 1.5); press('cross', 4)                    # Equip, on the guns page
+    press('cross', 2)                                         # pick the first slot; the cursor goes to the Shotgun
+    for _ in range(gun):
+        press('down', 1.2)
+    press('cross', 2.5)
+    shot('5gun')
+    press('triangle', 4)
 press('triangle', 7)                                          # to the briefing (a fade first)
 press('left', 1.5)
 shot('6start')

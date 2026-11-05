@@ -151,6 +151,12 @@ for _n in ("r_1", "r_2", "r_3", "r_4", "r_gap", "r_gapl", "r_st", "r_ht", "r_hth
 for _n in ("w_u", "w_d", "w_l", "w_r", "w_au", "w_aa", "d_n", "d_u", "d_d", "d_l", "d_r", "t_air", "t_airb", "dash3"):
     SCRIPTS.setdefault(_n, _from_hd(_n, style=0))
 # The circle button's style moves (the HD's s_* scripts) in Swordmaster (1), Gunslinger (2) and Royalguard (3).
+#: The guns (states style_tr_<gun>.p2s; Ebony & Ivory is the default): the HD's square scripts with "gun n".
+GUN_MOVES = ("g_1", "g_m", "g_h", "g_a")
+for _g, _tag in ((5, "ei"), (6, "sg"), (7, "ar"), (8, "sp"), (9, "ka")):
+    for _n in GUN_MOVES:
+        _f, _e = _from_hd(_n, style=0)
+        SCRIPTS.setdefault(f"{_tag}_{_n.replace('_', '')}", (_f, _e + ([("gun", _g, 0)] if _g != 5 else [])))
 #: The other melee weapons (states style_tr_<weapon>.p2s): the HD's triangle scripts with "melee n".
 MELEE_MOVES = ("c_1", "c_hold", "c_air", "c_airm", "c_b", "c_f", "c_mash", "r_gap", "r_4")
 for _w, _tag in ((1, "cer"), (2, "agn"), (3, "nev"), (4, "beo")):
@@ -202,7 +208,10 @@ def record_ps2(name, state_key=0x72):
     import glob
     import shutil
     weapon = next((int(a) for b, a, c in events if b == "melee"), 0)
+    gun = next((int(a) for b, a, c in events if b == "gun"), 5)
     tag = ['tr', 'sm', 'gs', 'rg'][style] + ("" if weapon == 0 else "_" + ["", "cerberus", "agni", "nevan", "beowulf"][weapon])
+    if gun != 5:
+        tag += "_" + {6: "shotgun", 7: "artemis", 8: "spiral", 9: "kalina"}[gun]
     source = ROOT / "build" / "refemu" / "sstates" / f"style_{tag}.p2s"
     slot1 = glob.glob(str(ROOT / "build" / "refemu" / "sstates" / "SLUS-21361 (*).01.p2s"))
     if source.exists() and slot1:
