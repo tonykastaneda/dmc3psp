@@ -8,6 +8,9 @@ sys.path.insert(0, 'tools')
 import pcsx2_ref as r
 
 rows, name = int(sys.argv[1]), sys.argv[2]
+# Optional: a melee weapon for the first slot, rows down from Cerberus on the Devil Arms page (0 Cerberus,
+# 1 Agni & Rudra, 2 Nevan, 3 Beowulf); without it, Rebellion stays.
+melee = int(sys.argv[3]) if len(sys.argv) > 3 else -1
 P = 0x17E0A40
 SLOT1 = glob.glob('build/refemu/sstates/SLUS-21361 (*).01.p2s')
 DEFAULT_BUTTONS = [0x1000, 0x4000, 0x2000, 0x8000, 0x10, 0x40, 0x20, 0x80, 4, 1, 0x200, 8, 2, 0x400, 0x100]
@@ -43,11 +46,29 @@ press('cross', 5); press('cross', 4)                          # Customize -> Sty
 for _ in range(abs(rows)):
     press('up' if rows < 0 else 'down', 1.2)
 shot('5style')
-press('cross', 3); press('triangle', 2.5); press('triangle', 4)
-press('left', 1.0)
+press('cross', 4)                                   # style chosen: back on Customize (Style)
+if melee >= 0:
+    press('down', 1.5); press('cross', 4); press('r1', 2.5)  # Equip, the Devil Arms page
+    press('cross', 2)                                         # pick the first slot; the cursor goes to Cerberus
+    for _ in range(melee):
+        press('down', 1.2)
+    press('cross', 2.5)
+    shot('5equip')
+    press('triangle', 4)                                      # back to Customize
+press('triangle', 7)                                          # to the briefing (a fade first)
+press('left', 1.5)
 shot('6start')
 press('cross', 20); press('start', 10)                        # Mission Start, skip the cutscene
 p = r.Pine()
+# Heavier weapons load longer: wait for Dante on the street (and a held weapon), skipping again if still in a movie.
+t_end = time.time() + 60
+while time.time() < t_end:
+    x = p.f32(P + 0x50)
+    if 1000.0 < x < 5000.0 and p.read(P + 0x3D4F, 1)[0] != 0xFF and p.read(P + 0x3C6C, 1)[0] < 6 and list(p.read(P + 0x3D4F, 2)) != [0, 0]:
+        break
+    time.sleep(2)
+    if time.time() > t_end - 40:
+        press('start', 3)
 for i, v in enumerate(DEFAULT_BUTTONS):
     p.write16(0x6C37DA + 2 * i, v)
 for _ in range(12):

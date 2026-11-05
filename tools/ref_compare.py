@@ -151,16 +151,31 @@ for _n in ("r_1", "r_2", "r_3", "r_4", "r_gap", "r_gapl", "r_st", "r_ht", "r_hth
 for _n in ("w_u", "w_d", "w_l", "w_r", "w_au", "w_aa", "d_n", "d_u", "d_d", "d_l", "d_r", "t_air", "t_airb", "dash3"):
     SCRIPTS.setdefault(_n, _from_hd(_n, style=0))
 # The circle button's style moves (the HD's s_* scripts) in Swordmaster (1), Gunslinger (2) and Royalguard (3).
+#: The other melee weapons (states style_tr_<weapon>.p2s): the HD's triangle scripts with "melee n".
+MELEE_MOVES = ("c_1", "c_hold", "c_air", "c_airm", "c_b", "c_f", "c_mash", "r_gap", "r_4")
+for _w, _tag in ((1, "cer"), (2, "agn"), (3, "nev"), (4, "beo")):
+    for _n in MELEE_MOVES:
+        _f, _e = _from_hd(_n, style=0)
+        SCRIPTS.setdefault(f"{_tag}_{_n.replace('_', '')}", (_f, _e + [("melee", _w, 0)]))
 STYLE_MOVES = ("s_1", "s_2", "s_3", "s_mash", "s_hold", "s_air", "s_airm", "s_lf", "s_lb", "s_lfm", "s_lbm", "s_lh", "s_airs")
 for _style, _tag in ((1, "sm"), (2, "gs"), (3, "rg")):
     for _n in STYLE_MOVES:
         SCRIPTS.setdefault(f"{_tag}_{_n[2:]}", _from_hd(_n, style=_style))
 
 
+PS2_INPUT_LAG = 2
+
+
 def write_port_script(name):
     frames, events = SCRIPTS[name]
     # Option lines: ("shot", frame, 0), ("enemy", cm, 0), ("melee", n, 0), ("gun", n, 0).
     events, s = prepared(events)
+    # The PS2's keys arrive PS2_INPUT_LAG frames after they're pressed (PCSX2's keyboard path; measured from the
+    # first movement of single presses): the port gets them that much later too, so both games see each press
+    # at the same point of a move.
+    options = ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps")
+    events = [(b, a, c) if b in options or b.startswith("style") else (b, a + PS2_INPUT_LAG, c + PS2_INPUT_LAG)
+              for b, a, c in events]
     text = f"frames {frames}\nspot {int(s['x'])} {int(s['z'])}\nfaceyaw {s['face']}\ncamyaw {s['cam']}\ncamlock 1\n" +"".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
     (GAME_DIR / "CMP_SCRIPT.TXT").write_text(text, encoding="ascii")
 
@@ -186,7 +201,9 @@ def record_ps2(name, state_key=0x72):
     style = next((int(b[5:]) for b, a, c in events if b.startswith("style")), 0)
     import glob
     import shutil
-    source = ROOT / "build" / "refemu" / "sstates" / f"style_{['tr', 'sm', 'gs', 'rg'][style]}.p2s"
+    weapon = next((int(a) for b, a, c in events if b == "melee"), 0)
+    tag = ['tr', 'sm', 'gs', 'rg'][style] + ("" if weapon == 0 else "_" + ["", "cerberus", "agni", "nevan", "beowulf"][weapon])
+    source = ROOT / "build" / "refemu" / "sstates" / f"style_{tag}.p2s"
     slot1 = glob.glob(str(ROOT / "build" / "refemu" / "sstates" / "SLUS-21361 (*).01.p2s"))
     if source.exists() and slot1:
         shutil.copy(source, slot1[0])
