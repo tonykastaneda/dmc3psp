@@ -246,6 +246,7 @@ static void fade_overlay(float amount) {
 
 typedef enum { SCREEN_TITLE, SCREEN_MISSIONS, SCREEN_BRIEFING, SCREEN_DONE } Screen;
 ShopState *menu_shop;   /* the briefing's Customize: set by main */
+static int debug_combo(unsigned int now, unsigned int pressed);
 int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int frame);
 
 static void draw_title(int cursor) {
@@ -339,6 +340,7 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
         }
         pressed = now & ~held;
         held = now;
+        if (debug_combo(now, pressed)) { held = 0xffffffffu; pressed = 0; }
         if (frame % 300 == 0) scePowerTick(PSP_POWER_TICK_ALL);
         if (!leaving && fade == 0) {
             switch (screen) {
@@ -521,6 +523,14 @@ enum { SHOP_INDEX, SHOP_ITEM, SHOP_STATIC };
 enum { ROW_STYLE, ROW_EQUIP, ROW_ITEM, ROW_ACTION, ROW_GUNS, ROW_EXIT, INDEX_ROWS };
 #define ITEM_ROWS 7
 MenuText menu_text;
+MenuDebug menu_debug;
+#define DEBUG_COMBO (PSP_CTRL_START | PSP_CTRL_SELECT)
+/* Both held, one of them just now: the debug menu, then the screen goes on. Returns 1 if it ran. */
+static int debug_combo(unsigned int now, unsigned int pressed) {
+    if (!menu_debug || (now & DEBUG_COMBO) != DEBUG_COMBO || !(pressed & DEBUG_COMBO)) return 0;
+    menu_debug();
+    return 1;
+}
 static ShopState *shop;
 static int shop_screen, shop_cursor, index_cursor, shop_image, shop_confirm, shop_yes, shop_note;
 /* The index's descriptions, by row (2294's messages). */
@@ -727,6 +737,7 @@ int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int fram
         else { sceCtrlReadBufferPositive(&data, 1); now = data.Buttons; }
         pressed = now & ~held;
         held = now;
+        if (debug_combo(now, pressed)) { held = 0xffffffffu; pressed = 0; }
         if (shop_update(pressed)) break;
         sceGuStart(GU_DIRECT, list);
         sceGuClearColor(0xff000000);

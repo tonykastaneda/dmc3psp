@@ -530,6 +530,8 @@ static int dummy_count = 1, dummy_attacks, dummy_kind;
 static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
+static unsigned int debug_held;      /* buttons down this frame */
+#define DEBUG_COMBO (PSP_CTRL_START | PSP_CTRL_SELECT)
 
 /* Returns 1 when the animation viewer should toggle. */
 static int debug_menu_update(unsigned int pressed) {
@@ -979,6 +981,31 @@ static void door_prompt_draw(void) {
     draw_text(SCR_WIDTH / 2 - 28, SCR_HEIGHT - 40, "O  ENTER");
 }
 
+static void draw_debug_menu(int viewer);
+/* The debug menu on its own frames, for the menus (menu.h's MenuDebug): until it's closed. */
+static void debug_modal(void) {
+    unsigned int previous = 0xffffffffu;
+    debug_open = 1;
+    debug_cursor = 0;
+    while (debug_open) {
+        SceCtrlData pad;
+        unsigned int pressed;
+        sceCtrlPeekBufferPositive(&pad, 1);
+        pressed = pad.Buttons & ~previous;
+        previous = pad.Buttons;
+        debug_menu_update(pressed);
+        if (debug_quit) { debug_quit = 0; debug_open = 0; }   /* already in the menus */
+        sceGuStart(GU_DIRECT, display_list);
+        sceGuClearColor(0xff000000u);
+        sceGuClear(GU_COLOR_BUFFER_BIT);
+        draw_debug_menu(0);
+        sceGuFinish();
+        sceGuSync(0, 0);
+        sceDisplayWaitVblankStart();
+        menu_draw_buffer = sceGuSwapBuffers();
+    }
+}
+
 static void draw_debug_menu(int viewer) {
     char lines[DEBUG_ITEMS][32];
     int i, x = SCR_WIDTH / 2 - 88, y = SCR_HEIGHT / 2 - 46;
@@ -1258,6 +1285,7 @@ static void read_pad(PlayerInput *input, unsigned int *previous_buttons, int *pr
     input->jump_held = (pad.Buttons & PSP_CTRL_CROSS) != 0;
     input->taunt = (pressed & PSP_CTRL_SELECT) != 0;
     debug_pressed = pressed;
+    debug_held = pad.Buttons;
 }
 
 /* Scripted input for the automated test (240 frames). */
@@ -1679,7 +1707,7 @@ static int cmp_place_frame[8], cmp_place_count; static float cmp_place[8][5];   
 static unsigned int menu_button(const char *name) {
     static const struct { const char *name; unsigned int button; } names[] = {
         {"cross", PSP_CTRL_CROSS}, {"circle", PSP_CTRL_CIRCLE}, {"square", PSP_CTRL_SQUARE}, {"up", PSP_CTRL_UP},
-        {"down", PSP_CTRL_DOWN}, {"left", PSP_CTRL_LEFT}, {"right", PSP_CTRL_RIGHT}, {"start", PSP_CTRL_START}};
+        {"down", PSP_CTRL_DOWN}, {"left", PSP_CTRL_LEFT}, {"right", PSP_CTRL_RIGHT}, {"start", PSP_CTRL_START}, {"select", PSP_CTRL_SELECT}};
     unsigned int i;
     for (i = 0; i < sizeof(names) / sizeof(names[0]); ++i) if (!strcmp(names[i].name, name)) return names[i].button;
     return 0;
@@ -2465,6 +2493,7 @@ int main(int argc, char *argv[]) {
         char path[320];
         path_in_game_dir(path, sizeof(path), "MENU.BIN");
         menu_text = menu_text_hook;
+        menu_debug = debug_modal;
         menu_shop = &shop_state;
         if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;
@@ -2492,6 +2521,7 @@ int main(int argc, char *argv[]) {
         int bones_now = show_bones || (autotest && frames == 26);
 
         debug_pressed = 0;
+        debug_held = 0;
         /* Keep the PSP awake and the screen on during long unattended runs. */
         if (frames % 300 == 0) scePowerTick(PSP_POWER_TICK_ALL);
         if (tour) {
@@ -2525,10 +2555,15 @@ int main(int argc, char *argv[]) {
             int was_open = debug_open || pause_active;
             {
                 int k;
-                for (k = 0; k < game_key_count; ++k) if (game_keys[k].frame == frames) debug_pressed |= game_keys[k].button;
+                for (k = 0; k < game_key_count; ++k) if (game_keys[k].frame == frames) { debug_pressed |= game_keys[k].button; debug_held |= game_keys[k].button; }
             }
             int toggle_viewer = 0;
-            if (pause_active) {
+            if ((debug_held & DEBUG_COMBO) == DEBUG_COMBO && (debug_pressed & DEBUG_COMBO) && !debug_open) {
+                /* START and SELECT together: the debug menu, whatever's open. */
+                pause_active = 0;
+                debug_open = 1;
+                debug_cursor = 0;
+            } else if (pause_active) {
                 PauseAction action = pause_update(debug_pressed);
                 if (action == PAUSE_RESUME) pause_active = 0;
                 else if (action == PAUSE_OPTIONS) { pause_active = 0; debug_open = 1; debug_cursor = 0; }

@@ -41,6 +41,9 @@ typedef struct {
 /* Text for the screens' messages: the game's font isn't on the disc, so main draws it with its own. */
 typedef void (*MenuText)(int x, int y, const char *text, unsigned int color);
 extern MenuText menu_text;
+/* START and SELECT together, anywhere: main's debug menu, run on its own frames. */
+typedef void (*MenuDebug)(void);
+extern MenuDebug menu_debug;
 /* The menus' font, from MENU.BIN (tools/prepare_menu.py), for text written at run time: x, y the top left
  * in PSP pixels, height the line's. Usable inside any open display list; returns the width. */
 float menu_font_draw(float x, float y, float height, const char *text, unsigned int color);
