@@ -224,8 +224,7 @@ def choose_scm(scm_data, hits):
 
     First whichever reading of the root's offset lines the visuals up with the collision (the middle of each
     one's vertices against the collision's). Then the nodes' full transforms (their rotations too) against
-    that, object by object: the stage takes whichever fits the collision better overall, and an object takes
-    the other reading only where it fits clearly better. Most stages' rotations are zero or cancel and nothing
+    that, object by object: the stage takes whichever fits the collision better overall, for all its objects. Most stages' rotations are zero or cancel and nothing
     changes; st002's (Mission 3's street) are what turn its pieces the right way round."""
     def middle(values):
         values = sorted(values)
@@ -244,19 +243,11 @@ def choose_scm(scm_data, hits):
     plain_total = sum(f[0] or 0.0 for f in fits)
     full_total = sum(f[1] or 0.0 for f in fits)
     prefer_full = full_total > plain_total + 0.5
-    objects, switched = [], 0
-    for (plain_fit, full_fit), a, b in zip(fits, best["objects"], full["objects"]):
-        use_full = prefer_full
-        if plain_fit is not None and full_fit is not None:
-            if full_fit > plain_fit + 0.1:
-                use_full = True
-            elif plain_fit > full_fit + 0.1:
-                use_full = False
-        if use_full != prefer_full or use_full:
-            switched += use_full != prefer_full
-        objects.append(b if use_full else a)
+    # One reading for the whole stage. Object by object the fit misleads: st002's building pieces read without
+    # their rotations hang over its far end, beside tall collision walls, and score well there.
+    objects = full["objects"] if prefer_full else best["objects"]
     print(f"scene placement: {'full transforms' if prefer_full else 'translations'} "
-          f"(collision fit {plain_total:.1f} translations, {full_total:.1f} full), {switched} objects the other way")
+          f"(collision fit {plain_total:.1f} translations, {full_total:.1f} full)")
     best = dict(best)
     best["objects"] = objects
     return best
