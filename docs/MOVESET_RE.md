@@ -52,6 +52,35 @@ position, +0x84 yaw, +0x2AD4 health, +0x3C6C style, +0x3C74 style level, +0x24C6
 - **Effect look**: a spiked flash and lingering smoke per shot with no visible bullet, a pale
   fan behind the blade, a streak behind a dash, no landing dust.
 
+## The PS2 as the reference (2026-11-05)
+
+The PS2 itself is now the reference: the harness PCSX2 (`build/refemu`) runs a 100% US save on card slot 2
+(`memcards/full100.ps2`). `tools/ps2_style_state.py` makes one savestate per style, melee weapon and gun through
+the game's own Customize screens (writing the style byte doesn't switch the moveset). The save's previous owner
+had swapped the buttons (Triangle/Circle, Cross/Square): every state has the default table written at
+`0x6C37DA`. `tools/ref_compare.py` holds the street's enemies by their class vtables (`tools/ps2_enemies.py`):
+one stands where the port puts its dummy, the rest far away (an enemy overhead still turns a jump into an Enemy
+Step). Dante's facing is the u16 at `+0x90`. The PS2's zone camera can't be moved, so scripts run where it
+looks the right way ("open" and, for R1, "behind"; the port copies it with spot / faceyaw / camyaw / camlock).
+`tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00).
+
+Taken from the PS2's code since (the guesses they replaced in brackets):
+- Trickster's dash script by style level, table 0x5911d0 (dash count); no pending press while the dash's gate
+  only buffers; left and right lock-on dashes (swapped).
+- Scripts start counting two frames after a move begins (gates were two frames early).
+- Helm Breaker, `FUN_00264b90`: vy and gravity from the config (`pl000` chunk 11, `player+0x2844`) +0x60.. (a
+  1800 cm/s slam). Aerial Rave `FUN_00268270..`, Agni & Rudra 5:17 `FUN_002737d0`, Nevan 6:15/6:34
+  `FUN_00276ac0` (6:34 hovers until its flag), Rain Storm `FUN_0026b8b0`, Beowulf's dive kick `FUN_00267d20`
+  (45 deg at 45, aimed 40-75 deg at a target), Air Trick's lock point (145 over the target's feet).
+- Royalguard's air block keeps the jump's arc. A tapped charge swing plays whole, then its own follow-on.
+- Twosome Time by the R1 sector (`FUN_0026b0d0`, table 0x595550) and back to the stance at 13 frames.
+
+Differences that are the test, not the port: Air Hike's peak in `a_hike` (a frame of keyboard jitter on the
+steepest part of the fall; at other timings it matches within 2-11 cm), the combo's sideways 29 cm on the PS2
+(a push by an object), `run` ending on a ramp (the PS2's camera is a degree or two off 122).
+Still open: the Aerial Rave mash takes a 4th hit, Gunslinger's 18:x travel (84 against 73), Cerberus 4:3 with
+lock back (the PS2 doesn't move; blocked?), jump pressed with the stick on the same frame (the PS2 drops it).
+
 ## HD Collection (a maxed save)
 
 The Steam `dmc3.exe` with the user's save (`tools/hd_ref.py`, `hd_trace.py`, `hd_video.py`). It
