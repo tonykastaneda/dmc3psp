@@ -2,7 +2,9 @@
 
 Spawn class 26 now runs Vanguard in `psp/testroom/vanguard.c`. The Mission 2 fight includes his original
 body/robe/scythe meshes, low-rank decisions and motion scripts, teleport attacks, health bar, damage,
-death animation and Mission Clear. This is a working base fight, not a claim of complete PS2 fidelity.
+death animation and Mission Clear. Combat completion tests do not establish animation or PS2 fidelity.
+The first implementation had incorrect rush entry frames, shared teleport timing, invented actor spin,
+and a frozen death pose; these defects were visible even though the fight could be completed.
 
 ## Encounter and AI
 
@@ -21,14 +23,27 @@ convention; it does not reproduce dynamic AI rank or all manager arbitration.
 | --- | --- |
 | Watch, action 15 | Turns at 256 angle units/frame; authored root motion. `00474be0`, `00474d20`, `0046d680` |
 | 27 / 16 | Script 47 from frame 20; tracks during the wind-up; script 101 follows at frame 77. Live hit shapes come from the scripts. `0046dab0`, `00474e00`, `00474e50` |
-| 56 / 72 → 69 or 70 → 73 | Wind-up to frame 70, one random rush/uppercut at rank 0, then recovery. `0046f1a0`, `0047fbb0`, `0047e840`, `0047ef00`, `0047fd10` |
+| 56 / 72 → 69 or 70 → 73 | Wind-up to frame 70, one random rush/uppercut at rank 0, then recovery. Rush enters script 102 at frame **202**; uppercut relocates to Dante rather than the random 400 cm circle. `0046f1a0`, `0047fbb0`, `0047e840`, `0047ef00`, `0047fd10` |
 | 57 / 71 | Hidden 30 frames, relocate 400 cm around Dante, face him and return after 30 more. `0046f400`, `0047f5b0` |
 | 40 / 35 | Scripts 75 and 7. `0046e6a0`, `00476b40`, `00476bb0` |
 | Hit reaction | The grounded flinch ends at frame 30 and rank 0 selects plan 57. `00471ea0`, jump-table target `0046cca8` |
 
-Teleport placement tries the original random direction first, then other directions at the same radius if
-stage geometry blocks it. It requires floor and room collision clearance. Hidden phases cannot be targeted,
-hit, or push Dante. Normal movement is checked against room collision in one-frame simulation substeps.
+Rush/uppercut first spend 30 frames in phase 10, then use the rank-0 relocation delay of 25 at `005cdd50`.
+Rush waits another 15 (`005cdd70`) before revealing, then 30 before striking. Uppercut reveals on the next
+step, plays script 105, waits 50, plays 107, then waits 3 before starting vertical velocity 80 with
+acceleration -8. At the apex acceleration changes to -0.5. `00285820` command **3000** passes a script ID
+and a start-frame override into `00254e80`/`00255420`: `(102,202)` is not a `[102,202]` interval.
+The extra actor rotation from the first implementation has been removed.
+`002b52f0` attaches the two torso robe pieces to body table `+410` (bone 3), not bone 4.
+Their attachment indices have been corrected; the remaining static robe rig is still not PS2 cloth simulation.
+
+Port-specific placement safeguards try the original random direction first, then other directions at
+the same radius if scenery blocks it. A candidate needs floor on the same storey, circle clearance,
+and an unobstructed chest-height segment to Dante. These are adaptations to the port's stage collision,
+not translations of the PS2 collision engine. Ground movement is subdivided spatially into steps no
+larger than one quarter of the decoded 50 cm root sphere, rejecting unsupported floor transitions.
+Hidden phases cannot be targeted, hit, or push Dante. Weapon/robe geometry can extend beyond the body
+collision sphere; full mesh collision is not implemented.
 
 Health uses the decoded base value **3000** at parameter block `0x5cd590 + 0x2c`. Incoming damage still uses
 the port's 42/84 light/heavy convention; outgoing damage uses the existing heavy-hit route (800), not a
@@ -47,6 +62,12 @@ live melee hit shapes and health loss to Dante; melee testing checks health loss
 
 Trace `t` counts simulation substeps, not authored motion frames; the `frame` field is the animation timeline.
 Test scenes reposition Dante for isolated interactions and do not certify a complete unaccelerated playthrough.
+
+`python tools/tests/run_vanguard_logic.py` compiles the actual Vanguard logic and motion sampler against
+the extracted original MOTs on the host. It checks the rush start frame, uppercut placement/timing,
+landing, death pose advancement, a thin-wall movement fixture, and a floor edge. GPU functions are no-ops:
+this test cannot certify visual quality. `tools/record_vanguard.py` captures each simulation frame at
+60 Hz, independently of emulator wall-clock throughput; the resulting MP4 is not an emulator performance test.
 
 Remaining limitations: real-time intro/Vergil cutscenes, sound effects, EFM fades, full cloth simulation,
 dynamic AI ranks, complete hit reactions and original damage scaling. Robes use bind-corrected attachments;

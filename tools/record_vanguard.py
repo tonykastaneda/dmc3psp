@@ -31,8 +31,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--encode-only', action='store_true')
     parser.add_argument('--ffmpeg', default='C:/ffmpeg/bin/ffmpeg.exe')
+    parser.add_argument('--folder', type=Path, default=ROOT / 'build/recordings/vanguard60')
+    parser.add_argument('--output', type=Path, default=ROOT / 'analysis/testroom/vanguard_boss_fight_60fps.mp4')
     args = parser.parse_args()
-    folder = ROOT / 'build/recordings/vanguard60'
+    folder = args.folder.resolve()
     folder.mkdir(parents=True, exist_ok=True)
     if not args.encode_only:
         if list(folder.glob('SHOT_*.BMP')):
@@ -45,7 +47,7 @@ def main():
                         '-Script', str(script), '-Out', str(folder),
                         '-TimeoutSeconds', '900', '-MissionClear'], cwd=ROOT, check=True)
     verify(folder, 'clear')
-    encode(folder, ROOT / 'analysis/testroom/vanguard_boss_fight_60fps.mp4', args.ffmpeg)
+    encode(folder, args.output.resolve(), args.ffmpeg)
 
 
 if __name__ == '__main__':

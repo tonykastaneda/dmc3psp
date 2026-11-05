@@ -27,6 +27,10 @@ def scene(mode, normal=False):
                   'psp_shot 200', 'psp_shot 480', 'psp_shot 1000', 'psp_shot 1500']
         if mode == 'clear':
             lines += ['fire 6']  # Uses the regular gun input, bullet collision, and enemy_hit path.
+        elif mode == 'observe':
+            # Exercise both distance bands through real stick movement. With corrected
+            # placement, standing still stays in the close-range melee plan indefinitely.
+            lines += ['walkto 3900 2900 600 850']
     return '\n'.join(lines) + '\n'
 
 

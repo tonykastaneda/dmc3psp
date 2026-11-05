@@ -1,24 +1,27 @@
-# Hell Vanguard verification — 2026-11-05
+# Hell Vanguard verification — 2026-11-05 (corrected implementation)
 
-PSP build and PPSSPP scene checks passed. The preliminary waves were accelerated and cleared by the harness; Vanguard took only ordinary combat damage.
+The original combat-completion checks did not establish PS2 animation fidelity. User review exposed incorrect motion entry, teleport behavior, robe attachments and geometry interactions. The first clips are not fidelity references.
 
-| Test | Warps | Hits on boss | Hits on Dante | Death / Mission Clear |
+Corrected against recovered PS2 code: rush script 102 starts at frame 202; no additional actor spin; distinct uppercut relocation and phase timing; apex acceleration switch; torso robes attach to bone 3. Death now samples its advancing pose. Port-specific safeguards subdivide ground movement and reject teleport destinations behind scenery, inside collision or on another storey.
+
+| PPSSPP test | Warps | Hits on boss | Hits on Dante | Result |
 | --- | ---: | ---: | ---: | --- |
-| [vanguard_observe_easy](../../build/tests/vanguard_observe_easy/VANGUARD_LOG.TXT) | 3 | 0 | 11 | observation only |
-| [vanguard_melee_easy](../../build/tests/vanguard_melee_easy/VANGUARD_LOG.TXT) | 8 | 2 | 1 | observation only |
-| [vanguard_clear_easy](../../build/tests/vanguard_clear_easy/VANGUARD_LOG.TXT) | 7 | 72 | 0 | yes |
-| [vanguard_clear_normal](../../build/tests/vanguard_clear_normal/VANGUARD_LOG.TXT) | 19 | 72 | 1 | yes |
+| [observe_easy](../../build/tests/vanguard_observe_easy/VANGUARD_LOG.TXT) | 3 | 0 | 7 | combat observed |
+| [melee_easy](../../build/tests/vanguard_melee_easy/VANGUARD_LOG.TXT) | 3 | 6 | 2 | combat observed |
+| [clear_easy](../../build/tests/vanguard_clear_easy/VANGUARD_LOG.TXT) | 7 | 72 | 1 | death → removal → Mission Clear |
+| [clear_normal](../../build/tests/vanguard_clear_normal/VANGUARD_LOG.TXT) | 7 | 72 | 1 | death → removal → Mission Clear |
 
-Both victory cases started at 3000 HP and reached zero through 72 gun hits. The melee scene dealt 168 damage and took one 800-damage scythe hit. Three Python regressions passed (stage-edge collision and Mission 2 boss gating). The final airborne-collision correction was rechecked with observation and a Normal victory.
+The observation test uses real stick movement to cover both close-range melee and a distant teleport attack. The harness accelerates preliminary minion waves only; ordinary gun/sword input damages the boss.
 
-Final EBOOT SHA-256: `bcae6df2b930618e91b3697762c767eec7368081f27171ccb2660d56d11ed4af`
+Host regression using the actual Vanguard implementation and original MOT data passed: rush entry/seek, uppercut placement and timing, landing, death pose advancement, thin-wall movement, floor-edge rejection and teleport clearance. GPU calls are no-ops in this test; it does not verify rendering. Three existing Python regressions also passed.
 
-Reproduce:
+Final EBOOT SHA-256: `6f48d8de781981b168473c0fd6e34bdec55be35e681a1a089e29ab3b0b01e0a5`
 
 ```powershell
-python tools/test_vanguard.py --build
+python tools/tests/run_vanguard_logic.py
+python tools/test_vanguard.py --mode all
 python tools/test_vanguard.py --mode clear --normal
 python -m unittest discover -s tools/tests
 ```
 
-Limitations and source addresses: [VANGUARD_SPEC.md](../../docs/VANGUARD_SPEC.md). Player death/Game Over, full cloth/effects, cutscenes and exact damage scaling remain unfinished.
+**Not established:** PS2 visual or runtime parity. Static robe rigs still replace cloth simulation; teleport effects/fades and cutscenes remain incomplete. Damage, AI rank and collision are partial ports. Body collision does not prevent every robe/scythe intersection with scenery. Player death/Game Over remains unfinished. Source addresses and distinctions: [VANGUARD_SPEC.md](../../docs/VANGUARD_SPEC.md).

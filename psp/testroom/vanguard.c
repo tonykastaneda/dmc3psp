@@ -18,14 +18,14 @@
 #include "vanguard_ai.h"
 
 /* CEm008 / CComEm000, lowest AI rank. Parameters and scripts are read from SLUS_213.61.
- * No invented attack cycle: plans 27, 40, 56 and 57 come from em008's own weighted rows.
- * The port still uses its existing light/heavy damage amounts. Cloth/effect rendering is simplified. */
+ * Plans 27, 40, 56 and 57 use em008's weighted rows. This remains a partial port:
+ * stage collision, damage, cloth and effects do not reproduce the complete PS2 runtime. */
 #define PI 3.1415926536f
 #define ANGLE(x) ((x) * (2.0f * PI / 65536.0f))
 typedef struct { float m[3][3], p[3]; } Transform;
 typedef struct { float u,v,nx,ny,nz,x,y,z; } Vertex;
 static struct {
-    float pos[3], yaw, hp, gauge, timer, frame, previous_frame, fade, fade_step, vy, spin;
+    float pos[3], yaw, hp, gauge, timer, frame, previous_frame, fade, fade_step, vy, ground;
     float cap_left[24], token;
     int active, hidden, dying, plan, action, phase, chain, motion, previous_motion, script, pc, stop, finish, done, hit_done, loop;
     int ids[80], ticks, trace, dead_reported;
@@ -123,6 +123,15 @@ static void play(int script) {
     if(script<0 || script>=108 || vg_scripts[script]<0) {vg.done=1;return;}
     vg.pc=vg_scripts[script];run_ops();
 }
+/* CEm008 command 3000 -> FUN_00254e80/FUN_00255420: script ID and START frame,
+ * not a frame interval. Advance past waits preceding the requested start. */
+static void play_from(int script,float frame) {
+    int guard;
+    play(script);vg.frame=frame;vg.fade=0;
+    for(guard=0;guard<128 && !vg.done && vg.stop!=32767 && vg.stop<=frame;++guard) {
+        if(vg.finish)vg.done=1;else run_ops();
+    }
+}
 static void tick_script(float f,float root[3]) {
     const Motion *m=motion_get(vg.motion);
     float a[3],b[3],stop; int k;
@@ -160,7 +169,11 @@ static void action(int a) {
     if(a==16)play(47);
     else if(a==35)play(75);
     else if(a==72)play(102);
-    else if(a==69 || a==70 || a==71 || a==73) {vg.hidden=1;memset(vg.cap_left,0,sizeof(vg.cap_left));}
+    else if(a==69 || a==70 || a==71 || a==73) {
+        /* 0047e730/0047edf0 start in phase 10, distinct from the relocation wait. */
+        vg.phase=(a==69 || a==70)?10:0;
+        vg.hidden=1;vg.vy=0;memset(vg.cap_left,0,sizeof(vg.cap_left));
+    }
     trace("action");
 }
 static void decide(float distance,int alternate) {
@@ -181,11 +194,36 @@ static void warp_to(float px,float py,float pz,float radius) {
         float a=angle+i*(2*PI/16);
         x=px+sinf(a)*radius;z=pz+cosf(a)*radius;y=py;
         if(player_floor_fn && !player_floor_fn(x,py+400,z,0,&y))continue;
-        ox=x;oz=z;stage_collide(&x,&z,y,48);
+        /* Port collision adaptation: do not select another storey or a point
+         * inside scenery. The original uppercut uses radius zero at Dante. */
+        if(fabsf(y-py)>50)continue;
+        ox=x;oz=z;stage_collide(&x,&z,y,vg_caps[0].radius);
         if((x-ox)*(x-ox)+(z-oz)*(z-oz)>100)continue;
-        vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;break;
+        {
+            float a[3]={px,py+100,pz},b[3]={x,y+100,z},t;
+            /* Port safety: don't reappear behind solid scenery separating the
+             * combatants. Keep the authored random angle when unobstructed. */
+            if(stage_raycast(a,b,&t))continue;
+        }
+        vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;vg.ground=y;break;
     }
     vg.yaw=toward(px,pz);trace("warp");
+}
+/* Spatial substeps, rather than one endpoint push per animation frame. A rush
+ * can cross a thin wall in a single authored frame. This is port collision,
+ * not a translation of the PS2 collision engine. */
+static void move_ground(float dx,float dz) {
+    float distance=hypotf(dx,dz),radius=vg_caps[0].radius;
+    int i,steps=(int)ceilf(distance/fmaxf(1,radius*.25f));
+    if(steps<1)steps=1;
+    for(i=0;i<steps;++i) {
+        float x=vg.pos[0]+dx/steps,z=vg.pos[2]+dz/steps,y=vg.pos[1];
+        stage_collide(&x,&z,y,radius);
+        if(player_floor_fn) {
+            if(!player_floor_fn(x,y+20,z,0,&y) || fabsf(y-vg.pos[1])>20)break;
+        }
+        vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;
+    }
 }
 static void start_death(void) {vg.hp=0;vg.dying=1;vg.hidden=0;vg.plan=20;vg.action=26;vg.timer=0;play(29);trace("death");}
 void vanguard_kill(void) {if(vg.active && !vg.dying)start_death();}
@@ -218,10 +256,10 @@ static int attack_test(float px,float py,float pz) {
     return 0;
 }
 static int step(float f,float px,float py,float pz,int attacks) {
-    float root[3],dist=hypotf(px-vg.pos[0],pz-vg.pos[2]),g;int hit=0,k;
+    float root[3],dist=hypotf(px-vg.pos[0],pz-vg.pos[2]);int hit=0,k;
     ++vg.ticks;vg.timer+=f;vg.token=fmaxf(0,vg.token-f);
     tick_script(f,root);
-    if(vg.dying) {if(vg.done || vg.timer>180) {vg.active=0;trace("removed");}return 0;}
+    if(vg.dying) {pose();if(vg.done || vg.timer>180) {vg.active=0;trace("removed");}return 0;}
     if(vg.action==13) {if(vg.done)idle();}
     else if(vg.action==0) {
         turn(px,pz,512,f);
@@ -248,26 +286,38 @@ static int step(float f,float px,float py,float pz,int attacks) {
         /* FUN_0047fbb0: wind-up ends at frame 70 of script 102, then one rush at rank 0. */
         if(vg.frame>=70)action((enemy_ai_random()&1)?69:70);
     } else if(vg.action==69 || vg.action==70) {
-        /* FUN_0047e840/0047ef00: 30 hidden frames, relocate 400 cm, wait 25, reveal for 30. */
-        if(vg.phase==0 && vg.timer>30) {warp_to(px,py,pz,400);vg.phase=1;vg.timer=0;play(0);}
-        else if(vg.phase==1 && vg.timer>25) {vg.phase=2;vg.timer=0;vg.hidden=0;trace("reveal");}
-        else if(vg.phase==2 && vg.timer>30) {
+        /* Separate PS2 paths: 0047e840 (rush), 0047ef00 (uppercut).
+         * Lowest-rank delays at 005cdd50/70 are 25 and 15, after phase 10's 30. */
+        if(vg.phase==10 && vg.timer>30) {vg.phase=0;vg.timer=0;play(0);}
+        else if(vg.phase==0 && vg.timer>25) {
+            warp_to(px,py,pz,vg.action==69?400:0);vg.phase=1;vg.timer=0;
+        }
+        else if(vg.phase==1 && vg.timer>(vg.action==69?15:0)) {
+            vg.phase=2;vg.timer=0;vg.hidden=0;
+            if(vg.action==70)play(105);
+            trace("reveal");
+        }
+        else if(vg.phase==2 && vg.timer>(vg.action==69?30:50)) {
             vg.phase=3;vg.timer=0;vg.yaw=toward(px,pz);
-            play(vg.action==69?102:107);
-            if(vg.action==69)vg.frame=102; /* original command 3000 selects [102,202] */
-            else {vg.vy=80;vg.hidden=0;}
+            if(vg.action==69)play_from(102,202);
+            else play(107);
+            /* Do not apply the preceding motion's root delta to a new action. */
+            memset(root,0,sizeof(root));
             trace("strike");
         } else if(vg.phase==3) {
             if(vg.action==69) {
-                if(vg.frame<203)vg.yaw+=ANGLE(65536.0f/43.0f)*f;
-                else if(vg.frame<237)turn(px,pz,182,f);
                 if(vg.done)action(73);
-            } else {
-                vg.vy-=8*f;vg.pos[1]+=vg.vy*f;
-                if(player_floor_fn && player_floor_fn(vg.pos[0],py+400,vg.pos[2],0,&g) && vg.pos[1]<=g && vg.vy<0) {
-                    vg.pos[1]=g;vg.vy=0;if(vg.done)action(73);
-                }
+            } else if(vg.timer>3) {
+                vg.phase=4;vg.vy=80;trace("jump");
             }
+        } else if(vg.action==70 && (vg.phase==4 || vg.phase==5)) {
+                /* 0047ef00 switches from -8 to -0.5 at the apex. */
+                if(vg.phase==4 && vg.vy<0) {vg.phase=5;vg.vy=0;}
+                vg.vy-=(vg.phase==4?8:.5f)*f;
+                vg.pos[1]+=vg.vy*f;
+                if(vg.pos[1]<=vg.ground && vg.vy<0) {
+                    vg.pos[1]=vg.ground;vg.vy=0;if(vg.done)action(73);
+                }
         }
     } else if(vg.action==71 || vg.action==73) {
         /* FUN_0047f5b0/0047fd10: disappear, relocate, face Dante, reveal after 30. */
@@ -278,11 +328,8 @@ static int step(float f,float px,float py,float pz,int attacks) {
         } else if(vg.phase==2 && vg.done)idle();
     }
     if(!vg.hidden && vg.action!=70) {
-        vg.pos[0]+=root[0]*cosf(vg.yaw)+root[2]*sinf(vg.yaw);
-        vg.pos[2]+=root[2]*cosf(vg.yaw)-root[0]*sinf(vg.yaw);
-        /* The 1-frame substeps sweep authored root motion through the stage collision. */
-        stage_collide(&vg.pos[0],&vg.pos[2],vg.pos[1],48);
-        if(player_floor_fn && player_floor_fn(vg.pos[0],vg.pos[1]+200,vg.pos[2],0,&g))vg.pos[1]=g;
+        move_ground(root[0]*cosf(vg.yaw)+root[2]*sinf(vg.yaw),
+                    root[2]*cosf(vg.yaw)-root[0]*sinf(vg.yaw));
     }
     pose();
     if(attacks)hit=attack_test(px,py,pz);
@@ -296,7 +343,7 @@ int vanguard_update(float frames,float px,float py,float pz,int attacks,float po
 }
 void vanguard_spawn(float x,float y,float z) {
     int trace_on=vg.trace,ids[80];memcpy(ids,vg.ids,sizeof(ids));memset(&vg,0,sizeof(vg));memcpy(vg.ids,ids,sizeof(ids));vg.trace=trace_on;
-    vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;vg.hp=VANGUARD_HP;vg.active=1;vg.plan=14;vg.action=13;
+    vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;vg.ground=y;vg.hp=VANGUARD_HP;vg.active=1;vg.plan=14;vg.action=13;
     vg.motion=vg.previous_motion=vg.ids[0];play(13);pose();trace("spawn");
 }
 int vanguard_hidden(void) {return vg.hidden;}
@@ -325,7 +372,9 @@ int vanguard_init(void) {
 
 static void skin_part(int part) {
     const VanguardMesh *m=&vanguard_parts[part];int i,j,k;
-    static const int anchor[9]={0,5,4,4,8,12,14,14,9};
+    /* 002b52f0: body bone table begins at +404. Robes 2/3 use +410
+     * (bone 3), not bone 4; the hood uses +418 (bone 5). */
+    static const int anchor[9]={0,5,3,3,8,12,14,14,9};
     Transform attachment=body[anchor[part]],local;
     Transform weapon_bones[2];
     if(part>0 && part<8) {
