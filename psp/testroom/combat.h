@@ -144,6 +144,7 @@ void combat_reset(Combat *combat);
 const char *combat_script_key(int script);
 /* An enemy's attack reached Dante, from this point. Returns 0 if he blocked it. */
 int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy);
+int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from_z, int heavy, float damage);
 void combat_update(Combat *combat, Player *player, const PlayerInput *input, float dt);
 const char *combat_move_name(MoveId move);
 /* Takes the shots fired since the last call; 0 if none. */

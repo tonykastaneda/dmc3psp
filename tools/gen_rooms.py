@@ -51,10 +51,10 @@ MISSIONS = {
     # Group 2 is the rooftop cinematic actor; group 4 is the cutscene-skip alternative to group 3.
     2: ("001", None, {"001": [0, 1, 3]}),
     # 002 66 Slum Avenue: the Enigmas, then the Seven Hells; 009 Bullseye; 004 Love Planet, the Hell Sloths.
-    # 006's only group is one class-43 enemy (Cerberus, not ported), so it has no fight yet.
+    # 006's only group is one class-43 enemy (Cerberus).
     # From its event script (EventTbl03): 002 runs groups 2, 1, 0 as Dante moves along it, then 3 (the main
-    # wave); 009 runs 2 on entry; 004 seals its doors and runs 1, then 0.
-    3: ("002", "100", {"002": [2, 1, 0, 3], "009": [2], "004": [1, 0]}),
+    # wave); 009 runs 2 on entry; 004 seals its doors and runs 1, then 0; 006 starts group 0 after demo 6.
+    3: ("002", "100", {"002": [2, 1, 0, 3], "009": [2], "004": [1, 0], "006": [0]}),
     # Mission 4, from its event script (GDATA EventTbl04): 100 Chamber of Echoes -> 101 Entranceway -> 102 Living
     # Statue Room -> 103 Silence Statuary (its lift) -> 110 Incandescent Space -> 100 2nd floor -> 112 Endless
     # Infernum, falling into 104 Chamber of Sins -> back to 112 -> 111 Giantwalker Chamber (the Gigapede, class 41)

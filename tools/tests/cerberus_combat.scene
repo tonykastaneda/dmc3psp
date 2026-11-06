@@ -1,0 +1,21 @@
+frames 6000
+turbo 0
+realdt 0
+fps 60
+menu 1
+movie 1
+startroom 6 0
+mkey cross 30
+mkey right 60
+mkey right 65
+mkey cross 110
+mkey cross 160
+place 180 2500 0 2200 0
+r1 180 5999
+fire 1
+psp_shot 200
+psp_shot 2000
+psp_shot 4000
+psp_shot 5000
+place 5500 2465 0 4210 0
+circle 5501 5502

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "enemy.h"
+#include "cerberus_boss.h"
 #include "fx.h"
 #include "stage.h"
 
@@ -55,6 +56,7 @@ static Bullet *new_bullet(void) {
 static float one_enemy_segment_hit(const float a[3], const float b[3]) {
     float e[3], dx, dz, len2, t, cx, cz, y;
     if (!enemy_active()) return -1.0f;
+    if (enemy_kind() == ENEMY_CERBERUS) return cerberus_boss_segment_hit(a, b);
     enemy_position(e);
     dx = b[0] - a[0];
     dz = b[2] - a[2];

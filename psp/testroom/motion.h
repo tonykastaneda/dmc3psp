@@ -14,9 +14,10 @@
 #define MOTION_RUN 2   /* "2-02": 48-frame loop, 408 cm of root motion */
 
 typedef struct {
-    unsigned short bone, channel, key_count, kind; /* kind 3 = Hermite, 2 = linear */
-    float params[6];             /* value / in / out tangent: base, scale */
-    const unsigned short *keys;  /* Hermite: {frame, v, in, out}; linear: {frame, v} */
+    unsigned short bone, channel, key_count, kind; /* 3/1 = Hermite, 2/0 = linear; 0/1 = unquantized */
+    float params[6];             /* quantized value / in / out tangent: base, scale */
+    const unsigned short *keys;  /* kind 3: {frame, v, in, out}; kind 2: {frame, v} */
+    const unsigned char *direct_keys; /* kind 1/0: {frame, pad, float value[, in, out]} */
 } MotionChannel;
 
 typedef struct {

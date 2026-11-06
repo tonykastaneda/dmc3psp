@@ -1287,12 +1287,12 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
 }
 
-int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy) {
+int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from_z, int heavy, float damage) {
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR) return 1;
     /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
-    /* The attack records' damage (0x5a7600 on the PS2): the swing 700, the wide swing 800. No dying yet. */
-    player->health -= heavy ? 800.0f : 700.0f;
+    if (damage < 0.0f) damage = heavy ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
+    player->health -= damage;
     if (player->health < 1.0f) player->health = 1.0f;
     player->yaw = atan2f(from_x - player->x, from_z - player->z);
     player->air_kind = AIR_NONE;
@@ -1301,6 +1301,9 @@ int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int
     c->base_y = player->y;
     start_move(c, !player->on_ground ? MOVE_HIT_AIR : heavy ? MOVE_HIT_HEAVY : MOVE_HIT, 0);
     return 1;
+}
+int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy) {
+    return combat_player_hit_damage(c, player, from_x, from_z, heavy, -1.0f);
 }
 
 const char *combat_script_key(int script) {

@@ -5,8 +5,9 @@
 
 #include "motion_runtime.h"
 #include "vanguard_motions.h"
+#include "boss_cerberus_motions.h"
 
-#define TOTAL_MOTIONS (DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT)
+#define TOTAL_MOTIONS (DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + CERBERUS_MOTION_COUNT)
 static Motion motions[TOTAL_MOTIONS];
 
 static unsigned int rd16(const unsigned char *p) { return (unsigned int)p[0] | ((unsigned int)p[1] << 8); }
@@ -46,7 +47,9 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
             count = rd16(d + offset + 2);
             kind = rd16(d + offset + 4);  /* the u16 after it is usually 0; see tools/mot_ps2.py */
             if (kind == 3) { record = 32; stride = 8; }
-            else if (kind == 2) { record = 16; stride = 4; }  /* linear (enemy motions) */
+            else if (kind == 2) { record = 16; stride = 4; }  /* quantized linear (enemy motions) */
+            else if (kind == 1) { record = 8; stride = 16; } /* direct Hermite (Cerberus) */
+            else if (kind == 0) { record = 8; stride = 8; }   /* direct linear (Cerberus) */
             else return 0;
             if (size != record + count * stride || offset + size > blob->size || !count) return 0;
             if (bit < 3 || bit > 8) {
@@ -62,7 +65,8 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
             c->key_count = (unsigned short)count;
             c->kind = (unsigned short)kind;
             for (k = 0; k < 6; ++k) c->params[k] = k < (kind == 3 ? 6u : 2u) ? rdf(d + offset + 8 + k * 4) : 0.0f;
-            c->keys = (const unsigned short *)(d + offset + record); /* blob is 4-byte aligned */
+            c->keys = kind >= 2 ? (const unsigned short *)(d + offset + record) : 0; /* blob is 4-byte aligned */
+            c->direct_keys = kind < 2 ? d + offset + record : 0;
             offset += size;
         }
     }
@@ -76,6 +80,10 @@ int motion_init(void) {
     }
     for (i = 0; i < VANGUARD_MOTION_COUNT; ++i)
         if (!parse(&vg_motion_blobs[i], &motions[DMC3_MOTION_COUNT + i])) return -(DMC3_MOTION_COUNT + i + 1);
+    for (i = 0; i < CERBERUS_MOTION_COUNT; ++i) {
+        int at = DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + i;
+        if (!parse(&cerberus_motion_blobs[i], &motions[at])) return -(at + 1);
+    }
     return TOTAL_MOTIONS;
 }
 
@@ -102,30 +110,41 @@ float motion_wrap(const Motion *m, float frame) {
 }
 
 #define KEY_STRIDE(c) ((c)->kind == 3 ? 4 : 2)
-#define KEY_FRAME(c, k) ((float)((c)->keys[(k) * KEY_STRIDE(c)] & 0x7FFF))
+#define DIRECT_STRIDE(c) ((c)->kind == 1 ? 16 : 8)
+#define KEY_FRAME(c, k) ((c)->kind < 2 ? (float)(rd16((c)->direct_keys + (k) * DIRECT_STRIDE(c)) & 0x7FFF) : \
+                         (float)((c)->keys[(k) * KEY_STRIDE(c)] & 0x7FFF))
 #define KEY_Q(c, k, n) ((float)(c)->keys[(k) * KEY_STRIDE(c) + (n)] * (1.0f / 65535.0f))
 
-/* Quantized Hermite: value/tangent = base + scale * q; tangents per frame. */
+/* n = 1 value, 2 incoming tangent, 3 outgoing tangent. Types 0/1 store all
+ * three directly; types 2/3 quantize them around a base and scale. */
+static float key_value(const MotionChannel *c, int k, int n) {
+    if (c->kind < 2) return rdf(c->direct_keys + k * DIRECT_STRIDE(c) + n * 4);
+    if (n == 1) return c->params[0] + c->params[1] * KEY_Q(c, k, 1);
+    if (n == 2) return c->params[2] + c->params[3] * KEY_Q(c, k, 2);
+    return c->params[4] + c->params[5] * KEY_Q(c, k, 3);
+}
+
+/* Hermite: value/tangent, tangents per frame. */
 static float evaluate(const MotionChannel *c, float frame) {
     int k;
-    if (frame <= KEY_FRAME(c, 0) || c->key_count == 1) return c->params[0] + c->params[1] * KEY_Q(c, 0, 1);
+    if (frame <= KEY_FRAME(c, 0) || c->key_count == 1) return key_value(c, 0, 1);
     for (k = 1; k < c->key_count; ++k) {
         float f1 = KEY_FRAME(c, k);
         if (frame <= f1) {
             float f0 = KEY_FRAME(c, k - 1);
             float span = f1 - f0;
             float t = (frame - f0) / span, t2 = t * t, t3 = t2 * t;
-            float v0 = c->params[0] + c->params[1] * KEY_Q(c, k - 1, 1);
-            float v1 = c->params[0] + c->params[1] * KEY_Q(c, k, 1);
+            float v0 = key_value(c, k - 1, 1);
+            float v1 = key_value(c, k, 1);
             float out0, in1;
-            if (c->kind == 2) return v0 + (v1 - v0) * t;  /* linear */
-            out0 = c->params[4] + c->params[5] * KEY_Q(c, k - 1, 3);
-            in1 = c->params[2] + c->params[3] * KEY_Q(c, k, 2);
+            if (c->kind == 0 || c->kind == 2) return v0 + (v1 - v0) * t;  /* linear */
+            out0 = key_value(c, k - 1, 3);
+            in1 = key_value(c, k, 2);
             return (2.0f * t3 - 3.0f * t2 + 1.0f) * v0 + (t3 - 2.0f * t2 + t) * span * out0 +
                    (-2.0f * t3 + 3.0f * t2) * v1 + (t3 - t2) * span * in1;
         }
     }
-    return c->params[0] + c->params[1] * KEY_Q(c, c->key_count - 1, 1);
+    return key_value(c, c->key_count - 1, 1);
 }
 
 void motion_sample(const Motion *m, float frame, MotionSample *out) {

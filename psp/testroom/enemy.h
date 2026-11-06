@@ -15,6 +15,7 @@ typedef enum {
 /* Not a model kind: the Gigapede's head and segments, which take one enemy slot each. */
 #define ENEMY_GIGAPEDE 100
 #define ENEMY_VANGUARD 101
+#define ENEMY_CERBERUS 102
 
 typedef enum {
     HIT_LIGHT,    /* combo hits: flinch in place */
@@ -65,6 +66,10 @@ int enemy_poses_done(void);         /* running total, to measure the saving */
 void enemy_update(float dt, float px, float py, float pz);
 /* An attack reached Dante this frame: returns 1 once per hit, from where, and if it's a heavy one. */
 int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
+/* Original attack-record damage, or -1 for the generic 700/800 fallback. */
+float enemy_attack_damage(void);
+/* Boss arena constraints, if one is active. */
+void enemy_clamp_player(float *z);
 /* Draw with the view/projection set, inside an open display list. */
 void enemy_draw(void);
 int enemy_active(void);
@@ -73,6 +78,7 @@ float enemy_height(void);            /* feet height above its floor (air time) *
 int enemy_hits_taken(void);
 /* Current boss pool for the HUD; zero when there is no active boss. */
 int enemy_boss_health(float *health, float *maximum);
+const char *enemy_boss_name(void);
 /* Apply a hit from a point (Dante's position) -- knock-back direction. */
 void enemy_hit(HitKind kind, float from_x, float from_z);
 /* Keep Dante (cylinder radius r at x,z) out of the dummy. */

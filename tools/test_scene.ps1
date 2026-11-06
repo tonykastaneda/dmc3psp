@@ -15,11 +15,12 @@ Get-ChildItem -LiteralPath (Join-Path $Root 'build\testroom') -File |
     Where-Object { $_.Extension -in '.BIN', '.PBP' } |
     Copy-Item -Destination $Game -Force
 Get-ChildItem -LiteralPath $Game -File |
-    Where-Object { $_.Name -match '^(SHOT_.*\.BMP|MENU_CLEAR\.BMP|FOCUS_DONE\.TXT|CMP_OUT\.TXT|SEAL_LOG\.TXT|VANGUARD_LOG\.TXT)$' } |
+    Where-Object { $_.Name -match '^(SHOT_.*\.BMP|MENU_CLEAR\.BMP|FOCUS_DONE\.TXT|CMP_OUT\.TXT|SEAL_LOG\.TXT|VANGUARD_LOG\.TXT|CERBERUS_LOG\.TXT)$' } |
     Remove-Item -Force
 Set-Content -LiteralPath (Join-Path $Game 'FOCUS.TXT') -Value 'cmp' -Encoding ascii
 Copy-Item -LiteralPath $Script -Destination (Join-Path $Game 'CMP_SCRIPT.TXT') -Force
-$Process = Start-Process -FilePath $Emulator -ArgumentList ('--windowed "{0}"' -f (Join-Path $Game 'EBOOT.PBP')) -WindowStyle Hidden -PassThru
+$EmulatorLog = Join-Path ([IO.Path]::GetFullPath($Out)) 'ppsspp.log'
+$Process = Start-Process -FilePath $Emulator -ArgumentList ('--windowed --log="{0}" --loglevel=3 "{1}"' -f $EmulatorLog, (Join-Path $Game 'EBOOT.PBP')) -WindowStyle Hidden -PassThru
 $Done = Join-Path $Game 'FOCUS_DONE.TXT'
 $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
 $ReachedClear = $false
@@ -43,7 +44,7 @@ try {
 } finally {
     if (-not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }
     Get-ChildItem -LiteralPath $Game -File |
-        Where-Object { $_.Name -match '^(SHOT_.*\.BMP|MENU_CLEAR\.BMP|FOCUS_DONE\.TXT|CMP_OUT\.TXT|SEAL_LOG\.TXT|VANGUARD_LOG\.TXT)$' } |
+        Where-Object { $_.Name -match '^(SHOT_.*\.BMP|MENU_CLEAR\.BMP|FOCUS_DONE\.TXT|CMP_OUT\.TXT|SEAL_LOG\.TXT|VANGUARD_LOG\.TXT|CERBERUS_LOG\.TXT)$' } |
         Copy-Item -Destination $Out -Force
     Remove-Item -LiteralPath (Join-Path $Game 'FOCUS.TXT'), (Join-Path $Game 'CMP_SCRIPT.TXT') -Force -ErrorAction SilentlyContinue
 }

@@ -55,7 +55,9 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $StageM1, "--slot", "272")
 }
 
-if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_runtime.h"))) {
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_runtime.h")) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\gen_rooms.py")).LastWriteTime -gt
+    (Get-Item -LiteralPath (Join-Path $Generated "rooms_runtime.h")).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
     Invoke-Native $Python @((Join-Path $Root "tools\gen_rooms.py"), $Iso.FullName, "--output", $Build, "--header", (Join-Path $Generated "rooms_runtime.h"))
@@ -65,6 +67,13 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "gigapede
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_gigapede.py"), $Iso.FullName, "--output", (Join-Path $Generated "gigapede_runtime.h"))
+}
+
+$CerberusHeader = Join-Path $Generated "boss_cerberus_runtime.h"
+if ($Regenerate -or -not (Test-Path -LiteralPath $CerberusHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_cerberus.py")).LastWriteTime -gt (Get-Item -LiteralPath $CerberusHeader).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_cerberus.py"), $Iso.FullName, "--output", $Generated)
 }
 
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "ICON0.PNG"))) {
@@ -106,7 +115,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "bullets", "hud", "fx", "menu", "movie", "orbs")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "menu", "movie", "orbs")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

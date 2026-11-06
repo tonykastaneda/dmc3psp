@@ -36,6 +36,7 @@
 #include "swizzle.h"
 #include "enemy.h"
 #include "vanguard.h"
+#include "cerberus_boss.h"
 #include "bullets.h"
 #include "fx.h"
 #include "hud.h"
@@ -539,6 +540,7 @@ static int kind_max_health(int kind) {
     case ENEMY_GREED: return 1000;
     case ENEMY_ENIGMA: return 600;
     case ENEMY_GIGAPEDE: return 2800;
+    case ENEMY_CERBERUS: return 7200;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
     default: return 250;
     }
@@ -1230,7 +1232,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             unsigned int alpha = (unsigned int)(150.0f + 105.0f * k);
             float boss_hp,boss_max;
             if(enemy_boss_health(&boss_hp,&boss_max)) {
-                const char *name="HELL VANGUARD";
+                const char *name=enemy_boss_name();
                 menu_font_draw((SCR_WIDTH-menu_font_width(16.0f,name))*0.5f,237.0f,16.0f,name,0xffddddffu);
             }
             snprintf(text, sizeof(text), "%d", shop_state.red_orbs);
@@ -1698,7 +1700,7 @@ static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the
  * to CMP_OUT.TXT, to line up with the same script on the real game (tools/ref_compare.py). */
 static int focus_cmp;
 #define CMP_MAX_EVENTS 64
-#define CMP_MAX_FRAMES 6000
+#define CMP_MAX_FRAMES 18000
 static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
 /* "walkto x z first last": over those frames the stick points at (x, z) from wherever he is, through the camera,
  * as a player steers; it lets go within 25 cm. Real walking: no teleports. */
@@ -2588,6 +2590,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     vanguard_set_difficulty(choice->difficulty);
+    cerberus_boss_set_difficulty(choice->difficulty);
     if (choice->mission == MENU_DEBUG_ROOM) { start_debug_room(choice, player, camera); return; }
     mission_mode = 1;
     game_turbo = choice->turbo;
@@ -2706,7 +2709,14 @@ int main(int argc, char *argv[]) {
         focus_hud = strncmp(text, "hud", 3) == 0;
         focus_weapons = strncmp(text, "weapons", 7) == 0;
         focus_cmp = strncmp(text, "cmp", 3) == 0;
-        if (focus_cmp) {cmp_load();path_in_game_dir(path,sizeof(path),"VANGUARD_LOG.TXT");vanguard_trace(path);vanguard_render_test(bench_no_texture,bench_no_lighting);}
+        if (focus_cmp) {
+            cmp_load();
+            path_in_game_dir(path,sizeof(path),"VANGUARD_LOG.TXT");
+            vanguard_trace(path);
+            path_in_game_dir(path,sizeof(path),"CERBERUS_LOG.TXT");
+            cerberus_boss_trace(path);
+            vanguard_render_test(bench_no_texture,bench_no_lighting);
+        }
     }
     recording = game_file_exists("RECORD.TXT");
     show_bones = game_file_exists("BONES.TXT");
@@ -3082,12 +3092,13 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+                enemy_clamp_player(&player.z);
                 orbs_update(dt, player.x, player.y, player.z);
                 bench_ai_us = sceKernelGetSystemTimeLow() - ai_start;
             }
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit(&combat, &player, from_x, from_z, heavy)) {
+                if (combat_player_hit_damage(&combat, &player, from_x, from_z, heavy, enemy_attack_damage())) {
                     fx_hit_spark(chest);
                     if(focus_cmp)vanguard_note("player_hurt",player.health);
                 } else {

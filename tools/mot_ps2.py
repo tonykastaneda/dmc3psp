@@ -22,7 +22,11 @@ Channel records follow, ordered by bone then by channel bit:
         u16 in-tangent, u16 out-tangent}
     2 = quantized linear (enemies): f32[2] value base+scale, then
         key[count] x 4 bytes {u16 frame, u16 value}
-  (each u16 q maps to base + scale * q / 65535; tangents per frame)
+    1 = unquantized Hermite (Cerberus): key[count] x 16 bytes
+        {u16 frame, u16 padding, f32 value, f32 in-tangent, f32 out-tangent}
+    0 = unquantized linear (Cerberus): key[count] x 8 bytes
+        {u16 frame, u16 padding, f32 value}
+  (each quantized u16 q maps to base + scale * q / 65535; tangents per frame)
 """
 
 import struct
@@ -57,22 +61,37 @@ def parse_mot(data: bytes):
             header, stride = 32, 8
         elif kind == 2:
             header, stride = 16, 4
+        elif kind == 1:
+            header, stride = 8, 16
+        elif kind == 0:
+            header, stride = 8, 8
         else:
             raise ValueError(f"Channel {len(channels)} has interpolation type {kind}")
         if size != header + key_count * stride:
             raise ValueError(f"Channel {len(channels)} size {size} != {header} + {stride} * {key_count}")
-        params = struct.unpack_from("<6f" if kind == 3 else "<2f", data, offset + 8)
+        params = struct.unpack_from("<6f" if kind == 3 else "<2f", data, offset + 8) if kind in (2, 3) else ()
         keys = []
         last_frame = -1
         for k in range(key_count):
+            key_at = offset + header + k * stride
             if kind == 3:
-                raw_frame, qv, qi, qo = struct.unpack_from("<4H", data, offset + header + k * 8)
+                raw_frame, qv, qi, qo = struct.unpack_from("<4H", data, key_at)
+            elif kind == 2:
+                raw_frame, qv = struct.unpack_from("<2H", data, key_at)
             else:
-                raw_frame, qv = struct.unpack_from("<2H", data, offset + header + k * 4)
+                raw_frame = struct.unpack_from("<H", data, key_at)[0]
             frame = raw_frame & 0x7FFF
             if frame <= last_frame:
                 raise ValueError(f"Channel {len(channels)} key frames not increasing")
             last_frame = frame
+            if kind == 1:
+                value, in_tangent, out_tangent = struct.unpack_from("<3f", data, key_at + 4)
+                keys.append((frame, value, in_tangent, out_tangent))
+                continue
+            if kind == 0:
+                value = struct.unpack_from("<f", data, key_at + 4)[0]
+                keys.append((frame, value, None, None))
+                continue
             value = params[0] + params[1] * qv / 65535.0
             if kind == 3:
                 keys.append((frame, value, params[2] + params[3] * qi / 65535.0, params[4] + params[5] * qo / 65535.0))

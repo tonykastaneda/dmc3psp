@@ -16,6 +16,7 @@
 #include "player.h"
 #include "stage.h"
 #include "vanguard.h"
+#include "cerberus_boss.h"
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "swizzle.h"
@@ -133,6 +134,7 @@ static int hits, attacks_on;
 static int landed;
 static float landed_x, landed_z;
 static int landed_heavy;
+static float landed_damage = -1.0f;
 static float attack_token;
 static int mortal;
 static int dummy_kind;
@@ -211,6 +213,7 @@ int enemy_init(void) {
     if (!enigma_init()) return 0;
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
+    if (!cerberus_boss_init()) return 0;
     for (k = 0; k < ENEMY_KIND_COUNT; ++k) {
         const EnemyModel *m = &enemy_models[k];
         indices[k] = memalign(16, sizeof(unsigned short) * m->index_count);
@@ -269,6 +272,13 @@ static void spawn_one(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
     if (kind == ENEMY_GIGAPEDE) { giga_spawn(); return; }
+    if (kind == ENEMY_CERBERUS) {
+        e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
+        e->pos[0] = 2500.0f; e->pos[1] = e->floor_y = 0.0f; e->pos[2] = 3250.0f;
+        e->yaw = PI;
+        cerberus_boss_spawn();
+        return;
+    }
     if (kind == ENEMY_VANGUARD) {
         float y=0;
         floor_under(x,spawn_search_y,z,&y);
@@ -346,6 +356,7 @@ void enemy_kill_all(void) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
             if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
+            if (enemies[i].kind == ENEMY_CERBERUS) cerberus_boss_kill();
             Enemy *was = e;
             e = &enemies[i];
             if (e->kind != ENEMY_GIGAPEDE) died();   /* their orbs, as if Dante had done it */
@@ -399,8 +410,10 @@ void enemy_select_nearest(float x, float z) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *o = &enemies[i];
         float dx = o->pos[0] - x, dz = o->pos[2] - z, d = dx * dx + dz * dz;
-        if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && vanguard_hidden()) && d < best) { best = d; e = &enemies[i]; }
+        if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && vanguard_hidden()) &&
+            !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && d < best) { best = d; e = &enemies[i]; }
     }
+    if (e->kind == ENEMY_CERBERUS) cerberus_boss_select_target(x, z);
 }
 
 void enemy_set_attacks(int attacks) { attacks_on = attacks; }
@@ -413,6 +426,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
+    if (spawn_class == 43) return ENEMY_CERBERUS;
     if (spawn_class == 26) return ENEMY_VANGUARD;
     return ENEMY_PRIDE;
 }
@@ -440,15 +454,35 @@ int enemy_attack_landed(float *from_x, float *from_z, int *heavy) {
     *heavy = landed_heavy;
     return 1;
 }
+float enemy_attack_damage(void) { return landed_damage; }
+void enemy_clamp_player(float *z) {
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i) if (enemies[i].active && enemies[i].kind == ENEMY_CERBERUS) {
+        cerberus_boss_clamp_player(z);
+        return;
+    }
+}
 
-int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()); }
-void enemy_position(float out[3]) { memcpy(out, e->pos, sizeof(e->pos)); }
+int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()); }
+void enemy_position(float out[3]) {
+    if (e->kind == ENEMY_CERBERUS) cerberus_boss_target_position(out);
+    else memcpy(out, e->pos, sizeof(e->pos));
+}
 float enemy_height(void) { return e->pos[1] - e->floor_y; }
 int enemy_hits_taken(void) { return hits; }
+const char *enemy_boss_name(void) {
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_CERBERUS) return "CERBERUS";
+    return "HELL VANGUARD";
+}
 int enemy_boss_health(float *health, float *maximum) {
     int i;
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VANGUARD) {
         *health=vanguard_health();*maximum=vanguard_max_health();return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_CERBERUS) {
+        *health=cerberus_boss_health();*maximum=cerberus_boss_max_health();return 1;
     }
     return 0;
 }
@@ -1011,6 +1045,11 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     float toward;
     int behind;
     if (!e->active) return;
+    if (e->kind == ENEMY_CERBERUS) {
+        ++hits;
+        if (cerberus_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
+        return;
+    }
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
@@ -1073,6 +1112,7 @@ void enemy_push_out(float *x, float *z, float r) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].kind == ENEMY_GIGAPEDE) continue;
         if (enemies[i].kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) continue;
+        if (enemies[i].kind == ENEMY_CERBERUS && cerberus_boss_dying()) continue;
         const Enemy *o = &enemies[i];
         float dx, dz, d, min;
         e = &enemies[i];
@@ -1080,7 +1120,7 @@ void enemy_push_out(float *x, float *z, float r) {
         if (!o->active) continue;
         dx = *x - o->pos[0]; dz = *z - o->pos[2];
         d = sqrtf(dx * dx + dz * dz);
-        min = r + ENEMY_RADIUS;
+        min = r + (o->kind == ENEMY_CERBERUS ? 250.0f : ENEMY_RADIUS);
         if (d < min && d > 1e-3f && fabsf(o->pos[1] - o->floor_y) < 150.0f) {
             *x = o->pos[0] + dx / d * min;
             *z = o->pos[2] + dz / d * min;
@@ -1123,6 +1163,7 @@ static void land_attack(int heavy) {
     landed_x = e->pos[0];
     landed_z = e->pos[2];
     landed_heavy = heavy;
+    landed_damage = -1.0f;
 }
 
 /* Bodies, for one on the ground: other grounded enemies shove it, and it stops at Dante. */
@@ -1201,6 +1242,20 @@ static void update_one(float dt, float px, float py, float pz) {
     if (!e->active) return;
     dante_y = py;
     if (e->kind == ENEMY_GIGAPEDE) { giga_part_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_CERBERUS) {
+        float hit_x, hit_z, damage;
+        int heavy;
+        cerberus_boss_root_position(e->pos);
+        e->floor_y = e->pos[1];
+        e->plan = cerberus_boss_dying() ? P_DEATH : P_WATCH;
+        cerberus_boss_update(f, px, py, pz, attacks_on);
+        cerberus_boss_root_position(e->pos);
+        if (cerberus_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
+            land_attack(heavy);
+            landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+        }
+        return;
+    }
     if (e->kind == ENEMY_VANGUARD) {
         float ground;
         if(vanguard_update(f,px,py,pz,attacks_on,e->pos,&e->active))land_attack(1);
@@ -1422,6 +1477,7 @@ void enemy_draw(void) {
         e = &enemies[i];
         if (!e->active) continue;
         if (e->kind == ENEMY_GIGAPEDE) { if (e->step == 0) giga_draw(); continue; }
+        if (e->kind == ENEMY_CERBERUS) { cerberus_boss_draw(); continue; }
         if (e->kind == ENEMY_VANGUARD) {vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
