@@ -18,8 +18,8 @@ stored in this repository.
 | Mission 3: Cerberus in his chains | Ceiling icicles (em025's icicle model and effects) |
 | ![Cerberus's ice sphere](docs/screenshots/cerberus_ice_sphere.png) | ![Cerberus's phase-two ice breath](docs/screenshots/cerberus_breath.png) |
 | The ice sphere, rolling toward Dante | Phase-two ice breath freezing the floor |
-| ![Mission 4 fight](docs/screenshots/mission4_fight.png) | |
-| A Mission 4 fight against the Seven Hells | |
+| ![Mission 4 fight](docs/screenshots/mission4_fight.png) | ![Mission 2 street](docs/screenshots/mission2_street.png) |
+| A Mission 4 fight against the Seven Hells | The Mission 2 street, at 60 FPS |
 
 ### Menus
 
