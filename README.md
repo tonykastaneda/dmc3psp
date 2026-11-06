@@ -16,16 +16,6 @@ from the player's disc at build time; none are stored in this repository.
 | ![Cerberus's ice sphere](docs/screenshots/cerberus_ice_sphere.png) | ![Cerberus's phase-two ice breath](docs/screenshots/cerberus_breath.png) |
 | The ice sphere, rolling toward Dante | Phase-two ice breath freezing the floor |
 
-### On a real PSP
-
-Captured by the game on the console itself and read back over PSPLINK (`host0:`), from the 2026-11-04 build
-with the current HUD. That run's frame log shows about 46-53 frames a second. The boss fights have only been
-captured in PPSSPP so far.
-
-| | |
-| --- | --- |
-| ![Dante on PSP hardware](docs/screenshots/psp_hardware.png) | ![Dante on PSP hardware, second frame](docs/screenshots/psp_hardware_2.png) |
-
 ## Current verified state
 
 - The PS2 ISO is verified by size and SHA-256.
