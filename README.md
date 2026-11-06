@@ -8,6 +8,8 @@ Captured from the port's own 480x272 framebuffer. About half were taken in PPSSP
 read back over PSPLINK. The models, textures and effects are read from the player's disc at build time; none are
 stored in this repository.
 
+### Gameplay
+
 | | |
 | --- | --- |
 | ![Mission 2: Dante against the Hell Vanguard](docs/screenshots/vanguard.png) | ![Red orbs drawn with the game's own orb effect](docs/screenshots/red_orbs.png) |
@@ -16,8 +18,10 @@ stored in this repository.
 | Mission 3: Cerberus in his chains | Ceiling icicles (em025's icicle model and effects) |
 | ![Cerberus's ice sphere](docs/screenshots/cerberus_ice_sphere.png) | ![Cerberus's phase-two ice breath](docs/screenshots/cerberus_breath.png) |
 | The ice sphere, rolling toward Dante | Phase-two ice breath freezing the floor |
+| ![Mission 4 fight](docs/screenshots/mission4_fight.png) | |
+| A Mission 4 fight against the Seven Hells | |
 
-### Menus and missions
+### Menus
 
 | | |
 | --- | --- |
@@ -25,8 +29,6 @@ stored in this repository.
 | Title screen | Mission Select, with Bloody Palace and the debug room |
 | ![Customize menu](docs/screenshots/customize.png) | ![Item shop](docs/screenshots/shop.png) |
 | The Customize menu at the Divinity Statue | Buying items with red orbs |
-| ![Mission 4 fight](docs/screenshots/mission4_fight.png) | |
-| A Mission 4 fight against the Seven Hells | |
 
 ## Current verified state
 
