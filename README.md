@@ -16,6 +16,17 @@ from the player's disc at build time; none are stored in this repository.
 | ![Cerberus's ice sphere](docs/screenshots/cerberus_ice_sphere.png) | ![Cerberus's phase-two ice breath](docs/screenshots/cerberus_breath.png) |
 | The ice sphere, rolling toward Dante | Phase-two ice breath freezing the floor |
 
+### Menus and missions
+
+| | |
+| --- | --- |
+| ![Title screen](docs/screenshots/title.png) | ![Mission Select](docs/screenshots/mission_select.png) |
+| Title screen | Mission Select, with Bloody Palace and the debug room |
+| ![Customize menu](docs/screenshots/customize.png) | ![Item shop](docs/screenshots/shop.png) |
+| The Customize menu at the Divinity Statue | Buying items with red orbs |
+| ![Mission 4 fight](docs/screenshots/mission4_fight.png) | |
+| A Mission 4 fight against the Seven Hells | |
+
 ## Current verified state
 
 - The PS2 ISO is verified by size and SHA-256.
