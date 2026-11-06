@@ -30,8 +30,8 @@ stored in this repository.
 | Mission 3: the red curtain hall | Mission 3: inside the tower |
 | ![Mission 3, the tower gate](docs/screenshots/mission3_gate.png) | ![Mission 4, against the Seven Hells](docs/screenshots/mission4_hells.png) |
 | Mission 3: the tower gate | Mission 4: surrounded by the Seven Hells |
-| ![Mission 4 corridor](docs/screenshots/mission4_corridor.png) | |
-| Mission 4: the tower corridors | |
+| ![Mission 4 corridor](docs/screenshots/mission4_corridor.png) | ![Mission 3 bar](docs/screenshots/mission3_bar.png) |
+| Mission 4: the tower corridors | Mission 3: the bar, with its breakable props |
 
 ### Menus
 
