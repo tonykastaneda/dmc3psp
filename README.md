@@ -16,6 +16,20 @@ from the player's disc at build time; none are stored in this repository.
 | ![Cerberus's ice sphere](docs/screenshots/cerberus_ice_sphere.png) | ![Cerberus's phase-two ice breath](docs/screenshots/cerberus_breath.png) |
 | The ice sphere, rolling toward Dante | Phase-two ice breath freezing the floor |
 
+### On a real PSP
+
+Captured by the game on the console itself and read back over PSPLINK (`tools/psp_bench.py`). These are from
+an earlier build (2026-11-03) in Mission 1, before the boss fights; the boss fights have only been captured in
+PPSSPP so far.
+
+| | |
+| --- | --- |
+| ![Mission 1 on PSP hardware at 30 FPS](docs/screenshots/psp_hardware_mission1.png) | ![100-enemy stress test on PSP hardware](docs/screenshots/psp_hardware_stress.png) |
+| Mission 1 with four Seven Hells, holding 30 FPS | A stress test with 100 enemies (4 FPS) |
+
+On the console, the game holds 30 FPS with up to 7 attacking enemies. The AI logic for 100 enemies alone fits in
+the frame budget; drawing them is what costs (`analysis/testroom/bench_*.txt`).
+
 ## Current verified state
 
 - The PS2 ISO is verified by size and SHA-256.
