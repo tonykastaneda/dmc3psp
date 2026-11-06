@@ -16,6 +16,16 @@ PSP-native port of **Devil May Cry 3: Dante's Awakening Special Edition** (`SLUS
 
 Full scene execution, animation/deformation, audio, and gameplay remain in progress. See [docs/PORT_MAP.md](docs/PORT_MAP.md) for the technical map and next targets.
 
+## What this repository contains
+
+No game data is distributed here. The tools read assets from your own copy of the disc at build time, and their
+output stays under the ignored `build/`. These are generated locally and kept out of Git:
+
+- `analysis/ghidra/export/`: run `tools/run_ghidra.ps1`.
+- `analysis/moveset/`: the moveset tools read the disc and that export.
+- `psp/testroom/combat_data.h`: run `python tools/gen_combat_data.py`.
+- `reference/dmc3-decomp/`: its sources come from the upstream commit in `UPSTREAM.json`.
+
 ## Reference implementation
 
 `reference/dmc3-decomp/` vendors the CC0 matching-decomp source and metadata at commit `f8d03f05bef4f98598d9154b81044a0353b7927a`. It supplies named gameplay systems and class/vtable maps; the Special Edition Ghidra analysis remains the authority for `SLUS_213.61` differences. Adapted PSP implementations live under `engine/`.

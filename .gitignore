@@ -21,3 +21,15 @@ analysis/ref/**/*.png
 analysis/ref/**/*.mp4
 analysis/ref/**/*.bmp
 analysis/testroom/*.TXT
+# Copyrighted material kept on this machine only (never in the public repo):
+# decompilation and maps of the game's executables, data dumped from the disc,
+# the third-party decomp's sources, and third-party guide text.
+analysis/ghidra/export/
+analysis/ref/hd/dec/
+analysis/moveset/
+psp/testroom/combat_data.h
+reference/dmc3-decomp/src/
+reference/dmc3-decomp/config/
+reference/dmc3-decomp/include/
+MISSIONwalkthrough.md
+SECRETmissions.md
