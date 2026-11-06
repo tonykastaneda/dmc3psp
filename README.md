@@ -25,7 +25,7 @@ stored in this repository.
 | ![Mission 4, the Astronomical Board](docs/screenshots/mission4_astronomical_board.png) | ![Rebellion's sword trail](docs/screenshots/sword_trail.png) |
 | Mission 4: the Astronomical Board | Rebellion's sword trail |
 | ![Ice](docs/screenshots/ice_room.png) | ![Ice](docs/screenshots/ice_room_2.png) |
-| Dante among Cerberus's ice | |
+| Dante among giant ice crystals | |
 
 ### Menus
 
