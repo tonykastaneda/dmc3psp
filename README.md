@@ -2,6 +2,20 @@
 
 PSP-native port of **Devil May Cry 3: Dante's Awakening Special Edition** (`SLUS_213.61`) based on static R5900 analysis and conversion of the original game data.
 
+## Screenshots
+
+Captured in PPSSPP 1.17.1 from the port's own 480×272 framebuffer. The models, textures and effects are read
+from the player's disc at build time; none are stored in this repository.
+
+| | |
+| --- | --- |
+| ![Mission 2: Dante against the Hell Vanguard](docs/screenshots/vanguard.png) | ![Red orbs drawn with the game's own orb effect](docs/screenshots/red_orbs.png) |
+| Mission 2: the Hell Vanguard boss fight | Red orbs, using CItemOrb's own effect and sizes |
+| ![Mission 3: Cerberus](docs/screenshots/cerberus.png) | ![Cerberus's ceiling icicles](docs/screenshots/cerberus_icicles.png) |
+| Mission 3: Cerberus in his chains | Ceiling icicles (em025's icicle model and effects) |
+| ![Cerberus's ice sphere](docs/screenshots/cerberus_ice_sphere.png) | ![Cerberus's phase-two ice breath](docs/screenshots/cerberus_breath.png) |
+| The ice sphere, rolling toward Dante | Phase-two ice breath freezing the floor |
+
 ## Current verified state
 
 - The PS2 ISO is verified by size and SHA-256.
