@@ -18,8 +18,14 @@ stored in this repository.
 | Mission 3: Cerberus in his chains | Ceiling icicles (em025's icicle model and effects) |
 | ![Cerberus's ice sphere](docs/screenshots/cerberus_ice_sphere.png) | ![Cerberus's phase-two ice breath](docs/screenshots/cerberus_breath.png) |
 | The ice sphere, rolling toward Dante | Phase-two ice breath freezing the floor |
-| ![Mission 4 fight](docs/screenshots/mission4_fight.png) | ![Mission 2 street](docs/screenshots/mission2_street.png) |
-| A Mission 4 fight against the Seven Hells | The Mission 2 street, at 60 FPS |
+| ![Every enemy kind](docs/screenshots/all_enemies.png) | ![Mission 2 street](docs/screenshots/mission2_street.png) |
+| Every enemy kind so far: the Enigma and all six Seven Hells | The Mission 2 street, at 60 FPS |
+| ![Mission 4 fight](docs/screenshots/mission4_fight.png) | ![Mission 4, the Gigapede](docs/screenshots/mission4_gigapede.png) |
+| A Mission 4 fight against the Seven Hells | Mission 4: the Gigapede passing overhead |
+| ![Mission 4, the Astronomical Board](docs/screenshots/mission4_astronomical_board.png) | ![Rebellion's sword trail](docs/screenshots/sword_trail.png) |
+| Mission 4: the Astronomical Board | Rebellion's sword trail |
+| ![Ice](docs/screenshots/ice_room.png) | ![Ice](docs/screenshots/ice_room_2.png) |
+| Dante among Cerberus's ice | |
 
 ### Menus
 
@@ -29,6 +35,8 @@ stored in this repository.
 | Title screen | Mission Select, with Bloody Palace and the debug room |
 | ![Customize menu](docs/screenshots/customize.png) | ![Item shop](docs/screenshots/shop.png) |
 | The Customize menu at the Divinity Statue | Buying items with red orbs |
+| ![Mission 1 briefing](docs/screenshots/mission_briefing.png) | |
+| The Mission 1 briefing card | |
 
 ## Current verified state
 
