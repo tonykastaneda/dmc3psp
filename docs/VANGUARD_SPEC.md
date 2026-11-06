@@ -47,7 +47,9 @@ the same radius if scenery blocks it. A candidate needs floor on the same storey
 and an unobstructed chest-height segment to Dante. These are adaptations to the port's stage collision,
 not translations of the PS2 collision engine. Ground movement is subdivided spatially into steps no
 larger than one quarter of the decoded 50 cm root sphere, rejecting unsupported floor transitions.
-Hidden phases cannot be targeted, hit, or push Dante. Weapon/robe geometry can extend beyond the body
+Hidden phases cannot be targeted, hit, or push Dante. While visible he now mostly stops at Dante, the way
+the ordinary enemies' `keep_apart` does (80% of the overlap; Dante's own push-out takes the rest). The
+uppercut is excluded, since it rises under him. Weapon/robe geometry can extend beyond the body
 collision sphere; full mesh collision is not implemented.
 
 Health uses the decoded base value **3000** at parameter block `0x5cd590 + 0x2c`. Ordinary E&I shots now use

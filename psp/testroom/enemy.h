@@ -82,6 +82,6 @@ const char *enemy_boss_name(void);
 /* Apply a hit from a point (Dante's position) -- knock-back direction. */
 void enemy_hit(HitKind kind, float from_x, float from_z);
 /* Keep Dante (cylinder radius r at x,z) out of the dummy. */
-void enemy_push_out(float *x, float *z, float r);
+void enemy_push_out(float *x, float *z, float y, float r);
 
 #endif

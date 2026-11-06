@@ -1106,13 +1106,17 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     }
 }
 
-void enemy_push_out(float *x, float *z, float r) {
+void enemy_push_out(float *x, float *z, float y, float r) {
     Enemy *selected = e;
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].kind == ENEMY_GIGAPEDE) continue;
         if (enemies[i].kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) continue;
-        if (enemies[i].kind == ENEMY_CERBERUS && cerberus_boss_dying()) continue;
+        if (enemies[i].kind == ENEMY_CERBERUS) {
+            /* Its body is five posed push capsules (pack chunks 31/32), not one circle at its hips. */
+            if (enemies[i].active) cerberus_boss_push_out(x, z, y, r);
+            continue;
+        }
         const Enemy *o = &enemies[i];
         float dx, dz, d, min;
         e = &enemies[i];
@@ -1120,8 +1124,9 @@ void enemy_push_out(float *x, float *z, float r) {
         if (!o->active) continue;
         dx = *x - o->pos[0]; dz = *z - o->pos[2];
         d = sqrtf(dx * dx + dz * dz);
-        min = r + (o->kind == ENEMY_CERBERUS ? 250.0f : ENEMY_RADIUS);
-        if (d < min && d > 1e-3f && fabsf(o->pos[1] - o->floor_y) < 150.0f) {
+        min = r + ENEMY_RADIUS;
+        /* Only bodies at his height: Dante over a Pride's head or the Vanguard mid-uppercut isn't shoved. */
+        if (d < min && d > 1e-3f && fabsf(o->pos[1] - o->floor_y) < 150.0f && fabsf(o->pos[1] - y) < 170.0f) {
             *x = o->pos[0] + dx / d * min;
             *z = o->pos[2] + dz / d * min;
         }

@@ -36,9 +36,12 @@
 #include "swizzle.h"
 #include "enemy.h"
 #include "vanguard.h"
+/* The scene frame, for boss traces to line up with SHOT_n captures. */
+int testroom_frame;
 #include "cerberus_boss.h"
 #include "bullets.h"
 #include "fx.h"
+#include "nfx.h"
 #include "hud.h"
 #include "orbs.h"
 #include "rebellion_runtime.h"
@@ -1215,9 +1218,9 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     } else {
         enemy_draw();
     }
-    orbs_draw();
     {
         float eye[3] = {camera->x, camera->y, camera->z};
+        nfx_draw(eye);   /* the PS2's own effects: orbs, Cerberus's ice */
         fx_draw(eye);
     }
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
@@ -2411,6 +2414,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     menu_show_loading();
     enemy_set_count(0, player->x, player->z);
     orbs_clear();
+    nfx_reset();
     path_in_game_dir(path, sizeof(path), rooms[room].file);
     stage_load(path);
     breakables_enter(room);
@@ -3106,7 +3110,21 @@ int main(int argc, char *argv[]) {
                     if(focus_cmp)vanguard_note("player_guard",player.health);
                 }
             }
-            enemy_push_out(&player.x, &player.z, PLAYER_RADIUS);
+            {
+                /* Bodies shove him after his own wall pass, so the shove has to meet the walls too: an enemy
+                 * walking him into a corner, or Cerberus's paws, must not carry him into the scenery. */
+                float was_x = player.x, was_z = player.z;
+                enemy_push_out(&player.x, &player.z, player.y, PLAYER_RADIUS);
+                if (stage_loaded() && (player.x != was_x || player.z != was_z)) {
+                    float mx = player.x - was_x, mz = player.z - was_z, cx = was_x, cz = was_z;
+                    int steps = (int)(sqrtf(mx * mx + mz * mz) / 15.0f) + 1, s;
+                    for (s = 1; s <= steps; ++s) {
+                        cx += mx / (float)steps; cz += mz / (float)steps;
+                        if (stage_collide(&cx, &cz, player.y, PLAYER_RADIUS)) player.wall_contact = 1;
+                    }
+                    player.x = cx; player.z = cz;
+                }
+            }
         }
         if (input.style >= 0) style_switched = 1;
         if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
@@ -3140,6 +3158,7 @@ int main(int argc, char *argv[]) {
         pose_evaluate(&pose);
         if (focus && focus_plink) plink_measure(&pose, frames);
         fx_update(dt);
+        nfx_update(player.quicksilver ? dt * 6.0f : dt * 60.0f);
         fire_pending_shots(&combat, &player, dt);
         if (player.devil && player.melee_weapon < DMC3_DEVIL_COUNT && devil_ready(player.melee_weapon)) {
             const DevilModel *dm = &dmc3_devils[player.melee_weapon];
@@ -3607,6 +3626,7 @@ int main(int argc, char *argv[]) {
         }
 
         ++frames;
+        testroom_frame = frames;
         sceDisplayWaitVblankStart();
         draw_buffer = sceGuSwapBuffers();
         if (focus_pending) { focus_hold(focus_pending); focus_pending = NULL; }

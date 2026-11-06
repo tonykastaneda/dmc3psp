@@ -132,6 +132,7 @@ typedef struct {
     /* Where it would be with nothing in the way, and how much of that it may use now (0-1): walls pull it in
      * quickly and it eases back out, so an edge the line to him keeps grazing doesn't make it jump. */
     float free_x, free_z, clip;
+    float lift;   /* raised over him when a wall is too close behind to stay in front of it */
 } FollowCamera;
 
 typedef struct {

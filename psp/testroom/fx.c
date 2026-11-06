@@ -9,7 +9,9 @@
 #include "fx_runtime.h"
 #include "vanguard_fx_runtime.h"
 
-#define MAX_SPRITES 56
+/* Sized for a boss fight: E&I's flashes (three a shot) and hit sparks no longer recycle a boss's own
+ * timed sprites before their authored lifetimes end. */
+#define MAX_SPRITES 128
 #define TRAIL_POINTS 14
 #define TRAIL_SECONDS 0.14f
 
@@ -42,6 +44,12 @@ static float fx_rand(void) {   /* 0..1 */
     return (float)((seed >> 16) & 0x7fff) / 32767.0f;
 }
 
+/* Visual-only randomness, separate from the AI's stream so effects never change a decision. */
+unsigned int fx_random_u32(void) {
+    seed = seed * 1103515245u + 12345u;
+    return seed >> 8;
+}
+
 void fx_reset(void) {
     memset(sprites, 0, sizeof(sprites));
     trail_count = 0;
@@ -49,7 +57,16 @@ void fx_reset(void) {
 }
 
 static Sprite *spawn(int sheet, int grid, int cell, const float at[3], float size0, float size1, float life, unsigned int color) {
-    Sprite *s = &sprites[next_sprite];
+    Sprite *s;
+    int tries;
+    /* Round robin, but a live native (game-timed) sprite is never the one taken: it would vanish mid-effect,
+     * the "blinking" of the Vanguard's teleports under gunfire. */
+    for (tries = 0; tries < MAX_SPRITES; ++tries) {
+        s = &sprites[next_sprite];
+        if (!(s->native && s->life > 0.0f)) break;
+        next_sprite = (next_sprite + 1) % MAX_SPRITES;
+    }
+    s = &sprites[next_sprite];
     next_sprite = (next_sprite + 1) % MAX_SPRITES;
     memset(s, 0, sizeof(*s));
     s->sheet = (unsigned char)sheet;
@@ -96,6 +113,11 @@ void fx_muzzle(const float at[3], const float dir[3], unsigned int color) {
     s->vel[1] = 14.0f;
     s->smoke = 1;
     s->angle = fx_rand() * 6.28f;
+}
+
+void fx_mote(const float at[3], const float vel[3], float size0, float size1, float life, unsigned int color) {
+    Sprite *s = spawn(FX_SHEET_GLOW, 4, 0, at, size0, size1, life, color);
+    memcpy(s->vel, vel, sizeof(s->vel));
 }
 
 void fx_tracer(const float from[3], const float to[3], unsigned int color, float width) {

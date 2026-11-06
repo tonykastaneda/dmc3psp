@@ -641,3 +641,15 @@ When a head's HP goes below 0:
   2a0160-2a5f70 2a61d0 2a64d0 2a7360 2a7590 2a7790 2a7a60 2a7da0 2a7e40 2a80f0 2a8190 2a8200 2a83f0 2a84b0
   2ab770 2abac0 2ac090 2ac130 2ac170 2ac2b0 2ac390 2acb40`.
 - Shells: `32bd30-32cdb0 37edb0-37fe00 40d970-40e1c0`.
+
+## Port notes: collision and effects
+
+- **Solid body.** Dante is pushed out of the five posed push capsules from chunks 31 and 32 (bones 13, 14, 18 and
+  19: 0,0,0 → 0,−200,0 r100; bone 3: 0,0,300 → 0,−50,−150 r180). This replaces the old 250 cm circle at the hips,
+  which let him stand inside the paws and chest.
+- **Heads (port addition).** Each live head also pushes him off as an r100 sphere at head bone 4. The PS2 gives
+  the heads no push shape, and lowered heads swallowed him.
+- **Walls.** Every body push is followed by Dante's swept wall pass, so a push can't put him inside the scenery.
+- **Effects.** The shells and moves play em025's own effects. See [NATIVE_FX.md](NATIVE_FX.md) for the ids,
+  call sites and the two stand-ins for unported particle programs.
+

@@ -30,6 +30,8 @@ static struct {
     float cap_left[24], token, strain;
     int active, hidden, visible, dying, plan, action, phase, chain, motion, previous_motion, script, pc, stop, finish, done, hit_done, loop;
     int ids[80], ticks, trace, dead_reported;
+    /* Presentation only: model opacity and the P312 body particles (see teleport_fx below). */
+    float dissolve, dissolve_rate, emit_delay, emit_left; int emit_mode;
 } vg;
 static Transform body[48];
 static Transform bind_body[48];
@@ -42,6 +44,7 @@ static int vg_difficulty=1;
 void vanguard_set_difficulty(int difficulty) {vg_difficulty=difficulty;}
 void vanguard_render_test(int texture,int lighting) {no_texture=texture;no_lighting=lighting;}
 extern unsigned int enemy_ai_random(void);
+extern int testroom_frame;
 
 static float wrap(float x) { while (x > PI) x -= 2*PI; while (x < -PI) x += 2*PI; return x; }
 static float toward(float x,float z) { return atan2f(x-vg.pos[0], z-vg.pos[2]); }
@@ -93,8 +96,8 @@ static void trace(const char *event) {
     FILE *f;
     if(!vg.trace)return;
     f=fopen(trace_path,"a");
-    if(f) { fprintf(f,"t=%d event=%s plan=%d action=%d phase=%d script=%d frame=%.2f hp=%.0f hidden=%d x=%.1f y=%.1f z=%.1f\n",
-        vg.ticks,event,vg.plan,vg.action,vg.phase,vg.script,vg.frame,vg.hp,vg.hidden,vg.pos[0],vg.pos[1],vg.pos[2]); fclose(f); }
+    if(f) { fprintf(f,"t=%d f=%d event=%s plan=%d action=%d phase=%d script=%d frame=%.2f hp=%.0f hidden=%d x=%.1f y=%.1f z=%.1f\n",
+        vg.ticks,testroom_frame,event,vg.plan,vg.action,vg.phase,vg.script,vg.frame,vg.hp,vg.hidden,vg.pos[0],vg.pos[1],vg.pos[2]); fclose(f); }
 }
 void vanguard_note(const char *event,float value) {
     FILE *f;
@@ -165,6 +168,7 @@ static void tick_script(float f,float root[3]) {
 }
 static void idle(void) {
     vg.plan=24;vg.action=15;vg.phase=0;vg.timer=0;vg.hidden=0;vg.visible=1;vg.vy=0;
+    if(vg.dissolve_rate>=0)vg.dissolve=0;
     play(1+(enemy_ai_random()%3));trace("idle");
 }
 static void action(int a) {
@@ -177,6 +181,8 @@ static void action(int a) {
         vg.phase=(a==69 || a==70)?10:0;
         vg.hidden=1;vg.vy=0;memset(vg.cap_left,0,sizeof(vg.cap_left));
         fx_vanguard_event(702,vg.pos);trace("departure_fx");
+        /* V702: P312 starts at frame 1 while he's still drawn for 30 frames. */
+        vg.dissolve=0;vg.dissolve_rate=1.0f/30;vg.emit_mode=1;vg.emit_delay=1;vg.emit_left=30;
     }
     trace("action");
 }
@@ -232,7 +238,7 @@ static void move_ground(float dx,float dz) {
         vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;
     }
 }
-static void start_death(void) {vg.hp=0;vg.dying=1;vg.hidden=0;vg.visible=1;vg.plan=20;vg.action=26;vg.timer=0;play(29);trace("death");}
+static void start_death(void) {vg.hp=0;vg.dying=1;vg.hidden=0;vg.visible=1;vg.dissolve=0;vg.dissolve_rate=0;vg.emit_mode=0;vg.plan=20;vg.action=26;vg.timer=0;play(29);trace("death");}
 void vanguard_kill(void) {if(vg.active && !vg.dying)start_death();}
 int vanguard_hit(int kind,int mortal) {
     int pistol=kind==HIT_PISTOL,stagger=1;
@@ -273,6 +279,42 @@ static int attack_test(float px,float py,float pz) {
     }
     return 0;
 }
+/* P312 ("ee008-50p0") is a VU particle program: 50 points taken from em008's own mesh, a 40-frame life,
+ * colour 80 a0 c0 (vg_fx_P312.bin). The VU emitter isn't ported. This stands in for it from the same
+ * numbers: points on his posed skeleton, which leave his body on departure and gather into it on
+ * arrival, so he dissolves and re-forms instead of popping in and out. */
+static void teleport_fx(float f) {
+    int n,i;
+    vg.dissolve=fmaxf(0,fminf(1,vg.dissolve+vg.dissolve_rate*f));
+    if(vg.dissolve<=0 && vg.dissolve_rate<0)vg.dissolve_rate=0;
+    if(!vg.emit_mode)return;
+    if(vg.emit_delay>0) {vg.emit_delay-=f;return;}
+    /* About 50 over the emission, two or so a frame. */
+    n=(int)(f*2.0f+(float)(fx_random_u32()&255)/256.0f);
+    for(i=0;i<n;++i) {
+        const VanguardMesh *m=&vanguard_parts[0];
+        int b=1+(int)(fx_random_u32()%(unsigned)(m->bone_count-1));
+        float lx=body[b].p[0]+((float)(fx_random_u32()&255)/128.0f-1)*18;
+        float ly=body[b].p[1]+((float)(fx_random_u32()&255)/128.0f-1)*18;
+        float lz=body[b].p[2]+((float)(fx_random_u32()&255)/128.0f-1)*18;
+        float at[3]={vg.pos[0]+cosf(vg.yaw)*lx+sinf(vg.yaw)*lz,vg.pos[1]+ly,vg.pos[2]-sinf(vg.yaw)*lx+cosf(vg.yaw)*lz};
+        float out[3]={(float)(fx_random_u32()&255)/128.0f-1,(float)(fx_random_u32()&255)/256.0f,(float)(fx_random_u32()&255)/128.0f-1};
+        float vel[3];int k;
+        if(vg.emit_mode==1) {
+            /* Leaving: drift outward and up. 40 frames = 0.67 s. */
+            for(k=0;k<3;++k)vel[k]=out[k]*90;
+            vel[1]+=50;
+            fx_mote(at,vel,11,3,0.67f,0xd0ffd8a8u);
+        } else {
+            /* Gathering: start out from the body and arrive at it by the reveal. */
+            float life=0.4f;
+            for(k=0;k<3;++k) {at[k]+=out[k]*70;vel[k]=-out[k]*70/life;}
+            fx_mote(at,vel,4,11,life,0xd0ffd8a8u);
+        }
+    }
+    vg.emit_left-=f;
+    if(vg.emit_left<=0)vg.emit_mode=0;
+}
 static int step(float f,float px,float py,float pz,int attacks) {
     float root[3],dist=hypotf(px-vg.pos[0],pz-vg.pos[2]);int hit=0,k;
     ++vg.ticks;vg.timer+=f;vg.token=fmaxf(0,vg.token-f);
@@ -306,7 +348,7 @@ static int step(float f,float px,float py,float pz,int attacks) {
     } else if(vg.action==69 || vg.action==70) {
         /* Separate PS2 paths: 0047e840 (rush), 0047ef00 (uppercut).
          * Lowest-rank delays at 005cdd50/70 are 25 and 15, after phase 10's 30. */
-        if(vg.phase==10 && vg.timer>30) {vg.visible=0;vg.phase=0;vg.timer=0;play(0);}
+        if(vg.phase==10 && vg.timer>30) {vg.visible=0;vg.dissolve=1;vg.dissolve_rate=0;vg.phase=0;vg.timer=0;play(0);}
         else if(vg.phase==0 && vg.timer>25) {
             warp_to(px,py,pz,vg.action==69?400:0);vg.phase=1;vg.timer=0;
         }
@@ -314,9 +356,11 @@ static int step(float f,float px,float py,float pz,int attacks) {
             vg.phase=2;vg.timer=0;
             if(vg.action==70)play(105);
             fx_vanguard_event(vg.action==70?516:499,vg.pos);trace("arrival_fx");
+            /* V499 starts P312 at 15, V516 at 45: the body re-forms just before the reveal. */
+            vg.emit_mode=2;vg.emit_delay=vg.action==70?45:15;vg.emit_left=vg.action==70?5:15;
         }
         else if(vg.phase==2 && vg.timer>(vg.action==69?30:50)) {
-            vg.phase=3;vg.timer=0;vg.yaw=toward(px,pz);vg.hidden=0;vg.visible=1;trace("reveal");
+            vg.phase=3;vg.timer=0;vg.yaw=toward(px,pz);vg.hidden=0;vg.visible=1;vg.dissolve_rate=-1.0f/12;trace("reveal");
             if(vg.action==69)play_from(102,202);
             else play(107);
             /* Do not apply the preceding motion's root delta to a new action. */
@@ -339,10 +383,13 @@ static int step(float f,float px,float py,float pz,int attacks) {
         }
     } else if(vg.action==71 || vg.action==73) {
         /* FUN_0047f5b0/0047fd10: disappear, relocate, face Dante, reveal after 30. */
-        if(vg.phase==0 && vg.timer>30) {vg.visible=0;warp_to(px,py,pz,400);vg.phase=1;vg.timer=0;play(0);}
-        else if(vg.phase==1 && vg.timer<=f) {fx_vanguard_event(499,vg.pos);trace("arrival_fx");}
+        if(vg.phase==0 && vg.timer>30) {vg.visible=0;vg.dissolve=1;vg.dissolve_rate=0;warp_to(px,py,pz,400);vg.phase=1;vg.timer=0;play(0);}
+        else if(vg.phase==1 && vg.timer<=f) {
+            fx_vanguard_event(499,vg.pos);trace("arrival_fx");
+            vg.emit_mode=2;vg.emit_delay=15;vg.emit_left=15;
+        }
         else if(vg.phase==1 && vg.timer>30) {
-            vg.hidden=0;vg.visible=1;vg.yaw=toward(px,pz);vg.phase=2;
+            vg.hidden=0;vg.visible=1;vg.yaw=toward(px,pz);vg.phase=2;vg.dissolve_rate=-1.0f/12;
             if(vg.action==73) {play(103);trace("reveal");}else idle();
         } else if(vg.phase==2 && vg.done)idle();
     }
@@ -350,7 +397,14 @@ static int step(float f,float px,float py,float pz,int attacks) {
         move_ground(root[0]*cosf(vg.yaw)+root[2]*sinf(vg.yaw),
                     root[2]*cosf(vg.yaw)-root[0]*sinf(vg.yaw));
     }
+    /* Port body collision, as the ordinary enemies' keep_apart: he mostly stops at Dante rather than
+     * walking his robe through him, and Dante's own push-out takes the rest. The uppercut rises under him. */
+    if(!vg.hidden && !vg.dying && vg.action!=70 && fabsf(py-vg.pos[1])<150) {
+        float dx=vg.pos[0]-px,dz=vg.pos[2]-pz,d=hypotf(dx,dz),min=vg_caps[0].radius+PLAYER_RADIUS;
+        if(d<min && d>1e-3f)move_ground(dx/d*(min-d)*.8f,dz/d*(min-d)*.8f);
+    }
     pose();
+    teleport_fx(f);
     if(attacks)hit=attack_test(px,py,pz);
     if(vg.trace && vg.ticks%60==0)trace("sample");
     return hit;
@@ -452,13 +506,20 @@ static void skin_part(int part) {
 }
 void vanguard_draw(void) {
     int part,i;
-    if(!vg.active || !vg.visible)return;
+    float alpha=1-vg.dissolve;
+    if(!vg.active || !vg.visible || alpha<=0.02f)return;
     sceGumMatrixMode(GU_MODEL);sceGumLoadIdentity();
     {ScePspFVector3 p={vg.pos[0],vg.pos[1],vg.pos[2]};sceGumTranslate(&p);}sceGumRotateY(vg.yaw);
     sceGuEnable(GU_TEXTURE_2D);sceGuEnable(GU_LIGHTING);sceGuEnable(GU_ALPHA_TEST);
     if(no_texture)sceGuDisable(GU_TEXTURE_2D);
     if(no_lighting)sceGuDisable(GU_LIGHTING);
     sceGuColor(0xffffffffu);sceGuTexFunc(GU_TFX_MODULATE,GU_TCC_RGBA);
+    if(alpha<0.99f) {
+        /* Fading: blended, darkening a little as it goes, like the EFM body's fade. */
+        unsigned int a=(unsigned int)(alpha*255),g=(unsigned int)(140+alpha*115);
+        sceGuEnable(GU_BLEND);sceGuBlendFunc(GU_ADD,GU_SRC_ALPHA,GU_ONE_MINUS_SRC_ALPHA,0,0);
+        sceGuAlphaFunc(GU_GREATER,0,0xff);sceGuColor(a<<24|g<<16|g<<8|g);
+    }
     sceGuTexScale(1,1);sceGuTexOffset(0,0);
     sceGuTexMode(GU_PSM_T8,0,0,1);sceGuClutMode(GU_PSM_8888,0,255,0);sceGuTexFilter(GU_LINEAR,GU_LINEAR);sceGuTexWrap(GU_CLAMP,GU_CLAMP);
     for(part=0;part<9;++part) {
@@ -472,5 +533,6 @@ void vanguard_draw(void) {
                            o->index_count,indices[part]+o->index_start,vertices[part]);
         }
     }
+    if(alpha<0.99f) {sceGuDisable(GU_BLEND);sceGuAlphaFunc(GU_GREATER,0x7f,0xff);sceGuColor(0xffffffffu);}
     sceGuDisable(GU_ALPHA_TEST);
 }

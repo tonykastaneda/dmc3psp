@@ -101,6 +101,13 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "fx_runti
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_fx.py"), $Iso.FullName, "--output", $Generated)
 }
 
+$NativeFxHeader = Join-Path $Generated 'native_fx_runtime.h'
+if ($Regenerate -or -not (Test-Path -LiteralPath $NativeFxHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root 'tools/native_fx.py')).LastWriteTime -gt (Get-Item -LiteralPath $NativeFxHeader).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools/native_fx.py'), $Iso.FullName, '--output', $Generated)
+}
+
 $VanguardHeader = Join-Path $Generated 'vanguard_ai.h'
 if ($Regenerate -or -not (Test-Path -LiteralPath $VanguardHeader) -or
     -not (Test-Path -LiteralPath (Join-Path $Generated 'vanguard_fx_runtime.h')) -or
@@ -115,7 +122,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "menu", "movie", "orbs")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

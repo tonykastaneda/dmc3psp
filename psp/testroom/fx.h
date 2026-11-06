@@ -7,6 +7,7 @@
  * a low cap on sprites to stay inside the PSP's frame time. */
 
 void fx_reset(void);
+unsigned int fx_random_u32(void);   /* visual randomness, not the AI stream */
 void fx_update(float dt);
 /* Original em008 V timeline IDs: 702 departure, 499 arrival, 516 uppercut arrival. */
 void fx_vanguard_event(int id, const float at[3]);
@@ -24,6 +25,8 @@ void fx_muzzle(const float at[3], const float dir[3], unsigned int color);
 void fx_tracer(const float from[3], const float to[3], unsigned int color, float width);
 void fx_projectile(const float tail[3], const float head[3], unsigned int color); /* one frame */
 void fx_hit_spark(const float at[3]);
+/* A soft additive dot drifting at vel (cm/s), from size0 to size1 cm over life seconds. */
+void fx_mote(const float at[3], const float vel[3], float size0, float size1, float life, unsigned int color);
 void fx_wall_spark(const float at[3]);
 void fx_explosion(const float at[3]);
 void fx_dust(const float at[3]);              /* landing, a roll */

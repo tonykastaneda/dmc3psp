@@ -10,8 +10,7 @@ void orbs_burst(float x, float y, float z, int total);
 void orbs_clear(void);
 /* dt in seconds; (px, py, pz) is Dante's feet. */
 void orbs_update(float dt, float px, float py, float pz);
-/* With the view and projection set, inside an open display list. */
-void orbs_draw(void);
+/* Each orb is drawn by its own PS2 effect (V45/V186-V189), in nfx_draw. */
 /* Seconds since the last one was collected, for the HUD's count to show and fade. */
 float orbs_since_collected(void);
 

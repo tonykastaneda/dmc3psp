@@ -15,6 +15,13 @@ void fx_wall_spark(const float p[3]) {(void)p;}
 void fx_explosion(const float p[3]) {(void)p;}
 void fx_dust(const float p[3]) {(void)p;}
 void fx_screen_tint(unsigned int color) {(void)color;}
+int testroom_frame;
+static int nfx_handles;
+int nfx_spawn(int b, int v, const float p[3], float y, int l) {(void)b;(void)v;(void)p;(void)y;(void)l;return ++nfx_handles;}
+int nfx_spawn_e(int b, int e, const float p[3], float y, int l) {(void)b;(void)e;(void)p;(void)y;(void)l;return ++nfx_handles;}
+void nfx_move(int h, const float p[3], float y) {(void)h;(void)p;(void)y;}
+void nfx_scale(int h, float s) {(void)h;(void)s;}
+void nfx_kill(int h) {(void)h;}
 
 int main(void) {
     int phase, id, i;

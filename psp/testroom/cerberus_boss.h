@@ -18,6 +18,8 @@ void cerberus_boss_root_position(float out[3]);
 void cerberus_boss_target_position(float out[3]);
 float cerberus_boss_segment_hit(const float a[3], const float b[3]);
 void cerberus_boss_clamp_player(float *z);
+/* Push Dante (feet at y, radius r) out of its posed body capsules. */
+void cerberus_boss_push_out(float *x, float *z, float y, float r);
 /* One damage event, cleared by reading it. Damage is the original record's value. */
 int cerberus_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *damage);
 void cerberus_boss_trace(const char *path);

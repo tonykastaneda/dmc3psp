@@ -44,6 +44,27 @@ atlas coordinates. `tools/tests/vanguard_logic.c` checks visibility separately f
 Run both with `python tools/tests/run_vanguard_logic.py`; GPU calls are no-ops in the host tests.
 PPSSPP frame capture is still required to review rendering.
 
+## Dissolve and P312 stand-in
+
+Two defects made the teleports "blink":
+
+- **Evicted sprites.** All effects shared one 56-sprite round-robin pool. Each E&I shot spawns three flash
+  sprites and each hit spark four, so gunfire overwrote the teleport's 40-frame native sprites mid-effect.
+  The pool is now 128, and a live native sprite is never the one recycled.
+- **No body presentation.** P312 (`ee008-50p0`) is a VU particle program. The 50 points come from em008's own
+  mesh, and the record gives a 40-frame life and colour 80 a0 c0. With nothing in its place the model simply
+  popped off at the hide call and on at the reveal.
+
+The port now does the following. It is presentation only and does not change visibility, hit immunity or timing:
+
+- **Departure.** The model fades out over V702's 30 visible frames. Points on his posed skeleton drift off the
+  body, starting from V702's P312 delay (frame 1).
+- **Arrival.** Points gather into the body from V499's P312 delay (frame 15), or V516's (frame 45). The model
+  fades in over 12 frames from the native reveal.
+
+Visual randomness uses `fx_random_u32`, not the AI's stream. This is a stand-in for P312 from its recorded
+numbers, not a port of the VU program.
+
 ## Solo encounter
 
 The preceding Mission 2 waves are gated by the living count. Dead actors can still draw during their

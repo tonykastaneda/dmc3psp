@@ -13,6 +13,9 @@ static int wall,missing_floor;
 static unsigned int random_state=1;
 unsigned int enemy_ai_random(void) {random_state=random_state*1664525u+1013904223u;return random_state;}
 void fx_vanguard_event(int id,const float at[3]) {(void)id;(void)at;}
+int testroom_frame;
+unsigned int fx_random_u32(void) {static unsigned int x=1;x=x*1103515245u+12345u;return x>>8;}
+void fx_mote(const float a[3],const float v[3],float s0,float s1,float l,unsigned int c) {(void)a;(void)v;(void)s0;(void)s1;(void)l;(void)c;}
 int stage_collide(float *x,float *z,float y,float radius) {
     (void)z;(void)y;
     if(wall && fabsf(*x)<radius) {*x=*x<0?-radius:radius;return 1;}

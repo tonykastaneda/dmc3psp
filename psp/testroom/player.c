@@ -511,19 +511,24 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             camera->free_x = player->x + dx / h * next;
             camera->free_z = player->z + dz / h * next;
         }
-        camera->y += (player->y + CAMERA_HEIGHT - camera->y) * (1.0f - expf(-8.0f * dt));
+        camera->y += (player->y + CAMERA_HEIGHT + camera->lift - camera->y) * (1.0f - expf(-8.0f * dt));
         {
             /* Pulled in when a wall comes between them, as on the real game near walls: quickly in, slowly
              * back out. */
             float from[3] = {player->x, player->y + CAMERA_TARGET_HEIGHT, player->z};
             float to[3] = {camera->free_x, camera->y, camera->free_z}, t, allowed = 1.0f;
             float reach = sqrtf((to[0] - from[0]) * (to[0] - from[0]) + (to[2] - from[2]) * (to[2] - from[2]));
+            float lift = 0.0f;
             if (stage_loaded() && stage_raycast(from, to, &t) && t < 1.0f) {
                 allowed = t * 0.92f;
-                /* It never comes closer than this on the real game. */
-                if (reach * allowed < CAMERA_MIN_DISTANCE && reach > 0.0f) allowed = CAMERA_MIN_DISTANCE / reach;
+                /* It comes no closer than this on the real game. Where a wall is closer behind him than that,
+                 * the old boom went on through it and showed the inside of the wall: now it stays in front
+                 * of the wall and rises to look down over him instead. */
+                if (reach * allowed < CAMERA_MIN_DISTANCE && reach > 0.0f)
+                    lift = fminf(220.0f, (CAMERA_MIN_DISTANCE - reach * allowed) * 0.9f);
                 if (allowed > 1.0f) allowed = 1.0f;
             }
+            camera->lift += (lift - camera->lift) * (1.0f - expf(-(lift > camera->lift ? 10.0f : 2.5f) * dt));
             if (allowed < camera->clip) camera->clip += (allowed - camera->clip) * (1.0f - expf(-25.0f * dt));
             else camera->clip += (allowed - camera->clip) * (1.0f - expf(-2.5f * dt));
             if (camera->clip < allowed - 0.35f) camera->clip = allowed - 0.35f;   /* never far behind a wall's edge */
