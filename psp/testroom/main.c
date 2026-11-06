@@ -1698,7 +1698,7 @@ static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the
  * to CMP_OUT.TXT, to line up with the same script on the real game (tools/ref_compare.py). */
 static int focus_cmp;
 #define CMP_MAX_EVENTS 64
-#define CMP_MAX_FRAMES 3000
+#define CMP_MAX_FRAMES 6000
 static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
 /* "walkto x z first last": over those frames the stick points at (x, z) from wherever he is, through the camera,
  * as a player steers; it lets go within 25 cm. Real walking: no teleports. */
@@ -2376,9 +2376,17 @@ static int script_run(float dt, float floor_y) {
         }
         switch (op->op) {
         case ROOM_OP_SPAWN:
+            if(mission_choice.mission==2 && op->a==26) {
+                /* The pre-boss waves are over. Their still-drawing death actors
+                 * do not belong in Vanguard's solo encounter. */
+                if(enemy_alive_count())return 0;
+                enemy_remove_defeated();
+            }
             /* From the script's own height: Enigmas stand on ledges and walls. */
             enemy_spawn_height((float)op->c > floor_y ? (float)op->c : floor_y);
             enemy_add_kind(enemy_kind_for_class(op->a), (float)op->b, (float)op->d);
+            if(mission_choice.mission==2 && op->a==26 && focus_cmp)
+                vanguard_note("encounter_enemies",(float)enemy_count());
             break;
         case ROOM_OP_WAIT:
             script_wait = (float)op->a;
@@ -2579,6 +2587,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 }
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    vanguard_set_difficulty(choice->difficulty);
     if (choice->mission == MENU_DEBUG_ROOM) { start_debug_room(choice, player, camera); return; }
     mission_mode = 1;
     game_turbo = choice->turbo;

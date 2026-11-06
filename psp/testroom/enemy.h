@@ -21,7 +21,8 @@ typedef enum {
     HIT_HEAVY,    /* finishers, Stinger: knock back */
     HIT_LAUNCH,   /* High Time: launched into the air */
     HIT_AIR,      /* any hit while airborne: juggle pop */
-    HIT_SLAM      /* Helm Breaker: smashed to the floor */
+    HIT_SLAM,     /* Helm Breaker: smashed to the floor */
+    HIT_PISTOL    /* Ordinary E&I shot: distinct native damage/reaction record */
 } HitKind;
 
 
@@ -42,6 +43,7 @@ void enemy_set_dummy_kind(int kind);   /* what the debug menu's dummies are */
 int enemy_alive_count(void);          /* those not yet dead */
 void enemy_kill_all(void);            /* for tests */
 void enemy_clear_minions(void);      /* tests: retain the boss and the script's alive-count gates */
+void enemy_remove_defeated(void);    /* encounter transition: retire completed wave actors */
 /* Keep the ones there are; add new ones in a ring around (x, z) or remove the last ones. */
 void enemy_set_count(int count, float x, float z);
 int enemy_count(void);

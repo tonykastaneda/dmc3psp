@@ -4,6 +4,7 @@
 #include "player.h"
 #include "stage.h"
 #include "swizzle.h"
+#include "fx.h"
 #include <pspgu.h>
 #include <pspgum.h>
 #include <pspkernel.h>
@@ -26,8 +27,8 @@ typedef struct { float m[3][3], p[3]; } Transform;
 typedef struct { float u,v,nx,ny,nz,x,y,z; } Vertex;
 static struct {
     float pos[3], yaw, hp, gauge, timer, frame, previous_frame, fade, fade_step, vy, ground;
-    float cap_left[24], token;
-    int active, hidden, dying, plan, action, phase, chain, motion, previous_motion, script, pc, stop, finish, done, hit_done, loop;
+    float cap_left[24], token, strain;
+    int active, hidden, visible, dying, plan, action, phase, chain, motion, previous_motion, script, pc, stop, finish, done, hit_done, loop;
     int ids[80], ticks, trace, dead_reported;
 } vg;
 static Transform body[48];
@@ -37,6 +38,8 @@ static unsigned short *indices[9];
 static void *textures[2];
 static char trace_path[320];
 static int no_texture,no_lighting;
+static int vg_difficulty=1;
+void vanguard_set_difficulty(int difficulty) {vg_difficulty=difficulty;}
 void vanguard_render_test(int texture,int lighting) {no_texture=texture;no_lighting=lighting;}
 extern unsigned int enemy_ai_random(void);
 
@@ -161,7 +164,7 @@ static void tick_script(float f,float root[3]) {
     }
 }
 static void idle(void) {
-    vg.plan=24;vg.action=15;vg.phase=0;vg.timer=0;vg.hidden=0;vg.vy=0;
+    vg.plan=24;vg.action=15;vg.phase=0;vg.timer=0;vg.hidden=0;vg.visible=1;vg.vy=0;
     play(1+(enemy_ai_random()%3));trace("idle");
 }
 static void action(int a) {
@@ -173,6 +176,7 @@ static void action(int a) {
         /* 0047e730/0047edf0 start in phase 10, distinct from the relocation wait. */
         vg.phase=(a==69 || a==70)?10:0;
         vg.hidden=1;vg.vy=0;memset(vg.cap_left,0,sizeof(vg.cap_left));
+        fx_vanguard_event(702,vg.pos);trace("departure_fx");
     }
     trace("action");
 }
@@ -181,6 +185,9 @@ static void decide(float distance,int alternate) {
     const VanguardPick *r=&vg_picks[alternate][band];
     float roll=(float)enemy_ai_random()*(99.0f/4294967296.0f),total=0;int i;
     vg.gauge=0;
+    /* The attack manager takes a three-second token only on a primary grant.
+     * Renewing it on defensive plans starves the primary attack list forever. */
+    if(!alternate)vg.token=180;
     for(i=0;i<r->count;++i) {total+=r->weight[i];if(roll<total)break;}
     if(i>=r->count)i=r->count-1;
     vg.plan=r->plan[i];vg.chain=0;
@@ -225,17 +232,28 @@ static void move_ground(float dx,float dz) {
         vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;
     }
 }
-static void start_death(void) {vg.hp=0;vg.dying=1;vg.hidden=0;vg.plan=20;vg.action=26;vg.timer=0;play(29);trace("death");}
+static void start_death(void) {vg.hp=0;vg.dying=1;vg.hidden=0;vg.visible=1;vg.plan=20;vg.action=26;vg.timer=0;play(29);trace("death");}
 void vanguard_kill(void) {if(vg.active && !vg.dying)start_death();}
 int vanguard_hit(int kind,int mortal) {
+    int pistol=kind==HIT_PISTOL,stagger=1;
+    float damage=pistol?VANGUARD_PISTOL_DAMAGE*(vg_difficulty==0?2:1):
+        (kind==HIT_LIGHT || kind==HIT_AIR?42:84);
     if(!vg.active || vg.dying)return 0;
     if(vg.hidden) {trace("immune");return 0;}
-    if(mortal)vg.hp=fmaxf(0,vg.hp-(kind==HIT_LIGHT || kind==HIT_AIR?42:84));
-    vg.gauge+=kind==HIT_LIGHT?21:42;
+    if(mortal)vg.hp=fmaxf(0,vg.hp-damage);
+    if(pistol) {
+        /* 002f17a0: tertiary strain, not a sword flinch for each bullet.
+         * 0046c0f0 adds half the unscaled record damage on ordinary hits. */
+        vg.strain-=VANGUARD_PISTOL_STRAIN;
+        stagger=vg.strain<=0;
+        if(stagger) {vg.strain=VANGUARD_STRAIN_MAX;trace("pistol_stagger");}
+        else if(vg.action==15 || vg.action==35)vg.gauge+=VANGUARD_PISTOL_DAMAGE*.5f;
+        trace("pistol_hit");
+    } else vg.gauge+=kind==HIT_LIGHT?21:42;
     trace("hurt");
     if(vg.hp<=0) {start_death();return 1;}
     /* Attack states use reaction category 4. They keep their attack instead of being stun-locked. */
-    if(vg.action==15 || vg.action==35) {vg.plan=0;vg.action=0;vg.phase=0;play(4+(enemy_ai_random()&1));trace("flinch");}
+    if(stagger && (vg.action==15 || vg.action==35)) {vg.plan=0;vg.action=0;vg.phase=0;play(4+(enemy_ai_random()&1));trace("flinch");}
     return 0;
 }
 static int attack_test(float px,float py,float pz) {
@@ -273,7 +291,7 @@ static int step(float f,float px,float py,float pz,int attacks) {
             float d=fabsf(wrap(toward(px,pz)-vg.yaw));
             for(k=0;k<3;++k)if(dist<vg_zones[k][0] && d<vg_zones[k][1]*PI/180) {vg.gauge+=vg_zones[k][2]*f;break;}
             if(d>PI/2) {vg.plan=57;action(71);}
-            else if(vg.gauge>100) {decide(dist,vg.token>0);vg.token=180;}
+            else if(vg.gauge>100)decide(dist,vg.token>0);
         }
     } else if(vg.action==16) {
         if(vg.phase==0) {
@@ -288,17 +306,17 @@ static int step(float f,float px,float py,float pz,int attacks) {
     } else if(vg.action==69 || vg.action==70) {
         /* Separate PS2 paths: 0047e840 (rush), 0047ef00 (uppercut).
          * Lowest-rank delays at 005cdd50/70 are 25 and 15, after phase 10's 30. */
-        if(vg.phase==10 && vg.timer>30) {vg.phase=0;vg.timer=0;play(0);}
+        if(vg.phase==10 && vg.timer>30) {vg.visible=0;vg.phase=0;vg.timer=0;play(0);}
         else if(vg.phase==0 && vg.timer>25) {
             warp_to(px,py,pz,vg.action==69?400:0);vg.phase=1;vg.timer=0;
         }
         else if(vg.phase==1 && vg.timer>(vg.action==69?15:0)) {
-            vg.phase=2;vg.timer=0;vg.hidden=0;
+            vg.phase=2;vg.timer=0;
             if(vg.action==70)play(105);
-            trace("reveal");
+            fx_vanguard_event(vg.action==70?516:499,vg.pos);trace("arrival_fx");
         }
         else if(vg.phase==2 && vg.timer>(vg.action==69?30:50)) {
-            vg.phase=3;vg.timer=0;vg.yaw=toward(px,pz);
+            vg.phase=3;vg.timer=0;vg.yaw=toward(px,pz);vg.hidden=0;vg.visible=1;trace("reveal");
             if(vg.action==69)play_from(102,202);
             else play(107);
             /* Do not apply the preceding motion's root delta to a new action. */
@@ -321,9 +339,10 @@ static int step(float f,float px,float py,float pz,int attacks) {
         }
     } else if(vg.action==71 || vg.action==73) {
         /* FUN_0047f5b0/0047fd10: disappear, relocate, face Dante, reveal after 30. */
-        if(vg.phase==0 && vg.timer>30) {warp_to(px,py,pz,400);vg.phase=1;vg.timer=0;play(0);}
+        if(vg.phase==0 && vg.timer>30) {vg.visible=0;warp_to(px,py,pz,400);vg.phase=1;vg.timer=0;play(0);}
+        else if(vg.phase==1 && vg.timer<=f) {fx_vanguard_event(499,vg.pos);trace("arrival_fx");}
         else if(vg.phase==1 && vg.timer>30) {
-            vg.hidden=0;vg.yaw=toward(px,pz);vg.phase=2;
+            vg.hidden=0;vg.visible=1;vg.yaw=toward(px,pz);vg.phase=2;
             if(vg.action==73) {play(103);trace("reveal");}else idle();
         } else if(vg.phase==2 && vg.done)idle();
     }
@@ -343,7 +362,8 @@ int vanguard_update(float frames,float px,float py,float pz,int attacks,float po
 }
 void vanguard_spawn(float x,float y,float z) {
     int trace_on=vg.trace,ids[80];memcpy(ids,vg.ids,sizeof(ids));memset(&vg,0,sizeof(vg));memcpy(vg.ids,ids,sizeof(ids));vg.trace=trace_on;
-    vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;vg.ground=y;vg.hp=VANGUARD_HP;vg.active=1;vg.plan=14;vg.action=13;
+    vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;vg.ground=y;vg.hp=VANGUARD_HP;vg.active=1;vg.visible=1;vg.plan=14;vg.action=13;
+    vg.strain=VANGUARD_STRAIN_MAX;
     vg.motion=vg.previous_motion=vg.ids[0];play(13);pose();trace("spawn");
 }
 int vanguard_hidden(void) {return vg.hidden;}
@@ -432,7 +452,7 @@ static void skin_part(int part) {
 }
 void vanguard_draw(void) {
     int part,i;
-    if(!vg.active || vg.hidden)return;
+    if(!vg.active || !vg.visible)return;
     sceGumMatrixMode(GU_MODEL);sceGumLoadIdentity();
     {ScePspFVector3 p={vg.pos[0],vg.pos[1],vg.pos[2]};sceGumTranslate(&p);}sceGumRotateY(vg.yaw);
     sceGuEnable(GU_TEXTURE_2D);sceGuEnable(GU_LIGHTING);sceGuEnable(GU_ALPHA_TEST);

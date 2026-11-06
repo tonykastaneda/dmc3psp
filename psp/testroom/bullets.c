@@ -147,7 +147,7 @@ void bullets_fire(int kind, const float muzzle[3], const float yaw, int has_targ
         if (any) { enemy_hit(guns[kind].hit, muzzle[0], muzzle[2]); ++hits_landed; }
         return;
     }
-    if (hitscan(kind, muzzle, to)) { enemy_hit(guns[kind].hit, muzzle[0], muzzle[2]); ++hits_landed; }
+    if (hitscan(kind, muzzle, to)) { enemy_hit(kind==BULLET_EBONY_IVORY?HIT_PISTOL:guns[kind].hit, muzzle[0], muzzle[2]); ++hits_landed; }
 }
 
 void bullets_update(float dt) {

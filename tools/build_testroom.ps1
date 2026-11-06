@@ -94,6 +94,8 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "fx_runti
 
 $VanguardHeader = Join-Path $Generated 'vanguard_ai.h'
 if ($Regenerate -or -not (Test-Path -LiteralPath $VanguardHeader) -or
+    -not (Test-Path -LiteralPath (Join-Path $Generated 'vanguard_fx_runtime.h')) -or
+    (Get-Item -LiteralPath (Join-Path $Root 'tools\vanguard_fx.py')).LastWriteTime -gt (Get-Item -LiteralPath $VanguardHeader).LastWriteTime -or
     (Get-Item -LiteralPath (Join-Path $Root 'tools\prepare_vanguard.py')).LastWriteTime -gt (Get-Item -LiteralPath $VanguardHeader).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\prepare_vanguard.py'), $Iso.FullName, '--output', $Generated)

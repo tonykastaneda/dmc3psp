@@ -2,6 +2,7 @@
 #define DMC3_VANGUARD_H
 
 int vanguard_init(void);
+void vanguard_set_difficulty(int difficulty);
 void vanguard_spawn(float x, float y, float z);
 /* Returns an attack landing. alive becomes 0 after the death animation. */
 int vanguard_update(float frames, float px, float py, float pz, int attacks, float pos[3], int *alive);

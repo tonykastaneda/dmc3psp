@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "fx_runtime.h"
+#include "vanguard_fx_runtime.h"
 
 #define MAX_SPRITES 56
 #define TRAIL_POINTS 14
@@ -19,6 +20,8 @@ typedef struct {
     float size0, size1, life, total, spin, angle, gravity;
     unsigned int color;
     unsigned char sheet, cell, grid, mode, smoke;
+    const unsigned char *native;
+    float native_age, native_scale[3], native_height;
 } Sprite;
 
 typedef struct { float u, v; unsigned int color; float x, y, z; } FxVertex;
@@ -32,6 +35,7 @@ static struct { float base[3], tip[3], age; } trail[TRAIL_POINTS];
 static int trail_count;
 static unsigned int trail_color;
 static int trail_fresh;
+static void vg_fx_reset(void);
 
 static float fx_rand(void) {   /* 0..1 */
     seed = seed * 1103515245u + 12345u;
@@ -41,6 +45,7 @@ static float fx_rand(void) {   /* 0..1 */
 void fx_reset(void) {
     memset(sprites, 0, sizeof(sprites));
     trail_count = 0;
+    vg_fx_reset();
 }
 
 static Sprite *spawn(int sheet, int grid, int cell, const float at[3], float size0, float size1, float life, unsigned int color) {
@@ -58,11 +63,15 @@ static Sprite *spawn(int sheet, int grid, int cell, const float at[3], float siz
     return s;
 }
 
+#include "vanguard_fx.inc"
+
 void fx_update(float dt) {
     int i, k;
+    vg_fx_update(dt * 60.0f);
     for (i = 0; i < MAX_SPRITES; ++i) {
         Sprite *s = &sprites[i];
         if (s->life <= 0.0f) continue;
+        if(s->native) {vg_fx_sprite(s,dt*60.0f);continue;}
         s->life -= dt;
         s->vel[1] -= s->gravity * dt;
         for (k = 0; k < 3; ++k) s->pos[k] += s->vel[k] * dt;
@@ -255,6 +264,14 @@ static void put_quad(FxVertex *v, const float c[4][3], float u0, float v0, float
 }
 
 static void bind(int sheet) {
+    if(sheet>=FX_SHEET_COUNT) {
+        int light=sheet==FX_SHEET_COUNT+1,size=light?128:256;
+        sceGuClutMode(GU_PSM_8888,0,0xff,0);
+        sceGuClutLoad(32,light?vg_fx_palette_48:vg_fx_palette_25);
+        sceGuTexMode(GU_PSM_T8,0,0,0);
+        sceGuTexImage(0,size,size,size,light?vg_fx_pixels_48:vg_fx_pixels_25);
+        sceGuTexFlush();return;
+    }
     sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
     sceGuClutLoad(256 / 8, fx_palettes[sheet]);
     sceGuTexMode(GU_PSM_T8, 0, 0, 0);
@@ -320,7 +337,8 @@ static void sprite_corners(const Sprite *s, const float eye[3], float c[4][3]) {
         }
     }
     for (i = 0; i < 4; ++i) {
-        float sx = (i & 1) ? size : -size, sy = (i & 2) ? -size : size;
+        float height=s->native?s->native_height:size;
+        float sx = (i & 1) ? size : -size, sy = (i & 2) ? -height : height;
         for (k = 0; k < 3; ++k) c[i][k] = s->pos[k] + right[k] * sx + up[k] * sy;
     }
 }
@@ -346,7 +364,7 @@ void fx_draw(const float eye[3]) {
         int pass;
         for (pass = 0; pass < 2; ++pass) {
             sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, pass ? GU_FIX : GU_ONE_MINUS_SRC_ALPHA, 0, 0xffffffff);
-            for (sheet = 0; sheet < FX_SHEET_COUNT; ++sheet) {
+            for (sheet = 0; sheet < FX_SHEET_COUNT+2; ++sheet) {
                 FxVertex *v;
                 int count = 0, n = 0;
                 for (i = 0; i < MAX_SPRITES; ++i)
@@ -364,8 +382,9 @@ void fx_draw(const float eye[3]) {
                         u1 = u0 + cell;
                         v1 = v0 + cell;
                     }
+                    if(s->native)vg_fx_uv(s,&u0,&v0,&u1,&v1);
                     sprite_corners(s, eye, c);
-                    fade = s->life / s->total;
+                    fade = s->native?1.0f:s->life / s->total;
                     put_quad(v + n, c, u0, v0, u1, v1, scale_alpha(s->color, fade));
                     n += 6;
                 }

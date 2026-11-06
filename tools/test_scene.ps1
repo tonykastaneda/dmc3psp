@@ -26,7 +26,11 @@ $ReachedClear = $false
 try {
     while (-not (Test-Path -LiteralPath $Done) -and -not $Process.HasExited -and [DateTime]::UtcNow -lt $Deadline) {
         $BossLog = Join-Path $Game 'VANGUARD_LOG.TXT'
-        if ($MissionClear -and (Test-Path -LiteralPath (Join-Path $Game 'MENU_CLEAR.BMP')) -and
+        $ClearShot = Join-Path $Game 'MENU_CLEAR.BMP'
+        # fopen creates the image before fwrite completes. Do not kill our
+        # emulator until the complete native 480x272 BGR framebuffer is saved.
+        if ($MissionClear -and (Test-Path -LiteralPath $ClearShot) -and
+            ((Get-Item -LiteralPath $ClearShot).Length -eq (54 + 480 * 272 * 3)) -and
             (Test-Path -LiteralPath $BossLog) -and (Select-String -LiteralPath $BossLog -SimpleMatch 'event=mission_clear' -Quiet)) {
             $ReachedClear = $true
             break

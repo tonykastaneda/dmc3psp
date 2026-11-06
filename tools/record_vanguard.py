@@ -40,7 +40,7 @@ def main():
         if list(folder.glob('SHOT_*.BMP')):
             raise RuntimeError('Choose a fresh recording directory before recording again')
         lines = [line for line in scene('clear').splitlines() if not line.startswith('psp_shot')]
-        lines += ['fps 60', 'psp_video 180 2799']
+        lines += ['fps 60', 'psp_video 180 5999']
         script = folder / 'scene.txt'
         script.write_text('\n'.join(lines) + '\n', encoding='ascii')
         subprocess.run(['pwsh', '-NoProfile', '-File', str(ROOT / 'tools/test_scene.ps1'),

@@ -362,6 +362,12 @@ int enemy_count(void) {
     for (i = 0; i < ENEMY_MAX; ++i) n += enemies[i].active;
     return n;
 }
+void enemy_remove_defeated(void) {
+    int i;
+    for(i=0;i<ENEMY_MAX;++i)
+        if(enemies[i].active && enemies[i].plan==P_DEATH)enemies[i].active=0;
+    if(!enemy_alive_count())for(i=0;i<ARROW_MAX_PUBLIC;++i)arrows_clear(i);
+}
 void enemy_clear_minions(void) {
     Enemy *selected=e;int i;
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind<ENEMY_KIND_COUNT && enemies[i].plan!=P_DEATH) {
@@ -1006,6 +1012,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     int behind;
     if (!e->active) return;
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
+    if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
     {
         /* On the side facing the attacker, at chest height. */
@@ -1041,6 +1048,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         return;
     }
     switch (kind) {
+    case HIT_PISTOL: /* Normalized to HIT_LIGHT above for ordinary enemies. */
     case HIT_LIGHT:
     case HIT_AIR:
         plan_set(behind ? P_FLINCH_BACK : P_FLINCH_FRONT);

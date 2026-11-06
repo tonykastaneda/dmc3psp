@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def scene(mode, normal=False):
-    lines = [f'frames {2800 if mode == "clear" else 1600 if mode == "observe" else 1000}',
+    lines = [f'frames {6000 if mode == "clear" else 1600 if mode == "observe" else 1000}',
              'turbo 0', 'realdt 0', 'menu 1', 'movie 1', 'fastwaves 1', 'clearminions 30',
              'mkey cross 30', 'mkey right 60', 'mkey cross 110', 'mkey cross 160']
     if normal:
@@ -23,7 +23,7 @@ def scene(mode, normal=False):
                   'psp_shot 230', 'psp_shot 400', 'psp_shot 900']
         lines += [f'triangle {i} {i+2}' for i in range(200, 900, 12)]
     else:
-        lines += ['place 180 3100 0 2400 90', 'r1 120 2799',
+        lines += ['place 180 3100 0 2400 90', 'r1 120 5999',
                   'psp_shot 200', 'psp_shot 480', 'psp_shot 1000', 'psp_shot 1500']
         if mode == 'clear':
             lines += ['fire 6']  # Uses the regular gun input, bullet collision, and enemy_hit path.
@@ -44,6 +44,8 @@ def verify(out, mode):
     assert abs(float(spawn['x'])-3436) < 1 and abs(float(spawn['z'])-2384) < 1, 'Wrong cinematic/ground spawn'
     start = rows.index(spawn)
     rows = rows[start:]
+    roster = [r for r in rows if r.get('event') == 'encounter_enemies']
+    assert roster and all(float(r['value']) == 1 for r in roster), 'Vanguard encounter must contain exactly one enemy'
     assert all(r.get('hidden') != '1' for r in rows if r.get('event') == 'hurt'), 'Hidden boss took damage'
     if mode == 'clear':
         death = next((i for i,r in enumerate(rows) if r.get('event') == 'death'), None)
@@ -51,7 +53,14 @@ def verify(out, mode):
         assert death is not None and cleared is not None and death < cleared, 'Missing death → Mission Clear'
         assert any(r.get('event') == 'removed' for r in rows[death:cleared+1]), 'Death animation never finished'
         assert any(r.get('event') == 'hurt' and float(r['hp']) < 3000 for r in rows[:death]), 'No real gun damage'
-        assert (out / 'MENU_CLEAR.BMP').exists(), 'Missing Mission Clear framebuffer'
+        pistol = [r for r in rows if r.get('event') == 'pistol_hit']
+        hurt = [r for r in rows if r.get('event') == 'hurt']
+        assert len(pistol) == len(hurt), 'Gun test used the melee damage path'
+        damage = 3000 - float(hurt[0]['hp'])
+        assert damage in (10, 20) and len(hurt)*damage == 3000, 'Wrong native pistol damage'
+        assert sum(r.get('event') == 'flinch' for r in rows) <= len(pistol)//60, 'Pistol hits still force excessive flinches'
+        assert sum(r.get('event') == 'action' and r.get('action') in ('16','72') for r in rows) >= 2, 'Defensive teleports starved primary attacks'
+        assert (out / 'MENU_CLEAR.BMP').stat().st_size == 54+480*272*3, 'Incomplete Mission Clear framebuffer'
     else:
         assert any(r.get('event') == 'warp' for r in rows), 'Teleport never ran'
         assert any(r.get('event') == 'landed' for r in rows), 'Boss attacks never connected'

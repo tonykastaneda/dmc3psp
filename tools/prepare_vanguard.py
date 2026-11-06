@@ -15,6 +15,7 @@ from prepare_skinned_model import (pnst_entries, pac_list, build_mesh, decode_te
                                    indexed_texture, array_lines, vec)
 from mot_ps2 import parse_mot
 from gen_enemy_ai import Elf, read_rows, floats
+from vanguard_fx import write_effects
 
 SLOT = 120
 PARTS = [('body', 1), ('robe1', 3), ('robe2', 5), ('robe3', 7), ('robe4', 9),
@@ -100,6 +101,10 @@ def write_ai(pack, executable, output):
         radius = struct.unpack_from('<f', pack[23], at + (48 if shape_kind == 4 else 32))[0]
         caps.append((kind, bone, *xyz, radius))
     bands, rows = read_rows(elf, 0x5cdd00)
+    # Ordinary E&I records: gp(00620170)-7580 = pointer 00618bf0 -> 005a5a30.
+    pistol = elf.word(0x618bf0)
+    if elf.byte(pistol+2)!=1 or elf.byte(pistol+0x18)!=255:
+        raise ValueError('Unexpected ordinary pistol damage/reaction record')
     f = lambda x: f'{x:.6f}f'
     lines = ['#pragma once', '/* SLUS_213.61 em008 grouped scripts, shapes and decision parameters. */',
              'typedef struct { short op, a, b, c; } VanguardOp;',
@@ -109,6 +114,9 @@ def write_ai(pack, executable, output):
              'static const VanguardCap vg_caps[] = {' + ','.join(
                  '{%d,%d,%s}' % (k, b, ','.join(map(f, v))) for k, b, *v in caps) + '};',
              f'#define VANGUARD_HP {f(elf.real(0x5cd590 + 44))}',
+             f'#define VANGUARD_PISTOL_DAMAGE {f(elf.real(pistol+4))}',
+             f'#define VANGUARD_PISTOL_STRAIN {f(elf.real(pistol+0x14))}',
+             f'#define VANGUARD_STRAIN_MAX {f(elf.real(0x5cd590+0x34))}',
              'static const float vg_bands[] = {' + ','.join(map(f, bands)) + '};',
              'static const float vg_zones[][3] = {' + ','.join('{' + ','.join(map(f, floats(elf, 0x5cdcb0 + i*12, 3))) + '}' for i in range(3)) + '};',
              '/* Lowest AI rank, both attack-token lists, three distance bands. */',
@@ -208,6 +216,7 @@ def generate(iso_path, output):
                      'static const Dmc3MotionBlob vg_motion_blobs[] = {' + ','.join(motion_table) + '};']
     (output / 'vanguard_motions.h').write_text('\n'.join(motion_lines) + '\n', encoding='ascii')
     write_ai(pack, executable, output)
+    write_effects(pack, output)
     print(f"Vanguard: {len(PARTS)} parts, {len(textures)} textures, {len(manifest['motions'])} motions -> {output}")
 
 

@@ -16,21 +16,26 @@ gates and the 40/30-frame inter-group delays. The previous generated script cont
 The decision table at `0x5cdd00` has distance bands 350 and 600. At rank 0 its primary rows pick plan 27
 nearby and plan 56 farther away. The alternate rows pick plan 57 nearby, and 57/40 at equal weights farther
 away. Zones at `0x5cdcb0` add gauge at 10/1/0.5 per frame inside 350/600/3000 cm and 45/25/10 degrees.
-The rank-0 gauge threshold is 100. The port shares the existing enemy Mersenne Twister and attack-token
-convention; it does not reproduce dynamic AI rank or all manager arbitration.
+The rank-0 gauge threshold is 100. The port shares the existing enemy Mersenne Twister and a three-second
+attack-token convention; it does not reproduce dynamic AI rank or all manager arbitration. The token is
+taken only on a primary attack grant. The first implementation incorrectly renewed it on defensive
+decisions too, allowing repeated plan-57 teleports to starve primary attacks indefinitely. `0046d680`
+requests a three-second grant; `0046ca00` separates primary/denied decisions. The port's ordinary-enemy
+manager likewise renews its token only when it grants an attack.
 
 | Plan / action | Translation and code evidence |
 | --- | --- |
 | Watch, action 15 | Turns at 256 angle units/frame; authored root motion. `00474be0`, `00474d20`, `0046d680` |
 | 27 / 16 | Script 47 from frame 20; tracks during the wind-up; script 101 follows at frame 77. Live hit shapes come from the scripts. `0046dab0`, `00474e00`, `00474e50` |
 | 56 / 72 → 69 or 70 → 73 | Wind-up to frame 70, one random rush/uppercut at rank 0, then recovery. Rush enters script 102 at frame **202**; uppercut relocates to Dante rather than the random 400 cm circle. `0046f1a0`, `0047fbb0`, `0047e840`, `0047ef00`, `0047fd10` |
-| 57 / 71 | Hidden 30 frames, relocate 400 cm around Dante, face him and return after 30 more. `0046f400`, `0047f5b0` |
+| 57 / 71 | Visible departure for 30 frames while untargetable, relocate while hidden, arrival effect, then show after 30 more. `0046f400`, `0047f5b0` |
 | 40 / 35 | Scripts 75 and 7. `0046e6a0`, `00476b40`, `00476bb0` |
 | Hit reaction | The grounded flinch ends at frame 30 and rank 0 selects plan 57. `00471ea0`, jump-table target `0046cca8` |
 
 Rush/uppercut first spend 30 frames in phase 10, then use the rank-0 relocation delay of 25 at `005cdd50`.
-Rush waits another 15 (`005cdd70`) before revealing, then 30 before striking. Uppercut reveals on the next
-step, plays script 105, waits 50, plays 107, then waits 3 before starting vertical velocity 80 with
+Rush waits another 15 (`005cdd70`) before starting the arrival effect, then 30 before revealing and striking.
+Uppercut starts its arrival effect on the next step, plays script 105 while hidden, waits 50, reveals,
+plays 107, then waits 3 before starting vertical velocity 80 with
 acceleration -8. At the apex acceleration changes to -0.5. `00285820` command **3000** passes a script ID
 and a start-frame override into `00254e80`/`00255420`: `(102,202)` is not a `[102,202]` interval.
 The extra actor rotation from the first implementation has been removed.
@@ -45,11 +50,36 @@ larger than one quarter of the decoded 50 cm root sphere, rejecting unsupported 
 Hidden phases cannot be targeted, hit, or push Dante. Weapon/robe geometry can extend beyond the body
 collision sphere; full mesh collision is not implemented.
 
-Health uses the decoded base value **3000** at parameter block `0x5cd590 + 0x2c`. Incoming damage still uses
-the port's 42/84 light/heavy convention; outgoing damage uses the existing heavy-hit route (800), not a
+Health uses the decoded base value **3000** at parameter block `0x5cd590 + 0x2c`. Ordinary E&I shots now use
+the native base damage 10 (20 on Easy) and the separate pistol strain/reaction route described below.
+Sword and other weapon damage still use the port's 42/84 light/heavy convention; outgoing damage uses the existing heavy-hit route (800), not a
 fully translated Vanguard attack-damage table. Protected attacks retain their motion; grounded flinches
 lead into teleport recovery. Full launch/juggle reactions are not implemented. Death plays script 29 and
 removes the boss before the existing two-second mission-clear delay finishes.
+
+## Pistol reaction and repeated teleports
+
+The old port routed each ordinary E&I shot through `HIT_LIGHT`, causing a sword flinch and then plan 57
+after 30 frames. This manufactured a repeated flinch → teleport cycle under automatic gunfire.
+
+The original ordinary E&I record is at `005a5a30` (`gp=00620170`, pointer at `00618bf0`): type byte +2 is 1,
+base damage +4 is 10, tertiary strain +14 is 5, and reaction +18 is FF. The bullet constructor copies this
+record in `002efaa0`. `002f0900` distinguishes firearm and melee categories; `002f17a0` applies difficulty
+and drains strain, and the actor wrappers `00259ed0`/`00259e90` dispatch ordinary-hit and strain-break
+callbacks separately. Ordinary hits reach `0046c0f0`; a strain break reaches `0046be40`.
+
+The supported Easy/Normal pistol path now applies 20/10 HP damage, adds half the unscaled record damage
+to the watch-state gauge on ordinary hits, and drains 5 from the decoded 300-point tertiary pool. A
+grounded flinch can occur when that pool breaks, rather than once per bullet. Native modifiers for gun
+upgrades, charged shots, special states and the remaining weapons are not fully translated. The port's
+existing protected-attack reaction handling remains partial.
+
+The separate pistol hit classification is normalized back to the previous light-hit behavior for
+ordinary enemies; this change does not reinterpret their existing combat implementation.
+
+Teleport sprite assets, visibility timing, and the solo encounter transition are documented in
+[VANGUARD_EFFECTS.md](VANGUARD_EFFECTS.md). The P312 VU particle program remains unported, so complete
+disintegration/re-forming presentation is still missing even with the original light and smoke sprites.
 
 ## Emulator verification
 

@@ -8,6 +8,8 @@
 
 void fx_reset(void);
 void fx_update(float dt);
+/* Original em008 V timeline IDs: 702 departure, 499 arrival, 516 uppercut arrival. */
+void fx_vanguard_event(int id, const float at[3]);
 /* In the display list, after the world and before the 2D. eye: the camera position. */
 void fx_draw(const float eye[3]);
 
