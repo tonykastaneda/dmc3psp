@@ -13,3 +13,11 @@ __pycache__/
 analysis/testroom/*.png
 analysis/testroom/*.mp4
 analysis/testroom/*.log
+# Data extracted from the game disc stays local, like build/.
+analysis/*.bin
+analysis/ref/*.bin
+# Reference captures: screenshots and videos are large and regenerable.
+analysis/ref/**/*.png
+analysis/ref/**/*.mp4
+analysis/ref/**/*.bmp
+analysis/testroom/*.TXT
