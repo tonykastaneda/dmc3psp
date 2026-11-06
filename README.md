@@ -4,8 +4,9 @@ PSP-native port of **Devil May Cry 3: Dante's Awakening Special Edition** (`SLUS
 
 ## Screenshots
 
-Captured in PPSSPP 1.17.1 from the port's own 480×272 framebuffer. The models, textures and effects are read
-from the player's disc at build time; none are stored in this repository.
+Captured from the port's own 480x272 framebuffer. About half were taken in PPSSPP 1.17.1 and half on a real PSP,
+read back over PSPLINK. The models, textures and effects are read from the player's disc at build time; none are
+stored in this repository.
 
 | | |
 | --- | --- |
