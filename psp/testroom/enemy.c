@@ -383,6 +383,12 @@ int enemy_add_kind(int kind, float x, float z) {
     return 0;
 }
 
+void enemy_drop_below(float y) {
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind < ENEMY_KIND_COUNT && enemies[i].pos[1] < y) { enemies[i].active = 0; enemies[i].plan = P_DEATH; }
+}
+
 int enemy_alive_count(void) {
     int i, n = 0;
     for (i = 0; i < ENEMY_MAX; ++i) n += enemies[i].active && enemies[i].plan != P_DEATH;

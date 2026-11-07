@@ -136,7 +136,7 @@ From its event script (EventTbl05, GDATA 243; `build/hdref/evt_m5.txt` locally).
 | 111 | 7 Blood-goyles (group 1, EST 32 = CEm014, `docs/ENEMY_SPECS.md` D). The door to 422 opens when they're gone |
 | 422 | The Jester (EST 62 = class 44, `CEm044`, SE only), on his own model (em037, GDATA 140) with a simplified fight (`docs/ENEMY_SPECS.md` E). Arena st422, GDATA 824 |
 | 102 | Group 3: Enigmas and Gluttonies (the Soul of Steel) |
-| 113 | Surge of Fortunas: its lift, and groups 0-3 (Prides, spawned at 2000-5000 high as it climbs) |
+| 113 | Surge of Fortunas: strike the switch (or O by it) and ride the lift. Each of groups 0-3 (Prides, set at 2000-5000 high) drops onto it as it comes within 1200 of their height, and it holds still while they're alive; any that fall 1500 below it are gone. It rises at 250 cm a second (an estimate) to the door to 120 |
 | 120 | Azure Garden, the Divinity Statue |
 | 121 | Agni & Rudra (EST 45, class 27), on their own model (em026, GDATA 131) with a simplified fight (`docs/ENEMY_SPECS.md` F). Both down clears the mission |
 

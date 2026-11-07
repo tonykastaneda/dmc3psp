@@ -2448,9 +2448,21 @@ static int script_run(float dt, float floor_y) {
                 if(enemy_alive_count())return 0;
                 enemy_remove_defeated();
             }
-            /* From the script's own height: Enigmas stand on ledges and walls. */
-            enemy_spawn_height((float)op->c > floor_y ? (float)op->c : floor_y);
-            enemy_add_kind(enemy_kind_for_class(op->a), (float)op->b, (float)op->d);
+            {
+                /* From the script's own height: Enigmas stand on ledges and walls. On a riding lift (113's, Surge of
+                 * Fortunas), each wave waits for the lift to come within 1200 of its height and drops onto it, its
+                 * spread kept (from the groups' origin, 2100, 2350) but held on the platform. */
+                const RoomLift *l = room_lift();
+                float sx = (float)op->b, sz = (float)op->d, sy = (float)op->c > floor_y ? (float)op->c : floor_y;
+                if (l && l->high - l->low > 3000.0f) {
+                    if (!lift_on || lift_y < (float)op->c - 1200.0f) return 0;
+                    sx = l->x + fmaxf(-250.0f, fminf(250.0f, sx - 2100.0f));
+                    sz = l->z + fmaxf(-120.0f, fminf(120.0f, sz - 2350.0f));
+                    sy = lift_y + 50.0f;
+                }
+                enemy_spawn_height(sy);
+                enemy_add_kind(enemy_kind_for_class(op->a), sx, sz);
+            }
             if(mission_choice.mission==2 && op->a==26 && focus_cmp)
                 vanguard_note("encounter_enemies",(float)enemy_count());
             break;
@@ -2530,8 +2542,11 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             door_prompt_time = 1.0f;
             if (pressed & (PSP_CTRL_CIRCLE | PSP_CTRL_SQUARE | PSP_CTRL_TRIANGLE)) lift_on = 1;
         }
-        if (lift_on && on && lift_y < lift->high) {
-            lift_y += LIFT_SPEED * dt;
+        /* A riding lift holds still while there's a wave on it. */
+        int riding = lift->high - lift->low > 3000.0f;
+        if (riding && lift_on && lift_y > lift->low + 1500.0f) enemy_drop_below(lift_y - 1500.0f);   /* fell off the lift */
+        if (lift_on && on && lift_y < lift->high && !(riding && enemy_alive_count() > 0)) {
+            lift_y += (riding ? 250.0f : LIFT_SPEED) * dt;
             if (lift_y > lift->high) lift_y = lift->high;
             player->y = lift_y;
         } else if (lift_on && !on && lift_y > lift->low) {
