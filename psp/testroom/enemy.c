@@ -142,6 +142,8 @@ static float landed_damage = -1.0f;
 static float attack_token;
 static int mortal;
 static int dummy_kind;
+static int hit_weapon;   /* the melee weapon of the hits being dealt */
+void enemy_set_hit_weapon(int melee) { hit_weapon = melee; }
 void (*enemy_died_fn)(int kind, float x, float y, float z);
 static void died(void) { if (enemy_died_fn) enemy_died_fn(e->kind, e->pos[0], e->pos[1], e->pos[2]); }
 static float dante_y;   /* this frame's, for attacks that test his height in their action */
@@ -2541,7 +2543,10 @@ static void ar_hit(HitKind kind) {
     fx_hit_spark(at);
     if (e->action == AR_STATUE || e->action == AR_STATUE2) { e->step = 1; return; }   /* struck awake */
     if (mortal) {
-        e->health = (signed char)(e->health - (kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2));
+        int dmg = kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
+        /* Agni's fire is weak to Cerberus's ice (the guide); twice the damage is an estimate. */
+        if (e->kind == ENEMY_AGNI && kind != HIT_PISTOL && hit_weapon == 1) dmg *= 2;
+        e->health = (signed char)(e->health - dmg);
         if (e->health <= 0) {
             e->plan = P_DEATH;
             ar_state(AR_DEATH);
