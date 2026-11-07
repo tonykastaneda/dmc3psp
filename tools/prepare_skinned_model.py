@@ -340,7 +340,12 @@ ENEMY_KINDS = (
     # The Jester (SE), em037.pac (GDATA 140, a PAC): [0] textures, [1] body (36 bones), [7] his hat; motions in
     # [3], [4], [5], [6], [19], [28], [29]. Found through the pack table at 0x58e740 (pack 27: slot 0x8c).
     ("jester", 140, 1, 7),
+    # Agni & Rudra, em026.pac (GDATA 131, pack 18 in the table at 0x58e740): [0] textures, [1] the body both
+    # brothers share, [2] and [3] their swords; motions in [11] (a PAC of 100 slots, 54 used).
+    ("agni", 131, 1, 2),
+    ("rudra", 131, 1, 3),
 )
+AR_SLOT = 131
 JESTER_SLOT = 140
 JESTER_MOTION_CHUNKS = (3, 4, 5, 6, 19, 28, 29)
 GOYLE_SLOT = 125
@@ -440,7 +445,7 @@ def write_enemy(output: Path, packs: dict) -> None:
         body = packs[slot][body_index]
         if body[:4] == b"EFM ":
             body = b"MOD " + body[4:]
-        skel, mesh = enemy_mesh(body, GOYLE_RATIO if slot == GOYLE_SLOT else 0.45 if slot == JESTER_SLOT else None)
+        skel, mesh = enemy_mesh(body, GOYLE_RATIO if slot == GOYLE_SLOT else 0.45 if slot in (JESTER_SLOT, AR_SLOT) else None)
         if weapon_index is None:
             # No weapon: one degenerate triangle keeps the tables the same shape.
             wmesh = {"positions": [(0.0, 0.0, 0.0)], "normals": [(0.0, 1.0, 0.0)], "uvs": [(0.0, 0.0)],
@@ -526,6 +531,7 @@ def main() -> None:
         enigma_pack = pac_list(read_slot(ENIGMA_SLOT))
         goyle_pack = pnst_entries(read_slot(GOYLE_SLOT))
         jester_pack = pac_list(read_slot(JESTER_SLOT))
+        ar_pack = pnst_entries(read_slot(AR_SLOT))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
@@ -656,7 +662,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack})
+    write_enemy(args.output, {117: enemy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack})
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable)
     write_devils(args.output, devil_packs)
 
@@ -698,6 +704,15 @@ def main() -> None:
             motions.append({"name": f"js{count:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
             count += 1
     print(f"Jester: {count} motions")
+    # Agni & Rudra's: "arNN" by their slot in [11].
+    for slot, raw in enumerate(pac_list(ar_pack[11])):
+        if not raw:
+            continue
+        try:
+            parsed = parse_mot(raw)
+        except ValueError:
+            continue
+        motions.append({"name": f"ar{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     # The Blood-goyle's: "gbNN" from [8], one a state (motion N plays in state N).
     for slot, raw in enumerate(pac_list(goyle_pack[8])):
         if not raw:

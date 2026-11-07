@@ -131,7 +131,7 @@ static Vertex *weapon_vertices[ENEMY_KIND_COUNT];
 static unsigned short *indices[ENEMY_KIND_COUNT], *weapon_indices[ENEMY_KIND_COUNT];
 static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
 /* Which bone holds the weapon, by kind. */
-static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5};
+static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5, 7, 11};
 static Enemy enemies[ENEMY_MAX];
 static Enemy *e = &enemies[0];
 static int hits, attacks_on;
@@ -202,6 +202,13 @@ static int jester_init(void);
 static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
+static int ar_init(void);
+static void ar_rudra_spawn(void);
+static void ar_spawn(void);
+static void ar_update(float f, float px, float py, float pz);
+static void ar_hit(HitKind kind);
+static float ar_health_total(float *maximum);
+static void goyle_turn_to(float px, float pz, float rate, float f);
 static void giga_orb(const float from[3], int kind, float px, float py, float pz);
 static void spawn_one(int kind, float x, float z);
 static float ai_unit(void);
@@ -234,6 +241,7 @@ int enemy_init(void) {
     if (!enigma_init()) return 0;
     if (!goyle_init()) return 0;
     if (!jester_init()) return 0;
+    if (!ar_init()) return 0;
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
     if (!cerberus_boss_init()) return 0;
@@ -288,6 +296,7 @@ static int kind_health(int kind) {
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
     case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
+    case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
 }
@@ -343,6 +352,8 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
+    if (kind == ENEMY_AGNI) { ar_spawn(); return; }
+    if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
     script_play(0);
     e->fade = 0.0f;
 }
@@ -456,6 +467,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
+    if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
     if (spawn_class == 26) return ENEMY_VANGUARD;
@@ -509,6 +521,8 @@ const char *enemy_boss_name(void) {
         if (enemies[i].active && enemies[i].kind == ENEMY_GIGAPEDE) return "GIGAPEDE";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_JESTER) return "JESTER";
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && (enemies[i].kind == ENEMY_AGNI || enemies[i].kind == ENEMY_RUDRA)) return "AGNI & RUDRA";
     return "HELL VANGUARD";
 }
 int enemy_boss_health(float *health, float *maximum) {
@@ -518,6 +532,9 @@ int enemy_boss_health(float *health, float *maximum) {
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_CERBERUS) {
         *health=cerberus_boss_health();*maximum=cerberus_boss_max_health();return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && (enemies[i].kind==ENEMY_AGNI || enemies[i].kind==ENEMY_RUDRA) && enemies[i].plan!=P_DEATH) {
+        *health=ar_health_total(maximum);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * 1500 / 250;return 1;
@@ -1094,6 +1111,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
+    if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
@@ -1317,6 +1335,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
         int use_root = action_update(px, pz, f);
@@ -1486,6 +1505,8 @@ static void draw_one(void) {
     sceGuTexMode(GU_PSM_T8, 0, 0, 1);     /* swizzled at load */
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    if (e->kind == ENEMY_AGNI) sceGuColor(0xff8090ffu);        /* Agni: red */
+    else if (e->kind == ENEMY_RUDRA) sceGuColor(0xffffa080u);  /* Rudra: blue */
     if (e->kind == ENEMY_GOYLE && (e->action == 15 || e->action == 16 || e->action == 17 || e->action == 19) && e->plan != P_DEATH) {
         /* Stone: grey. */
         sceGuDisable(GU_TEXTURE_2D);
@@ -1502,7 +1523,7 @@ static void draw_one(void) {
         }
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[e->kind] + o->index_start, e->vertices);
     }
-    if (e->kind == ENEMY_GOYLE) { sceGuAmbientColor(0xffffffffu); sceGuColor(0xffffffffu); sceGuEnable(GU_TEXTURE_2D); }
+    if (e->kind == ENEMY_GOYLE || e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { sceGuAmbientColor(0xffffffffu); sceGuColor(0xffffffffu); sceGuEnable(GU_TEXTURE_2D); }
     if (e->kind != ENEMY_ENIGMA && e->kind != ENEMY_GOYLE) {
         /* The weapon in its hand: a Seven Hell's scythe. The Enigma's bows are part of its body. */
         ScePspFMatrix4 mm;
@@ -2263,6 +2284,226 @@ static void jester_hit(HitKind kind) {
         e->vel[0] = kind == HIT_HEAVY ? 10.0f : 3.0f;
         jester_state(J_FLINCH);
     }
+}
+
+/* ---- Agni & Rudra (class 27, EST 45; em026.pac, GDATA 131), Mission 5's boss in room 121 (docs/ENEMY_SPECS.md
+ * section F). Class 27 (`FUN_00480bb0`, an object of 0x290 bytes) is a controller over the two brothers; their
+ * own code isn't ported. A stand-in fight on their model, swords and motions: each walks in and slashes
+ * (a three-hit combo, or an overhead), dashes in and out, leaps in with a jump slash, or charges his sword and
+ * drives it in: Agni's sends a fire wave along the floor, Rudra's a whirlwind that chases Dante. Now and then
+ * they team up: both dash through Dante from either side. When one falls the other fights on alone, faster.
+ * Agni is red, Rudra blue (a tint: their textures are shared). Motions were chosen from their shapes and
+ * root motion [inferred]; health is an estimate (the guide's boss bonus, 4000 orbs, and the two bars). */
+#define AR_HEALTH (ENEMY_HEALTH * 1200 / 250)
+enum { AR_IDLE, AR_WALK, AR_COMBO1, AR_COMBO2, AR_COMBO3, AR_OVERHEAD, AR_DASH_IN, AR_DASH_OUT, AR_LEAP, AR_CHARGE,
+       AR_TEAM, AR_FLINCH, AR_KNOCK, AR_DEATH, AR_STATE_COUNT };
+/* arNN: their slots in [11]. */
+static const signed char ar_motion_slot[AR_STATE_COUNT] = {0, 1, 36, 37, 38, 39, 3, 4, 7, 42, 2, 30, 44, 83};
+static int ar_motion[AR_STATE_COUNT];
+
+static int ar_init(void) {
+    int i;
+    for (i = 0; i < AR_STATE_COUNT; ++i) {
+        char name[5] = {'a', 'r', (char)('0' + ar_motion_slot[i] / 10), (char)('0' + ar_motion_slot[i] % 10), 0};
+        ar_motion[i] = motion_find(name);
+        if (ar_motion[i] < 0) return 0;
+    }
+    return 1;
+}
+
+static Enemy *ar_brother(void) {
+    int i, want = e->kind == ENEMY_AGNI ? ENEMY_RUDRA : ENEMY_AGNI;
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == want && enemies[i].plan != P_DEATH) return &enemies[i];
+    return 0;
+}
+
+static void ar_state(int s) {
+    int m = ar_motion[s];
+    e->action = (unsigned char)s;
+    e->timer = 0.0f;
+    e->step = 0;
+    e->done = 0;
+    e->prev_motion = e->motion; e->prev_frame = e->frame;
+    e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 6.0f;
+    e->motion = m; e->frame = 0.0f;
+}
+
+static void ar_rudra_spawn(void) { e->plan = P_WATCH; e->motion = -1; ar_state(AR_IDLE); e->fade = 0.0f; }
+
+/* The one spawn (class 27) brings both: Agni here, Rudra beside him. */
+static void ar_spawn(void) {
+    Enemy *agni = e;
+    int k;
+    agni->plan = P_WATCH; agni->motion = -1;
+    agni->pos[0] += 180.0f;
+    ar_state(AR_IDLE); agni->fade = 0.0f;
+    for (k = 0; k < ENEMY_MAX; ++k) {
+        Enemy *o = &enemies[k];
+        if (o->active) continue;
+        e = o;
+        spawn_one(ENEMY_RUDRA, agni->pos[0] - 360.0f, agni->pos[2]);
+        break;
+    }
+    e = agni;
+}
+
+static void ar_decide(float d) {
+    float r = ai_unit();
+    Enemy *bro = ar_brother();
+    if (attacks_on && attack_token <= 0.0f) {
+        attack_token = bro ? 3.0f : 1.8f;   /* alone, he presses harder */
+        if (bro && r < 0.15f && bro->action <= AR_WALK) {
+            /* Double team: both run through him. */
+            Enemy *me = e;
+            ar_state(AR_TEAM);
+            e = bro; ar_state(AR_TEAM); e = me;
+            return;
+        }
+        r = ai_unit();
+        if (d > 700.0f) { ar_state(r < 0.5f ? AR_LEAP : AR_CHARGE); return; }
+        if (d > 300.0f) { ar_state(r < 0.6f ? AR_DASH_IN : AR_CHARGE); return; }
+        ar_state(r < 0.6f ? AR_COMBO1 : r < 0.85f ? AR_OVERHEAD : AR_DASH_OUT);
+        return;
+    }
+    ar_state(d > 280.0f && r < 0.7f ? AR_WALK : AR_IDLE);
+}
+
+static void ar_strike(float reach, float radius, int heavy, float px, float py, float pz) {
+    float s = sinf(e->yaw), c = cosf(e->yaw), hx = e->pos[0] + s * reach - px, hz = e->pos[2] + c * reach - pz;
+    if (attacks_on && hx * hx + hz * hz < radius * radius && fabsf(py - e->pos[1]) < 250.0f) land_attack(heavy);
+}
+
+static void ar_update(float f, float px, float py, float pz) {
+    const Motion *m;
+    float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, s, c, speed = 0.0f;
+    float rate = ar_brother() ? 1.0f : 1.25f;   /* alone, faster */
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    m = motion_get(e->motion);
+    e->frame += f * rate;
+    e->timer += f * rate;
+    if (e->frame >= m->end_frame) {
+        e->done = 1;
+        e->frame = (e->action == AR_IDLE || e->action == AR_WALK) ? motion_wrap(m, e->frame) : m->end_frame;
+    }
+    if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
+    e->pos[1] = e->floor_y;
+    if (e->plan == P_DEATH) {
+        if (e->timer > 200.0f) e->active = 0;
+        return;
+    }
+    s = sinf(e->yaw); c = cosf(e->yaw);
+    switch (e->action) {
+    case AR_IDLE:
+        goyle_turn_to(px, pz, 0.06f, f);
+        if (e->timer > 40.0f) ar_decide(d);
+        break;
+    case AR_WALK:
+        goyle_turn_to(px, pz, 0.08f, f);
+        speed = 1.3f;   /* the walk's own root: 128 cm in 101 frames */
+        if (d < 260.0f || e->timer > 150.0f) ar_decide(d);
+        break;
+    case AR_COMBO1: case AR_COMBO2: case AR_COMBO3:
+        if (e->frame < 15.0f) goyle_turn_to(px, pz, 0.12f, f);
+        speed = 81.0f / 67.0f;
+        if (!e->step && e->frame > 25.0f) { e->step = 1; ar_strike(170.0f, 190.0f, e->action == AR_COMBO3, px, py, pz); }
+        if (e->done) {
+            if (e->action != AR_COMBO3 && d < 330.0f && ai_unit() < 0.7f) ar_state(e->action + 1);
+            else ar_state(AR_IDLE);
+        }
+        break;
+    case AR_OVERHEAD:
+        if (e->frame < 20.0f) goyle_turn_to(px, pz, 0.1f, f);
+        if (!e->step && e->frame > 32.0f) {
+            float at[3] = {e->pos[0] + s * 180.0f, e->floor_y, e->pos[2] + c * 180.0f};
+            e->step = 1; ar_strike(180.0f, 170.0f, 1, px, py, pz); fx_dust(at);
+        }
+        if (e->done) ar_state(AR_IDLE);
+        break;
+    case AR_DASH_IN: case AR_DASH_OUT:
+        if (e->frame < 4.0f) goyle_turn_to(px, pz, 0.3f, f);
+        speed = e->action == AR_DASH_IN ? 9.7f : -9.3f;
+        if (e->done) ar_state(e->action == AR_DASH_IN ? AR_COMBO1 : AR_IDLE);
+        break;
+    case AR_LEAP:
+        if (e->frame < 30.0f) goyle_turn_to(px, pz, 0.1f, f);
+        /* Carried over the gap to him while airborne. */
+        if (e->frame > 20.0f && e->frame < 60.0f && d > 150.0f) speed = fminf(d / 40.0f, 25.0f);
+        if (!e->step && e->frame > 62.0f) {
+            float at[3] = {e->pos[0] + s * 120.0f, e->floor_y, e->pos[2] + c * 120.0f};
+            e->step = 1; ar_strike(120.0f, 220.0f, 1, px, py, pz); fx_dust(at);
+        }
+        if (e->done) ar_state(AR_IDLE);
+        break;
+    case AR_CHARGE:
+        if (e->frame < 120.0f) {
+            goyle_turn_to(px, pz, 0.05f, f);
+            if (((int)e->frame & 7) == 0) {
+                /* The blade takes its element. */
+                float at[3] = {e->hand_pos[0], e->hand_pos[1], e->hand_pos[2]}, v[3] = {0.0f, 40.0f, 0.0f};
+                at[0] = e->pos[0] + at[0] * c + at[2] * s; at[1] += e->pos[1]; at[2] = e->pos[2] + at[2] * c - at[0] * 0.0f;
+                fx_mote(at, v, 80.0f, 10.0f, 0.4f, e->kind == ENEMY_AGNI ? 0xff2080ffu : 0xffffd080u);
+            }
+        }
+        if (!e->step && e->frame > 150.0f) {
+            /* Driven in: a wave (Agni's fire) or a whirlwind (Rudra's wind) that runs at Dante. */
+            float at[3] = {e->pos[0] + s * 160.0f, e->floor_y + 150.0f, e->pos[2] + c * 160.0f};
+            e->step = 1;
+            giga_orb(at, 1, px, py, pz);
+            if (e->kind == ENEMY_RUDRA) { float at2[3] = {at[0] + c * 150.0f, at[1], at[2] - s * 150.0f}; giga_orb(at2, 0, px, py, pz); }
+            fx_explosion(at);
+        }
+        if (e->done) ar_state(AR_IDLE);
+        break;
+    case AR_TEAM:
+        /* Run straight through him, from where each stands. */
+        if (e->frame < 10.0f) goyle_turn_to(px, pz, 0.3f, f);
+        speed = 918.0f / 110.0f;
+        if (!e->step && d < 160.0f) { e->step = 1; ar_strike(0.0f, 200.0f, 1, px, py, pz); }
+        if (e->done) ar_state(AR_IDLE);
+        break;
+    case AR_FLINCH:
+        speed = -e->vel[0]; e->vel[0] *= 0.85f;
+        if (e->done) ar_state(ai_unit() < 0.4f ? AR_DASH_OUT : AR_IDLE);
+        break;
+    case AR_KNOCK:
+        speed = -262.0f / 109.0f;
+        if (e->done) ar_state(AR_IDLE);
+        break;
+    default:
+        ar_state(AR_IDLE);
+    }
+    e->pos[0] += s * speed * f * rate; e->pos[2] += c * speed * f * rate;
+}
+
+static void ar_hit(HitKind kind) {
+    float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
+    if (e->plan == P_DEATH) return;
+    ++hits;
+    fx_hit_spark(at);
+    if (mortal) {
+        e->health = (signed char)(e->health - (kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2));
+        if (e->health <= 0) {
+            e->plan = P_DEATH;
+            ar_state(AR_DEATH);
+            e->plan = P_DEATH;
+            died();
+            return;
+        }
+    }
+    /* They shrug off light hits mid-swing; heavy ones knock them back. */
+    if (kind == HIT_HEAVY || kind == HIT_SLAM) { ar_state(AR_KNOCK); return; }
+    if (kind != HIT_PISTOL && (e->action == AR_IDLE || e->action == AR_WALK)) { e->vel[0] = 3.0f; ar_state(AR_FLINCH); }
+}
+
+static float ar_health_total(float *maximum) {
+    int i;
+    float h = 0.0f;
+    *maximum = (float)(AR_HEALTH * 2);
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && (enemies[i].kind == ENEMY_AGNI || enemies[i].kind == ENEMY_RUDRA) && enemies[i].plan != P_DEATH)
+            h += (float)enemies[i].health;
+    return h;
 }
 
 /* ---- The Gigapede (CEm023), Mission 4's boss (docs/ENEMY_SPECS.md section C, rank 0). Its head runs the

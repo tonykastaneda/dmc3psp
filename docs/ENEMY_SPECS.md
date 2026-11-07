@@ -722,3 +722,21 @@ rolling orb), vanishes in a puff and reappears behind Dante, and dances. Hits fi
 slowly); stunned for 200 frames he takes double damage. Which motion plays for each was chosen from their
 shapes and lengths [inferred]: idle js21, walk js03, swings js08/js09, bombs js10, vanish js26, dance js31,
 flinch js05, stun js14, launched js04, death js16. Health 1500 against the Pride's 250 [estimate].
+
+---
+
+## F. Agni & Rudra (class 27): Mission 5, room 121
+
+EST 45 → class 27 → `FUN_00480bb0`, an object of only 0x290 bytes: a controller for the two brothers. Pack 18
+(`0x58e740`) → slot 0x83 = **GDATA 131, em026.pac** (PNST): [0] 2 textures, [1] the body both brothers use (19
+bones, 3,148 vertices, 3 m tall), [2] and [3] their swords, [6] [7] `em026_03.clt` / `em026_04.clt` (one each),
+[11] a PAC of 100 motion slots (54 used), [12] [13] a motion script each. Hands: bones 7 and 11. Classes 28-30
+also use pack 18 but are made by `FUN_0039ee10`, in the Blood-goyle's code. Slot 132 (em027) is a lighter copy.
+
+**In the port** (`psp/testroom/enemy.c`, "Agni & Rudra"): their code isn't ported. One spawn brings both: Agni
+(tinted red, sword in bone 7) and Rudra (blue, bone 11), each 956 triangles. They walk in and slash (a three-hit
+combo or an overhead), dash in and out, leap in, or charge their swords and drive them in (Agni sends a wave
+along the floor, Rudra a pair of orbs); sometimes both dash through Dante together. Heavy hits knock them back.
+The last one standing moves 25% faster and takes the attack token sooner. One boss bar for both. Motions by
+shape and root motion [inferred]: idle ar00, walk ar01, combo ar36-38, overhead ar39, dash ar03/ar04, leap
+ar07, charge ar42, team run ar02, flinch ar30, knock-back ar44, death ar83. Health 1200 each [estimate].

@@ -10,7 +10,7 @@
 
 /* The kinds there are models for, in tools/prepare_skinned_model.py's ENEMY_KINDS order. */
 typedef enum {
-    ENEMY_PRIDE, ENEMY_GLUTTONY, ENEMY_LUST, ENEMY_SLOTH, ENEMY_WRATH, ENEMY_GREED, ENEMY_ENIGMA, ENEMY_GOYLE, ENEMY_JESTER, ENEMY_KIND_TOTAL
+    ENEMY_PRIDE, ENEMY_GLUTTONY, ENEMY_LUST, ENEMY_SLOTH, ENEMY_WRATH, ENEMY_GREED, ENEMY_ENIGMA, ENEMY_GOYLE, ENEMY_JESTER, ENEMY_AGNI, ENEMY_RUDRA, ENEMY_KIND_TOTAL
 } EnemyKind;
 /* Not a model kind: the Gigapede's head and segments, which take one enemy slot each. */
 #define ENEMY_GIGAPEDE 100

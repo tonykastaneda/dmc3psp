@@ -544,6 +544,7 @@ static int kind_max_health(int kind) {
     case ENEMY_ENIGMA: return 600;
     case ENEMY_GOYLE: return 300;
     case ENEMY_JESTER: return 1500;
+    case ENEMY_AGNI: case ENEMY_RUDRA: return 2000;
     case ENEMY_GIGAPEDE: return 2800;
     case ENEMY_CERBERUS: return 7200;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
@@ -557,7 +558,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -2134,6 +2135,11 @@ static int over_lift(const RoomLift *l, float x, float z) {
     float lx = dx * cosf(a) - dz * sinf(a), lz = dx * sinf(a) + dz * cosf(a);
     return fabsf(lx) < l->half_x && fabsf(lz) < l->half_z;
 }
+static int room_named(const char *file) {
+    int i;
+    for (i = 0; i < (int)(sizeof(rooms) / sizeof(rooms[0])); ++i) if (!strcmp(rooms[i].file, file)) return i;
+    return -1;
+}
 /* The stage's floor, or the lift's top when that's higher and under the feet. */
 static int mission_floor(float x, float y, float z, float step, float *out) {
     const RoomLift *l = room_lift();
@@ -2141,6 +2147,21 @@ static int mission_floor(float x, float y, float z, float step, float *out) {
     if (l && over_lift(l, x, z) && lift_y <= y + step + LIFT_STEP && (!found || lift_y > *out)) { *out = lift_y; found = 1; }
     if (pad_on && (x - pad[0]) * (x - pad[0]) + (z - pad[2]) * (z - pad[2]) < PAD_RADIUS * PAD_RADIUS && pad[1] <= y + step + LIFT_STEP
         && (!found || pad[1] > *out)) { *out = pad[1]; found = 1; }
+    {
+        /* Mission 5: with the Soul of Steel (102's fight over), an unseen bridge where 112's stairs fell: from
+         * the floor at 3000 (z 2650) up to the one at 3500 (z 4350), over the pit to 104 (the stage's own
+         * floors, from its collision). The game's invisible platform gimmick isn't read. */
+        static int room_112 = -2, room_102 = -2;
+        if (room_112 == -2) { room_112 = room_named("ROOM_112.BIN"); room_102 = room_named("ROOM_102.BIN"); }
+        if (mission_choice.mission == 5 && mission_room == room_112 && room_102 >= 0 && (rooms_cleared >> room_102 & 1ull)
+            && x > 2150.0f && x < 2850.0f && z > 2600.0f && z < 4400.0f) {
+            float k = (z - 2650.0f) / (4350.0f - 2650.0f), b;
+            if (k < 0.0f) k = 0.0f;
+            if (k > 1.0f) k = 1.0f;
+            b = 3000.0f + 500.0f * k;
+            if (b <= y + step + LIFT_STEP && (!found || b > *out)) { *out = b; found = 1; }
+        }
+    }
     {
         float g;   /* the Gigapede's back */
         if (enemy_giga_floor(x, y, z, step, &g) && (!found || g > *out)) { *out = g; found = 1; }
