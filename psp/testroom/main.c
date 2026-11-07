@@ -2140,6 +2140,16 @@ static int room_named(const char *file) {
     for (i = 0; i < (int)(sizeof(rooms) / sizeof(rooms[0])); ++i) if (!strcmp(rooms[i].file, file)) return i;
     return -1;
 }
+/* Mission 5's bridge over 112's pit, once 102 is cleared (see mission_floor). */
+static int bridge_up(void) {
+    static int room_112 = -2, room_102 = -2;
+    if (room_112 == -2) { room_112 = room_named("ROOM_112.BIN"); room_102 = room_named("ROOM_102.BIN"); }
+    return mission_mode && mission_choice.mission == 5 && mission_room == room_112 && room_102 >= 0 && (rooms_cleared >> room_102 & 1ull);
+}
+/* On it: the pit's edge walls (prepare_stage.py puts walls on open floor edges) don't stop him there. */
+static int on_bridge(float x, float z, float y) {
+    return bridge_up() && x > 2150.0f && x < 2850.0f && z > 2450.0f && z < 4450.0f && y > 2950.0f;
+}
 /* The stage's floor, or the lift's top when that's higher and under the feet. */
 static int mission_floor(float x, float y, float z, float step, float *out) {
     const RoomLift *l = room_lift();
@@ -2151,10 +2161,7 @@ static int mission_floor(float x, float y, float z, float step, float *out) {
         /* Mission 5: with the Soul of Steel (102's fight over), an unseen bridge where 112's stairs fell: from
          * the floor at 3000 (z 2650) up to the one at 3500 (z 4350), over the pit to 104 (the stage's own
          * floors, from its collision). The game's invisible platform gimmick isn't read. */
-        static int room_112 = -2, room_102 = -2;
-        if (room_112 == -2) { room_112 = room_named("ROOM_112.BIN"); room_102 = room_named("ROOM_102.BIN"); }
-        if (mission_choice.mission == 5 && mission_room == room_112 && room_102 >= 0 && (rooms_cleared >> room_102 & 1ull)
-            && x > 2150.0f && x < 2850.0f && z > 2600.0f && z < 4400.0f) {
+        if (bridge_up() && x > 2150.0f && x < 2850.0f && z > 2600.0f && z < 4400.0f) {
             float k = (z - 2650.0f) / (4350.0f - 2650.0f), b;
             if (k < 0.0f) k = 0.0f;
             if (k > 1.0f) k = 1.0f;
@@ -3153,7 +3160,7 @@ int main(int argc, char *argv[]) {
                 int steps = (int)(sqrtf(mx * mx + mz * mz) / 15.0f) + 1, s;
                 for (s = 1; s <= steps; ++s) {
                     cx += mx / (float)steps; cz += mz / (float)steps;
-                    if (stage_collide(&cx, &cz, player.y, PLAYER_RADIUS)) player.wall_contact = 1;
+                    if (!on_bridge(cx, cz, player.y) && stage_collide(&cx, &cz, player.y, PLAYER_RADIUS)) player.wall_contact = 1;
                 }
                 player.x = cx; player.z = cz;
             }
@@ -3189,7 +3196,7 @@ int main(int argc, char *argv[]) {
                     int steps = (int)(sqrtf(mx * mx + mz * mz) / 15.0f) + 1, s;
                     for (s = 1; s <= steps; ++s) {
                         cx += mx / (float)steps; cz += mz / (float)steps;
-                        if (stage_collide(&cx, &cz, player.y, PLAYER_RADIUS)) player.wall_contact = 1;
+                        if (!on_bridge(cx, cz, player.y) && stage_collide(&cx, &cz, player.y, PLAYER_RADIUS)) player.wall_contact = 1;
                     }
                     player.x = cx; player.z = cz;
                 }
