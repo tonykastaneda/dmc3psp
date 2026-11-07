@@ -142,6 +142,11 @@ From its event script (EventTbl05, GDATA 243; `build/hdref/evt_m5.txt` locally).
 | 120 | Azure Garden, the Divinity Statue |
 | 121 | Agni & Rudra (EST 45, class 27), on their own model (em026, GDATA 131) with a simplified fight (`docs/ENEMY_SPECS.md` F). Both down clears the mission |
 
+Load, against what's been measured on the PSP: 111's seven Blood-goyles skin about 3,900 vertices (Mission 2's
+street, at 30 FPS on hardware, skins about 7,700 for its six Prides); Agni & Rudra are 2 x 1,142 vertices, the
+Jester 1,387, and the Gigapede about 2,100 rigid triangles (parts in the walls skipped). None of Mission 5 has
+been run on hardware yet: PPSSPP only.
+
 Gates: 111's doors to 112 and 110 wait for 422; 112's door to 113 waits for 102, and then an unseen bridge
 spans 112's pit (from its floor at 3000 to the one at 3500), standing in for the Soul of Steel's platform.
 120's Divinity Statue isn't in: neither its stage nor the Mission 5 script places one. The Astronomical Board,
