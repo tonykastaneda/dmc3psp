@@ -200,6 +200,7 @@ static void goyle_spawn(void);
 static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
+static void goyle_bullet(const float from[3], const float to[3]);
 static int enemy_giga_part(int k, float out[3]);
 static void enemy_giga_struck(const float at[3], float damage);
 #define GIGA_PARTS_PUBLIC 8
@@ -1720,6 +1721,8 @@ static void arrows_update(float f, float px, float py, float pz) {
                     a->vel[0] = dx2 / l2 * 30.0f; a->vel[1] = 0.0f; a->vel[2] = dz2 / l2 * 30.0f;
                 }
             }
+        } else if (a->type == 4) {
+            /* A Blood-goyle's bullet: straight. */
         } else if (a->homing) {
             /* Turn toward his chest, and the small upward steer that fades. */
             float tx = px - a->pos[0], ty = py + 100.0f - a->pos[1], tz = pz - a->pos[2];
@@ -1750,7 +1753,11 @@ static void arrows_update(float f, float px, float py, float pz) {
         }
 missed:
         /* The floor (the Gigapede's orbs keep going: they're on it, or come down to it). */
-        if (a->type == 0 && player_floor_fn && player_floor_fn(a->pos[0], a->pos[1] + 50.0f, a->pos[2], 0.0f, &g) && a->pos[1] < g) a->active = 0;
+        if ((a->type == 0 || a->type == 4) && player_floor_fn && player_floor_fn(a->pos[0], a->pos[1] + 50.0f, a->pos[2], 0.0f, &g) && a->pos[1] < g) a->active = 0;
+        if (a->type == 4 && stage_loaded()) {
+            float cx = a->pos[0], cz = a->pos[2];
+            if (stage_collide(&cx, &cz, a->pos[1] - 90.0f, 20.0f)) { fx_hit_spark(a->pos); a->active = 0; }   /* bursts on a wall */
+        }
     }
 }
 
@@ -1768,7 +1775,7 @@ static void arrows_draw(void) {
         l = sqrtf(a->vel[0] * a->vel[0] + a->vel[1] * a->vel[1] + a->vel[2] * a->vel[2]) + 0.01f;
         if (a->type) {
             /* A glowing orb, drawn as a short vertical streak with a trail. */
-            v[n].color = a->type == 1 ? 0xffff60c0u : a->type == 3 ? 0xffffffffu : 0xffffd060u; v[n].x = a->pos[0]; v[n].y = a->pos[1] + 50.0f; v[n].z = a->pos[2]; ++n;
+            v[n].color = a->type == 1 ? 0xffff60c0u : a->type == 3 ? 0xffffffffu : a->type == 4 ? 0xff2020ffu : 0xffffd060u; v[n].x = a->pos[0]; v[n].y = a->pos[1] + 50.0f; v[n].z = a->pos[2]; ++n;
             v[n].color = a->type == 1 ? 0xff801060u : 0xff806010u; v[n].x = a->pos[0] - a->vel[0] / l * 120.0f; v[n].y = a->pos[1] - 50.0f; v[n].z = a->pos[2] - a->vel[2] / l * 120.0f; ++n;
             continue;
         }
@@ -1901,7 +1908,7 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
 #define GOYLE_MAX_OUT 5
 #define GOYLE_SPLITS 5
 enum { G_HOVER = 0, G_STRAFE_L = 2, G_STRAFE_R = 3, G_APPROACH = 4, G_BACK = 5, G_FLINCH = 6, G_FLINCH_HEAVY = 7,
-       G_SPLIT = 8, G_EMERGE = 9, G_WINDUP = 11, G_AIM = 12, G_DIVE = 14, G_STONE = 15, G_STONE_FALL = 16,
+       G_SPLIT = 8, G_EMERGE = 9, G_WINDUP = 11, G_AIM = 12, G_SHOOT = 13, G_DIVE = 14, G_STONE = 15, G_STONE_FALL = 16,
        G_STATUE = 17, G_REVIVE = 18, G_STONE_HIT = 19, G_DEATH = 26 };
 static int goyle_motion[28];
 
@@ -1957,7 +1964,12 @@ static void goyle_spawn(void) {
 static void goyle_decide(float d) {
     float r = ai_unit();
     if (d > 1000.0f) { goyle_state(G_APPROACH); return; }
-    if (attacks_on && attack_token <= 0.0f && r < 0.6f) { attack_token = 3.0f; goyle_state(G_WINDUP); return; }
+    if (attacks_on && attack_token <= 0.0f && r < 0.6f) {
+        /* From further off it may shoot instead of diving. */
+        attack_token = 3.0f;
+        goyle_state(d > 500.0f && ai_unit() < 0.5f ? G_SHOOT : G_WINDUP);
+        return;
+    }
     r = ai_unit();
     goyle_state(r < 0.4f ? G_HOVER : r < 0.6f ? G_BACK : r < 0.8f ? G_STRAFE_L : G_STRAFE_R);
 }
@@ -2017,6 +2029,22 @@ static void goyle_update(float f, float px, float py, float pz) {
         /* Thrown apart, frames 11-40 (FUN_00430330 / 00430480). */
         if (e->frame > 11.0f && e->frame < 40.0f) { e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f; }
         if (e->done) goyle_decide(d);
+        break;
+    case G_SHOOT:
+        /* State 13: Shl00 (FUN_004404a0) emits, 27-32 frames into its life, 2 / 3 / 4 Shl01 blood bullets by
+         * distance band (under 350, under 700, further; 0x5bf242) at Dante's place +-100 cm each way. They fly
+         * straight and burst on a wall (FUN_00459eb0). Their speed and life aren't decoded: 25 a frame and 120. */
+        goyle_turn_to(px, pz, 0.1f, f);
+        if (!e->step && e->timer > 28.0f) {
+            int k, n = d < 350.0f ? 2 : d < 700.0f ? 3 : 4;
+            e->step = 1;
+            for (k = 0; k < n; ++k) {
+                float from[3] = {e->pos[0] + s * 60.0f, e->pos[1] + 150.0f, e->pos[2] + c * 60.0f};
+                float to[3] = {px + ai_unit() * 200.0f - 100.0f, py + 100.0f + ai_unit() * 200.0f - 100.0f, pz + ai_unit() * 200.0f - 100.0f};
+                goyle_bullet(from, to);
+            }
+        }
+        if (e->done) goyle_state(G_HOVER);
         break;
     case G_WINDUP:
         goyle_turn_to(px, pz, 0.1f, f);
@@ -2092,6 +2120,17 @@ void enemy_gun_aimed(float x, float z) {
         goyle_state(ai_unit() < 0.5f ? 2 : 3);
     }
     e = was;
+}
+
+static void goyle_bullet(const float from[3], const float to[3]) {
+    int i;
+    float dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], l = sqrtf(dx * dx + dy * dy + dz * dz) + 0.01f;
+    for (i = 0; i < ARROW_MAX && arrows[i].active; ++i) {}
+    if (i >= ARROW_MAX) return;
+    memset(&arrows[i], 0, sizeof(arrows[i]));
+    arrows[i].active = 1; arrows[i].type = 4; arrows[i].life = 120.0f;
+    memcpy(arrows[i].pos, from, sizeof(arrows[i].pos));
+    arrows[i].vel[0] = dx / l * 25.0f; arrows[i].vel[1] = dy / l * 25.0f; arrows[i].vel[2] = dz / l * 25.0f;
 }
 
 static void goyle_split_off(void) {

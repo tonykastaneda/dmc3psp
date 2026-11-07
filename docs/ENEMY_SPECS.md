@@ -677,23 +677,25 @@ from table `0x5bf814`):
 | 8 | **Split**: cooldown 300, effect 0x194, `FUN_0039e370` spawns a CEm014 at its place with its health, the splits left (after one's taken) and the spawn flag; thrown apart on frames 11-40 |
 | 9 | The new one, emerging (thrown back 10) |
 | 11 → 12 → 14 | Attack: wind-up; aim (yaw ± 50° at random, pitch -0.61); dive at 20, accelerating 0.5 to 30, steering 3° a frame (546 × dt of 0x10000) while Dante's ahead. Hits a wall or the floor: effect 0x1be, back to 0 |
-| 13 | Shoots (Shl00 via `FUN_004404a0`) |
+| 13 | Shoots: Shl00 (`FUN_004404a0`) is an emitter that, 27-32 frames in, sends 2 / 3 / 4 Shl01 bullets by band (`0x5bf242`) at Dante's place ± 100 cm a side; they fly straight and burst on walls (`FUN_00459eb0`) |
 | 15 | Turned to stone: falls 40 frames (gravity), lands (effect 0x2c), then 16 or 17 |
 | 17 | Statue (grey, `0x80808080`) until the stone gauge is back to 0 → 18 |
 | 18 | Back to life (effect 0x36d) |
 | 19, 21 | Stone struck: knocked up at 23.1, falling 0.7 a frame |
 
 **Hits** (`FUN_0039d9e0`):
+- The table at `0x5bf240` is indexed by +0x41b, a **distance band** (`FUN_0039e660`: under 350, under 700,
+  beyond; the u16 at the start of each row), not the difficulty rank as first read.
 - **Guns** (hit record byte 2 = 1): stone gauge +0x448 += 2 × power, shots +0x44c += power; over 60 shots: gauge
-  +120, a flinch (7). Over `0x5bf244[rank]` (**150** at rank 0, 200 at rank 2) it turns to stone (0xf). Capped
+  +120, a flinch (7). Over `0x5bf244[band]` (**150** near and mid, 200 far) it turns to stone (0xf). Capped
   at 1000.
 - The gauge drains `0x5bf248[rank]` a frame as stone (1.0 at rank 0) and `0x5bf24c` as flesh (0.2).
 - **Sword** (byte 2 = 0): the split check `FUN_0039e460`: not stone, the cooldown +0x454 run out (it drains
   1e6 / max(d, 1000)² a frame, d = distance to Dante), fewer of its class than +0x461, a 75% roll, splits left.
   Else a flinch by hit type. On stone: states 0x13 / 0x15.
 
-**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above at rank 0 except the shots (13) and
-the decision tables. The dodge from aimed guns is taken from Dante's shots (within 500 hovering, 300
+**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above. The shots' bullets fly at 25 a frame for 120 frames [estimate]; it shoots
+instead of diving half the time from beyond 500 cm. The dodge from aimed guns is taken from Dante's shots (within 500 hovering, 300
 approaching, 50/50 left or right). The decision tables are a fixed choice (approach beyond 1000; with the
 attack token, 60% attack; else hover, back off or strafe). The body is drawn once per surface and cut to 490
 triangles with `tools/decimate_rigid.py` (skin-aware), as up to a dozen can be on screen. A pistol shot's power
