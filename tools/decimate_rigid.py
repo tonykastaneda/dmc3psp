@@ -11,10 +11,13 @@ import heapq
 from decimate import _cross, _error, _plane_quadric
 
 
-def decimate_rigid(positions, normals, uvs, indices, ratio, tri_groups=None):
+def decimate_rigid(positions, normals, uvs, indices, ratio, tri_groups=None, skins=None):
     """Keep about ratio of the triangles. tri_groups: a group id per triangle (an object), kept in order.
-    Returns (positions, normals, uvs, indices, groups of the kept triangles)."""
+    skins: optional (bones, weights) per vertex for a skinned model. A vertex that moves then takes the
+    skinning of the point it moves to, and collapsing between points on different main bones costs more.
+    Returns (positions, normals, uvs, indices, groups of the kept triangles[, skins])."""
     positions, normals, uvs = list(positions), list(normals), list(uvs)
+    skins = list(skins) if skins else None
     tris = [list(indices[i:i + 3]) for i in range(0, len(indices), 3)]
     groups = list(tri_groups) if tri_groups else [0] * len(tris)
     target = int(len(tris) * ratio)
@@ -27,6 +30,15 @@ def decimate_rigid(positions, normals, uvs, indices, ratio, tri_groups=None):
             gpos.append(tuple(p))
         wedge_gid.append(gid_of_key[key])
     ng = len(gpos)
+    rep = [0] * ng   # a vertex at each position, for its skinning
+    for w, g in enumerate(wedge_gid):
+        rep[g] = w
+    main_bone = None
+    if skins:
+        main_bone = [0] * ng
+        for g in range(ng):
+            b, wt = skins[rep[g]]
+            main_bone[g] = b[max(range(len(wt)), key=lambda k: wt[k])]
     quadric = [[0.0] * 10 for _ in range(ng)]
     g_tris = [set() for _ in range(ng)]
     for t, tri in enumerate(tris):
@@ -62,7 +74,10 @@ def decimate_rigid(positions, normals, uvs, indices, ratio, tri_groups=None):
             for v in tri_g(t):
                 if v != u:
                     q = [a + b for a, b in zip(quadric[u], quadric[v])]
-                    heapq.heappush(heap, (_error(q, gpos[v]), u, v))
+                    cost = _error(q, gpos[v])
+                    if main_bone and main_bone[u] != main_bone[v]:
+                        cost = cost * 4.0 + 50.0
+                    heapq.heappush(heap, (cost, u, v))
 
     for u in range(ng):
         push(u)
@@ -114,6 +129,8 @@ def decimate_rigid(positions, normals, uvs, indices, ratio, tri_groups=None):
                     positions.append(gpos[v])
                     normals.append(normals[w])
                     uvs.append(uvs[w])
+                    if skins:
+                        skins.append(skins[rep[v]])
                     wedge_gid.append(v)
                     target_wedge[w] = len(positions) - 1
                 tris[t][i] = target_wedge[w]
@@ -128,5 +145,8 @@ def decimate_rigid(positions, normals, uvs, indices, ratio, tri_groups=None):
     remap = {old: new for new, old in enumerate(used)}
     order = sorted((t for t in range(len(tris)) if alive[t]), key=lambda t: (groups[t], t))
     out_idx = [remap[w] for t in order for w in tris[t]]
-    return ([positions[w] for w in used], [normals[w] for w in used], [uvs[w] for w in used], out_idx,
-            [groups[t] for t in order])
+    out = ([positions[w] for w in used], [normals[w] for w in used], [uvs[w] for w in used], out_idx,
+           [groups[t] for t in order])
+    if skins:
+        out += ([skins[w] for w in used],)
+    return out

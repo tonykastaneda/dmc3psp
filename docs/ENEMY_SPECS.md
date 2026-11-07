@@ -637,3 +637,58 @@ hide the body (the `0x78c4` "emerged" flag is set from slot 1's frame being in [
   way toward the middle of its visible parts (at most 350 cm across, 380 up) and pulls back and up.
 - Tests: `python tools/ppsspp_scene.py <name> --mission 4 --room 111 --start 1 ...`; `onboss frame part` puts
   Dante on a segment, and the report (FOCUS_DONE.TXT) lists its states, hits, shells and throws.
+
+---
+
+## D. Blood-goyle (CEm014): Mission 5
+
+**Class and pack:** EST 32 → class 14 → `CEm014` (factory case 0xe, `FUN_0039b900`; constructor `0039bc20`,
+vtable `0x609600`, object 0x1200 bytes). Pack **GDATA slot 125, em014.pac** (PNST):
+
+| Entry | Content |
+| --- | --- |
+| [0] | 4 textures |
+| [1] | The body, 21 bones, 2,384 triangles. Tagged `EFM ` but laid out as a MOD. Its objects are layers over the same surfaces (flesh, then scrolling blood: [2] is the UV-scroll script): only 1,226 distinct triangles |
+| [2] | `.TSC` UV scroll script |
+| [3] | `em014_00.clt` |
+| [6] | Motion scripts (not decoded: their layout isn't Dante's) |
+| [7] | Effects PNST |
+| [8] | PAC of 28 motions. Motion N goes with state N (by length: 2/3, 4/5 and 6/7 are the left/right, toward/away and light/heavy pairs) [inferred] |
+
+**Defaults** (`FUN_0039bef0`): health 300, split cooldown 300, splits left 5, at most 5 out at once (+0x461; the
+spawn record can raise it to 6). Hover offset 50 above Dante, re-rolled to 50-120 every 200-400 frames.
+
+**States** (+5, dispatched by `FUN_0039cb30` to `0042f090`…`004324e0`; the next one picked by `FUN_0039e660`
+from table `0x5bf814`):
+
+| State | What it does |
+| --- | --- |
+| 0 | Hover: holds Dante's height + the offset, easing at most 3 down / 1 up a frame. 30% use motion 0x1c |
+| 1 | Settle to the floor (effect 0x198) |
+| 2, 3 | Strafe (sideways 6, or 20-32 when dodging). When Dante aims (his state 0x11) within 500, 50/50 into one |
+| 4 | Approach: 12 a frame over 2500, 6 over 1000, else 3 |
+| 5 | Back off at 2 |
+| 6, 7 | Flinch light / heavy |
+| 8 | **Split**: cooldown 300, effect 0x194, `FUN_0039e370` spawns a CEm014 at its place with its health, the splits left (after one's taken) and the spawn flag; thrown apart on frames 11-40 |
+| 9 | The new one, emerging (thrown back 10) |
+| 11 → 12 → 14 | Attack: wind-up; aim (yaw ± 50° at random, pitch -0.61); dive at 20, accelerating 0.5 to 30, steering 3° a frame (546 × dt of 0x10000) while Dante's ahead. Hits a wall or the floor: effect 0x1be, back to 0 |
+| 13 | Shoots (Shl00 via `FUN_004404a0`) |
+| 15 | Turned to stone: falls 40 frames (gravity), lands (effect 0x2c), then 16 or 17 |
+| 17 | Statue (grey, `0x80808080`) until the stone gauge is back to 0 → 18 |
+| 18 | Back to life (effect 0x36d) |
+| 19, 21 | Stone struck: knocked up at 23.1, falling 0.7 a frame |
+
+**Hits** (`FUN_0039d9e0`):
+- **Guns** (hit record byte 2 = 1): stone gauge +0x448 += 2 × power, shots +0x44c += power; over 60 shots: gauge
+  +120, a flinch (7). Over `0x5bf244[rank]` (**150** at rank 0, 200 at rank 2) it turns to stone (0xf). Capped
+  at 1000.
+- The gauge drains `0x5bf248[rank]` a frame as stone (1.0 at rank 0) and `0x5bf24c` as flesh (0.2).
+- **Sword** (byte 2 = 0): the split check `FUN_0039e460`: not stone, the cooldown +0x454 run out (it drains
+  1e6 / max(d, 1000)² a frame, d = distance to Dante), fewer of its class than +0x461, a 75% roll, splits left.
+  Else a flinch by hit type. On stone: states 0x13 / 0x15.
+
+**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above at rank 0 except the shots (13), the
+dodge from aimed guns, and the decision tables, which are a fixed choice (approach beyond 1000; with the
+attack token, 60% attack; else hover, back off or strafe). The body is drawn once per surface and cut to 490
+triangles with `tools/decimate_rigid.py` (skin-aware), as up to a dozen can be on screen. A pistol shot's power
+is taken as 5 [inferred]; stone takes triple sword damage [inferred]. Stone is drawn untextured grey.

@@ -334,12 +334,51 @@ ENEMY_KINDS = (
     ("wrath", 117, 18, 26),
     ("greed", 117, 19, 26),
     ("enigma", 124, 1, 2),
+    # The Blood-goyle, em014.pac (GDATA 125, a PNST): [0] textures, [1] its body, tagged "EFM " but laid out
+    # as a MOD, [8] its 28 motions. No weapon.
+    ("goyle", 125, 1, None),
 )
+GOYLE_SLOT = 125
+GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 
-def enemy_mesh(body: bytes):
+def layered_mesh(body: bytes, skel, ratio):
+    """A body drawn in layers (the Blood-goyle's flesh under its scrolling blood): each surface once, the
+    first object's copy, then cut across UV seams (tools/decimate_rigid.py, keeping the skinning)."""
+    from decimate import weld
+    from decimate_rigid import decimate_rigid
+    mesh = build_mesh(body, skel["count"])
+    P, I = mesh["positions"], mesh["indices"]
+    key = lambda v: (round(P[v][0], 2), round(P[v][1], 2), round(P[v][2], 2))
+    seen, keep, groups = set(), [], []
+    for k, o in enumerate(mesh["objects"]):
+        for t in range(o["index_start"], o["index_start"] + o["index_count"], 3):
+            s3 = frozenset(key(v) for v in I[t:t + 3])
+            if s3 in seen:
+                continue
+            seen.add(s3)
+            keep += I[t:t + 3]
+            groups.append(k)
+    used, idx = weld(P, mesh["normals"], mesh["uvs"], mesh["bones"], mesh["weights"], keep)
+    pos, nor, uvs, idx, groups, skins = decimate_rigid(
+        [P[u] for u in used], [mesh["normals"][u] for u in used], [mesh["uvs"][u] for u in used], idx, ratio, groups,
+        [(mesh["bones"][u], mesh["weights"][u]) for u in used])
+    objects, start = [], 0
+    for k, o in enumerate(mesh["objects"]):
+        n = groups.count(k) * 3
+        if n:
+            objects.append({**o, "index_start": start, "index_count": n})
+        start += n
+    return {**mesh, "positions": pos, "normals": nor, "uvs": uvs, "indices": idx, "objects": objects,
+            "bones": [b for b, w in skins], "weights": [w for b, w in skins]}
+
+
+def enemy_mesh(body: bytes, ratio=None):
     skel = parse_skeleton(body)
-    mesh = slim_mesh(build_mesh(body, skel["count"]), 0.7)   # disposable and many on screen
+    if ratio is not None:
+        mesh = layered_mesh(body, skel, ratio)
+    else:
+        mesh = slim_mesh(build_mesh(body, skel["count"]), 0.7)   # disposable and many on screen
     # One draw per texture: on the PSP each dummy was 22 draws of 2 textures.
     order, merged = sorted(mesh["objects"], key=lambda o: o["texture"]), []
     indices = []
@@ -393,10 +432,18 @@ def write_enemy(output: Path, packs: dict) -> None:
     table = []
     max_vertices = max_bones = 0
     for kind, (name, slot, body_index, weapon_index) in enumerate(ENEMY_KINDS):
-        body, weapon = packs[slot][body_index], packs[slot][weapon_index]
-        skel, mesh = enemy_mesh(body)
-        wskel = parse_skeleton(weapon)
-        wmesh = slim_mesh(build_mesh(weapon, wskel["count"]))
+        body = packs[slot][body_index]
+        if body[:4] == b"EFM ":
+            body = b"MOD " + body[4:]
+        skel, mesh = enemy_mesh(body, GOYLE_RATIO if slot == GOYLE_SLOT else None)
+        if weapon_index is None:
+            # No weapon: one degenerate triangle keeps the tables the same shape.
+            wmesh = {"positions": [(0.0, 0.0, 0.0)], "normals": [(0.0, 1.0, 0.0)], "uvs": [(0.0, 0.0)],
+                     "indices": [0, 0, 0], "objects": [{"texture": 0}]}
+        else:
+            weapon = packs[slot][weapon_index]
+            wskel = parse_skeleton(weapon)
+            wmesh = slim_mesh(build_mesh(weapon, wskel["count"]))
         n = f"ek{kind}"
         height = max(v[1] for v in mesh["positions"])
         lines += [
@@ -468,6 +515,7 @@ def main() -> None:
         study_moves = {slot: read_slot(slot) for slot in STUDY_MOTION_SLOTS}
         enemy_pack = pnst_entries(read_slot(ENEMY_SLOT))
         enigma_pack = pac_list(read_slot(ENIGMA_SLOT))
+        goyle_pack = pnst_entries(read_slot(GOYLE_SLOT))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
@@ -598,7 +646,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 124: enigma_pack})
+    write_enemy(args.output, {117: enemy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack})
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable)
     write_devils(args.output, devil_packs)
 
@@ -627,6 +675,16 @@ def main() -> None:
                 print(f"Enigma {prefix}{slot:02d}: not a MOT ({error}), skipped")
                 continue
             motions.append({"name": f"{prefix}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    # The Blood-goyle's: "gbNN" from [8], one a state (motion N plays in state N).
+    for slot, raw in enumerate(pac_list(goyle_pack[8])):
+        if not raw:
+            continue
+        try:
+            parsed = parse_mot(raw)
+        except ValueError as error:
+            print(f"Blood-goyle gb{slot:02d}: not a MOT ({error}), skipped")
+            continue
+        motions.append({"name": f"gb{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     mlines = [
         "#ifndef DMC3_MOTION_RUNTIME_H",
         "#define DMC3_MOTION_RUNTIME_H",

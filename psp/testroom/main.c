@@ -542,6 +542,7 @@ static int kind_max_health(int kind) {
     case ENEMY_WRATH: return 500;
     case ENEMY_GREED: return 1000;
     case ENEMY_ENIGMA: return 600;
+    case ENEMY_GOYLE: return 300;
     case ENEMY_GIGAPEDE: return 2800;
     case ENEMY_CERBERUS: return 7200;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
@@ -555,7 +556,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -2553,7 +2554,12 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         return 0;
     }
     rooms_cleared |= 1ull << mission_room;
-    if (info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE) {
+    if (info->clear_room == mission_room) {
+        /* This mission ends with this room's boss. */
+        mission_clear_wait += dt;
+        return mission_clear_wait > 2.0f;
+    }
+    if (info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE && info->clear_room == ROOM_NONE) {
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
@@ -2643,7 +2649,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     breakables_reset();
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
-        int first = missions[choice->mission - 1].first_room, start = 0, i;
+        int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
         for (i = 0; cmp_start_room >= 0 && i < (int)(sizeof(rooms) / sizeof(rooms[0])); ++i) {
             char want[16];
             snprintf(want, sizeof(want), "ROOM_%03d.BIN", cmp_start_room);

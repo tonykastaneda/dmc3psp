@@ -52,6 +52,7 @@ IMAGES = [
     ("IMG_BANNER_2", [(BANNER_BASE + ENGLISH_BANNER_STEP, 1, False, ZOOM, {})]),
     ("IMG_BANNER_3", [(BANNER_BASE + ENGLISH_BANNER_STEP * 2, 1, False, ZOOM, {})]),
     ("IMG_BANNER_4", [(BANNER_BASE + ENGLISH_BANNER_STEP * 3, 1, False, ZOOM, {})]),
+    ("IMG_BANNER_5", [(BANNER_BASE + ENGLISH_BANNER_STEP * 4, 1, False, ZOOM, {})]),
     # Only the heading and the band for now: the results themselves aren't tracked yet.
     ("IMG_CLEAR", [(1665, 1, False, None, {0: CENTRE}), (1665, 23, False, SPAN, {})]),
 ]

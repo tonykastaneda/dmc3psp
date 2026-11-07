@@ -43,7 +43,9 @@ CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
 SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292, "006": 296, "009": 308,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
-         "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428}
+         "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428,
+         # SE: the Jester's arenas follow st400 at 736, four slots a room. 422 is Mission 5's.
+         "422": 824}
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -60,13 +62,24 @@ MISSIONS = {
     # Infernum, falling into 104 Chamber of Sins -> back to 112 -> 111 Giantwalker Chamber (the Gigapede, class 41)
     # -> 110, where the Astronomical Board (item 36) ends it. 101's group isn't in the script: 0 is a guess.
     4: ("100", None, {"101": [0], "102": [1], "110": [0], "104": [0], "111": [0]}),
+    # Mission 5, from EventTbl05 (GDATA 243): after demo 11 it starts in 111 at its start 2, where 7 Blood-goyles
+    # (group 1, EST 32 = CEm014) lock the doors. Cleared, a door to 422 opens: the Jester (group 0, EST 62 =
+    # CEm044). Beating him unlocks 111. Then 112 -> 100 -> 101 -> 102 (group 3: Enigmas and Gluttonies; the Soul
+    # of Steel) -> back to 112, whose door to 113 the Soul of Steel opens -> 113 Surge of Fortunas, its lift
+    # (groups 0-3, waves as it climbs) -> 120 Azure Garden (the Divinity Statue) -> 121 Firestorm Chamber: Agni
+    # & Rudra (group 0, EST 45 = CEm027). Their fall clears the mission. 110 (groups 1, 0) is off the route.
+    5: ("111", None, {"111": [1], "422": [0], "102": [3], "113": [0, 1, 2, 3], "110": [1], "121": [0]}),
 }
+# Where a mission starts in its first room, when not at start 0.
+FIRST_START = {5: 2}
+# A mission cleared by a room's fight being over (its boss), not a door or an item.
+CLEAR_ROOMS = {5: "121"}
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this).
 SHOPS = {"005": (5211.4, 780.7, 1539.8)}
 # Lifts that work: 103's carries Dante up to the door into 110 in Mission 4. Others aren't on a route yet.
-LIFT_ROOMS = {"103"}
+LIFT_ROOMS = {"103", "113"}
 # A mission that ends on an item instead of a door: room, the item's place (the room's ITM chunk), and the
 # room whose fight must be over first.
 GOALS = {4: ("110", (1517.4, 838.0, 417.3), "111")}
@@ -78,6 +91,10 @@ GATES = [
     (4, "112", "111", "104"),   # Endless Infernum's seal holds until the Chamber of Sins (flag 6)
     (4, "110", "111", "111"),   # the Giantwalker Chamber is entered from 112's side
     (4, "112", "113", "999"),   # not part of Mission 4
+    (4, "111", "422", "999"),   # the Jester's door is Mission 5's
+    (5, "111", "112", "422"),   # 111 unlocks when the Jester's beaten (flag 2)
+    (5, "111", "110", "422"),
+    (5, "112", "113", "102"),   # the Soul of Steel, from 102, opens 112's way to 113
 ]
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
@@ -219,7 +236,7 @@ def main():
              "typedef struct { const char *file; const float (*starts)[4]; const RoomDoor *doors; short door_count; } Room;",
              "typedef struct { const RoomOp *ops; short count; } RoomScript;",
              "typedef struct { short first_room, end_room; RoomScript scripts[2][%d]; "
-             "short goal_room, goal_after; float goal[3]; } MissionInfo;  /* scripts[Easy, Normal][room] */" % len(names),
+             "short goal_room, goal_after; float goal[3]; short first_start, clear_room; } MissionInfo;  /* scripts[Easy, Normal][room] */" % len(names),
              "typedef struct { short mission, room, next_number, needs_room; } DoorGate;",
              "/* A lift: centre, turn (degrees), half sizes, its top's low and high heights, and the switch. */",
              "typedef struct { short room; float x, z, yaw, half_x, half_z, low, high, switch_pos[3]; } RoomLift;",
@@ -353,6 +370,7 @@ def main():
         goal = GOALS.get(mission)
         tail = (f',{index[goal[0]]},{index[goal[2]]},{{{goal[1][0]:.1f}f,{goal[1][1]:.1f}f,{goal[1][2]:.1f}f}}' if goal
                 else ',ROOM_NONE,ROOM_NONE,{0,0,0}')
+        tail += f',{FIRST_START.get(mission, 0)},{index[CLEAR_ROOMS[mission]] if mission in CLEAR_ROOMS else "ROOM_NONE"}'
         lines.append(f'    {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
     lines.append("};")
     args.header.write_text("\n".join(lines) + "\n")

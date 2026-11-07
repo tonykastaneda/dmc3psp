@@ -24,7 +24,7 @@
 #define DIM 0xff707070
 #define BRIGHT 0xffffffff
 #define LOCKED 0x60ffffff
-#define MENU_MISSIONS 4
+#define MENU_MISSIONS 5
 
 typedef struct {
     char magic[4];

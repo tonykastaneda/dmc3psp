@@ -120,6 +120,10 @@ typedef struct {
     float hand_rot[3][3], hand_pos[3];
     float anim_wait, posed_frame;
     int posed_motion;
+    /* The Blood-goyle's stone gauge and shots toward the next flinch, split cooldown and splits left, the
+     * height it hovers over Dante and when that's re-rolled, and its dive's aim. */
+    float goyle_stone, goyle_shots, goyle_split, goyle_lift, goyle_lift_wait, goyle_aim;
+    signed char goyle_splits;
 } Enemy;
 
 static int hl_motion[HL_MOTIONS];
@@ -127,7 +131,7 @@ static Vertex *weapon_vertices[ENEMY_KIND_COUNT];
 static unsigned short *indices[ENEMY_KIND_COUNT], *weapon_indices[ENEMY_KIND_COUNT];
 static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
 /* Which bone holds the weapon, by kind. */
-static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE};
+static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0};
 static Enemy enemies[ENEMY_MAX];
 static Enemy *e = &enemies[0];
 static int hits, attacks_on;
@@ -189,6 +193,14 @@ static int enigma_init(void);
 static void enigma_spawn(void);
 static void enigma_update(float f, float px, float py, float pz);
 static void enigma_hit(HitKind kind, float from_x, float from_z);
+static int goyle_init(void);
+static void goyle_spawn(void);
+static void goyle_update(float f, float px, float py, float pz);
+static void goyle_hit(HitKind kind, float from_x, float from_z);
+static void giga_note(const char *what, int a, float b);
+static void spawn_one(int kind, float x, float z);
+static float ai_unit(void);
+static float wrap_angle(float a);
 static void land_attack(int heavy);
 static void evaluate_pose(void);
 static void trace_row(int did_land);
@@ -215,6 +227,7 @@ int enemy_init(void) {
         if (hl_motion[i] < 0) return 0;
     }
     if (!enigma_init()) return 0;
+    if (!goyle_init()) return 0;
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
     if (!cerberus_boss_init()) return 0;
@@ -267,6 +280,7 @@ static int kind_health(int kind) {
     case ENEMY_GLUTTONY: return ENEMY_HEALTH * 700 / 250;
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
+    case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
     default: return ENEMY_HEALTH;
     }
 }
@@ -320,6 +334,7 @@ static void spawn_one(int kind, float x, float z) {
     e->hidden = 0;
     e->active = 1;
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
+    if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     script_play(0);
     e->fade = 0.0f;
 }
@@ -431,6 +446,7 @@ int enemy_kind_for_class(int spawn_class) {
      * 16 Wrath, 20 Greed), and 31 is the Enigma. Anything not ported yet stands in as a Pride. */
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
     if (spawn_class == 31) return ENEMY_ENIGMA;
+    if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
     if (spawn_class == 26) return ENEMY_VANGUARD;
@@ -1063,6 +1079,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     }
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
+    if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
     {
@@ -1073,6 +1090,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         fx_hit_spark(at);
     }
     if (e->kind == ENEMY_ENIGMA) { enigma_hit(kind, from_x, from_z); return; }
+    if (e->kind == ENEMY_GOYLE) { goyle_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
     if (mortal) {
@@ -1282,6 +1300,7 @@ static void update_one(float dt, float px, float py, float pz) {
         return;
     }
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
         int use_root = action_update(px, pz, f);
@@ -1451,6 +1470,12 @@ static void draw_one(void) {
     sceGuTexMode(GU_PSM_T8, 0, 0, 1);     /* swizzled at load */
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    if (e->kind == ENEMY_GOYLE && (e->action == 15 || e->action == 16 || e->action == 17 || e->action == 19) && e->plan != P_DEATH) {
+        /* Stone: grey. */
+        sceGuDisable(GU_TEXTURE_2D);
+        sceGuAmbientColor(0xff3c4046u);
+        sceGuColor(0xff70767cu);
+    }
     for (i = 0; i < m->object_count; ++i) {
         const Dmc3ModelObject *o = &m->objects[i];
         if ((int)o->texture != bound) {
@@ -1461,7 +1486,8 @@ static void draw_one(void) {
         }
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[e->kind] + o->index_start, e->vertices);
     }
-    if (e->kind != ENEMY_ENIGMA) {
+    if (e->kind == ENEMY_GOYLE) { sceGuAmbientColor(0xffffffffu); sceGuColor(0xffffffffu); sceGuEnable(GU_TEXTURE_2D); }
+    if (e->kind != ENEMY_ENIGMA && e->kind != ENEMY_GOYLE) {
         /* The weapon in its hand: a Seven Hell's scythe. The Enigma's bows are part of its body. */
         ScePspFMatrix4 mm;
         const float (*r)[3] = e->hand_rot;
@@ -1785,6 +1811,264 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
     /* A light hit doesn't stop it shooting; a heavier one does. */
     if (kind == HIT_LIGHT || kind == HIT_AIR) enigma_play(enigma_motion_flinch);
     else { enigma_play(enigma_motion_heavy); e->overlay_motion = -1; e->shoot_set = -1; }
+}
+
+/* ---- The Blood-goyle (CEm014, em014.pac), Mission 5 (docs/ENEMY_SPECS.md section D, rank 0). A flying
+ * blood gargoyle. Its states are the game's (+5, dispatched by FUN_0039cb30) and motion N plays in state N.
+ *   Flying: hovers 50-120 cm over Dante's feet (re-rolled every 200-400 frames), approaches at 12, 6 or 3 a
+ *   frame by distance (over 2500, over 1000, nearer), backs off at 2, strafes. With the attack token it
+ *   winds up (11), aims (12, a random +-50 degrees), and dives (14): 20 a frame building to 30, steering
+ *   3 degrees a frame at him until it's past him.
+ *   Sword: a flinch, or a split (8). It splits when its cooldown has run out (300 frames; it runs at one a
+ *   frame with Dante within 1000 cm, slower beyond as 1e6 / d^2), fewer than 5 are out, splits are left (5,
+ *   shared down the line) and a 75% roll passes. The new one (9) comes out of it with its health.
+ *   Guns: each shot fills a stone gauge by twice its power; every 60 is a flinch and 120 more. Over 150
+ *   (rank 0's 0x5bf244) it turns to stone (15): grey, it drops to the floor (16, 17) and stands as a statue
+ *   while the gauge drains 1 a frame (0.2 as flesh). At 0 it comes back to life (18). Sword hits on the
+ *   statue knock it up (19, vy 23, fall 0.7) and it shatters when its health is gone.
+ * Simplified: the decision tables (0x5bf814) are a fixed choice; its blood shots (state 13) and the
+ * dodge from aimed guns aren't in; damage to Dante is the default; three times the damage on stone is
+ * inferred, not decoded. */
+#define GOYLE_HEALTH (ENEMY_HEALTH * 300 / 250)
+#define GOYLE_STONE_AT 150.0f
+#define GOYLE_MAX_OUT 5
+#define GOYLE_SPLITS 5
+enum { G_HOVER = 0, G_STRAFE_L = 2, G_STRAFE_R = 3, G_APPROACH = 4, G_BACK = 5, G_FLINCH = 6, G_FLINCH_HEAVY = 7,
+       G_SPLIT = 8, G_EMERGE = 9, G_WINDUP = 11, G_AIM = 12, G_DIVE = 14, G_STONE = 15, G_STONE_FALL = 16,
+       G_STATUE = 17, G_REVIVE = 18, G_STONE_HIT = 19, G_DEATH = 26 };
+static int goyle_motion[28];
+
+static int goyle_init(void) {
+    int i;
+    for (i = 0; i < 28; ++i) {
+        char name[5] = {'g', 'b', (char)('0' + i / 10), (char)('0' + i % 10), 0};
+        goyle_motion[i] = motion_find(name);
+        if (goyle_motion[i] < 0) return 0;
+    }
+    return 1;
+}
+
+static int goyle_count(void) {
+    int i, n = 0;
+    for (i = 0; i < ENEMY_MAX; ++i) n += enemies[i].active && enemies[i].kind == ENEMY_GOYLE && enemies[i].plan != P_DEATH;
+    return n;
+}
+
+static void goyle_state(int s) {
+    int m = goyle_motion[s < 28 ? s : 0];
+    if (s == G_SPLIT || s == G_EMERGE || s == G_STONE || s == G_STATUE || s == G_REVIVE || s == G_DEATH || s == G_DIVE)
+        giga_note("goyle", s * 100 + (int)(e - enemies), e->goyle_stone);
+    e->action = (unsigned char)s;
+    e->step = 0;
+    e->timer = 0.0f;
+    if (m != e->motion) {
+        e->prev_motion = e->motion;
+        e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f;
+        e->fade_rate = 1.0f / 8.0f;
+        e->motion = m;
+        e->frame = 0.0f;
+    }
+    e->done = 0;
+}
+
+static void goyle_spawn(void) {
+    e->plan = P_WATCH;
+    e->motion = -1;
+    e->goyle_stone = e->goyle_shots = 0.0f;
+    e->goyle_split = 300.0f;
+    e->goyle_splits = GOYLE_SPLITS;
+    e->vel[0] = e->vel[1] = e->vel[2] = 0.0f;
+    e->goyle_lift = 50.0f + ai_unit() * 70.0f;
+    e->goyle_lift_wait = 200.0f + ai_unit() * 200.0f;
+    e->pos[1] += 150.0f;   /* they come in flying */
+    goyle_state(G_HOVER);
+    e->fade = 0.0f;
+}
+
+/* What to do next (FUN_0039e660, its tables simplified). */
+static void goyle_decide(float d) {
+    float r = ai_unit();
+    if (d > 1000.0f) { goyle_state(G_APPROACH); return; }
+    if (attacks_on && attack_token <= 0.0f && r < 0.6f) { attack_token = 3.0f; goyle_state(G_WINDUP); return; }
+    r = ai_unit();
+    goyle_state(r < 0.4f ? G_HOVER : r < 0.6f ? G_BACK : r < 0.8f ? G_STRAFE_L : G_STRAFE_R);
+}
+
+static void goyle_turn_to(float px, float pz, float rate, float f) {
+    float want = atan2f(px - e->pos[0], pz - e->pos[2]), d = wrap_angle(want - e->yaw), t = rate * f;
+    e->yaw = wrap_angle(e->yaw + (d > t ? t : d < -t ? -t : d));
+}
+
+static void goyle_update(float f, float px, float py, float pz) {
+    const Motion *m;
+    float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, s = sinf(e->yaw), c = cosf(e->yaw);
+    int stone = e->action == G_STONE || e->action == G_STONE_FALL || e->action == G_STATUE || e->action == G_STONE_HIT;
+    /* The stone gauge drains; so does the split cooldown, faster the nearer he is. */
+    if (e->goyle_stone > 0.0f) { e->goyle_stone -= (stone ? 1.0f : 0.2f) * f; if (e->goyle_stone < 0.0f) e->goyle_stone = 0.0f; }
+    if (e->goyle_shots > 0.0f) e->goyle_shots -= f;
+    if (e->goyle_split > 0.0f) { float dd = d < 1000.0f ? 1000.0f : d; e->goyle_split -= 1.0e6f / (dd * dd) * f; }
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    m = motion_get(e->motion);
+    e->frame += f;
+    e->timer += f;
+    if (e->frame >= m->end_frame) { e->done = 1; e->frame = (e->action == G_HOVER || e->action == G_APPROACH || e->action == G_BACK ||
+                                                              e->action == G_STATUE || e->action == G_DIVE) ? motion_wrap(m, e->frame) : m->end_frame; }
+    if (!floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) g = e->floor_y;
+    e->floor_y = g;
+    if (e->plan == P_DEATH) {
+        /* A statue shatters at once; flesh bursts after its fall. */
+        e->pos[1] -= 6.0f * f;
+        if (e->pos[1] < g) e->pos[1] = g;
+        if (e->timer > (e->goyle_stone > 0.0f ? 2.0f : 40.0f)) e->active = 0;
+        return;
+    }
+    switch (e->action) {
+    case G_HOVER: case G_APPROACH: case G_BACK: case G_STRAFE_L: case G_STRAFE_R: {
+        float target = py + e->goyle_lift, step = (e->pos[1] - target) / 20.0f, speed = 0.0f, side = 0.0f;
+        if (step > 3.0f) step = 3.0f;
+        if (step < -1.0f) step = -1.0f;
+        e->pos[1] -= step * f;
+        if ((e->goyle_lift_wait -= f) < 0.0f) { e->goyle_lift = 50.0f + ai_unit() * 70.0f; e->goyle_lift_wait = 200.0f + ai_unit() * 200.0f; }
+        goyle_turn_to(px, pz, 0.06f, f);
+        if (e->action == G_APPROACH) speed = d > 2500.0f ? 12.0f : d > 1000.0f ? 6.0f : 3.0f;
+        if (e->action == G_BACK) speed = -2.0f;
+        if (e->action == G_STRAFE_L) side = 6.0f;
+        if (e->action == G_STRAFE_R) side = -6.0f;
+        if (e->action == G_APPROACH && d < 250.0f) speed = 0.0f;
+        e->pos[0] += (s * speed + c * side) * f;
+        e->pos[2] += (c * speed - s * side) * f;
+        if (e->timer > (e->action == G_HOVER ? 70.0f : e->action == G_APPROACH ? 90.0f : 45.0f)) goyle_decide(d);
+        break;
+    }
+    case G_FLINCH: case G_FLINCH_HEAVY:
+        e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f;
+        e->vel[0] *= 0.9f;
+        if (e->done) goyle_decide(d);
+        break;
+    case G_SPLIT: case G_EMERGE:
+        /* Thrown apart, frames 11-40 (FUN_00430330 / 00430480). */
+        if (e->frame > 11.0f && e->frame < 40.0f) { e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f; }
+        if (e->done) goyle_decide(d);
+        break;
+    case G_WINDUP:
+        goyle_turn_to(px, pz, 0.1f, f);
+        if (e->done) {
+            goyle_state(G_AIM);
+            e->goyle_aim = (ai_unit() * 100.0f - 50.0f) / 360.0f * 6.283185f;
+        }
+        break;
+    case G_AIM:
+        goyle_turn_to(px, pz, 0.1f, f);
+        e->pos[1] += 2.0f * f;   /* it rises into the dive */
+        if (e->done) { e->yaw = wrap_angle(e->yaw + e->goyle_aim * 0.2f); e->vel[0] = 20.0f; goyle_state(G_DIVE); }
+        break;
+    case G_DIVE: {
+        /* 20 a frame, building 0.5 a frame to 30; steering 3 degrees a frame while he's ahead; down onto him. */
+        float want = atan2f(dx, dz), off = fabsf(wrap_angle(want - e->yaw)), ddy = py + 90.0f - e->pos[1];
+        if (off < 1.4f) goyle_turn_to(px, pz, 0.052f, f);
+        e->vel[0] += 0.5f * f; if (e->vel[0] > 30.0f) e->vel[0] = 30.0f;
+        e->pos[0] += s * e->vel[0] * f; e->pos[2] += c * e->vel[0] * f;
+        e->pos[1] += (ddy > 0.0f ? 1.0f : -1.0f) * fminf(fabsf(ddy), 6.0f * f);
+        if (d < 110.0f && fabsf(py + 90.0f - e->pos[1]) < 150.0f && e->step == 0) {
+            land_attack(0);
+            e->step = 1;
+        }
+        if (e->timer > 70.0f || (e->step == 1 && e->timer > 20.0f) || e->pos[1] < g + 20.0f) {
+            if (e->pos[1] < g + 20.0f) { float at[3] = {e->pos[0], g, e->pos[2]}; fx_dust(at); e->pos[1] = g + 20.0f; }
+            goyle_state(G_HOVER);
+        }
+        break;
+    }
+    case G_STONE: case G_STONE_FALL: case G_STONE_HIT:
+        /* Falls as stone (gravity 0.7 a frame); knocked up when struck. */
+        e->vel[1] -= 0.7f * f;
+        e->pos[1] += e->vel[1] * f;
+        e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f;
+        e->vel[0] *= 0.95f;
+        if (e->pos[1] <= g) {
+            float at[3] = {e->pos[0], g, e->pos[2]};
+            e->pos[1] = g; e->vel[1] = 0.0f;
+            fx_dust(at);
+            goyle_state(G_STATUE);
+        }
+        break;
+    case G_STATUE:
+        e->pos[1] = g;
+        if (e->goyle_stone <= 0.0f) { goyle_state(G_REVIVE); e->pos[1] = g; }
+        break;
+    case G_REVIVE:
+        e->pos[1] += 3.0f * f;
+        if (e->done) goyle_state(G_HOVER);
+        break;
+    default:
+        goyle_state(G_HOVER);
+        break;
+    }
+    if (e->pos[1] < g) e->pos[1] = g;
+}
+
+static void goyle_split_off(void) {
+    Enemy *parent = e;
+    int k;
+    for (k = 0; k < ENEMY_MAX; ++k) {
+        Enemy *o = &enemies[k];
+        if (o->active) continue;
+        e = o;
+        spawn_one(ENEMY_GOYLE, parent->pos[0], parent->pos[2]);
+        o->pos[1] = parent->pos[1];
+        o->yaw = wrap_angle(parent->yaw + PI);
+        o->health = parent->health;
+        o->goyle_splits = parent->goyle_splits;
+        o->goyle_split = 300.0f;
+        o->vel[0] = 10.0f;
+        goyle_state(G_EMERGE);
+        break;
+    }
+    e = parent;
+}
+
+static void goyle_hit(HitKind kind, float from_x, float from_z) {
+    int stone = e->action == G_STONE || e->action == G_STONE_FALL || e->action == G_STATUE || e->action == G_STONE_HIT;
+    int gun = kind == HIT_PISTOL;
+    float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
+    if (e->plan == P_DEATH) return;
+    e->yaw = atan2f(from_x - e->pos[0], from_z - e->pos[2]);   /* knocked away from him */
+    if (gun) {
+        /* The stone gauge: twice the shot's power (a pistol shot's 5, inferred), capped at 1000; each 60 shot
+         * at it is a flinch and 120 more. */
+        e->goyle_stone += 10.0f; e->goyle_shots += 5.0f;
+        if (e->goyle_shots > 60.0f) { e->goyle_stone += 120.0f; e->goyle_shots = 0.0f; if (!stone) { e->vel[0] = 4.0f; goyle_state(G_FLINCH_HEAVY); } }
+        if (e->goyle_stone > 1000.0f) e->goyle_stone = 1000.0f;
+        if (!stone && e->goyle_stone > GOYLE_STONE_AT) { e->vel[0] = 0.0f; e->vel[1] = 0.0f; goyle_state(G_STONE); }
+        if (mortal && ai_unit() < 0.15f) --e->health;   /* bullets barely hurt it */
+    } else if (stone) {
+        /* Struck stone: up it goes, and it takes three times the damage. */
+        e->vel[1] = 23.0f; e->vel[0] = kind == HIT_HEAVY ? 12.0f : 4.0f;
+        goyle_state(G_STONE_HIT);
+        if (mortal) e->health = (signed char)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 3 : 6));
+    } else {
+        if (mortal) e->health = (signed char)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2));
+        if (e->health > 0 && e->goyle_split <= 0.0f && e->goyle_splits > 0 && goyle_count() < GOYLE_MAX_OUT && ai_unit() < 0.75f) {
+            --e->goyle_splits;
+            e->goyle_split = 300.0f;
+            e->vel[0] = 10.0f;
+            goyle_state(G_SPLIT);
+            fx_explosion(at);
+            goyle_split_off();
+        } else {
+            e->vel[0] = kind == HIT_HEAVY || kind == HIT_LAUNCH ? 12.0f : 3.0f;
+            goyle_state(kind == HIT_LIGHT || kind == HIT_AIR ? G_FLINCH : G_FLINCH_HEAVY);
+        }
+    }
+    if (mortal && e->health <= 0) {
+        if (stone) { fx_explosion(at); fx_wall_spark(at); }
+        e->plan = P_DEATH;
+        e->timer = 0.0f;
+        goyle_state(G_DEATH);
+        e->plan = P_DEATH;
+        died();
+    }
 }
 
 /* ---- The Gigapede (CEm023), Mission 4's boss (docs/ENEMY_SPECS.md section C, rank 0). Its head runs the
