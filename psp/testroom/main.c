@@ -2423,9 +2423,8 @@ static void mission_gimmicks_draw(void) {
     sceGumLoadIdentity();
     l = room_lift();
     if (l) {
-        draw_box(l->x, l->low - 20.0f, lift_y, l->z, l->half_x, l->half_z, l->yaw, 0xff6a7078u, 0xff40464cu);
-        draw_box(l->switch_pos[0], l->switch_pos[1], l->switch_pos[1] + 90.0f, l->switch_pos[2], 30.0f, 30.0f, 45.0f,
-                 lift_on ? 0xffffc040u : 0xff2020ffu, lift_on ? 0xffa07020u : 0xff1010a0u);
+        /* The lift and its switch are the room's own models (baked into the stage, the lift raised there). */
+        stage_set_lift(lift_y - l->low);
     }
     seal_draw();
     info = &missions[mission_choice.mission - 1];
@@ -2563,6 +2562,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             lift_y -= LIFT_SPEED * dt;
             if (lift_y < lift->low) lift_y = lift->low;
         }
+        stage_set_lift(lift_y - lift->low);
     }
     for (i = 0; i < ROOM_SHOP_COUNT; ++i) {
         /* A Divinity Statue: O by it opens the shop, when there's no fight on. */

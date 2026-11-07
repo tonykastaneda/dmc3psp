@@ -113,8 +113,9 @@ Statuary -> (its lift) -> 110 Incandescent Space -> 100 2nd floor -> 112 Endless
 Doors held shut as the script's flags do (`GATES` in `gen_rooms.py`): 100's way to 112 opens after 110, 112's
 to 111 after 104, 110's to 111 never (it's entered from 112), and 112's to 113 isn't in this mission.
 
-Stand-ins: the lift and its switch are plain blocks, and the board a gold one, because their models aren't
-converted. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
+The lift and its switch are the room's own models (`tools/gimmicks.py` bakes a lift room's LIFT and SWITCH
+sets into its stage; the lift's batches are tagged 254 and drawn raised to its height). Stand-in: the
+Astronomical Board is a gold block, as its item model isn't converted. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
 in the stage collision), the room gets a pad at that height. 112's stairs don't collapse: the pit is open,
 and falling in is what takes Dante to 104.
 
@@ -169,7 +170,7 @@ Stand-ins and estimates:
 ## Next steps, in order
 
 1. The Lust's, Wrath's and Greed's own tables and moves (the Wrath's explosion).
-2. Gimmick models: 103's lift, its switch, the seals, the Astronomical Board.
+2. Gimmick models: the seals and the Astronomical Board (the lifts and their switches are in).
 3. Cerberus; Vanguard fidelity improvements are listed in VANGUARD_SPEC.md.
 4. Enemy health and Dante's damage from the game, then dying and Game Over.
 5. Result screen values and ranks.

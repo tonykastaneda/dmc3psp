@@ -40,12 +40,16 @@ static const Header *header;
 static const HitsHeader *hits;
 static unsigned char group_hidden[256];   /* by breakable number */
 void stage_hide_group(int number) { if (number > 0 && number < 256) group_hidden[number] = 1; }
+#define LIFT_TAG 254   /* tools/gimmicks.py: a lift's batches */
+static float lift_raise;
+void stage_set_lift(float raise) { lift_raise = raise; }
 static StageInfo info;
 static unsigned char *chunk_visible;   /* per chunk, this frame */
 static unsigned int chunk_total;
 
 int stage_load(const char *path) {
     memset(group_hidden, 0, sizeof(group_hidden));
+    lift_raise = 0.0f;
     stage_clear_boxes();   /* main.c adds the new room's */
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
     int size, got;
@@ -172,8 +176,13 @@ void stage_draw(void) {
         const Batch *b = &batches[i];
         unsigned int k, visible = 0;
         if (b->pad[0] && b->pad[0] < 256 && group_hidden[b->pad[0]]) continue;   /* a broken prop */
+        int lift = b->pad[0] == LIFT_TAG;
         for (k = 0; k < b->chunk_count; ++k) visible += chunk_visible[b->chunk_first + k];
-        if (!visible) continue;
+        if (!visible && !lift) continue;   /* a lift isn't where its chunks were baked */
+        if (lift) {
+            ScePspFVector3 up = {0.0f, lift_raise, 0.0f};
+            sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity(); sceGumTranslate(&up);
+        }
         if ((int)b->texture != bound) {
             bind_texture(&textures[b->texture]);
             bound = (int)b->texture;
@@ -198,7 +207,7 @@ void stage_draw(void) {
         for (k = 0; k < b->chunk_count; ++k) {
             const Chunk *c = &chunks[b->chunk_first + k];
             unsigned int done = 0;
-            if (!chunk_visible[b->chunk_first + k]) continue;
+            if (!chunk_visible[b->chunk_first + k] && !lift) continue;
             ++stage_chunks_drawn;
             /* The GE takes at most 65535 vertices per draw. */
             while (done < c->count) {
@@ -209,6 +218,7 @@ void stage_draw(void) {
                 done += n;
             }
         }
+        if (lift) { sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity(); }
     }
     sceGuDepthOffset(0);
     sceGuDisable(GU_BLEND);

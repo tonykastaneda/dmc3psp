@@ -114,13 +114,17 @@ def _rotation(rot):
     return mul(mul(ry, rx), rz)
 
 
-def placed(game_text, pnst):
+# A lift's batches carry this tag: the runtime draws them raised to the lift's height.
+LIFT_TAG = 254
+
+
+def placed(game_text, pnst, extra=()):
     """[(set, kind, [(tri, texture)])] for every drawn set with a model that has geometry, in the room's order.
     Breakables are numbered by their place in this list among the breakable kinds (see breakables())."""
     found = models(pnst)
     cache, out = {}, []
     for s in parse_game(game_text):
-        if s["kind"] not in DRAWN or s["model"] is None or s["model"] not in found:
+        if (s["kind"] not in DRAWN and s["kind"] not in extra) or s["model"] is None or s["model"] not in found:
             continue
         if s["model"] not in cache:
             cache[s["model"]] = model_triangles(found[s["model"]])

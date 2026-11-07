@@ -500,14 +500,17 @@ def main() -> None:
     for index, tag in gimmicks.story_tags(game_text).items():
         numbers.setdefault(index, tag)
     prop_batches = 0
-    for s, kind, tris in (gimmicks.placed(game_text, stage[5]) if len(stage) > 5 else []):
+    # A room with a lift also gets its lift and the lift's switch drawn from their own models (the lift tagged so
+    # the runtime can raise it); other switches (Mission 3's crest switch) are drawn by the runtime.
+    extra = ("LIFT", "SWITCH") if re.search(r"# SET\s+\d+\s+LIFT", game_text) else ()
+    for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra) if len(stage) > 5 else []):
         by_texture = {}
         for tri, texture in tris:
             by_texture.setdefault(texture, []).extend(subdivide(tri, play))
         for texture, subdivided in by_texture.items():
             texture = min(texture, len(textures) - 1)
             kind_flag = 2 if texture in blend_textures else (1 if texture in alpha_textures else 0)
-            batches.append([texture, kind_flag, subdivided, 0, numbers.get(s["index"], 0)])
+            batches.append([texture, kind_flag, subdivided, 0, gimmicks.LIFT_TAG if kind == "LIFT" else numbers.get(s["index"], 0)])
             prop_batches += 1
 
     # ---- write the blob
