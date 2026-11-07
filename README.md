@@ -32,6 +32,14 @@ stored in this repository.
 | Mission 3: the tower gate | Mission 4: surrounded by the Seven Hells |
 | ![Mission 4 corridor](docs/screenshots/mission4_corridor.png) | ![Mission 3 bar](docs/screenshots/mission3_bar.png) |
 | Mission 4: the tower corridors | Mission 3: the bar, with its breakable props |
+| ![Mission 4, riding the Gigapede](docs/screenshots/mission4_gigapede_ride.png) | ![Mission 4, the Gigapede's shake-off](docs/screenshots/mission4_gigapede_shake.png) |
+| Mission 4: standing on the Gigapede's back | Sparks run down it before it rolls to throw him off |
+| ![Mission 5, Blood-goyles](docs/screenshots/mission5_goyles.png) | ![Mission 5, a Blood-goyle turned to stone](docs/screenshots/mission5_goyle_statue.png) |
+| Mission 5: Blood-goyles, split by the sword | Gunfire turns one to stone (bottom left) |
+| ![Mission 5, the Jester](docs/screenshots/mission5_jester.png) | ![Mission 5, Agni & Rudra](docs/screenshots/mission5_agni_rudra.png) |
+| Mission 5: the Jester, in his arena | Mission 5: Agni & Rudra |
+| ![Mission 5, Surge of Fortunas](docs/screenshots/mission5_lift.png) | |
+| Mission 5: the Surge of Fortunas lift, with a wave dropped onto it (the platform is a stand-in) | |
 
 ### Menus
 

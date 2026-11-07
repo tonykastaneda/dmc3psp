@@ -1516,8 +1516,8 @@ static void draw_one(void) {
     if (e->kind == ENEMY_GOYLE && (e->action == 15 || e->action == 16 || e->action == 17 || e->action == 19) && e->plan != P_DEATH) {
         /* Stone: grey. */
         sceGuDisable(GU_TEXTURE_2D);
-        sceGuAmbientColor(0xff3c4046u);
-        sceGuColor(0xff70767cu);
+        sceGuAmbientColor(0xff141618u);
+        sceGuColor(0xff2a2d30u);
     }
     for (i = 0; i < m->object_count; ++i) {
         const Dmc3ModelObject *o = &m->objects[i];
