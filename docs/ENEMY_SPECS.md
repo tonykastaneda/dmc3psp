@@ -633,8 +633,13 @@ hide the body (the `0x78c4` "emerged" flag is set from slot 1's frame being in [
 - **In the walls:** a part with no collision floor cell under it is in a hole or behind a wall. It isn't a
   target for the lock-on, the sword or the guns, and doesn't fire; it still counts as alive.
 - **Death:** route 10, path 13 at rate 4, flickering out after 90 frames.
+- **Batting spheres back:** a sword hit's reach plus 200 in front of Dante (a swing's hit is one instant, so
+  the window is wider than the move's) turns a homing sphere around (v × -0.5); it homes on the nearest part
+  in the room (accel 1.2, top 40) and hits it as 5 light hits (the spec's ×5 for hit type 0x11). Test: `gigaorb
+  frame` fires one at Dante.
 - **Camera:** the room's fixed cameras aren't read. While it's in the room, the follow camera turns 30% of the
-  way toward the middle of its visible parts (at most 350 cm across, 380 up) and pulls back and up.
+  way toward the middle of its visible parts (at most 200 cm across and up) and pulls back and up, short of
+  any wall between it and Dante.
 - Tests: `python tools/ppsspp_scene.py <name> --mission 4 --room 111 --start 1 ...`; `onboss frame part` puts
   Dante on a segment, and the report (FOCUS_DONE.TXT) lists its states, hits, shells and throws.
 

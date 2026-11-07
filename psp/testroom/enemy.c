@@ -198,6 +198,9 @@ static void goyle_spawn(void);
 static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
+static int enemy_giga_part(int k, float out[3]);
+static void enemy_giga_struck(const float at[3], float damage);
+#define GIGA_PARTS_PUBLIC 8
 static int jester_init(void);
 static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
@@ -1685,6 +1688,25 @@ static void arrows_update(float f, float px, float py, float pz) {
             a->vel[0] += tx / tl * f; a->vel[1] += ty / tl * f; a->vel[2] += tz / tl * f;
             v = sqrtf(a->vel[0] * a->vel[0] + a->vel[1] * a->vel[1] + a->vel[2] * a->vel[2]);
             if (v > 30.0f) { float k = 30.0f / v; a->vel[0] *= k; a->vel[1] *= k; a->vel[2] *= k; }
+        } else if (a->type == 3) {
+            /* Batted back: it homes on the nearest part of the Gigapede (accel 1.2, top 40) and hits it as five. */
+            float best = 1.0e12f, t[3] = {0.0f, 0.0f, 0.0f}, tl, v;
+            int k;
+            for (k = 1; k < GIGA_PARTS_PUBLIC; ++k) {
+                float q[3], d2;
+                if (!enemy_giga_part(k, q)) continue;
+                d2 = (q[0] - a->pos[0]) * (q[0] - a->pos[0]) + (q[1] - a->pos[1]) * (q[1] - a->pos[1]) + (q[2] - a->pos[2]) * (q[2] - a->pos[2]);
+                if (d2 < best) { best = d2; t[0] = q[0]; t[1] = q[1]; t[2] = q[2]; }
+            }
+            if (best > 1.0e11f) { a->active = 0; continue; }
+            if (best < 180.0f * 180.0f) { enemy_giga_struck(a->pos, 5.0f); a->active = 0; continue; }
+            t[0] -= a->pos[0]; t[1] -= a->pos[1]; t[2] -= a->pos[2];
+            tl = sqrtf(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]) + 0.01f;
+            a->vel[0] += t[0] / tl * 1.2f * f; a->vel[1] += t[1] / tl * 1.2f * f; a->vel[2] += t[2] / tl * 1.2f * f;
+            v = sqrtf(a->vel[0] * a->vel[0] + a->vel[1] * a->vel[1] + a->vel[2] * a->vel[2]);
+            if (v > 40.0f) { float k2 = 40.0f / v; a->vel[0] *= k2; a->vel[1] *= k2; a->vel[2] *= k2; }
+            a->pos[0] += a->vel[0] * f; a->pos[1] += a->vel[1] * f; a->pos[2] += a->vel[2] * f;
+            continue;
         } else if (a->type == 2) {
             /* Falls 10 a frame to the floor's height, then rolls at 30 a frame toward where Dante was. */
             float g2;
@@ -1744,7 +1766,7 @@ static void arrows_draw(void) {
         l = sqrtf(a->vel[0] * a->vel[0] + a->vel[1] * a->vel[1] + a->vel[2] * a->vel[2]) + 0.01f;
         if (a->type) {
             /* A glowing orb, drawn as a short vertical streak with a trail. */
-            v[n].color = a->type == 1 ? 0xffff60c0u : 0xffffd060u; v[n].x = a->pos[0]; v[n].y = a->pos[1] + 50.0f; v[n].z = a->pos[2]; ++n;
+            v[n].color = a->type == 1 ? 0xffff60c0u : a->type == 3 ? 0xffffffffu : 0xffffd060u; v[n].x = a->pos[0]; v[n].y = a->pos[1] + 50.0f; v[n].z = a->pos[2]; ++n;
             v[n].color = a->type == 1 ? 0xff801060u : 0xff806010u; v[n].x = a->pos[0] - a->vel[0] / l * 120.0f; v[n].y = a->pos[1] - 50.0f; v[n].z = a->pos[2] - a->vel[2] / l * 120.0f; ++n;
             continue;
         }
@@ -3040,6 +3062,43 @@ void enemy_giga_ride(float *x, float *y, float *z, int on_ground) {
 }
 
 static int giga_part_out(int k) { return k >= 0 && k < GIGA_PARTS && giga.out[k]; }
+static int enemy_giga_part(int k, float out[3]) {
+    if (!giga.active || giga.dying || k < 0 || k >= GIGA_PARTS || giga.out[k]) return 0;
+    out[0] = giga.pos[k][0] - giga.dir[k][0] * 250.0f; out[1] = giga.pos[k][1]; out[2] = giga.pos[k][2] - giga.dir[k][2] * 250.0f;
+    return 1;
+}
+static void enemy_giga_struck(const float at[3], float damage) {
+    int i;
+    fx_explosion(at);
+    if (!mortal || giga.dying || !giga.active) return;
+    giga.health -= damage;
+    giga_note("deflected", 0, damage);
+    if (giga.health <= 0.0f) {
+        for (i = 0; i < ENEMY_MAX; ++i) if (enemies[i].kind == ENEMY_GIGAPEDE && enemies[i].active && enemies[i].step == 0) { Enemy *was = e; e = &enemies[i]; giga_kill(); e = was; break; }
+    }
+}
+void enemy_test_orb(float x, float y, float z, float yaw) {
+    float at[3] = {x + sinf(yaw) * 700.0f, y + 250.0f, z + cosf(yaw) * 700.0f};
+    giga_orb(at, 0, x, y, z);
+}
+/* Dante's sword meets its homing spheres: within reach in front of him, they're batted back (v x -0.5) to home on
+ * the Gigapede. */
+void enemy_deflect(float px, float py, float pz, float yaw, float reach) {
+    int i;
+    float s = sinf(yaw), c = cosf(yaw);
+    for (i = 0; i < ARROW_MAX; ++i) {
+        Arrow *a = &arrows[i];
+        float dx, dz, d, facing;
+        if (!a->active || a->type != 1) continue;
+        dx = a->pos[0] - px; dz = a->pos[2] - pz; d = sqrtf(dx * dx + dz * dz);
+        facing = d > 1.0f ? (dx * s + dz * c) / d : 1.0f;
+        if (d < reach + 200.0f && facing > -0.3f && a->pos[1] > py - 50.0f && a->pos[1] < py + 350.0f) {
+            a->type = 3; a->life = 300.0f;
+            a->vel[0] *= -0.5f; a->vel[1] *= -0.5f; a->vel[2] *= -0.5f;
+            giga_note("bat", i, 0.0f);
+        }
+    }
+}
 int enemy_giga_top_point(int k, float out[3]) {
     int in;
     if (!giga.active || giga.dying || k < 1 || k >= GIGA_PARTS || giga.out[k]) return 0;

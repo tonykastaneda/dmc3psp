@@ -642,6 +642,7 @@ static void deal_hit(Combat *c, const Player *player) {
     int i;
     if (d->hit_kind < 0) return;
     if (combat_hit_fn) combat_hit_fn(player, d->reach, d->hit_kind);
+    enemy_deflect(player->x, player->y, player->z, player->yaw, d->reach);
     for (i = 0; i < ENEMY_MAX; ++i) {
         float e[3], dx, dz, dist, facing, dy;
         enemy_select(i);

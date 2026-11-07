@@ -1089,8 +1089,8 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             want[2] = (focus[2] - camera_copy.tz) * 0.3f;
             /* Dante stays in the picture: only so far toward it. */
             h = sqrtf(want[0] * want[0] + want[2] * want[2]);
-            if (h > 350.0f) { want[0] *= 350.0f / h; want[2] *= 350.0f / h; }
-            if (want[1] > 380.0f) want[1] = 380.0f;
+            if (h > 200.0f) { want[0] *= 200.0f / h; want[2] *= 200.0f / h; }
+            if (want[1] > 200.0f) want[1] = 200.0f;
             if (want[1] < -100.0f) want[1] = -100.0f;
             want_pull = 1.0f;
         }
@@ -1098,7 +1098,16 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         pull += (want_pull - pull) * 0.04f;
         bx = camera_copy.x - camera_copy.tx; bz = camera_copy.z - camera_copy.tz;
         camera_copy.tx += look[0]; camera_copy.ty += look[1]; camera_copy.tz += look[2];
-        camera_copy.x += bx * 0.45f * pull; camera_copy.z += bz * 0.45f * pull; camera_copy.y += 160.0f * pull;
+        if (pull > 0.01f) {
+            /* Pulled back only as far as the room allows: a wall between him and the new eye stops it. */
+            float from[3] = {player->x, player->y + 140.0f, player->z};
+            float to[3] = {camera_copy.x + bx * 0.45f * pull, camera_copy.y + 160.0f * pull, camera_copy.z + bz * 0.45f * pull}, t;
+            if (stage_loaded() && stage_raycast(from, to, &t) && t < 1.0f) {
+                float k = t * 0.9f;
+                to[0] = from[0] + (to[0] - from[0]) * k; to[1] = from[1] + (to[1] - from[1]) * k; to[2] = from[2] + (to[2] - from[2]) * k;
+            }
+            camera_copy.x = to[0]; camera_copy.y = to[1]; camera_copy.z = to[2];
+        }
     }
     int bound_texture = -1;
 
@@ -1782,7 +1791,7 @@ static int cmp_fastwaves, cmp_clear_minions;
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
 static int cmp_goto[16][2], cmp_goto_count;
-static int cmp_onboss_from = -1, cmp_onboss_part = 3;   /* "onboss frame part": from that frame, Dante onto that Gigapede segment once it's low and upright */
+static int cmp_onboss_from = -1, cmp_onboss_part = 3, cmp_orb_at[8], cmp_orb_count;   /* "onboss frame part": from that frame, Dante onto that Gigapede segment once it's low and upright */
 static int cmp_place_frame[8], cmp_place_count; static float cmp_place[8][5];   /* "place frame x y z yaw [press]": Dante there (and O pressed if press is 1) */   /* "gotoroom frame number": Dante to that door, its room cleared */
 static unsigned int menu_button(const char *name) {
     static const struct { const char *name; unsigned int button; } names[] = {
@@ -1838,6 +1847,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
+        else if (strncmp(line, "gigaorb ", 8) == 0) { if (cmp_orb_count < 8) cmp_orb_at[cmp_orb_count++] = atoi(line + 8); }
         else if (strncmp(line, "onboss ", 7) == 0) sscanf(line + 7, "%d %d", &cmp_onboss_from, &cmp_onboss_part);
         else if (strncmp(line, "place ", 6) == 0) {
             if (cmp_place_count < 8 && sscanf(line + 6, "%d %f %f %f %f %f", &cmp_place_frame[cmp_place_count], &cmp_place[cmp_place_count][0], &cmp_place[cmp_place_count][1],
@@ -3054,6 +3064,7 @@ int main(int argc, char *argv[]) {
                     if (cmp_place[g][4] > 0.5f) debug_pressed |= PSP_CTRL_CIRCLE;
                     start_camera(&player, &camera);
                 }
+                for (g = 0; g < cmp_orb_count; ++g) if (cmp_orb_at[g] == frames) enemy_test_orb(player.x, player.y, player.z, player.yaw);
                 if (cmp_onboss_from >= 0 && frames >= cmp_onboss_from) {
                     float top[3];
                     if (enemy_giga_top_point(cmp_onboss_part, top) && top[1] < player.y + 700.0f) {

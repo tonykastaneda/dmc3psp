@@ -85,7 +85,10 @@ int enemy_giga_floor(float x, float y, float z, float step, float *out);
 void enemy_giga_ride(float *x, float *y, float *z, int on_ground);
 int enemy_giga_focus(float out[3]);
 int enemy_giga_top_point(int part, float out[3]);
-const char *enemy_giga_log(void);   /* its states, shells and throws so far, for tests */   /* for tests: the middle of a segment's back */   /* the middle of its parts in the room, for the camera; 0 if none */
+const char *enemy_giga_log(void);
+/* A sword swing: the Gigapede's spheres within reach in front of him are batted back. */
+void enemy_deflect(float px, float py, float pz, float yaw, float reach);
+void enemy_test_orb(float x, float y, float z, float yaw);   /* tests: a Gigapede sphere 7 m in front of him */   /* its states, shells and throws so far, for tests */   /* for tests: the middle of a segment's back */   /* the middle of its parts in the room, for the camera; 0 if none */
 const char *enemy_boss_name(void);
 /* Apply a hit from a point (Dante's position) -- knock-back direction. */
 void enemy_hit(HitKind kind, float from_x, float from_z);
