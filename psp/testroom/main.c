@@ -2367,6 +2367,45 @@ static void breakable_hit(const Player *player, float reach, int kind) {
 static int shop_closed;   /* the shop had its own frames: the game's clock starts again */
 /* Stand-ins until model 20 and the seal's board are drawn: the switch's hub, 8 blades turning with the charge
  * and its 8 flames on a 108 cm circle (red once lit, FUN_00305dd0); the seal as a blue, shimmering board. */
+/* Red seals on a room's doors while its fight is on (the game's door_attach_seal; here every door, as the port
+ * holds them all shut then), fading in over half a second and out once it's over. Drawn as Mission 3's seal is. */
+static float fight_seal_alpha;
+static int fight_seal_on;
+static void fight_seals_draw(void) {
+    int i;
+    float shimmer = 0.85f + 0.15f * sinf(seal_time * 0.21f);
+    if (fight_seal_alpha <= 0.01f || mission_room == ROOM_NONE) return;
+    sceGuDepthMask(GU_TRUE);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    for (i = 0; i < rooms[mission_room].door_count; ++i) {
+        const RoomDoor *d = &rooms[mission_room].doors[i];
+        float x0, z0, x1, z1, y0 = d->box[1] + 10.0f, y1 = d->box[1] + d->box[4];
+        unsigned int alpha = (unsigned int)(85.0f * fight_seal_alpha * shimmer), edge = (unsigned int)(220.0f * fight_seal_alpha);
+        unsigned int col = alpha << 24 | 0x002030ffu, rim = edge << 24 | 0x006070ffu;
+        ColorVertex *o, *e;
+        int k;
+        if (mission_choice.mission < d->low || mission_choice.mission > d->high || d->next == ROOM_NONE) continue;
+        if (d->box[4] > 1000.0f) continue;   /* a fall into another room (112's pit), not a door */
+        /* The board spans the box's long side, across its middle. */
+        if (d->box[3] >= d->box[5]) { x0 = d->box[0] - d->box[3] * 0.5f; x1 = d->box[0] + d->box[3] * 0.5f; z0 = z1 = d->box[2]; }
+        else { z0 = d->box[2] - d->box[5] * 0.5f; z1 = d->box[2] + d->box[5] * 0.5f; x0 = x1 = d->box[0]; }
+        o = (ColorVertex *)sceGuGetMemory(sizeof(ColorVertex) * 12);
+        e = (ColorVertex *)sceGuGetMemory(sizeof(ColorVertex) * 8);
+        o[0] = (ColorVertex){col, x0, y0, z0}; o[1] = (ColorVertex){col, x1, y0, z1}; o[2] = (ColorVertex){col, x1, y1, z1};
+        o[3] = (ColorVertex){col, x0, y0, z0}; o[4] = (ColorVertex){col, x1, y1, z1}; o[5] = (ColorVertex){col, x0, y1, z0};
+        for (k = 0; k < 6; ++k) o[6 + k] = o[5 - k];
+        e[0] = (ColorVertex){rim, x0, y0, z0}; e[1] = (ColorVertex){rim, x1, y0, z1};
+        e[2] = (ColorVertex){rim, x1, y0, z1}; e[3] = (ColorVertex){rim, x1, y1, z1};
+        e[4] = (ColorVertex){rim, x1, y1, z1}; e[5] = (ColorVertex){rim, x0, y1, z0};
+        e[6] = (ColorVertex){rim, x0, y1, z0}; e[7] = (ColorVertex){rim, x0, y0, z0};
+        sceGumDrawArray(GU_TRIANGLES, COLOR_VTYPE, 12, 0, o);
+        sceGumDrawArray(GU_LINES, COLOR_VTYPE, 8, 0, e);
+    }
+    sceGuDisable(GU_BLEND);
+    sceGuDepthMask(GU_FALSE);
+}
+
 static void seal_draw(void) {
     const RoomSwitchSeal *w = room_seal();
     int i;
@@ -2427,6 +2466,7 @@ static void mission_gimmicks_draw(void) {
         stage_set_lift(lift_y - l->low);
     }
     seal_draw();
+    fight_seals_draw();
     info = &missions[mission_choice.mission - 1];
     if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull)) {
         goal_spin += 3.0f;
@@ -2503,6 +2543,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     seal_enter(room);
     mission_room = room;
     doors_armed = 0;
+    fight_seal_alpha = 0.0f;
     {
         int i;
         lift_index = -1;
@@ -2539,6 +2580,8 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
     int done = script_run(dt, player->y), i, in_a_box = 0;
+    fight_seal_on = !done || enemy_alive_count() > 0;
+    fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
