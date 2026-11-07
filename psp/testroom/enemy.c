@@ -2324,9 +2324,9 @@ static void jester_hit(HitKind kind) {
  * root motion [inferred]; health is an estimate (the guide's boss bonus, 4000 orbs, and the two bars). */
 #define AR_HEALTH (ENEMY_HEALTH * 1200 / 250)
 enum { AR_IDLE, AR_WALK, AR_COMBO1, AR_COMBO2, AR_COMBO3, AR_OVERHEAD, AR_DASH_IN, AR_DASH_OUT, AR_LEAP, AR_CHARGE,
-       AR_TEAM, AR_FLINCH, AR_KNOCK, AR_DEATH, AR_STATE_COUNT };
+       AR_TEAM, AR_FLINCH, AR_KNOCK, AR_DEATH, AR_STATUE, AR_STATUE2, AR_STATE_COUNT };
 /* arNN: their slots in [11]. */
-static const signed char ar_motion_slot[AR_STATE_COUNT] = {0, 1, 36, 37, 38, 39, 3, 4, 7, 42, 2, 30, 44, 83};
+static const signed char ar_motion_slot[AR_STATE_COUNT] = {0, 1, 36, 37, 38, 39, 3, 4, 7, 42, 2, 30, 44, 83, 71, 72};
 static int ar_motion[AR_STATE_COUNT];
 
 static int ar_init(void) {
@@ -2357,7 +2357,7 @@ static void ar_state(int s) {
     e->motion = m; e->frame = 0.0f;
 }
 
-static void ar_rudra_spawn(void) { e->plan = P_WATCH; e->motion = -1; ar_state(AR_IDLE); e->fade = 0.0f; }
+static void ar_rudra_spawn(void) { e->plan = P_WATCH; e->motion = -1; ar_state(AR_STATUE2); e->fade = 0.0f; }
 
 /* The one spawn (class 27) brings both: Agni here, Rudra beside him. */
 static void ar_spawn(void) {
@@ -2365,7 +2365,7 @@ static void ar_spawn(void) {
     int k;
     agni->plan = P_WATCH; agni->motion = -1;
     agni->pos[0] += 180.0f;
-    ar_state(AR_IDLE); agni->fade = 0.0f;
+    ar_state(AR_STATUE); agni->fade = 0.0f;
     for (k = 0; k < ENEMY_MAX; ++k) {
         Enemy *o = &enemies[k];
         if (o->active) continue;
@@ -2421,6 +2421,17 @@ static void ar_update(float f, float px, float py, float pz) {
         return;
     }
     s = sinf(e->yaw); c = cosf(e->yaw);
+    if (e->action == AR_STATUE || e->action == AR_STATUE2) {
+        /* They stand as statues (their one-frame poses ar71, ar72) until he comes near, strikes one, or waits;
+         * then both wake. The game plays a cutscene here. */
+        Enemy *bro = ar_brother();
+        if (d < 900.0f || e->timer > 600.0f || e->step || (bro && bro->action < AR_STATUE)) {
+            float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
+            fx_dust(at); fx_explosion(at);
+            ar_state(AR_IDLE);
+        }
+        return;
+    }
     switch (e->action) {
     case AR_IDLE:
         goyle_turn_to(px, pz, 0.06f, f);
@@ -2509,6 +2520,7 @@ static void ar_hit(HitKind kind) {
     if (e->plan == P_DEATH) return;
     ++hits;
     fx_hit_spark(at);
+    if (e->action == AR_STATUE || e->action == AR_STATUE2) { e->step = 1; return; }   /* struck awake */
     if (mortal) {
         e->health = (signed char)(e->health - (kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2));
         if (e->health <= 0) {

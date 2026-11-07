@@ -742,6 +742,6 @@ also use pack 18 but are made by `FUN_0039ee10`, in the Blood-goyle's code. Slot
 (tinted red, sword in bone 7) and Rudra (blue, bone 11), each 956 triangles. They walk in and slash (a three-hit
 combo or an overhead), dash in and out, leap in, or charge their swords and drive them in (Agni sends a wave
 along the floor, Rudra a pair of orbs); sometimes both dash through Dante together. Heavy hits knock them back.
-The last one standing moves 25% faster and takes the attack token sooner. One boss bar for both. Motions by
+The last one standing moves 25% faster and takes the attack token sooner. They start as statues (their one-frame poses ar71/ar72) and wake when Dante comes within 900 cm, strikes one, or after 600 frames (the game plays a cutscene). One boss bar for both. Motions by
 shape and root motion [inferred]: idle ar00, walk ar01, combo ar36-38, overhead ar39, dash ar03/ar04, leap
 ar07, charge ar42, team run ar02, flinch ar30, knock-back ar44, death ar83. Health 1200 each [estimate].

@@ -2381,7 +2381,7 @@ static void fight_seals_draw(void) {
     for (i = 0; i < rooms[mission_room].door_count; ++i) {
         const RoomDoor *d = &rooms[mission_room].doors[i];
         float x0, z0, x1, z1, y0 = d->box[1] + 10.0f, y1 = d->box[1] + d->box[4];
-        unsigned int alpha = (unsigned int)(85.0f * fight_seal_alpha * shimmer), edge = (unsigned int)(220.0f * fight_seal_alpha);
+        unsigned int alpha = (unsigned int)(50.0f * fight_seal_alpha * shimmer), edge = (unsigned int)(220.0f * fight_seal_alpha);
         unsigned int col = alpha << 24 | 0x002030ffu, rim = edge << 24 | 0x006070ffu;
         ColorVertex *o, *e;
         int k;
