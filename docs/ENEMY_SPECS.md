@@ -692,8 +692,9 @@ from table `0x5bf814`):
   1e6 / max(d, 1000)² a frame, d = distance to Dante), fewer of its class than +0x461, a 75% roll, splits left.
   Else a flinch by hit type. On stone: states 0x13 / 0x15.
 
-**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above at rank 0 except the shots (13), the
-dodge from aimed guns, and the decision tables, which are a fixed choice (approach beyond 1000; with the
+**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above at rank 0 except the shots (13) and
+the decision tables. The dodge from aimed guns is taken from Dante's shots (within 500 hovering, 300
+approaching, 50/50 left or right). The tables which are a fixed choice (approach beyond 1000; with the
 attack token, 60% attack; else hover, back off or strafe). The body is drawn once per surface and cut to 490
 triangles with `tools/decimate_rigid.py` (skin-aware), as up to a dozen can be on screen. A pistol shot's power
 is taken as 5 [inferred]; stone takes triple sword damage [inferred]. Stone is drawn untextured grey.

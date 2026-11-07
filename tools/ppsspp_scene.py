@@ -46,10 +46,11 @@ def main():
     ap.add_argument("--line", action="append", default=[], help="one more CMP_SCRIPT.TXT line")
     ap.add_argument("--timeout", type=int, default=0)
     ap.add_argument("--street", action="store_true", help="the test street with dummies, not a mission")
+    ap.add_argument("--menu", action="store_true", help="go through the menus (drive them with --line \"mkey ...\")")
     args = ap.parse_args()
 
     sync()
-    for f in list(GAME.glob("SHOT_*.BMP")) + [GAME / "FOCUS_DONE.TXT"]:
+    for f in list(GAME.glob("SHOT_*.BMP")) + list(GAME.glob("MENU_*.BMP")) + [GAME / "FOCUS_DONE.TXT"]:
         f.unlink(missing_ok=True)
     lines = [f"frames {args.frames}", "fps 30"] + ([] if args.street else ["menu 1"])
     if args.room >= 0:

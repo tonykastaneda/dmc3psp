@@ -42,7 +42,8 @@ int enemy_kind_for_class(int spawn_class);
 int enemy_kind(void);                  /* the selected one's */
 void enemy_set_dummy_kind(int kind);   /* what the debug menu's dummies are */
 int enemy_alive_count(void);
-void enemy_drop_below(float y);      /* those fallen far below a riding lift: gone */          /* those not yet dead */
+void enemy_drop_below(float y);
+void enemy_gun_aimed(float x, float z);   /* Dante fired from here */      /* those fallen far below a riding lift: gone */          /* those not yet dead */
 void enemy_kill_all(void);            /* for tests */
 void enemy_clear_minions(void);      /* tests: retain the boss and the script's alive-count gates */
 void enemy_remove_defeated(void);    /* encounter transition: retire completed wave actors */

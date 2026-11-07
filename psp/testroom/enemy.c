@@ -2073,6 +2073,25 @@ static void goyle_update(float f, float px, float py, float pz) {
     if (e->pos[1] < g) e->pos[1] = g;
 }
 
+/* FUN_0042f090 / 0042fd40: with Dante aiming (his action 0x11) within 500 (300 while it approaches), a hovering
+ * or approaching Blood-goyle dodges, left or right at 50/50. Taken here as his shots. */
+void enemy_gun_aimed(float x, float z) {
+    Enemy *was = e;
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        Enemy *o = &enemies[i];
+        float dx, dz, r;
+        if (!o->active || o->kind != ENEMY_GOYLE || o->plan == P_DEATH) continue;
+        if (o->action != 0 && o->action != 4) continue;   /* G_HOVER, G_APPROACH */
+        r = o->action == 4 ? 300.0f : 500.0f;
+        dx = o->pos[0] - x; dz = o->pos[2] - z;
+        if (dx * dx + dz * dz > r * r || o->timer < 10.0f) continue;
+        e = o;
+        goyle_state(ai_unit() < 0.5f ? 2 : 3);
+    }
+    e = was;
+}
+
 static void goyle_split_off(void) {
     Enemy *parent = e;
     int k;

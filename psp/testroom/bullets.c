@@ -105,7 +105,12 @@ static int hitscan(int kind, const float from[3], const float to[3]) {
     return hit;
 }
 
+static void bullets_fire_one(int kind, const float muzzle[3], const float yaw, int has_target, const float target[3]);
 void bullets_fire(int kind, const float muzzle[3], const float yaw, int has_target, const float target[3]) {
+    enemy_gun_aimed(muzzle[0], muzzle[2]);   /* Blood-goyles near him may dodge (their state 0's check) */
+    bullets_fire_one(kind, muzzle, yaw, has_target, target);
+}
+static void bullets_fire_one(int kind, const float muzzle[3], const float yaw, int has_target, const float target[3]) {
     float to[3], d[3], len;
     int k;
     if (kind < 0 || kind >= BULLET_KIND_COUNT) return;
