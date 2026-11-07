@@ -114,8 +114,9 @@ Doors held shut as the script's flags do (`GATES` in `gen_rooms.py`): 100's way 
 to 111 after 104, 110's to 111 never (it's entered from 112), and 112's to 113 isn't in this mission.
 
 The lift and its switch are the room's own models (`tools/gimmicks.py` bakes a lift room's LIFT and SWITCH
-sets into its stage; the lift's batches are tagged 254 and drawn raised to its height). Stand-in: the
-Astronomical Board is a gold block, as its item model isn't converted. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
+sets into its stage; the lift's batches are tagged 254 and drawn raised to its height). The
+Astronomical Board lies as a glow with sparks rising off it: key items (`CItemKey`, vtable `0x60d820`) are an
+effect with a pick-up range of 200 cm, not a model. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
 in the stage collision), the room gets a pad at that height. 112's stairs don't collapse: the pit is open,
 and falling in is what takes Dante to 104.
 
@@ -171,7 +172,7 @@ Stand-ins and estimates:
 ## Next steps, in order
 
 1. The Lust's, Wrath's and Greed's own tables and moves (the Wrath's explosion).
-2. Gimmick models: the seals and the Astronomical Board (the lifts and their switches are in).
+2. The seals' own models (the lifts and their switches are in; the seals are tinted boards).
 3. Cerberus; Vanguard fidelity improvements are listed in VANGUARD_SPEC.md.
 4. Enemy health and Dante's damage from the game, then dying and Game Over.
 5. Result screen values and ranks.

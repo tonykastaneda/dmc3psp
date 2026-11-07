@@ -2469,8 +2469,16 @@ static void mission_gimmicks_draw(void) {
     fight_seals_draw();
     info = &missions[mission_choice.mission - 1];
     if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull)) {
-        goal_spin += 3.0f;
-        draw_box(info->goal[0], info->goal[1] + 60.0f, info->goal[1] + 120.0f, info->goal[2], 25.0f, 25.0f, goal_spin, 0xff40e0ffu, 0xff2090c0u);
+        /* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
+        float core[3] = {info->goal[0], info->goal[1] + 70.0f, info->goal[2]}, still[3] = {0.0f, 0.0f, 0.0f};
+        goal_spin += 1.0f;
+        fx_mote(core, still, 70.0f + 12.0f * sinf(goal_spin * 0.15f), 60.0f, 0.05f, 0xffa0f0ffu);
+        if (((int)goal_spin % 4) == 0) {
+            unsigned int r = fx_random_u32();
+            float at[3] = {core[0] + (float)((int)(r & 63) - 32), core[1] - 20.0f, core[2] + (float)((int)(r >> 8 & 63) - 32)};
+            float up[3] = {0.0f, 50.0f + (float)(r >> 16 & 31), 0.0f};
+            fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
+        }
     }
     sceGuEnable(GU_TEXTURE_2D);
 }
