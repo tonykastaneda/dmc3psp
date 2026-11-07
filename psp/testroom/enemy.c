@@ -131,7 +131,7 @@ static Vertex *weapon_vertices[ENEMY_KIND_COUNT];
 static unsigned short *indices[ENEMY_KIND_COUNT], *weapon_indices[ENEMY_KIND_COUNT];
 static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
 /* Which bone holds the weapon, by kind. */
-static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0};
+static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5};
 static Enemy enemies[ENEMY_MAX];
 static Enemy *e = &enemies[0];
 static int hits, attacks_on;
@@ -198,6 +198,11 @@ static void goyle_spawn(void);
 static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
+static int jester_init(void);
+static void jester_spawn(void);
+static void jester_update(float f, float px, float py, float pz);
+static void jester_hit(HitKind kind);
+static void giga_orb(const float from[3], int kind, float px, float py, float pz);
 static void spawn_one(int kind, float x, float z);
 static float ai_unit(void);
 static float wrap_angle(float a);
@@ -228,6 +233,7 @@ int enemy_init(void) {
     }
     if (!enigma_init()) return 0;
     if (!goyle_init()) return 0;
+    if (!jester_init()) return 0;
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
     if (!cerberus_boss_init()) return 0;
@@ -281,6 +287,7 @@ static int kind_health(int kind) {
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
     case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
+    case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
     default: return ENEMY_HEALTH;
     }
 }
@@ -335,6 +342,7 @@ static void spawn_one(int kind, float x, float z) {
     e->active = 1;
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
+    if (kind == ENEMY_JESTER) { jester_spawn(); return; }
     script_play(0);
     e->fade = 0.0f;
 }
@@ -447,6 +455,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
+    if (spawn_class == 62) return ENEMY_JESTER;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
     if (spawn_class == 26) return ENEMY_VANGUARD;
@@ -498,6 +507,8 @@ const char *enemy_boss_name(void) {
         if (enemies[i].active && enemies[i].kind == ENEMY_CERBERUS) return "CERBERUS";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_GIGAPEDE) return "GIGAPEDE";
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_JESTER) return "JESTER";
     return "HELL VANGUARD";
 }
 int enemy_boss_health(float *health, float *maximum) {
@@ -507,6 +518,9 @@ int enemy_boss_health(float *health, float *maximum) {
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_CERBERUS) {
         *health=cerberus_boss_health();*maximum=cerberus_boss_max_health();return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 1500 / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GIGAPEDE) {
         *health=enemy_giga_health();*maximum=enemy_giga_max_health();return 1;
@@ -1079,6 +1093,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     }
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
+    if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
@@ -1301,6 +1316,7 @@ static void update_one(float dt, float px, float py, float pz) {
     }
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
         int use_root = action_update(px, pz, f);
@@ -2068,6 +2084,184 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
         goyle_state(G_DEATH);
         e->plan = P_DEATH;
         died();
+    }
+}
+
+/* ---- The Jester (CEm044, SE; em037.pac, GDATA 140), Mission 5's boss in room 422 (docs/ENEMY_SPECS.md
+ * section E). The game builds him like a player character, with moves (actions 0-0x15) an AI picks and
+ * reactions (0x64-0x80), 383 functions in all (0x532000-0x556000): not ported. This is a stand-in fight on
+ * his own model and motions: he walks in and swings his cane, lobs bombs that roll at Dante, teleports
+ * behind him, and dances. Hits fill a stun gauge; stunned, he takes double damage. Which motion is which
+ * was chosen by their shapes and lengths (inferred); his health is an estimate. The arena's centre,
+ * (3500, 492, 3500), is from his set-up (FUN_005331d0). */
+#define JESTER_HEALTH (ENEMY_HEALTH * 1500 / 250)
+#define JESTER_STUN_HITS 12.0f
+enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH };
+/* jsNN, in tools/prepare_skinned_model.py's order: [3] 0-2, [4] 3-20, [5] 21-29, [6] 30-33, [19] 34-40. */
+static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 26, 26, 31, 5, 14, 4, 16};
+static int jester_motion[sizeof(jester_motion_index)];
+
+static int jester_init(void) {
+    unsigned int i;
+    for (i = 0; i < sizeof(jester_motion_index); ++i) {
+        char name[5] = {'j', 's', (char)('0' + jester_motion_index[i] / 10), (char)('0' + jester_motion_index[i] % 10), 0};
+        jester_motion[i] = motion_find(name);
+        if (jester_motion[i] < 0) return 0;
+    }
+    return 1;
+}
+
+static void jester_state(int s) {
+    int m = jester_motion[s];
+    e->action = (unsigned char)s;
+    e->timer = 0.0f;
+    e->step = 0;
+    e->done = 0;
+    if (m != e->motion) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 8.0f;
+        e->motion = m; e->frame = 0.0f;
+    }
+}
+
+static void jester_puff(void) {
+    int k;
+    for (k = 0; k < 10; ++k) {
+        float at[3] = {e->pos[0] + ai_unit() * 120.0f - 60.0f, e->pos[1] + ai_unit() * 180.0f, e->pos[2] + ai_unit() * 120.0f - 60.0f};
+        float v[3] = {0.0f, 60.0f + ai_unit() * 60.0f, 0.0f};
+        fx_mote(at, v, 90.0f, 20.0f, 0.5f, (k & 1) ? 0xffff60ffu : 0xffffd0ffu);
+    }
+}
+
+static void jester_spawn(void) {
+    e->plan = P_WATCH;
+    e->motion = -1;
+    e->goyle_stone = 0.0f;   /* his stun gauge */
+    jester_state(J_TAUNT);
+    e->fade = 0.0f;
+}
+
+static void jester_decide(float d) {
+    float r = ai_unit();
+    if (d > 260.0f && r < 0.45f) { jester_state(J_WALK); return; }
+    if (d <= 260.0f && r < 0.55f) { jester_state(J_CANE); return; }
+    r = ai_unit();
+    jester_state(r < 0.4f ? J_BOMB : r < 0.75f ? J_VANISH : J_TAUNT);
+}
+
+static void jester_update(float f, float px, float py, float pz) {
+    const Motion *m;
+    float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, s, c;
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->goyle_stone > 0.0f && e->action != J_STUN) { e->goyle_stone -= 0.02f * f; if (e->goyle_stone < 0.0f) e->goyle_stone = 0.0f; }
+    m = motion_get(e->motion);
+    e->frame += f;
+    e->timer += f;
+    if (e->frame >= m->end_frame) {
+        e->done = 1;
+        e->frame = (e->action == J_IDLE || e->action == J_WALK || e->action == J_TAUNT) ? motion_wrap(m, e->frame) : m->end_frame;
+    }
+    if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
+    if (e->plan == P_DEATH) {
+        if (e->timer > 150.0f) { jester_puff(); e->active = 0; }
+        return;
+    }
+    s = sinf(e->yaw); c = cosf(e->yaw);
+    switch (e->action) {
+    case J_IDLE:
+        goyle_turn_to(px, pz, 0.08f, f);
+        if (e->timer > 50.0f) jester_decide(d);
+        break;
+    case J_WALK:
+        goyle_turn_to(px, pz, 0.1f, f);
+        e->pos[0] += s * 5.0f * f; e->pos[2] += c * 5.0f * f;
+        if (d < 220.0f) jester_state(J_CANE);
+        else if (e->timer > 120.0f) jester_decide(d);
+        break;
+    case J_CANE: case J_CANE2:
+        if (e->frame < 25.0f) goyle_turn_to(px, pz, 0.12f, f);
+        if (e->frame > 25.0f && e->frame < 45.0f) { e->pos[0] += s * 4.0f * f; e->pos[2] += c * 4.0f * f; }
+        if (!e->step && e->frame > 35.0f) {
+            float hx = e->pos[0] + s * 150.0f - px, hz = e->pos[2] + c * 150.0f - pz;
+            e->step = 1;
+            if (attacks_on && hx * hx + hz * hz < 170.0f * 170.0f && fabsf(py - e->pos[1]) < 200.0f) land_attack(e->action == J_CANE2);
+        }
+        if (e->done) { if (e->action == J_CANE && ai_unit() < 0.5f) jester_state(J_CANE2); else jester_state(J_IDLE); }
+        break;
+    case J_BOMB:
+        goyle_turn_to(px, pz, 0.1f, f);
+        if (!e->step && e->frame > 30.0f) {
+            int k;
+            e->step = 1;
+            /* Three bombs: they drop by him, then roll at where Dante was (the Gigapede's rolling orb). */
+            for (k = -1; k <= 1; ++k) {
+                float at[3] = {e->pos[0] + s * 120.0f + c * 80.0f * (float)k, e->pos[1] + 170.0f, e->pos[2] + c * 120.0f - s * 80.0f * (float)k};
+                giga_orb(at, 1, px + c * 150.0f * (float)k, py, pz - s * 150.0f * (float)k);
+            }
+        }
+        if (e->done) jester_state(J_IDLE);
+        break;
+    case J_VANISH:
+        if (e->timer < 2.0f && !e->step) { e->step = 1; jester_puff(); }
+        if (e->timer > 20.0f) {
+            /* Back behind Dante, in the arena. */
+            float a = atan2f(dx, dz);
+            e->pos[0] = px + sinf(a) * 320.0f; e->pos[2] = pz + cosf(a) * 320.0f;
+            if (floor_under(e->pos[0], py + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+            else { e->pos[0] = 3500.0f; e->pos[1] = 492.0f; e->pos[2] = 3500.0f; }
+            e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
+            jester_state(J_APPEAR);
+            jester_puff();
+        }
+        break;
+    case J_APPEAR:
+        if (e->timer > 25.0f) jester_state(ai_unit() < 0.6f && d < 400.0f ? J_CANE : J_IDLE);
+        break;
+    case J_TAUNT:
+        goyle_turn_to(px, pz, 0.05f, f);
+        if (e->timer > 150.0f) jester_decide(d);
+        break;
+    case J_FLINCH:
+        e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f; e->vel[0] *= 0.85f;
+        if (e->done) jester_state(ai_unit() < 0.5f ? J_VANISH : J_IDLE);
+        break;
+    case J_STUN:
+        if (e->timer > 200.0f) { e->goyle_stone = 0.0f; jester_state(J_VANISH); }
+        break;
+    case J_LAUNCHED:
+        if (e->done) jester_state(J_IDLE);
+        break;
+    default:
+        jester_state(J_IDLE);
+    }
+    if (e->action != J_VANISH && e->action != J_LAUNCHED) e->pos[1] = e->floor_y;
+}
+
+static void jester_hit(HitKind kind) {
+    float at[3] = {e->pos[0], e->pos[1] + 110.0f, e->pos[2]};
+    int stunned = e->action == J_STUN;
+    if (e->plan == P_DEATH || e->action == J_VANISH) return;
+    ++hits;
+    fx_hit_spark(at);
+    if (mortal) {
+        int dmg = kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
+        if (stunned) dmg *= 2;
+        e->health = (signed char)(e->health - dmg);
+        if (e->health <= 0) {
+            e->plan = P_DEATH;
+            jester_state(J_DEATH);
+            e->plan = P_DEATH;
+            died();
+            return;
+        }
+    }
+    if (stunned) return;
+    e->goyle_stone += kind == HIT_PISTOL ? 0.2f : 1.0f;
+    if (e->goyle_stone >= JESTER_STUN_HITS) { jester_state(J_STUN); return; }
+    if (kind == HIT_LAUNCH) { jester_state(J_LAUNCHED); return; }
+    if (kind != HIT_PISTOL && (e->action == J_IDLE || e->action == J_WALK || e->action == J_TAUNT || e->action == J_FLINCH || e->action == J_BOMB)) {
+        e->vel[0] = kind == HIT_HEAVY ? 10.0f : 3.0f;
+        jester_state(J_FLINCH);
     }
 }
 

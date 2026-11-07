@@ -692,3 +692,33 @@ dodge from aimed guns, and the decision tables, which are a fixed choice (approa
 attack token, 60% attack; else hover, back off or strafe). The body is drawn once per surface and cut to 490
 triangles with `tools/decimate_rigid.py` (skin-aware), as up to a dozen can be on screen. A pistol shot's power
 is taken as 5 [inferred]; stone takes triple sword damage [inferred]. Stone is drawn untextured grey.
+
+---
+
+## E. The Jester (CEm044, SE): Mission 5, room 422
+
+**Finding the pack.** EST 62 → class 44 (`0x599690`: class 44, pack 27). The room loader (`FUN_0020afc0`)
+collects each spawn's pack byte and calls `FUN_0028f050`, which asks for list 5 (the enemy) and list 6 (its
+effects) with that number. List 5 is `FUN_0028eac0` case 5: the pointer table at **`0x58e740`**, one word per
+pack whose top 16 bits are the GDATA slot (pack 9 → 0x7d = 125, the Blood-goyle; 14 → 129, the Gigapede; 16 →
+130, Cerberus; 18 → 131, Agni & Rudra). Pack 27 → **0x8c = slot 140, em037.pac**.
+
+| Entry | Content |
+| --- | --- |
+| [0] | 6 textures |
+| [1] | Body, 36 bones, 5,158 vertices: frilled collar, sleeves and skirt |
+| [7] | His hat (17 bones), modelled in place on his head (bone 5) |
+| [3] [4] [5] [6] [19] [28] [29] | Motions: 3, 18, 9, 4, 7, 1, 2 |
+| [8] [9] | `em037_00.clt`, `em037_01.clt` |
+
+**Code.** `new` `FUN_00532880` (object 0x4e00 bytes), constructor `00532d50`, vtable `0x616010`, set-up
+`FUN_005331d0` (arena centre (3500, 492, 3500) at +0x680). He's built like a player character: actions 0-0x15
+are moves picked by `FUN_00536b10`/`00536c70`/`00536dd0` (a random one of three) and 0x64-0x80 reactions
+(dispatch `FUN_0053bfc0`). The class is 383 functions, 0x532000-0x556000: not ported.
+
+**In the port** (`psp/testroom/enemy.c`, "The Jester"): a stand-in fight on his model (cut to 1,656 triangles)
+and motions. He walks in and swings (one or two swings), lobs three bombs that roll at Dante (the Gigapede's
+rolling orb), vanishes in a puff and reappears behind Dante, and dances. Hits fill a stun gauge (12, draining
+slowly); stunned for 200 frames he takes double damage. Which motion plays for each was chosen from their
+shapes and lengths [inferred]: idle js21, walk js03, swings js08/js09, bombs js10, vanish js26, dance js31,
+flinch js05, stun js14, launched js04, death js16. Health 1500 against the Pride's 250 [estimate].
