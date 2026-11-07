@@ -19,6 +19,9 @@ int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
  * leaves *out untouched if there is no floor below. */
 int stage_floor(float x, float y, float z, float step, float *out);
+/* Whether the game's collision has walkable floor near (x, z) (a grid cell with floor triangles): what's
+ * outside it is in the walls. */
+int stage_walkable_below(float x, float z);
 /* A breakable prop's triangles (tagged with its number by tools/prepare_stage.py) aren't drawn once it's
  * broken. Loading a stage shows them all again. */
 void stage_hide_group(int number);

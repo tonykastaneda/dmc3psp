@@ -108,7 +108,7 @@ Statuary -> (its lift) -> 110 Incandescent Space -> 100 2nd floor -> 112 Endless
 | 103 | The lift. Strike its switch (or press O by it), then stand on it: it carries Dante up to the door into 110 |
 | 110 | Group 0: 6 Gluttonies, 2 Sloths. After the Gigapede, the Astronomical Board: O by it ends the mission |
 | 104 | Group 0: Sloths, Lusts and Wraths. The walkthrough says Gluttony; the decoded classes say otherwise |
-| 111 | The Gigapede |
+| 111 | The Gigapede: its routes, attacks, shells and shake-off (`docs/ENEMY_SPECS.md` section C), with a boss bar. Its death opens the door back to 110 |
 
 Doors held shut as the script's flags do (`GATES` in `gen_rooms.py`): 100's way to 112 opens after 110, 112's
 to 111 after 104, 110's to 111 never (it's entered from 112), and 112's to 113 isn't in this mission.
@@ -135,7 +135,7 @@ Stand-ins and estimates:
 
 - **Enemies:** each of the six Seven Hells has its own model. The Pride, Sloth and Gluttony use their own
   decision tables, the Sloth warps and the Gluttony spews (`docs/ENEMY_AI.md`). The Lust, Wrath and Greed use
-  the Pride's table, so the Wrath doesn't explode yet. The Enigma and the Gigapede have their own logic. Classes
+  the Pride's table, so the Wrath doesn't explode yet. The Enigma has its own logic, and the Gigapede is a full boss fight. Classes
   not ported spawn as Prides, except Cerberus, whose room has no fight. Mission 2 now runs groups 0 and 1,
   then the Hell Vanguard in group 3; his health bar, teleport attacks and death lead into Mission Clear
   (`docs/VANGUARD_SPEC.md`).

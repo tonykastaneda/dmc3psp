@@ -612,3 +612,28 @@ Tables are [rank][phase].
 
 Not decoded: damage numbers, the meaning of the head script entries, what triggers `38d950`, and how the holes
 hide the body (the `0x78c4` "emerged" flag is set from slot 1's frame being in [0, end-100]).
+
+### In the port (`psp/testroom/enemy.c`, rank 0)
+
+- **Model:** drawn rigid in its rest pose. `tools/decimate_rigid.py` collapses edges across UV seams, which the
+  skinned decimator can't, taking the head from 1,657 to 579 triangles and a segment from 629 to 219: about
+  2,100 for the whole Gigapede against 6,060. Parts deep in a wall aren't drawn.
+- **Routes 11, 1, 4, 7** with their events: 1-2 homing spheres from every segment with a shell, 3-4 the
+  drop-then-roll orb from every other one, 9 three belly beams (Shl05, a segment re-picked each frame,
+  hitting every 10 frames), 10 the half roll (0x69).
+- **Shells:** 4 hits a segment. Broken, the segment's top carapace (body object 4, chosen from a render of each
+  object) is left out, it stops firing, takes double damage and slows the Gigapede by 0.05. It grows back once
+  that segment has followed the head onto a new path. All 7 broken: 120 frames of sparks, then the rush (0x6a).
+- **Standing on it:** an upright segment's back is floor (`enemy_giga_floor`, through the mission's floor) and
+  carries Dante (`enemy_giga_ride`). The first frame he's on it starts the shake-off (0x68): 60 frames of
+  sparks, then a full roll running back 4 frames a segment. Past about 37 degrees he's thrown (a heavy hit) and
+  can't land on it for 40 frames.
+- **Damage:** a sword hit is 1 (2 heavy) of 67, the head takes 2.5 times that, a segment without its shell twice.
+  Ebony & Ivory do 0.17 and don't crack shells, as with Cerberus.
+- **In the walls:** a part with no collision floor cell under it is in a hole or behind a wall. It isn't a
+  target for the lock-on, the sword or the guns, and doesn't fire; it still counts as alive.
+- **Death:** route 10, path 13 at rate 4, flickering out after 90 frames.
+- **Camera:** the room's fixed cameras aren't read. While it's in the room, the follow camera turns 30% of the
+  way toward the middle of its visible parts (at most 350 cm across, 380 up) and pulls back and up.
+- Tests: `python tools/ppsspp_scene.py <name> --mission 4 --room 111 --start 1 ...`; `onboss frame part` puts
+  Dante on a segment, and the report (FOCUS_DONE.TXT) lists its states, hits, shells and throws.

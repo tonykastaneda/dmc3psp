@@ -411,6 +411,13 @@ int stage_raycast(const float a[3], const float b[3], float *t) {
     return 1;
 }
 
+int stage_walkable_below(float x, float z) {
+    const Cell *cell;
+    if (!header) return 0;
+    cell = grid_cell(hits->floor_grid, x, z);
+    return cell && cell->count > 0;
+}
+
 int stage_floor(float x, float y, float z, float step, float *out) {
     const float *tris;
     const Cell *cells;

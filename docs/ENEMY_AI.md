@@ -123,8 +123,9 @@ From the class set-ups and the factory table, decoded in `docs/ENEMY_SPECS.md`:
   tables). Each volley takes the same 3-second token and is one arrow or a fan of three. An arrow homes when
   Dante is within 1000 cm (35 a frame, up to 65, 240 frames), and is lobbed onto his feet otherwise.
   The arms' motions play over their own bones only. Hops, ledge falls and statue spawns aren't in.
-- **Gigapede** (CEm023, em023.pac): see `docs/GAME_FLOW.md` and `tools/prepare_gigapede.py`. Head and 7 segments,
-  each an enemy slot, following the routes of its 18 baked paths, with homing and rolling orbs.
+- **Gigapede** (CEm023, em023.pac): see `docs/ENEMY_SPECS.md` section C ("In the port"). Head and 7
+  segments, each an enemy slot, following the routes of its 18 baked paths: homing and rolling orbs, belly
+  beams, shells, the roll and the shake-off when Dante stands on it.
 - **Health** in light hits is the Pride's 6 scaled by the parameter blocks' (inferred) health: Gluttony 700,
   Sloth 1200, Enigma 600, Gigapede 2800, against the Pride's 250.
 

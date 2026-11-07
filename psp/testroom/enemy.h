@@ -78,6 +78,13 @@ float enemy_height(void);            /* feet height above its floor (air time) *
 int enemy_hits_taken(void);
 /* Current boss pool for the HUD; zero when there is no active boss. */
 int enemy_boss_health(float *health, float *maximum);
+/* The Gigapede's segments as floor (the mission's floor asks), and carrying him while he stands on one;
+ * call after enemy_update. */
+int enemy_giga_floor(float x, float y, float z, float step, float *out);
+void enemy_giga_ride(float *x, float *y, float *z, int on_ground);
+int enemy_giga_focus(float out[3]);
+int enemy_giga_top_point(int part, float out[3]);
+const char *enemy_giga_log(void);   /* its states, shells and throws so far, for tests */   /* for tests: the middle of a segment's back */   /* the middle of its parts in the room, for the camera; 0 if none */
 const char *enemy_boss_name(void);
 /* Apply a hit from a point (Dante's position) -- knock-back direction. */
 void enemy_hit(HitKind kind, float from_x, float from_z);

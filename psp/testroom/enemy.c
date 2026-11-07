@@ -201,6 +201,10 @@ static void giga_spawn(void);
 static void giga_part_update(float f, float px, float py, float pz);
 static void giga_hit(HitKind kind);
 static void giga_draw(void);
+float enemy_giga_health(void);
+static int giga_part_out(int k);
+static void giga_kill(void);
+float enemy_giga_max_health(void);
 #define ARROW_MAX_PUBLIC 24
 
 int enemy_init(void) {
@@ -360,6 +364,7 @@ void enemy_kill_all(void) {
             Enemy *was = e;
             e = &enemies[i];
             if (e->kind != ENEMY_GIGAPEDE) died();   /* their orbs, as if Dante had done it */
+            else giga_kill();                        /* its death run, and its orbs once */
             e = was;
             enemies[i].plan = P_DEATH;
             enemies[i].plan_step = 0;
@@ -411,6 +416,7 @@ void enemy_select_nearest(float x, float z) {
         const Enemy *o = &enemies[i];
         float dx = o->pos[0] - x, dz = o->pos[2] - z, d = dx * dx + dz * dz;
         if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && vanguard_hidden()) &&
+            !(o->kind == ENEMY_GIGAPEDE && giga_part_out(o->step)) &&
             !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && d < best) { best = d; e = &enemies[i]; }
     }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_select_target(x, z);
@@ -463,7 +469,7 @@ void enemy_clamp_player(float *z) {
     }
 }
 
-int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()); }
+int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()); }
 void enemy_position(float out[3]) {
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_target_position(out);
     else memcpy(out, e->pos, sizeof(e->pos));
@@ -474,6 +480,8 @@ const char *enemy_boss_name(void) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_CERBERUS) return "CERBERUS";
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_GIGAPEDE) return "GIGAPEDE";
     return "HELL VANGUARD";
 }
 int enemy_boss_health(float *health, float *maximum) {
@@ -483,6 +491,9 @@ int enemy_boss_health(float *health, float *maximum) {
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_CERBERUS) {
         *health=cerberus_boss_health();*maximum=cerberus_boss_max_health();return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GIGAPEDE) {
+        *health=enemy_giga_health();*maximum=enemy_giga_max_health();return 1;
     }
     return 0;
 }
@@ -1051,6 +1062,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         return;
     }
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
+    if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
     {
@@ -1061,7 +1073,6 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         fx_hit_spark(at);
     }
     if (e->kind == ENEMY_ENIGMA) { enigma_hit(kind, from_x, from_z); return; }
-    if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
     if (mortal) {
@@ -1776,35 +1787,61 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
     else { enigma_play(enigma_motion_heavy); e->overlay_motion = -1; e->shoot_set = -1; }
 }
 
-/* ---- The Gigapede (CEm023), Mission 4's boss (build/hdref/enemy_specs.md section C, rank 0). Its head
- * runs the game's routes of movement paths through room 111's walls, holes and ceiling, the 7 segments
- * trailing 500 cm apart along the same track. Each segment is an enemy slot, so Dante's attacks, lock-on and
- * the room's fight work as for any enemy; damage goes to one shared pool. Attacks at the routes' own path
- * frames: event 1 and 2, a homing sphere from each segment; 3 and 4, an orb that drops, then rolls at where
- * Dante was. Simplified: drawn rigid (its motions aren't played), no shells, no rolls or shake-off, no beams
- * or head orb. Health is the spec's 2800 against the Pride's 250. */
+/* ---- The Gigapede (CEm023), Mission 4's boss (docs/ENEMY_SPECS.md section C, rank 0). Its head runs the
+ * game's routes of movement paths through room 111's walls, holes and ceiling, the 7 segments trailing 500 cm
+ * apart along the same track. Each part is an enemy slot, so Dante's attacks, lock-on and the room's fight
+ * work as for any enemy; damage goes to one shared pool, the head's 2800.
+ *
+ * From the spec: the routes' events (homing spheres, the drop-then-roll orb, belly beams, the roll), segment
+ * shells (4 hits at rank 0; broken, the plates go, the segment stops firing and takes more damage, and the
+ * shell grows back once the segment has been through a hole), the shake-off when Dante stands on it (60
+ * frames of sparks, then a full roll that runs down the body 4 frames a segment), the all-shells-broken rush,
+ * and the death run out along path 13.
+ * Simplified: drawn rigid and cut to a third of its triangles (tools/prepare_gigapede.py); the body hides its
+ * top carapace for a broken shell rather than the game's staged plates; damage to Dante is the default. */
 #include "gigapede_runtime.h"
 #define GIGA_PARTS 8               /* the head and 7 segments */
 #define GIGA_SPACING 500.0f
 #define GIGA_HISTORY 512
-#define GIGA_HEALTH (ENEMY_HEALTH * 2800 / 250)
-typedef struct { signed char path; float speed; short at[2]; signed char event[2]; } GigaStep;
-/* Rank 0 routes: 11 the entrance, then 1, 4, 7 by phase. Where a route has two choices by Dante's height,
- * these are the ones for him on the floor. */
-static const GigaStep giga_route[4][4] = {
-    {{14, 1.0f, {-1, -1}, {0, 0}}, {0, 1.0f, {-1, -1}, {0, 0}}, {-1, 0, {0}, {0}}},
-    {{3, 1.0f, {2000, -1}, {1, 0}}, {1, 2.0f, {1200, -1}, {1, 0}}, {-1, 0, {0}, {0}}},
-    {{11, 1.0f, {1200, 1700}, {3, 3}}, {9, 1.0f, {1100, 2200}, {2, 0}}, {-1, 0, {0}, {0}}},
-    {{3, 1.0f, {1300, -1}, {2, 0}}, {6, 0.8f, {1550, -1}, {1, 0}}, {16, 1.0f, {1200, -1}, {2, 0}}, {-1, 0, {0}, {0}}},
+#define GIGA_HEALTH (ENEMY_HEALTH * 2800.0f / 250.0f)
+#define GIGA_SHELL 4               /* rank 0's shell hits, 0x5bba80 */
+#define GIGA_SPARK_FRAMES 60.0f    /* rank 0's warning before the shake-off roll, 0x5baab0 */
+#define GIGA_BEAMS 3
+#define GIGA_TOP_BACK -560.0f      /* the carapace Dante can stand on, along a segment (cm from its front) */
+#define GIGA_TOP_FRONT 60.0f
+#define GIGA_TOP_HALF 170.0f
+#define TWO_PI 6.2831853f
+typedef struct { signed char path; float speed; short at[4]; signed char event[4]; } GigaStep;
+/* Rank 0 routes (0x5ba9b0): 11 the entrance, then 1, 4, 7 by phase. Where a route has two choices by
+ * Dante's height, these are the ones for him on the floor. Events: 1-2 homing spheres, 3-4 drop-then-roll
+ * orbs, 9 belly beams, 10 a roll. */
+static const GigaStep giga_route[4][5] = {
+    {{14, 1.0f, {-1, -1, -1, -1}, {0}}, {0, 1.0f, {-1, -1, -1, -1}, {0}}, {-1, 0, {0}, {0}}},
+    {{3, 1.0f, {2000, -1, -1, -1}, {1}}, {1, 2.0f, {1200, -1, -1, -1}, {1}}, {-1, 0, {0}, {0}}},
+    {{11, 1.0f, {1200, 1700, -1, -1}, {3, 3}}, {9, 1.0f, {1100, 2200, -1, -1}, {2, 0}}, {-1, 0, {0}, {0}}},
+    {{3, 1.0f, {1300, -1, -1, -1}, {2}}, {6, 0.8f, {800, 1500, 1550, -1}, {10, 9, 1}}, {16, 1.0f, {1200, -1, -1, -1}, {2}},
+     {-1, 0, {0}, {0}}},
 };
+enum { GIGA_NORMAL, GIGA_SHAKE, GIGA_ROLL, GIGA_RUSH };
 static struct {
-    int active, health, route, step, dying;
-    float frame, rate, dead_time;
+    int active, route, step, dying, state, rider, ride_frames;
+    float health, frame, rate, dead_time, state_time, throw_time, arc;
     float history[GIGA_HISTORY][3];
-    int history_head, history_count;
-    float pos[GIGA_PARTS][3], dir[GIGA_PARTS][3];
-    unsigned char fired[2];
+    int history_head;
+    float pos[GIGA_PARTS][3], prev[GIGA_PARTS][3], dir[GIGA_PARTS][3], roll[GIGA_PARTS];
+    int shell[GIGA_PARTS], out[GIGA_PARTS];   /* out: in the walls, not drawn and not a target */
+    float regrow_at[GIGA_PARTS];
+    unsigned char fired[4];
+    struct { float life, hit_wait; int part; } beam[GIGA_BEAMS];
 } giga;
+static char giga_log_text[3072];
+static int giga_log_len, giga_ticks;
+static void giga_note(const char *what, int a, float b) {
+    if (giga_log_len < (int)sizeof(giga_log_text) - 80)
+        giga_log_len += snprintf(giga_log_text + giga_log_len, sizeof(giga_log_text) - giga_log_len,
+                                 "giga t=%d %s %d %.1f hp=%.1f\n", giga_ticks, what, a, b, giga.health);
+}
+const char *enemy_giga_log(void) { return giga_log_text; }
 static unsigned short *giga_head_idx, *giga_body_idx;
 static Vertex *giga_head_v, *giga_body_v;
 static void *giga_tex[GIGA_TEXTURE_COUNT];
@@ -1856,8 +1893,12 @@ static int giga_init(void) {
 
 static void giga_begin_step(void) {
     const GigaStep *s = &giga_route[giga.route][giga.step];
+    int k;
     giga.frame = (float)path_enter(s->path);
-    giga.fired[0] = giga.fired[1] = 0;
+    memset(giga.fired, 0, sizeof(giga.fired));
+    /* A new path starts in a hole: each broken shell grows back once its segment has followed it in. */
+    for (k = 1; k < GIGA_PARTS; ++k)
+        if (giga.shell[k] <= 0 && giga.regrow_at[k] <= 0.0f) giga.regrow_at[k] = giga.arc + GIGA_SPACING * (float)k;
 }
 
 /* A claimed slot per part: the head is the slot that was spawned. */
@@ -1866,15 +1907,16 @@ static void giga_spawn(void) {
     int k, found = 1, i;
     float p[3];
     memset(&giga, 0, sizeof(giga));
+    giga_log_len = 0; giga_log_text[0] = 0; giga_ticks = 0;
     giga.active = 1;
     giga.health = GIGA_HEALTH;
-    giga.route = 0;
-    giga.step = 0;
     giga.rate = 1.4f;
+    giga.rider = -1;
+    for (k = 0; k < GIGA_PARTS; ++k) giga.shell[k] = GIGA_SHELL;
     giga_begin_step();
     path_at(giga_route[0][0].path, giga.frame, p);
     for (i = 0; i < GIGA_HISTORY; ++i) memcpy(giga.history[i], p, sizeof(p));
-    giga.history_count = GIGA_HISTORY;
+    for (k = 0; k < GIGA_PARTS; ++k) { memcpy(giga.pos[k], p, sizeof(p)); memcpy(giga.prev[k], p, sizeof(p)); giga.dir[k][2] = 1.0f; }
     head->kind = ENEMY_GIGAPEDE; head->step = 0; head->active = 1; head->plan = P_WATCH; head->hidden = 1;
     for (k = 0; k < ENEMY_MAX && found < GIGA_PARTS; ++k) {
         Enemy *o = &enemies[k];
@@ -1888,8 +1930,9 @@ static void giga_spawn(void) {
 
 static void giga_record(const float p[3]) {
     const float *last = giga.history[giga.history_head];
-    float dx = p[0] - last[0], dy = p[1] - last[1], dz = p[2] - last[2];
-    if (dx * dx + dy * dy + dz * dz < 25.0f * 25.0f) return;
+    float dx = p[0] - last[0], dy = p[1] - last[1], dz = p[2] - last[2], d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < 25.0f * 25.0f) return;
+    giga.arc += sqrtf(d2);
     giga.history_head = (giga.history_head + 1) % GIGA_HISTORY;
     memcpy(giga.history[giga.history_head], p, sizeof(float) * 3);
 }
@@ -1913,97 +1956,270 @@ static void giga_behind(float distance, float out[3]) {
     memcpy(out, giga.history[at], sizeof(float) * 3);
 }
 
+/* A part's frame: forward along the body, right and up rolled about it by the part's roll. */
+static void giga_axes(int k, float r[3], float u[3]) {
+    const float *f = giga.dir[k];
+    float rx = f[2], rz = -f[0], l = sqrtf(rx * rx + rz * rz), ux, uy, uz, c = cosf(giga.roll[k]), s = sinf(giga.roll[k]);
+    if (l < 0.01f) { rx = 1.0f; rz = 0.0f; l = 1.0f; }
+    rx /= l; rz /= l;
+    /* up = forward x right */
+    ux = f[1] * rz; uy = f[2] * rx - f[0] * rz; uz = -f[1] * rx;
+    r[0] = rx * c + ux * s; r[1] = uy * s; r[2] = rz * c + uz * s;
+    u[0] = ux * c - rx * s; u[1] = uy * c; u[2] = uz * c - rz * s;
+}
+
+/* The belly (bone 0, under the middle of a segment). */
+static void giga_belly(int k, float out[3]) {
+    float r[3], u[3];
+    giga_axes(k, r, u);
+    out[0] = giga.pos[k][0] - giga.dir[k][0] * 300.0f - u[0] * 80.0f;
+    out[1] = giga.pos[k][1] - giga.dir[k][1] * 300.0f - u[1] * 80.0f;
+    out[2] = giga.pos[k][2] - giga.dir[k][2] * 300.0f - u[2] * 80.0f;
+}
+
 static void giga_orb(const float from[3], int kind, float px, float py, float pz);
 
 static void giga_event(int ev, float px, float py, float pz) {
     int k;
-    if (ev == 1 || ev == 2) for (k = 1; k < GIGA_PARTS; ++k) giga_orb(giga.pos[k], 0, px, py, pz);
-    if (ev == 3 || ev == 4) for (k = 2; k < GIGA_PARTS; k += 2) giga_orb(giga.pos[k], 1, px, py, pz);
+    float at[3];
+    /* Only segments with their shell fire (0x38bba0). */
+    if (ev == 1 || ev == 2) for (k = 1; k < GIGA_PARTS; ++k) { if (giga.shell[k] > 0 && !giga.out[k]) { giga_belly(k, at); giga_orb(at, 0, px, py, pz); } }
+    if (ev == 3 || ev == 4) for (k = 2; k < GIGA_PARTS; k += 2) { if (giga.shell[k] > 0 && !giga.out[k]) { giga_belly(k, at); giga_orb(at, 1, px, py, pz); } }
+    if (ev == 8 || ev == 9)
+        for (k = 0; k < GIGA_BEAMS; ++k) { giga.beam[k].life = 60.0f; giga.beam[k].hit_wait = 0.0f; giga.beam[k].part = 1 + (int)(ai_random() % (GIGA_PARTS - 1)); }
+    giga_note("event", ev, giga.frame);
+    if (ev == 10 && giga.state == GIGA_NORMAL) { giga.state = GIGA_ROLL; giga.state_time = 0.0f; }
+}
+
+/* The roll: each part turns per_frame radians a frame for `frames`, starting 4 frames after the one in
+ * front, `wait` frames in. t: frames since it began. */
+static void giga_roll_wave(float t, float wait, float per_frame, float frames) {
+    int k;
+    for (k = 0; k < GIGA_PARTS; ++k) {
+        float local = t - wait - 4.0f * (float)k;
+        if (local < 0.0f) local = 0.0f;
+        if (local > frames) local = frames;
+        giga.roll[k] = per_frame * local;
+    }
+}
+
+static void giga_sparks(void) {
+    int k;
+    for (k = 0; k < GIGA_PARTS; ++k) {
+        float at[3], v[3] = {0.0f, 60.0f, 0.0f};
+        unsigned int r = fx_random_u32();
+        at[0] = giga.pos[k][0] - giga.dir[k][0] * 300.0f + (float)((int)(r & 255) - 128);
+        at[1] = giga.pos[k][1] + (float)((int)(r >> 8 & 127) - 30);
+        at[2] = giga.pos[k][2] - giga.dir[k][2] * 300.0f + (float)((int)(r >> 16 & 255) - 128);
+        fx_mote(at, v, 70.0f, 10.0f, 0.25f, (r >> 24 & 1) ? 0xffffa0ffu : 0xffff60c0u);
+    }
+}
+
+static void giga_throw(void) {
+    if (giga.rider < 0) return;
+    giga_note("throw", giga.rider, giga.roll[giga.rider]);
+    landed = 1;
+    landed_x = giga.pos[giga.rider][0];
+    landed_z = giga.pos[giga.rider][2];
+    landed_heavy = 1;
+    landed_damage = -1.0f;
+    giga.throw_time = 40.0f;
+    giga.rider = -1;
+    giga.ride_frames = 0;
 }
 
 static void giga_update(float f, float px, float py, float pz) {
     const GigaStep *s;
     float target, p[3];
-    int k, near = 0, i;
+    int k, near = 0, broken = 0;
     if (!giga.active) return;
-    if (giga.dying) {
-        giga.dead_time += f;
-        if (giga.dead_time > 90.0f) {
-            for (i = 0; i < ENEMY_MAX; ++i) if (enemies[i].kind == ENEMY_GIGAPEDE) enemies[i].active = 0;
-            giga.active = 0;
-        }
-        return;
+    giga_ticks += (int)(f + 0.5f);
+    {
+        static int last_state = -1, last_route = -1, last_step = -1;
+        if (giga.state != last_state) { giga_note("state", giga.state, giga.state_time); last_state = giga.state; }
+        if (giga.route != last_route || giga.step != last_step) { giga_note("path", giga_route[giga.route][giga.step].path, (float)giga.route); last_route = giga.route; last_step = giga.step; }
     }
+    memcpy(giga.prev, giga.pos, sizeof(giga.prev));
+    if (giga.throw_time > 0.0f) giga.throw_time -= f;
+    for (k = 1; k < GIGA_PARTS; ++k) {
+        if (giga.shell[k] <= 0) ++broken;
+        if (giga.regrow_at[k] > 0.0f && giga.arc >= giga.regrow_at[k]) { giga_note("shell_regrow", k, giga.arc); giga.shell[k] = GIGA_SHELL; giga.regrow_at[k] = 0.0f; }
+    }
+    giga.state_time += f;
+    if (giga.dying) {
+        /* Route 10: path 13 at rate 4, out through its hole, flickering, then gone. */
+        giga.dead_time += f;
+        giga.frame += 4.0f * f;
+        if (giga.dead_time > 150.0f || giga.frame >= (float)path_frames(13)) {
+            for (k = 0; k < ENEMY_MAX; ++k) if (enemies[k].kind == ENEMY_GIGAPEDE) enemies[k].active = 0;
+            giga.active = 0;
+            return;
+        }
+        path_at(13, giga.frame, p);
+        goto place;
+    }
+    /* The head's states (0x388690 and on). */
+    switch (giga.state) {
+    case GIGA_NORMAL:
+        for (k = 0; k < GIGA_PARTS; ++k) {   /* unwinds any roll */
+            float r = fmodf(giga.roll[k], TWO_PI);
+            if (r > TWO_PI * 0.5f) r -= TWO_PI;
+            giga.roll[k] = fabsf(r) < 0.05f * f ? 0.0f : r - (r > 0.0f ? 0.05f : -0.05f) * f;
+        }
+        if (giga.ride_frames > 0) { giga_note("rider", giga.rider, 0.0f); giga.state = GIGA_SHAKE; giga.state_time = 0.0f; }
+        else if (broken == GIGA_PARTS - 1) { giga.state = GIGA_RUSH; giga.state_time = 0.0f; }
+        break;
+    case GIGA_SHAKE:
+        /* 0x68: sparks on every slot, then one full turn at 0x400 a frame (64 frames). */
+        if (giga.state_time < GIGA_SPARK_FRAMES) { if ((int)giga.state_time % 3 == 0) giga_sparks(); }
+        giga_roll_wave(giga.state_time, GIGA_SPARK_FRAMES, TWO_PI / 64.0f, 64.0f);
+        if (giga.state_time > GIGA_SPARK_FRAMES + 64.0f + 4.0f * GIGA_PARTS) { giga.state = GIGA_NORMAL; memset(giga.roll, 0, sizeof(giga.roll)); }
+        break;
+    case GIGA_ROLL:
+        /* 0x69: waits 20, then 0x200 a frame for 64 frames: half a turn, unwound after. */
+        giga_roll_wave(giga.state_time, 20.0f, TWO_PI / 128.0f, 64.0f);
+        if (giga.state_time > 20.0f + 64.0f + 4.0f * GIGA_PARTS) giga.state = GIGA_NORMAL;
+        break;
+    case GIGA_RUSH:
+        /* 0x6a: every shell broken. Waits 120, then rolls 0x200 a frame for 300 frames at path rate 5. */
+        if (giga.state_time < 120.0f) { if ((int)giga.state_time % 4 == 0) giga_sparks(); }
+        else giga_roll_wave(giga.state_time, 120.0f, TWO_PI / 128.0f, 300.0f);
+        if (giga.state_time > 420.0f + 4.0f * GIGA_PARTS) {
+            giga.state = GIGA_NORMAL;
+            for (k = 1; k < GIGA_PARTS; ++k) if (giga.regrow_at[k] <= 0.0f) giga.regrow_at[k] = giga.arc + GIGA_SPACING * (float)k;
+        }
+        break;
+    }
+    /* Thrown off once his segment has turned past about a third. */
+    if (giga.rider >= 0 && fabsf(sinf(giga.roll[giga.rider])) > 0.6f) giga_throw();
     s = &giga_route[giga.route][giga.step];
-    /* Rate: the step's speed x 1.4 (x 1.8 in its last phase), doubled when no part is near Dante. */
+    /* Rate: the step's speed x 1.4 (x 1.8 in its last phase), 0.05 less a broken shell (not under 0.5),
+     * doubled when no part is near Dante, easing 0.01 a frame. */
     for (k = 0; k < GIGA_PARTS; ++k) {
         float dx = giga.pos[k][0] - px, dz = giga.pos[k][2] - pz;
         if (dx * dx + dz * dz < 1000.0f * 1000.0f) near = 1;
     }
-    target = s->speed * (giga.health < GIGA_HEALTH * 500 / 2800 ? 1.8f : 1.4f) * (near ? 1.0f : 2.0f);
+    target = s->speed * (giga.health < GIGA_HEALTH * 500.0f / 2800.0f ? 1.8f : 1.4f) - 0.05f * (float)broken;
+    if (target < 0.5f) target = 0.5f;
+    if (!near) target *= 2.0f;
     if (s->path == 14) target = s->speed * 2.8f;
     giga.rate += (target - giga.rate) * 0.01f * f;
+    if (giga.state == GIGA_RUSH && giga.state_time >= 120.0f) giga.rate = 5.0f;
     giga.frame += giga.rate * f;
-    for (k = 0; k < 2; ++k)
+    for (k = 0; k < 4; ++k)
         if (!giga.fired[k] && s->at[k] >= 0 && giga.frame >= (float)s->at[k]) { giga.fired[k] = 1; if (s->event[k]) giga_event(s->event[k], px, py, pz); }
     if (giga.frame >= (float)(path_frames(s->path) - path_margin(s->path))) {
         ++giga.step;
         if (giga_route[giga.route][giga.step].path < 0) {
             /* The next route, by phase: under 2000 of 2800 the second, under 500 the third. */
-            giga.route = giga.health < GIGA_HEALTH * 500 / 2800 ? 3 : giga.health < GIGA_HEALTH * 2000 / 2800 ? 2 : 1;
+            giga.route = giga.health < GIGA_HEALTH * 500.0f / 2800.0f ? 3 : giga.health < GIGA_HEALTH * 2000.0f / 2800.0f ? 2 : 1;
             giga.step = 0;
         }
         giga_begin_step();
         s = &giga_route[giga.route][giga.step];
     }
     path_at(s->path, giga.frame, p);
+place:
     giga_record(p);
     memcpy(giga.pos[0], p, sizeof(p));
     for (k = 1; k < GIGA_PARTS; ++k) giga_behind(GIGA_SPACING * (float)k, giga.pos[k]);
     for (k = 0; k < GIGA_PARTS; ++k) {
         float ahead[3], dx, dy, dz, l;
-        if (k == 0) giga_behind(-0.0f, ahead), giga_behind(60.0f, ahead), dx = p[0] - ahead[0], dy = p[1] - ahead[1], dz = p[2] - ahead[2];
+        if (k == 0) { giga_behind(60.0f, ahead); dx = p[0] - ahead[0]; dy = p[1] - ahead[1]; dz = p[2] - ahead[2]; }
         else { dx = giga.pos[k - 1][0] - giga.pos[k][0]; dy = giga.pos[k - 1][1] - giga.pos[k][1]; dz = giga.pos[k - 1][2] - giga.pos[k][2]; }
         l = sqrtf(dx * dx + dy * dy + dz * dz);
         if (l > 1.0f) { giga.dir[k][0] = dx / l; giga.dir[k][1] = dy / l; giga.dir[k][2] = dz / l; }
     }
+    /* In the walls: no walkable floor under it (the holes and the paths behind them are outside the room's
+     * collision). The game's own flag (+0x78c4) isn't read. */
+    for (k = 0; k < GIGA_PARTS; ++k) giga.out[k] = !stage_walkable_below(giga.pos[k][0] - giga.dir[k][0] * (k ? 300.0f : -200.0f),
+                                                                          giga.pos[k][2] - giga.dir[k][2] * (k ? 300.0f : -200.0f));
+    /* Belly beams (Shl05): straight down from the belly of a segment picked again every frame; they hit
+     * every 10 frames, radius 100. */
+    for (k = 0; k < GIGA_BEAMS; ++k) {
+        float at[3], dx, dz;
+        if (giga.beam[k].life <= 0.0f) continue;
+        giga.beam[k].life -= f;
+        giga.beam[k].part = 1 + (int)(ai_random() % (GIGA_PARTS - 1));
+        if (giga.out[giga.beam[k].part]) continue;
+        giga_belly(giga.beam[k].part, at);
+        if (giga.beam[k].hit_wait > 0.0f) { giga.beam[k].hit_wait -= f; continue; }
+        dx = px - at[0]; dz = pz - at[2];
+        if (dx * dx + dz * dz < (100.0f + DANTE_RADIUS) * (100.0f + DANTE_RADIUS) && py < at[1]) {
+            landed = 1; landed_x = at[0]; landed_z = at[2]; landed_heavy = 0; landed_damage = -1.0f;
+            giga.beam[k].hit_wait = 10.0f;
+        }
+    }
 }
 
+/* Where a part stands for Dante's attacks and the lock-on: the point of its body nearest him. */
 static void giga_part_update(float f, float px, float py, float pz) {
-    if (e->step == 0) giga_update(f, px, py, pz);
-    memcpy(e->pos, giga.pos[e->step < GIGA_PARTS ? e->step : 0], sizeof(e->pos));
+    int k = e->step < GIGA_PARTS ? e->step : 0;
+    float back = GIGA_TOP_BACK, front = GIGA_TOP_FRONT, t;
+    const float *b, *d;
+    if (k == 0) { giga_update(f, px, py, pz); back = 0.0f; front = 450.0f; }   /* the head reaches forward */
+    b = giga.pos[k]; d = giga.dir[k];
+    t = (px - b[0]) * d[0] + (pz - b[2]) * d[2];
+    if (t < back) t = back;
+    if (t > front) t = front;
+    e->pos[0] = b[0] + d[0] * t; e->pos[1] = b[1] + d[1] * t - 40.0f; e->pos[2] = b[2] + d[2] * t;
     e->floor_y = e->pos[1];
     e->plan = giga.dying ? P_DEATH : P_WATCH;
 }
 
 static void giga_hit(HitKind kind) {
+    int k = e->step < GIGA_PARTS ? e->step : 0;
     float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
+    /* Ebony & Ivory chip it (a sixth of a sword hit, as with Cerberus) and don't crack a shell. */
+    int pistol = kind == HIT_PISTOL;
+    float damage = pistol ? 0.17f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1.0f : 2.0f;
     ++hits;
     fx_hit_spark(at);
     if (!mortal || giga.dying) return;
-    giga.health -= (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
-    if (giga.health <= 0) { giga.dying = 1; giga.dead_time = 0.0f; died(); }
+    /* The head takes the most (its block's 75 against the body's 30); a segment without its shell more than
+     * one with. Shell: one off a hit; at 0 it shatters. */
+    if (k == 0) damage *= 2.5f;
+    else if (giga.shell[k] > 0) {
+        if (!pistol && --giga.shell[k] == 0) { giga_note("shell_break", k, 0.0f); fx_explosion(at); fx_wall_spark(at); giga.regrow_at[k] = 0.0f; }
+    } else damage *= 2.0f;
+    giga.health -= damage;
+    if (!pistol) giga_note("hit", k * 10 + giga.shell[k], damage);
+    if (giga.health <= 0.0f) {
+        giga.health = 0.0f;
+        giga.dying = 1; giga.dead_time = 0.0f; giga.frame = 0.0f;
+        giga_note("death", k, 0.0f);
+        giga.state = GIGA_NORMAL; memset(giga.beam, 0, sizeof(giga.beam));
+        giga_throw();
+        died();
+    }
 }
 
-static void giga_draw_part(const float pos[3], const float dir[3], int head) {
+static void giga_kill(void) {
+    if (!giga.active || giga.dying) return;
+    giga.health = 0.0f;
+    giga.dying = 1; giga.dead_time = 0.0f; giga.frame = 0.0f;
+    giga.state = GIGA_NORMAL; memset(giga.beam, 0, sizeof(giga.beam));
+    giga_note("death", -1, 0.0f);
+    giga_throw();
+    died();
+}
+
+static void giga_draw_part(int k) {
     ScePspFMatrix4 m;
-    float fx = dir[0], fy = dir[1], fz = dir[2], rx, ry, rz, ux, uy, uz, l;
-    int i, bound = -1;
+    float r[3], u[3];
+    int i, bound = -1, head = k == 0;
     const Dmc3ModelObject *objects = head ? giga_head_objects : giga_body_objects;
     int count = head ? GIGA_HEAD_OBJECT_COUNT : GIGA_BODY_OBJECT_COUNT;
-    /* Right = up x forward, then up = forward x right. */
-    rx = fz; ry = 0.0f; rz = -fx; l = sqrtf(rx * rx + rz * rz);
-    if (l < 0.01f) { rx = 1.0f; rz = 0.0f; l = 1.0f; }
-    rx /= l; rz /= l;
-    ux = fy * rz - fz * ry; uy = fz * rx - fx * rz; uz = fx * ry - fy * rx;
-    m.x.x = rx; m.x.y = ry; m.x.z = rz; m.x.w = 0.0f;
-    m.y.x = ux; m.y.y = uy; m.y.z = uz; m.y.w = 0.0f;
-    m.z.x = fx; m.z.y = fy; m.z.z = fz; m.z.w = 0.0f;
-    m.w.x = pos[0]; m.w.y = pos[1]; m.w.z = pos[2]; m.w.w = 1.0f;
+    giga_axes(k, r, u);
+    m.x.x = r[0]; m.x.y = r[1]; m.x.z = r[2]; m.x.w = 0.0f;
+    m.y.x = u[0]; m.y.y = u[1]; m.y.z = u[2]; m.y.w = 0.0f;
+    m.z.x = giga.dir[k][0]; m.z.y = giga.dir[k][1]; m.z.z = giga.dir[k][2]; m.z.w = 0.0f;
+    m.w.x = giga.pos[k][0]; m.w.y = giga.pos[k][1]; m.w.z = giga.pos[k][2]; m.w.w = 1.0f;
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadMatrix(&m);
     for (i = 0; i < count; ++i) {
         const Dmc3ModelObject *o = &objects[i];
+        if (!head && giga_body_shell[i] && giga.shell[k] <= 0) continue;   /* the carapace is gone */
         if ((int)o->texture != bound) {
             bound = (int)o->texture;
             sceGuClutLoad(256 / 8, giga_palettes[bound]);
@@ -2025,8 +2241,19 @@ static void giga_draw(void) {
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     for (k = GIGA_PARTS - 1; k >= 0; --k) {
-        if (giga.dying && ((int)giga.dead_time / 4) % 2) continue;   /* flickers out */
-        giga_draw_part(giga.pos[k], giga.dir[k], k == 0);
+        if (giga.dying && giga.dead_time > 90.0f && ((int)giga.dead_time / 4) % 2) continue;   /* flickers out */
+        if (giga.out[k] && (k == 0 || giga.out[k - 1]) && (k == GIGA_PARTS - 1 || giga.out[k + 1])) continue;   /* deep in a wall */
+        giga_draw_part(k);
+    }
+    /* The belly beams: purple bolts to the floor. */
+    for (k = 0; k < GIGA_BEAMS; ++k) {
+        float top[3], bottom[3], g;
+        if (giga.beam[k].life <= 0.0f || giga.out[giga.beam[k].part]) continue;
+        giga_belly(giga.beam[k].part, top);
+        bottom[0] = top[0]; bottom[2] = top[2];
+        bottom[1] = player_floor_fn && player_floor_fn(top[0], top[1] - 50.0f, top[2], 0.0f, &g) ? g : top[1] - 3000.0f;
+        fx_tracer(top, bottom, 0xffff70d0u, 60.0f);
+        if (((int)giga.beam[k].life & 3) == 0) { float v[3] = {0.0f, 80.0f, 0.0f}; fx_mote(bottom, v, 120.0f, 20.0f, 0.2f, 0xffff90e0u); }
     }
 }
 
@@ -2044,3 +2271,69 @@ static void giga_orb(const float from[3], int kind, float px, float py, float pz
     arrows[i].goal[0] = px;
     arrows[i].goal[1] = pz;
 }
+
+/* ---- Standing on it: the tops of upright segments are floor, and carry him. */
+static float giga_top(int k, float x, float z, int *inside) {
+    const float *b = giga.pos[k], *d = giga.dir[k];
+    float h = sqrtf(d[0] * d[0] + d[2] * d[2]), fx, fz, dx = x - b[0], dz = z - b[2], along, side, r[3], u[3];
+    *inside = 0;
+    if (h < 0.5f) return 0.0f;
+    giga_axes(k, r, u);
+    if (u[1] < 0.8f) return 0.0f;   /* on a wall or the ceiling, or rolling */
+    fx = d[0] / h; fz = d[2] / h;
+    along = dx * fx + dz * fz; side = dx * fz - dz * fx;
+    if (along < GIGA_TOP_BACK || along > GIGA_TOP_FRONT || fabsf(side) > GIGA_TOP_HALF) return 0.0f;
+    *inside = 1;
+    return b[1] + d[1] / h * along + giga_body_bounds[1][1];
+}
+
+int enemy_giga_floor(float x, float y, float z, float step, float *out) {
+    int k, found = 0, in;
+    if (!giga.active || giga.dying || giga.throw_time > 0.0f) return 0;
+    for (k = 1; k < GIGA_PARTS; ++k) {
+        float top = giga_top(k, x, z, &in);
+        if (in && top <= y + step + 60.0f && (!found || top > *out)) { *out = top; found = 1; }
+    }
+    return found;
+}
+
+void enemy_giga_ride(float *x, float *y, float *z, int on_ground) {
+    int k, in, best = -1;
+    if (!giga.active || giga.dying) { giga.rider = -1; return; }
+    if (on_ground) {
+        for (k = 1; k < GIGA_PARTS; ++k) {
+            float top = giga_top(k, *x, *z, &in);
+            if (in && fabsf(top - *y) < 80.0f) { best = k; break; }
+        }
+    }
+    giga.rider = best;
+    giga.ride_frames = best >= 0 ? giga.ride_frames + 1 : 0;
+    if (best < 0) return;
+    *x += giga.pos[best][0] - giga.prev[best][0];
+    *y += giga.pos[best][1] - giga.prev[best][1];
+    *z += giga.pos[best][2] - giga.prev[best][2];
+}
+
+static int giga_part_out(int k) { return k >= 0 && k < GIGA_PARTS && giga.out[k]; }
+int enemy_giga_top_point(int k, float out[3]) {
+    int in;
+    if (!giga.active || giga.dying || k < 1 || k >= GIGA_PARTS || giga.out[k]) return 0;
+    out[0] = giga.pos[k][0] - giga.dir[k][0] * 250.0f;
+    out[2] = giga.pos[k][2] - giga.dir[k][2] * 250.0f;
+    out[1] = giga_top(k, out[0], out[2], &in);
+    return in;
+}
+int enemy_giga_focus(float out[3]) {
+    int k, n = 0;
+    out[0] = out[1] = out[2] = 0.0f;
+    if (!giga.active) return 0;
+    for (k = 0; k < GIGA_PARTS; ++k) {
+        if (giga.out[k]) continue;
+        out[0] += giga.pos[k][0]; out[1] += giga.pos[k][1]; out[2] += giga.pos[k][2]; ++n;
+    }
+    if (!n) return 0;
+    out[0] /= (float)n; out[1] /= (float)n; out[2] /= (float)n;
+    return 1;
+}
+float enemy_giga_health(void) { return giga.health; }
+float enemy_giga_max_health(void) { return GIGA_HEALTH; }

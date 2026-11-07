@@ -1072,6 +1072,31 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     const FollowCamera *camera = &camera_copy;
     perf_render_start = sceKernelGetSystemTimeLow();
     int i;
+    {
+        /* The Gigapede's hall is far bigger than the follow camera's view, and the game shows it with wide
+         * fixed cameras (its CAM zones aren't read). Here the view turns partway toward the parts of it in
+         * the room, and pulls back and up, easing in and out. */
+        static float look[3], pull;
+        float focus[3], want[3] = {0.0f, 0.0f, 0.0f}, want_pull = 0.0f, bx, bz;
+        int k;
+        if (mission_mode && enemy_giga_focus(focus)) {
+            float h;
+            want[0] = (focus[0] - camera_copy.tx) * 0.3f;
+            want[1] = (focus[1] - camera_copy.ty) * 0.3f;
+            want[2] = (focus[2] - camera_copy.tz) * 0.3f;
+            /* Dante stays in the picture: only so far toward it. */
+            h = sqrtf(want[0] * want[0] + want[2] * want[2]);
+            if (h > 350.0f) { want[0] *= 350.0f / h; want[2] *= 350.0f / h; }
+            if (want[1] > 380.0f) want[1] = 380.0f;
+            if (want[1] < -100.0f) want[1] = -100.0f;
+            want_pull = 1.0f;
+        }
+        for (k = 0; k < 3; ++k) look[k] += (want[k] - look[k]) * 0.05f;
+        pull += (want_pull - pull) * 0.04f;
+        bx = camera_copy.x - camera_copy.tx; bz = camera_copy.z - camera_copy.tz;
+        camera_copy.tx += look[0]; camera_copy.ty += look[1]; camera_copy.tz += look[2];
+        camera_copy.x += bx * 0.45f * pull; camera_copy.z += bz * 0.45f * pull; camera_copy.y += 160.0f * pull;
+    }
     int bound_texture = -1;
 
     sceGuStart(GU_DIRECT, display_list);
@@ -1754,6 +1779,7 @@ static int cmp_fastwaves, cmp_clear_minions;
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
 static int cmp_goto[16][2], cmp_goto_count;
+static int cmp_onboss_from = -1, cmp_onboss_part = 3;   /* "onboss frame part": from that frame, Dante onto that Gigapede segment once it's low and upright */
 static int cmp_place_frame[8], cmp_place_count; static float cmp_place[8][5];   /* "place frame x y z yaw [press]": Dante there (and O pressed if press is 1) */   /* "gotoroom frame number": Dante to that door, its room cleared */
 static unsigned int menu_button(const char *name) {
     static const struct { const char *name; unsigned int button; } names[] = {
@@ -1809,6 +1835,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
+        else if (strncmp(line, "onboss ", 7) == 0) sscanf(line + 7, "%d %d", &cmp_onboss_from, &cmp_onboss_part);
         else if (strncmp(line, "place ", 6) == 0) {
             if (cmp_place_count < 8 && sscanf(line + 6, "%d %f %f %f %f %f", &cmp_place_frame[cmp_place_count], &cmp_place[cmp_place_count][0], &cmp_place[cmp_place_count][1],
                                                &cmp_place[cmp_place_count][2], &cmp_place[cmp_place_count][3], &cmp_place[cmp_place_count][4]) >= 5) ++cmp_place_count;
@@ -2112,6 +2139,10 @@ static int mission_floor(float x, float y, float z, float step, float *out) {
     if (l && over_lift(l, x, z) && lift_y <= y + step + LIFT_STEP && (!found || lift_y > *out)) { *out = lift_y; found = 1; }
     if (pad_on && (x - pad[0]) * (x - pad[0]) + (z - pad[2]) * (z - pad[2]) < PAD_RADIUS * PAD_RADIUS && pad[1] <= y + step + LIFT_STEP
         && (!found || pad[1] > *out)) { *out = pad[1]; found = 1; }
+    {
+        float g;   /* the Gigapede's back */
+        if (enemy_giga_floor(x, y, z, step, &g) && (!found || g > *out)) { *out = g; found = 1; }
+    }
     return found;
 }
 /* A crest switch and the seal it takes down (CStageSetSwitch, CStageSetSeal; docs/BAR_CRANK_SPEC.md). Sword
@@ -2973,6 +3004,15 @@ int main(int argc, char *argv[]) {
                     if (cmp_place[g][4] > 0.5f) debug_pressed |= PSP_CTRL_CIRCLE;
                     start_camera(&player, &camera);
                 }
+                if (cmp_onboss_from >= 0 && frames >= cmp_onboss_from) {
+                    float top[3];
+                    if (enemy_giga_top_point(cmp_onboss_part, top) && top[1] < player.y + 700.0f) {
+                        player.x = top[0]; player.y = top[1]; player.z = top[2];
+                        player.on_ground = 1;
+                        cmp_onboss_from = -1;
+                        if (focus_cmp) vanguard_note("onboss", (float)frames);
+                    }
+                }
                 for (g = 0; g < cmp_goto_count; ++g) {
                     if (cmp_goto[g][0] != frames) continue;
                     script_at = missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][mission_room].count;
@@ -3097,6 +3137,7 @@ int main(int argc, char *argv[]) {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
                 enemy_clamp_player(&player.z);
+                enemy_giga_ride(&player.x, &player.y, &player.z, player.on_ground);
                 orbs_update(dt, player.x, player.y, player.z);
                 bench_ai_us = sceKernelGetSystemTimeLow() - ai_start;
             }
@@ -3372,7 +3413,7 @@ int main(int argc, char *argv[]) {
                 }
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
-                if (report) { fprintf(report, "cmp done, frames=%d enemy_poses=%d\n", cmp_frames, enemy_poses_done()); fclose(report); }
+                if (report) { fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log()); fclose(report); }
                 running = 0;
             }
         } else
