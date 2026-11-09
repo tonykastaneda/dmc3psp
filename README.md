@@ -8,6 +8,9 @@ Captured from the port's own 480x272 framebuffer. About half were taken in PPSSP
 read back over PSPLINK. The models, textures and effects are read from the player's disc at build time; none are
 stored in this repository.
 
+The FPS counter in some shots is PPSSPP's, which runs the port at up to 60 FPS on a PC. On hardware the port
+targets 30 FPS on the PSP-2000, 3000, Go and Street (and Adrenaline on Vita); the PSP-1000 isn't supported.
+
 ### Gameplay
 
 | | |
