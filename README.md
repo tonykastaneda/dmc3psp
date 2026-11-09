@@ -9,7 +9,8 @@ read back over PSPLINK. The models, textures and effects are read from the playe
 stored in this repository.
 
 The FPS counter in some shots is PPSSPP's, which runs the port at up to 60 FPS on a PC. On hardware the port
-targets 30 FPS on the PSP-2000, 3000, Go and Street (and Adrenaline on Vita); the PSP-1000 isn't supported.
+targets 30 FPS on the PSP-2000, 3000, Go and Street (and Adrenaline on Vita). The PSP-1000 isn't targeted: the current build
+needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms load 4-5 MB each).
 
 ### Gameplay
 
@@ -65,7 +66,7 @@ targets 30 FPS on the PSP-2000, 3000, Go and Street (and Adrenaline on Vita); th
 - GDATA inventory covers **3,183 PACs**, **680 raw assets**, **14,969 top-level chunks**, and **533 nested PACs**, with no malformed packs.
 - All **87 standalone TIM2 assets** convert successfully to PNG/RGBA. The first MOD converts to 17 objects, 5,316 vertices, 5,282 triangles, and three correct character textures.
 - The PSP runtime executes adapted gameplay routines and renders Dante with original geometry, UVs, and textures. Its current benchmark is **37.4 FPS** using a 240×136 model buffer upscaled to 480×272 with native-resolution UI.
-- `MEMSIZE=1` targets PSP-2000/3000/Go/Street and Adrenaline on Vita at a 30 FPS budget; PSP-1000 is out of scope.
+- `MEMSIZE=1` targets PSP-2000/3000/Go/Street and Adrenaline on Vita at a 30 FPS budget. PSP-1000 isn't targeted: the current build needs more than its 32 MB.
 - A freestanding Allegrex `EBOOT.PBP` builds and runs in **PPSSPP 1.17.1**. The runtime test requires PSP code to write `DMC3PSP_BOOT_OK` to the emulated memory stick.
 - `TIME.txt` contains the timestamped work log. `analysis/autonomy-status.json` records the latest autonomous stage results.
 
