@@ -39,7 +39,7 @@ stored in this repository.
 | ![Mission 5, the Jester](docs/screenshots/mission5_jester.png) | ![Mission 5, Agni & Rudra](docs/screenshots/mission5_agni_rudra.png) |
 | Mission 5: the Jester, in his arena | Mission 5: Agni & Rudra |
 | ![Mission 5, Surge of Fortunas](docs/screenshots/mission5_lift.png) | |
-| Mission 5: the Surge of Fortunas lift, with a wave dropped onto it (the platform is a stand-in) | |
+| Mission 5: the Surge of Fortunas lift, the room's own model, with a wave dropped onto it | |
 
 ### Menus
 

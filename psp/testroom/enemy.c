@@ -2205,6 +2205,7 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
  * (3500, 492, 3500), is from his set-up (FUN_005331d0). */
 #define JESTER_HEALTH (ENEMY_HEALTH * 1500 / 250)
 #define JESTER_STUN_HITS 12.0f
+#define JESTER_ARENA 1400.0f   /* how far from the arena's centre he may go (its floor runs to 1550) */
 enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH };
 /* jsNN, in tools/prepare_skinned_model.py's order: [3] 0-2, [4] 3-20, [5] 21-29, [6] 30-33, [19] 34-40. */
 static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 26, 26, 31, 5, 14, 4, 16};
@@ -2343,7 +2344,15 @@ static void jester_update(float f, float px, float py, float pz) {
     default:
         jester_state(J_IDLE);
     }
-    if (e->action != J_VANISH && e->action != J_LAUNCHED) e->pos[1] = e->floor_y;
+    /* His arena is a square platform, +-1550 cm about (3500, 3500) at 492, with nothing past its edge: he stays
+     * on it (teleports and walks included), on its floor. */
+    if (e->pos[0] < 3500.0f - JESTER_ARENA) e->pos[0] = 3500.0f - JESTER_ARENA;
+    if (e->pos[0] > 3500.0f + JESTER_ARENA) e->pos[0] = 3500.0f + JESTER_ARENA;
+    if (e->pos[2] < 3500.0f - JESTER_ARENA) e->pos[2] = 3500.0f - JESTER_ARENA;
+    if (e->pos[2] > 3500.0f + JESTER_ARENA) e->pos[2] = 3500.0f + JESTER_ARENA;
+    if (!floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) g = 492.0f;
+    e->floor_y = g;
+    if (e->action != J_VANISH) e->pos[1] = e->floor_y;
 }
 
 static void jester_hit(HitKind kind) {

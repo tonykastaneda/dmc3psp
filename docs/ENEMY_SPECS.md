@@ -726,7 +726,8 @@ are moves picked by `FUN_00536b10`/`00536c70`/`00536dd0` (a random one of three)
 
 **In the port** (`psp/testroom/enemy.c`, "The Jester"): a stand-in fight on his model (cut to 1,656 triangles)
 and motions. He walks in and swings (one or two swings), lobs three bombs that roll at Dante (the Gigapede's
-rolling orb), vanishes in a puff and reappears behind Dante, and dances. Hits fill a stun gauge (12, draining
+rolling orb), vanishes in a puff and reappears behind Dante, and dances. He stays on his square platform (±1550 cm about (3500, 3500); held to ±1400), teleports
+included. Hits fill a stun gauge (12, draining
 slowly); stunned for 200 frames he takes double damage. Which motion plays for each was chosen from their
 shapes and lengths [inferred]: idle js21, walk js03, swings js08/js09, bombs js10, vanish js26, dance js31,
 flinch js05, stun js14, launched js04, death js16. Health 1500 against the Pride's 250 [estimate].
