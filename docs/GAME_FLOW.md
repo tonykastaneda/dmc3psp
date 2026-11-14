@@ -305,6 +305,25 @@ The rooms 201/203/204/206/211 have no event-script enemy spawn. Room 211's EST g
 other missions and must not run for M10. The bridge and lake cutscene choreography is a separate
 implementation concern from the decoded route and item gates above.
 
+### Mission 12: "Hunting the Hunter"
+
+Decoded from EventTbl12 (GDATA 250; `tools/event_dump.py <iso> 12 --out <dir>` writes the listing locally).
+Demo 31 leads to 217 Torture Chamber at start 1 (item 50 is given here; the soul timer it runs isn't ported).
+217 door 0 -> 240 -> the Temperance Wagon ride, 216 (groups 2, 3, 4: 18 Seven Hells; then goto_room 239, start 3)
+-> 239 door 0 -> 214 (group 1: Prides and Lusts) -> 213 (group 0: 7 Blood-goyles) -> 212 (group 2: 6
+Blood-goyles) -> 211 (group 0: a Hell Vanguard (EST 26) and Prides) -> 201 The Rotating Bridge (start 2; item 50
+turns it) -> door 3 -> 218 -> door 1 -> 228. In 228, demo 32 and Geryon on the bridge (group 0, EST 50, class 32);
+at 80% he leaves, the bridge falls (demo 33) and the fight goes on at start 2 below; after him demo 34, the
+Quicksilver (item 34), door 1 and demo 35, Mission Clear.
+
+**In the port** (`tools/gen_rooms.py` Mission 12, `psp/testroom/mission12.c`, `docs/GERYON_SPEC.md`): the route
+above, start to Mission Clear.
+- 216 has no floor of its own (the wagon is a gimmick over a backdrop): `prepare_stage.py` gives it an 8 x 4 m deck
+  at its start, and the ride doesn't move. Its waves cleared, Dante goes on to 239 at **start 1** (starts 2 and 3
+  are on the wagon, which has no collision in 239) [approximation].
+- 240's wagon is a box door into 216 (EXTRA_DOORS).
+- 201's bridge isn't turned by item 50; door 3 is walked to as it stands [approximation].
+- 228: Geryon both phases; at 80% Dante is put at start 2. No cutscenes; Quicksilver isn't given.
 
 ## What the missions do now, and what's a stand-in
 

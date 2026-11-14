@@ -50,6 +50,8 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 | Mission 7: Vergil on the Peak of Darkness, Yamato drawn | Mission 7: Damned Pawns closing in, in the Divine Library |
 | ![Mission 7, Hell Greeds](docs/screenshots/mission7_greeds.png) | |
 | Mission 7: Hell Greeds and the Prides their coffins summoned | |
+| ![Mission 12, Geryon on the bridge](docs/screenshots/mission12_geryon_bridge.png) | ![Mission 12, Geryon below](docs/screenshots/mission12_geryon_ground.png) |
+| Mission 12: Geryon and his carriage charging down the bridge | Mission 12: after the bridge falls, he gallops the ground below |
 | ![Mission 9, Arachnes](docs/screenshots/mission9_arachne.png) | ![Mission 9, Nevan](docs/screenshots/mission9_nevan.png) |
 | Mission 9: Arachnes in the Provisions Storeroom | Mission 9: Nevan in the Sunken Opera House (her bats and dress aren't drawn yet) |
 
@@ -189,6 +191,13 @@ five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and us
 Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
 full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
 [the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).
+
+## Mission 12
+
+From the Torture Chamber to Mission Clear: the Temperance Wagon's ride, the Blood-goyle rooms, the Marble
+Throughway and the Rotating Bridge, and Geryon (CEm029, his horse and carriage from em029) on the bridge and, once
+it falls, on the ground below. What's decoded and what's estimated: [the Geryon spec](docs/GERYON_SPEC.md) and
+[game flow](docs/GAME_FLOW.md#mission-12-hunting-the-hunter).
 
 ## Mission 10
 

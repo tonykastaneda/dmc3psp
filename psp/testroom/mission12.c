@@ -2,11 +2,13 @@
 
 #include "geryon_boss.h"
 
-/* 216's script (EventTbl12): after the waves (groups 2, 3, 4) the ride ends with goto_room 239, start 3. */
+/* 216's script (EventTbl12): after the waves (groups 2, 3, 4) the ride ends with goto_room 239, start 3. Starts 2
+ * and 3 are on the wagon, a gimmick with no collision of its own in 239; the port puts him on the platform it
+ * stops by, start 1 [approximation]. */
 int m12_room_done(int room, int *next_room, int *start) {
     if (room != 216) return 0;
     *next_room = 239;
-    *start = 3;
+    *start = 1;
     return 1;
 }
 
