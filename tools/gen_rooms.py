@@ -30,7 +30,8 @@ from prepare_stage import pac_entries
 import gimmicks
 
 # How many light hits a breakable takes: its vital over about what one light hit does (a Pride's 250 is 6 hits,
-# an estimate already). Red orb crystals give some orbs a hit, then shatter: not read from the game yet.
+# an estimate already). Red orb crystals run on their own clock and payout (main.c crystals_update, decoded); their
+# hits and orbs here are unused.
 VITAL_PER_HIT = 42.0
 CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 

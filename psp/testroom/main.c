@@ -2483,10 +2483,18 @@ static void draw_box(float x, float y0, float y1, float z, float hx, float hz, f
 static float goal_spin;
 /* Breakable props (rooms_runtime.h's room_breakables): hits left each, and broken ones stay broken this mission. */
 static short breakable_hits[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+/* Red orb crystals (CStageSetORBreak: hit FUN_00366f10, update FUN_00366d50): the first hit starts a 720-frame
+ * clock; each hit adds its damage to a total, and at most every 30 frames a hit pays total x 0.1 x the table at
+ * 0x5b1800 (1, 1.5, 2, 3, 5, 5, 8 by total / 750) in red orbs; it cracks at 100-400 frames and shatters at 720.
+ * The damage is the port's (42 a light hit, 84 heavy): Dante's real attack power isn't read. */
+static float crystal_clock[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+static float crystal_total[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+static float crystal_cool[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+
 static unsigned char breakable_broken[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
 static void breakables_reset(void) {
     int i;
-    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) { breakable_hits[i] = room_breakables[i].hits; breakable_broken[i] = 0; }
+    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) { breakable_hits[i] = room_breakables[i].hits; breakable_broken[i] = 0; crystal_clock[i] = -1.0f; crystal_total[i] = 0.0f; crystal_cool[i] = 0.0f; }
 }
 static int m8_goo_door(const RoomDoor *d) {
     int i;
@@ -2513,6 +2521,15 @@ static void breakables_enter(int room) {
         if (room_story[i].room == room && mission_choice.mission >= room_story[i].first && mission_choice.mission <= room_story[i].last)
             stage_hide_group(room_story[i].tag);
 }
+static void crystals_update(float dt) {
+    int i;
+    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
+        if (!room_breakables[i].crystal || breakable_broken[i] || crystal_clock[i] < 0.0f) continue;
+        crystal_clock[i] += dt * 60.0f;
+        if (crystal_cool[i] > 0.0f) crystal_cool[i] -= dt * 60.0f;
+        if (crystal_clock[i] >= 720.0f) { breakable_broken[i] = 1; stage_hide_group(room_breakables[i].number); }
+    }
+}
 static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;
     float fx = sinf(player->yaw), fz = cosf(player->yaw);
@@ -2538,8 +2555,21 @@ static void breakable_hit(const Player *player, float reach, int kind) {
             float at[3] = {b->x, b->y + b->height * 0.5f, b->z};
             fx_hit_spark(at);
         }
+        if (b->crystal) {
+            static const float pay[7] = {1.0f, 1.5f, 2.0f, 3.0f, 5.0f, 5.0f, 8.0f};
+            int band;
+            if (crystal_clock[i] < 0.0f) crystal_clock[i] = 0.0f;
+            crystal_total[i] += kind == HIT_LIGHT || kind == HIT_AIR ? 42.0f : 84.0f;
+            band = (int)(crystal_total[i] / 750.0f);
+            if (band > 6) band = 6;
+            if (crystal_cool[i] <= 0.0f) {
+                int n = (int)(crystal_total[i] * 0.1f * pay[band]);
+                if (n > 0) orbs_burst(b->x, b->y + b->height * 0.5f, b->z, n);
+                crystal_cool[i] = 30.0f;
+            }
+            continue;   /* it shatters on its clock (crystals_update) */
+        }
         breakable_hits[i] -= kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2;
-        if (b->crystal) orbs_burst(b->x, b->y + b->height * 0.5f, b->z, b->orbs[0]);   /* a crystal pays each hit */
         if (breakable_hits[i] > 0) continue;
         breakable_broken[i] = 1;
         stage_hide_group(b->number);
@@ -2890,6 +2920,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
     hazards_update(dt, player);
+    crystals_update(dt);
     if (mission_choice.mission == 7) {
         static int m7_tick;
         m7_update(dt);
@@ -2982,7 +3013,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (!line[0] || sm_active()) sm_status(line, sizeof(line));
             float ep[3] = {0, 0, 0};
             if (enemy_active()) enemy_position(ep);
-            if ((f = fopen(path, "a"))) { fprintf(f, "%d ak=%d dv=%d mw=%d att=%d jm=%d og=%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d e=%.0f,%.0f,%.0f %s\n", m_tick, player->air_kind, player->devil, player->melee_weapon, player->attacking, player->jump_motion, player->on_ground, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], ep[0], ep[1], ep[2], line); fclose(f); }
+            if ((f = fopen(path, "a"))) { fprintf(f, "%d orbs=%d ak=%d dv=%d mw=%d att=%d jm=%d og=%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d e=%.0f,%.0f,%.0f %s\n", m_tick, shop_state.red_orbs, player->air_kind, player->devil, player->melee_weapon, player->attacking, player->jump_motion, player->on_ground, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], ep[0], ep[1], ep[2], line); fclose(f); }
         }
     }
     if (focus_cmp && lift && (testroom_frame % 30) == 0) vergil_boss_note("lift", player->x, player->y, player->z, lift_y);
