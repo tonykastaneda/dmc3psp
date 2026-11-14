@@ -19,6 +19,7 @@ typedef enum {
 #define ENEMY_LEVIATHAN 103
 #define ENEMY_VERGIL 104
 #define ENEMY_GERYON 105
+#define ENEMY_DOPPELGANGER 106
 
 typedef enum {
     HIT_LIGHT,    /* combo hits: flinch in place */

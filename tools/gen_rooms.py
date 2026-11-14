@@ -228,6 +228,20 @@ ITEM_GATES += [(15, "219", "106", 52), (15, "219", "106", 53), (15, "219", "106"
 # 219's lift (gimmick 100, its platform area 1, not in the collision) carries Dante up to door 4 (into 106, start 3):
 # here a box over the platform at floor level [approximation: the ride up isn't shown].
 EXTRA_DOORS["219"] = [((2497.0, 1.0, 2107.0, 390.0, 400.0, 213.0), "106", 3, 15, 15)]
+
+# ---- Mission 17, "Inner-demons", from EventTbl17 (GDATA 255; docs/GAME_FLOW.md). After demo 46 it starts in 133 at
+# start 1 -> 128 God-cube Chamber (its cubes up to door 2) -> 129 Tri-sealed Antechamber -> 132 Trial of Wisdom (group 0:
+# 3 Dullahans) -> 131 Trial of Skill (its red pod, a CATAPULT, up to door 1) -> 140 Pitch-Black Void -> 141 Skull Spire
+# (group 0: 4 Abyss, EST 24) -> 138 Moonlight Mile -> 143 Dark-pact Chamber: area 0 plays demo 47 -> 139 Apparition
+# Incarnate: the Doppelganger (group 0, EST 52 = CEm034; psp/testroom/doppelganger_boss.c) -> demo 48, 139's middle ->
+# 143 start 2: area 1 clears the mission. 130 (Trial of the Warrior, group 0), 121 (group 1) and 449 are side trips.
+SLOTS.update({"128": 436, "129": 440, "130": 444, "131": 448, "132": 452, "133": 456, "139": 480, "140": 484,
+              "141": 488, "143": 496})
+MISSIONS[17] = ("133", None, {"132": [0], "141": [0], "139": [0], "130": [0]})
+FIRST_START[17] = 1
+CATAPULT_ROOMS.add("131")
+# 143's area 1 (block 3: counter 0 is 1 after the Doppelganger, sw_in_area 1 -> mission_clear): walk into it.
+GOALS[17] = ("143", (5028.1, 4185.0, 3539.2), "139")   # area 1's floor is the slope at 4185
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
