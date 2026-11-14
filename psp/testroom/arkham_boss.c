@@ -99,7 +99,8 @@ static const float chance_missiles[3] = {0, 5, 8};      /* 0x5c2620: -> 0x15 */
 static const float chance_roar[3] = {20, 30, 40};       /* 0x5c25f0: away -> 0xc */
 static const float chance_far_missiles[3] = {0, 15, 20}; /* 0x5c2650: away -> 0x15 */
 static const float summon_damage[3] = {2000, 1800, 1600}; /* 0x5c2270: damage since the last summon -> 0xb */
-#define SUMMON_CLOCK 900.0f           /* [estimate] +0x15e4's reload isn't decoded */
+/* +0x15e4, the Legions' clock, reloaded by FUN_003d7dc0 from 0x5c2390 [variant 0, by phase]: 3000 / 2700 / 2400 */
+static const float summon_clock[3] = {3000.0f, 2700.0f, 2400.0f};
 
 /* Which of his four sides (FUN_00359b40: within 700, a sector) Dante is on: 0 front (40 deg), 1 back (100 deg),
  * 2 left (110 deg about +75), 3 right (110 deg about -75), or 4 none. */
@@ -300,7 +301,7 @@ static void ai_step(float f) {
         /* 0xb (0:11, motion 30): the Legions at 90 and 165 [four each, estimated] */
         if (ak.step == 0 && ak.frame >= 90.0f) { summon(4); ak.step = 1; }
         if (ak.step == 1 && ak.frame >= 165.0f) { summon(4); ak.step = 2; }
-        if (done()) { ak.summon_clock = SUMMON_CLOCK; ak.hurt_since = 0.0f; next_state(); }
+        if (done()) { ak.summon_clock = summon_clock[ak.phase]; ak.hurt_since = 0.0f; next_state(); }
         break;
     case S_ROUND:
         /* Group 0 down: demo 53, Vergil joins, and group 1 is Arkham again at 9000 (not played: a pause) */
@@ -503,7 +504,7 @@ void arkham_boss_spawn(float x, float y, float z) {
     ak.pos[0] = x; ak.floor_y = y; ak.pos[1] = y + 730.0f; ak.pos[2] = z;
     ak.yaw = 0.0f;
     ak.hp = MAX_HEALTH;
-    ak.summon_clock = SUMMON_CLOCK;
+    ak.summon_clock = summon_clock[ak.phase];
     ak.body_motion = ak.shell_motion = -1;
     set_state(S_IDLE);
     trace("spawn");
