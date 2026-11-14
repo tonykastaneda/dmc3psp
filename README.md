@@ -235,3 +235,11 @@ boss door, Damned Bishop encounters, and Vergil's second fight with Beowulf and 
 The M13 variant extends the existing Vergil boss while preserving M7 behavior. Native data and
 remaining approximations are recorded in [Mission 13 notes](docs/MISSION13_SPEC.md) and
 [the Vergil spec](docs/VERGIL_SPEC.md).
+
+## Mission 20
+
+The final Vergil fight uses the native arena, 10000 HP, Force Edge model and motion scripts,
+with an additive M20 move scheduler and Devil Trigger phase. Defeating him leads automatically
+to the timed ending street, then Mission Clear. The ending's Lady ally, cinematic sequence and
+some boss effects remain approximations; see [Mission 20 notes](docs/MISSION20_SPEC.md) and
+[the Vergil spec](docs/VERGIL_SPEC.md).

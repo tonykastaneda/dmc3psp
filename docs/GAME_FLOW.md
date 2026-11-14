@@ -507,6 +507,11 @@ and a Vanguard (26). This is a timed ending sequence: op 8c [13620], op 7e [2], 
 wait 300, op 7e [4], then demos 59 and 60 and Mission Clear. The exact 8c/7e side effects remain
 undecoded; the numeric delay is recorded rather than assigning an unverified opcode name.
 
+In the port: room 411 runs variant 2, then automatically enters 012. Its native ending waves run
+with hostile Lady omitted (she is an ally here); the port treats 13620 + 300 as the ending delay
+before Mission Clear. No ending demos or credits. See `docs/MISSION20_SPEC.md` for verification
+and the boss/ending approximations.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
