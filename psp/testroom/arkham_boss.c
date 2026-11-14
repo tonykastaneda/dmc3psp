@@ -76,14 +76,15 @@ static float wrap_angle(float a) { while (a > PI) a -= 2.0f * PI; while (a < -PI
 static float unit_random(void) { return (float)enemy_ai_random() * 2.3283064e-10f; }
 static float flat(const float a[3], const float b[3]) { float dx = a[0] - b[0], dz = a[2] - b[2]; return sqrtf(dx * dx + dz * dz); }
 static float angle_to(const float at[3]) { return atan2f(at[0] - ak.pos[0], at[2] - ak.pos[2]); }
+static int legion_count(void) { int i, n = 0; for (i = 0; i < LEGIONS; ++i) n += ak.legions[i].on; return n; }
 static void trace(const char *event) {
     FILE *f;
     if (!trace_on) return;
     f = fopen(trace_path, "a");
     if (!f) return;
-    fprintf(f, "t=%d f=%d %s state=%#x phase=%d round=%d frame=%.1f hp=%.0f zones=%.0f,%.0f,%.0f,%.0f,%.0f d=%.0f\n",
+    fprintf(f, "t=%d f=%d %s state=%#x phase=%d round=%d frame=%.1f hp=%.0f zones=%.0f,%.0f,%.0f,%.0f,%.0f d=%.0f legions=%d\n",
             ak.tick, testroom_frame, event, ak.state, ak.phase, ak.round, ak.frame, ak.hp, ak.zone[0], ak.zone[1],
-            ak.zone[2], ak.zone[3], ak.zone[4], flat(ak.pos, ak.dante));
+            ak.zone[2], ak.zone[3], ak.zone[4], flat(ak.pos, ak.dante), legion_count());
     fclose(f);
 }
 void arkham_boss_trace(const char *path) {
@@ -242,10 +243,11 @@ static void shells_update(float f) {
         l->yaw = atan2f(dx, dz);
         if (d > 1.0f) { l->pos[0] += dx / d * LEGION_SPEED * f; l->pos[2] += dz / d * LEGION_SPEED * f; }
         l->pos[1] += (ak.dante[1] + 100.0f - l->pos[1]) * fminf(1.0f, 0.05f * f);
-        /* They burst on touching him (the walkthrough; the explosion's record isn't read) */
+        /* They burst on touching him (the walkthrough), with the Legion class's one attack record (0x5db9d0, set up
+         * at 3ed244): 300, reaction 100, light */
         if (d < LEGION_RADIUS + DANTE_RADIUS && fabsf(ak.dante[1] + 100.0f - l->pos[1]) < 150.0f) {
             fx_explosion(l->pos);
-            land(400.0f, 1);
+            land(300.0f, 0);
             l->on = 0;
         }
     }
@@ -298,9 +300,10 @@ static void ai_step(float f) {
         if (done()) next_state();
         break;
     case S_SUMMON:
-        /* 0xb (0:11, motion 30): the Legions at 90 and 165 [four each, estimated] */
-        if (ak.step == 0 && ak.frame >= 90.0f) { summon(4); ak.step = 1; }
-        if (ak.step == 1 && ak.frame >= 165.0f) { summon(4); ak.step = 2; }
+        /* 0xb (0:11, motion 30): the Legions at 90 and 165, FUN_004e9b50's count from 0x5c23b8 [variant 0, by phase]:
+         * 4, 5, 5 */
+        if (ak.step == 0 && ak.frame >= 90.0f) { summon(ak.phase ? 5 : 4); ak.step = 1; }
+        if (ak.step == 1 && ak.frame >= 165.0f) { summon(ak.phase ? 5 : 4); ak.step = 2; }
         if (done()) { ak.summon_clock = summon_clock[ak.phase]; ak.hurt_since = 0.0f; next_state(); }
         break;
     case S_ROUND:

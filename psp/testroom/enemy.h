@@ -44,6 +44,8 @@ int enemy_add(float x, float z);
 int enemy_add_kind(int kind, float x, float z);
 /* The kind for a room script's spawn class (the EST chunk's ids). */
 int enemy_kind_for_class(int spawn_class);
+/* Spawn by EST class: like enemy_add_kind(enemy_kind_for_class(c)), but a stand-in keeps its class's health. */
+int enemy_add_class(int spawn_class, float x, float z);
 int enemy_kind(void);                  /* the selected one's */
 void enemy_set_dummy_kind(int kind);   /* what the debug menu's dummies are */
 void enemy_ride(float x0, float x1, float z0, float z1, float dx, float deck_y);   /* Secret Mission 9's wagons */

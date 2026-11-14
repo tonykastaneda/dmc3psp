@@ -2759,7 +2759,7 @@ static int script_run(float dt, float floor_y) {
                     sy = lift_y + 50.0f;
                 }
                 enemy_spawn_height(sy);
-                enemy_add_kind(enemy_kind_for_class(op->a), sx, sz);
+                enemy_add_class(op->a, sx, sz);
             }
             if(mission_choice.mission==2 && op->a==26 && focus_cmp)
                 vanguard_note("encounter_enemies",(float)enemy_count());

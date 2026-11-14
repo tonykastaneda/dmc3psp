@@ -488,6 +488,26 @@ void enemy_set_mortal(int on) { mortal = on; }
 
 int enemy_add(float x, float z) { return enemy_add_kind(ENEMY_PRIDE, x, z); }
 
+/* An EST class that spawns as another kind's stand-in keeps its own decoded health (its parameter block +0x2c):
+ * the Abyss (EST 24-27, class 6, 0x5ce060 via FUN_0041d748) 1500; the Soul Eater (EST 34, class 16, 0x5c1440 via
+ * FUN_0049b3a8) 200. Others: the kind's own. */
+int enemy_add_class(int spawn_class, float x, float z) {
+    Enemy *selected = e;
+    int i, kind = enemy_kind_for_class(spawn_class), hp = 0;
+    if (spawn_class >= 24 && spawn_class <= 27 && kind == ENEMY_PRIDE) hp = 1500;
+    if (spawn_class == 34 && kind == ENEMY_PRIDE) hp = 200;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        if (!enemies[i].active) {
+            e = &enemies[i];
+            spawn_one(kind, x, z);
+            if (hp && e->active) e->health = (short)(ENEMY_HEALTH * hp / 250);
+            e = selected;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int enemy_add_kind(int kind, float x, float z) {
     Enemy *selected = e;
     int i;
@@ -3817,7 +3837,7 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     b->pos[1] = e->pos[1];
     e->hidden = (unsigned char)b->hidden;
     if (b->restart || nevan_motion_id[b->want] != e->motion) { nevan_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }
     nevan_draw_fx(b);
     if (b->remove) e->active = 0;
 }
@@ -4002,7 +4022,7 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     if (b->restart || beowulf_motion_id[b->want] != e->motion) { beowulf_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* his attack record's damage */
     beowulf_draw_fx(b);
     if (e->plan == P_DEATH) { e->timer += f; if (e->timer > 330.0f) e->active = 0; }
 }

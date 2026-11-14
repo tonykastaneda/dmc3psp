@@ -105,7 +105,7 @@ static void bats_update(NevanBrain *b, float f, float px, float py, float pz, in
         t->life -= f;
         if (d < 80.0f) {
             t->on = 0;
-            if (attacks) b->land = 1;
+            if (attacks) { b->land = 1; b->land_damage = -1.0f; }
             continue;
         }
         if (t->life <= 0.0f) t->on = 0;
@@ -141,7 +141,9 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
         if (!b->step && b->frame > 50.0f) {
             float hx = b->pos[0] + sinf(b->yaw) * 140.0f - px, hz = b->pos[2] + cosf(b->yaw) * 140.0f - pz;
             b->step = 1;
-            if (attacks && hx * hx + hz * hz < 220.0f * 220.0f && fabsf(py - b->pos[1]) < 250.0f) b->land = 2;
+            /* Her attack record 0 (table 0x5bc280: 1000, reaction 500, so heavy): her code never sets the caps'
+             * record index (+6) from its reset 0, and her scripts have no op 6. */
+            if (attacks && hx * hx + hz * hz < 220.0f * 220.0f && fabsf(py - b->pos[1]) < 250.0f) { b->land = 2; b->land_damage = 1000.0f; }
         }
         if (b->done) act(b, N_HOVER);
         break;

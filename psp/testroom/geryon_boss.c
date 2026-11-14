@@ -303,8 +303,9 @@ static void move_forward(float speed, float frames) {
     gb.pos[2] += cosf(gb.yaw) * speed * frames;
 }
 static void contact(float frames) {
-    /* Running into Dante: the horse and its carriage hit him [approximation: the attack records aren't
-     * decoded; 600, heavy]. */
+    /* Running into Dante: the horse and its carriage hit him. The attack records are 0x40 each from 0x5d69b0 (the
+     * pointer +0x3c54, set at 382ee0); the only record any of his scripts names is 0 (em029 [12] 0:9 and [16]
+     * 0:10, op 6 0), so his body's caps hit with record 0: 1500, reaction 750, heavy [inferred]. */
     float c = cosf(gb.yaw), s = sinf(gb.yaw), dx, dz, along, across;
     gb.contact_wait = fmaxf(0.0f, gb.contact_wait - frames);
     if (gb.contact_wait > 0.0f || gb.dante[1] > gb.pos[1] + 300.0f || gb.dante[1] + 150.0f < gb.pos[1]) return;
@@ -312,7 +313,7 @@ static void contact(float frames) {
     along = s * dx + c * dz;
     across = c * dx - s * dz;
     if (along > -950.0f && along < 380.0f && fabsf(across) < (along > -200.0f ? 110.0f : 330.0f) + DANTE_RADIUS) {
-        land(gb.pos[0], gb.pos[2], 600.0f, 1);
+        land(gb.pos[0], gb.pos[2], 1500.0f, 1);
         gb.contact_wait = 60.0f;
     }
 }

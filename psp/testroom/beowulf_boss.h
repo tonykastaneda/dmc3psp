@@ -19,6 +19,7 @@ typedef struct {
     int action, step, health;
     int want, restart;           /* out: the motion to play, and whether from the top */
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
+    float land_damage;           /* out: its attack record's damage (-1: the fallback) */
     BeowulfShot shots[BEOWULF_SHOTS];
 } BeowulfBrain;
 

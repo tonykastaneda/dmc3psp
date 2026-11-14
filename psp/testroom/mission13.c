@@ -65,7 +65,7 @@ void mission13_update(float frames){
  int i;if(return_ops){
   if(return_wait>0){if(return_alive>=0 && enemy_alive_count()>return_alive)return;return_wait-=frames;if(return_wait>0)return;return_alive=-1;}
   while(return_at<return_count){const M13Op*o=&return_ops[return_at++];
-   if(o->kind==0){enemy_spawn_height(o->c);enemy_add_kind(enemy_kind_for_class(o->a),o->b,o->d);}
+   if(o->kind==0){enemy_spawn_height(o->c);enemy_add_class(o->a,o->b,o->d);}
    else {return_wait=o->kind==1?o->a:o->b;return_alive=o->kind==2?o->a:-1;break;}
   }
  }
