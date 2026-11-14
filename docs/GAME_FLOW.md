@@ -147,8 +147,8 @@ street, at 30 FPS on hardware, skins about 7,700 for its six Prides); Agni & Rud
 Jester 1,387, and the Gigapede about 2,100 rigid triangles (parts in the walls skipped). None of Mission 5 has
 been run on hardware yet: PPSSPP only.
 
-Gates: 111's doors to 112 and 110 wait for 422; 112's door to 113 waits for 102, and then an unseen bridge
-spans 112's pit (from its floor at 3000 to the one at 3500), standing in for the Soul of Steel's platform.
+Gates: 111's doors to 112 and 110 wait for 422; 112's door to 113 waits for 102, and then a bridge
+spans 112's pit (from its floor at 3000 to the one at 3500), standing in for the Soul of Steel's platform. It's drawn as 20 plain stone steps (the game's platform gimmick isn't converted).
 120's Divinity Statue isn't in: neither its stage nor the Mission 5 script places one. The Astronomical Board,
 Vajura and Soul of Steel aren't items: the gates stand in for them.
 

@@ -1810,6 +1810,7 @@ static unsigned int menu_script_pad(int frame) {
 static struct { float x, y, z, yaw, dt, floor, cframe; short move, script, ground, room; } cmp_log[CMP_MAX_FRAMES];
 static int cmp_realdt;   /* "realdt 1": the real clock, as in play, not a fixed step */
 static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": for a test, the mission begins in that room */
+static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
 static void cmp_load(void) {
     char path[320], line[64];
     FILE *f;
@@ -1882,6 +1883,7 @@ static void cmp_load(void) {
                        &cmp_walks[cmp_walk_count].first, &cmp_walks[cmp_walk_count].last) == 4) ++cmp_walk_count;
         }
         else if (strncmp(line, "startroom ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_start_room, &cmp_start_pos);
+        else if (strncmp(line, "cleared ", 8) == 0) { if (cmp_cleared_count < 8) cmp_cleared[cmp_cleared_count++] = atoi(line + 8); }
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
         else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
@@ -2470,6 +2472,17 @@ static void mission_gimmicks_draw(void) {
     }
     seal_draw();
     fight_seals_draw();
+    if (bridge_up()) {
+        /* 112's bridge (mission_floor's ramp, 3000 at z 2650 to 3500 at z 4350): drawn as 20 stone steps,
+         * alternating shades, each a box down to the step below. A stand-in: the game's own platform gimmick
+         * isn't converted. */
+        int s;
+        for (s = 0; s < 20; ++s) {
+            float za = 2650.0f + 85.0f * s, y1 = 3000.0f + 25.0f * (s + 1);
+            draw_box(2500.0f, y1 - 60.0f, y1, za + 42.5f, 330.0f, 42.5f, 0.0f,
+                     (s & 1) ? 0xff2c3238u : 0xff353c43u, 0xff1c2024u);
+        }
+    }
     info = &missions[mission_choice.mission - 1];
     if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) {
         /* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
@@ -2752,6 +2765,14 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     enemy_set_mortal(1);
     mission_clear_wait = 0.0f;
     memset(rooms_cleared, 0, sizeof rooms_cleared);
+    {
+        int c;
+        for (c = 0; c < cmp_cleared_count; ++c) {
+            char want[16];
+            snprintf(want, sizeof(want), "ROOM_%03d.BIN", cmp_cleared[c]);
+            room_set_cleared(room_named(want));
+        }
+    }
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
