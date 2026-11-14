@@ -357,7 +357,7 @@ static int kind_health(int kind) {
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
     case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
-    case ENEMY_FALLEN: return ENEMY_HEALTH * 1500 / 250;   /* an estimate (fallen.c) */
+    case ENEMY_FALLEN: return ENEMY_HEALTH * 1300 / 250;   /* 0x5c32a0 +0x2c (class 11, copied by FUN_00342450) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * BEOWULF_MAX / 250;   /* 0x5b84e0 +0x2c (class 33, FUN_002d95a4) */
     case ENEMY_LADY: return ENEMY_HEALTH * LADY_MAX / 250;   /* 0x5cbe40 +0x2c (class 37, FUN_00444a8c) */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
