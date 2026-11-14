@@ -41,9 +41,12 @@ CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 # (104) and the ice (109). After he's beaten (counter 2): the entrance ice (100), his broken ice (103), the fence.
 # Mission 4's script has no room 6, so the room stays as Mission 3 left it.
 STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
+# COLLISION sets that belong to a story piece of the same number: 122's rubble (STAY 100) and its three walls
+# in front of the door to 127, which the Mute Goddess blasts away in Mission 6 (psp/testroom/mission6.c).
+STORY_WALLS = {"122": (100,)}
 SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292, "006": 296, "009": 308,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
-         "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428,
+         "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428, "127": 432,
          # SE: the Jester's arenas follow st400 at 736, four slots a room. 422 is Mission 5's.
          "422": 824}
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
@@ -69,6 +72,11 @@ MISSIONS = {
     # (groups 0-3, waves as it climbs) -> 120 Azure Garden (the Divinity Statue) -> 121 Firestorm Chamber: Agni
     # & Rudra (group 0, EST 45 = CEm027). Their fall clears the mission. 110 (groups 1, 0) is off the route.
     5: ("111", None, {"111": [1], "422": [0], "102": [3], "113": [0, 1, 2, 3], "110": [1], "121": [0]}),
+    # Mission 6, from EventTbl06 (GDATA 244): 122 Mute Goddess' Chamber -> 123 Chamber of 3 Trials -> the trials 126
+    # (Wisdom: group 0 only after a wrong doorway), 125 (Skill: group 0 once its Essence is taken) and 124 (Warrior:
+    # group 0 under a barrier the two crest switches lift) -> 122, the Essences into the statue -> 127 The Dark
+    # Corridor, whose area 0 (demo 15) clears it. When 126's and 125's groups run is psp/testroom/mission6.c's.
+    6: ("122", None, {"124": [0], "125": [0], "126": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2}
@@ -222,6 +230,10 @@ def main():
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
                                story=gimmicks.story_tags(game), sets={g["number"]: g for g in gimmicks.parse_game(game)})
             tags = {s["index"]: n for n, s, *_ in rooms[name]["breakables"]}
+            # Walls that go with a story piece: they share its tag, so hiding the piece takes them away too.
+            for s in gimmicks.parse_game(game):
+                if s["kind"] == "COLLISION" and s["number"] in STORY_WALLS.get(name, ()):
+                    tags[s["index"]] = gimmicks.STORY_TAG + s["number"] - 100
             rooms[name]["boxes"] = gimmicks.collision_boxes(game, tags)
     for name, slot in SLOTS.items():
         out = args.output / f"ROOM_{name}.BIN"

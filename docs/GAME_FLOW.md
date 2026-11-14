@@ -176,6 +176,22 @@ sections; 120, 121 and 123 run nothing.
 | 124 | Trial of the Warrior | Area 0 starts it: group 0 (5 Prides, 3 Gluttonies, 2 Lusts, 2 Sloths, 1 Wrath) under a barrier (enemy_mgr_19 1). Crest switches 100 and 101 (flags 32, 33) both lit drop the barrier; they run down after 2400 frames (Easy, Normal), 1800 (Hard), 1200 (Very Hard, DMD), and the barrier comes back. All dead: the Essence of Fighting (item 40). Group 1 is the cutscene-skip copy of group 0 |
 | 127 | The Dark Corridor | Area 0 plays demo 15, which clears the mission |
 
+In the port (`psp/testroom/mission6.c`, hooked from `main.c`; room 127 is GDATA 432): the whole route plays
+from 122's start to Mission Clear in PPSSPP. 126's doorway order, its lock and fight, and the retargeted
+doors are the script's. 124's switches work as Mission 3's (damage charges them), and stay lit for the
+script's time. The barrier is drawn as a purple mist and makes the enemies take no damage while it's up, and
+a wall shuts the corridor during the fight. 122's rubble (STAY 100) and its walls go when the second Essence
+is placed (`STORY_WALLS` in `gen_rooms.py`). Stand-ins and estimates:
+
+- **125's spike trap** (`CStageSetNeedle`) isn't decoded. Rows of spikes come down the corridor from the left
+  wall, the right wall, the floor or the ceiling, from the walkthrough's description; their speed, spacing and
+  700 damage are estimates.
+- **The barrier's effect** (each enemy's vfunc +0x114, through a sub-object) isn't decoded: "no damage" is the walkthrough's
+  reading. Where 124's switches and corridor wall stand depends on the pillars' joint 1, which isn't read.
+  The pillars don't rise.
+- **Essences** are glows, picked up with O (as Mission 4's board), with their name shown. **Artemis** (item 30)
+  isn't a gun in the port yet; the statue only shows its name. Messages, cameras and demos 15/321 aren't in.
+
 ### Mission 7: "A chance meeting"
 
 Starts in 127 at start 2 after demo 16. 127 -> 114 Heavenrise Chamber -> 115 Divine Library (group 1: 6
