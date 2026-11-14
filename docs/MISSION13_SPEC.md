@@ -42,8 +42,21 @@ healing and decision tables are not decoded. Model identity is native, not a sub
 Host checks: `run_vergil_variants.py`, `run_mission13_logic.py`, and `bishop_logic.c`. These cover M7
 isolation, M13 native health/DT threshold and Beowulf chain, finite poses, the native beam solution,
 switch reset, persistent gate, return script, aimed-spell avoidance and enemy death. PPSSPP route and
-full-health boss validation are recorded after the end-to-end scene completes.
+full-health boss validation are recorded below.
 
 PPSSPP crystal check: `pM_m13_crystals` broke the native solution's four nodes through ordinary sword
 contacts, lit the receiver and collected item 51. Its report: room=233, key=1, puzzle=1, broken=18696.
 Frame 700 shows the beam reaching the opened gate (`docs/screenshots/mission13_crystals.png`).
+
+PPSSPP end-to-end check: `pM_m13_route`, Normal difficulty, `tools/tests/mission13_route.scene`,
+completed at frame 8762. Report: `room=234 key=2 puzzle=1 broken=18696 variant=1 hp=0 dt=1`.
+`M13_CLEAR.TXT` independently recorded the consumed key, solved puzzle and dead M13 Vergil before
+entering the normal Mission Clear menu. The route starts in 229, follows both 241 encounters,
+solves the grid with ordinary sword contacts, collects and uses item 51, then defeats the native
+8000-HP boss with ordinary shotgun damage. The log includes DT transitions/healing and Beowulf
+2b→2c→2d. Positioning, door approaches and minion clears are scripted to isolate progression;
+this is not a manual traversal or a combat-balance test. Dante retains normal health/damage rules.
+
+Inspected captures: `analysis/testroom/pM_m13_route_1500.png` (solved beam), `_1630.png` (key location),
+`_4000.png` and `_6000.png` (boss arena), and `docs/screenshots/mission13_clear.png` (Mission Clear).
+The final build includes master 4b47025; the M7 variant-isolation host check also passed after merging.

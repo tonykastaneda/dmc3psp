@@ -227,3 +227,11 @@ native shield model and motions with a simplified rear-weakness/charge AI. Bridg
 collision are approximations; see [Mission 10 implementation notes](docs/MISSION10_SPEC.md).
 The scripted PPSSPP route uses placements and minion clears to isolate progression, and walks
 Dante across the powered bridge using normal movement.
+
+## Mission 13
+
+The underground route includes the native crystal-light grid, its reset switch, item 51 and sealed
+boss door, Damned Bishop encounters, and Vergil's second fight with Beowulf and Devil Trigger.
+The M13 variant extends the existing Vergil boss while preserving M7 behavior. Native data and
+remaining approximations are recorded in [Mission 13 notes](docs/MISSION13_SPEC.md) and
+[the Vergil spec](docs/VERGIL_SPEC.md).

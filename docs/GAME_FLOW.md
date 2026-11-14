@@ -356,7 +356,8 @@ the seal-opening event. Item 51 is at 233's native ITM position (3885.3,189.6,13
 
 In room 233, crest switch 100 is bound to flag 32 and timer 120; CRYSTAL set 102 supplies completion flag 34.
 Its start/end/relay/cover/no values are 1/2/0/3/1, at (1700,164,299). Flag 34 opens door piece 101 and
-sets persistent puzzle flag 1. This light puzzle and the additive Vergil variant are being implemented.
+sets persistent puzzle flag 1. The port implements this light grid, its reset switch, key gate and return encounter, plus the additive
+Beowulf/Devil Trigger Vergil variant. Details and fidelity limits are in `docs/MISSION13_SPEC.md`.
 ### Mission 12: "Hunting the Hunter"
 
 Decoded from EventTbl12 (GDATA 250; `tools/event_dump.py <iso> 12 --out <dir>` writes the listing locally).
