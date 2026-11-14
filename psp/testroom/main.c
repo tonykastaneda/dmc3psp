@@ -40,6 +40,7 @@
 int testroom_frame;
 #include "cerberus_boss.h"
 #include "vergil_boss.h"
+#include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
 #include "bullets.h"
@@ -2220,6 +2221,7 @@ static int item_area_inside(const RoomItemUse *u, float x, float y, float z) {
 /* The key items lying in this room that can be taken now. */
 static int key_item_shown(const RoomKeyItem *k) {
     return k->mission == mission_choice.mission && k->room == mission_room && item_is(k->item, 0)
+        && (k->mission != 7 || m7_item_shown(k->item))
         && (k->after < 0 || item_is(k->after, 2));
 }
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
@@ -2457,6 +2459,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if(mission_choice.mission==8)mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);
     switch_hit(player, reach, kind);
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
+    if (mission_choice.mission == 7) m7_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
         float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
@@ -2593,6 +2596,7 @@ static void mission_gimmicks_draw(void) {
     seal_draw();
     fight_seals_draw();
     if (mission_choice.mission == 6) m6_draw();
+    if (mission_choice.mission == 7) m7_draw();
     if (bridge_up()) {
         /* 112's bridge (mission_floor's ramp, 3000 at z 2650 to 3500 at z 4350): drawn as 20 stone steps,
          * alternating shades, each a box down to the step below. A stand-in: the game's own platform gimmick
@@ -2724,6 +2728,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
     script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
     if (mission_mode && mission_choice.mission == 6 && m6_enter(room_number(room))) script_at = 0;   /* mission6.c */
+    if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room));   /* mission7.c */
     script_wait = 0.0f;
     script_waiting_alive = -1;
     player_spawn[0] = s[0];
@@ -2761,6 +2766,15 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
+    if (mission_choice.mission == 7) {
+        static int m7_tick;
+        m7_update(dt);
+        if (focus_cmp && (m7_tick++ % 30) == 0) {
+            char line[160];
+            m7_status(line, sizeof(line));
+            vergil_boss_note(line, player->x, player->y, player->z, (float)enemy_alive_count());
+        }
+    }
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
@@ -3044,6 +3058,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     seal_index = -1;
     breakables_reset();
     if (choice->mission == 6) m6_reset(choice->difficulty);
+    if (choice->mission == 7) m7_reset();
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
@@ -3573,6 +3588,7 @@ int main(int argc, char *argv[]) {
                  * walking him into a corner, or Cerberus's paws, must not carry him into the scenery. */
                 float was_x = player.x, was_z = player.z;
                 enemy_push_out(&player.x, &player.z, player.y, PLAYER_RADIUS);
+                if (mission_mode && mission_choice.mission == 7) m7_push_out(&player.x, &player.z, player.y, PLAYER_RADIUS);
                 if(mission_mode && mission_choice.mission==8)mission8_push_out(&player.x,&player.z,player.y,PLAYER_RADIUS);
                 if (stage_loaded() && (player.x != was_x || player.z != was_z)) {
                     float mx = player.x - was_x, mz = player.z - was_z, cx = was_x, cz = was_z;
