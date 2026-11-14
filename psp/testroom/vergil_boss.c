@@ -61,7 +61,7 @@ static struct {
     ScriptPlayer body;
     int landed, landed_heavy;
     float landed_x, landed_z, landed_damage;
-    int tick, variant, dt, dt_unlocked;
+    int tick, variant, dt, dt_unlocked, m13_chain;
     float dt_left,dt_cooldown;
 } vb;
 
@@ -777,6 +777,14 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
         script_play(&vb.body, 1, 11);   /* the long reaction (motion 111) [approximation: the demo takes over] */
         vb.action = 0x13;
         return 1;
+    }
+    if(vb.variant==1 && vb.hp<MAX_HEALTH*.75f && !vb.dt_unlocked && vb.state!=S_DT){
+        vb.m13_chain=0;set_state(S_DT);return 0;
+    }
+    /* M13's simplified reaction escape prevents indefinite heavy-shot flinches.
+     * Three interrupting contacts trigger the Beowulf warp; native count not decoded. */
+    if(vb.variant==1 && kind!=HIT_PISTOL && interruptible() && ++vb.m13_chain>=3){
+        vb.m13_chain=0;set_state(S_BEOWULF_WARP);return 0;
     }
     /* Flinches only between attacks [approximation: CEm035's reaction table 0x5dcc90 isn't decoded]. */
     if (kind != HIT_PISTOL && interruptible()) {

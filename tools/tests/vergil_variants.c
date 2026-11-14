@@ -15,7 +15,7 @@ int main(void){int i,seen=0;
  for(i=0;i<1000;++i)vergil_boss_update(1,0,0,400,1);
  assert(!vergil_boss_devil() && !vb.dt_unlocked && vergil_boss_variant()==0);
  vergil_boss_set_variant(1);vergil_boss_spawn(0,0,0);assert(vergil_boss_health()==8000);
- vb.hp=5900;set_state(S_THINK);
+ vb.hp=6050;set_state(S_FLINCH);vergil_boss_hit(HIT_HEAVY,0,100,1);assert(vb.state==S_DT);
  for(i=0;i<900;++i){vergil_boss_update(1,0,0,700,1);if(vb.dt)seen=1;}
  assert(seen && vb.dt_unlocked);
  vb.dt=0;vb.dt_cooldown=10000;set_state(S_BEOWULF);seen=0;

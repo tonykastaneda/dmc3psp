@@ -149,3 +149,8 @@ visible. Normal M7 calls do not enter these branches.
 
 `run_vergil_variants.py` checks M7 isolation, native M13 HP/threshold, Beowulf action progression and
 finite vertices for every part. PPSSPP `pM_m13_vergil_close` shows the second arena and native boss.
+
+M13 reaction follow-up: a contact crossing the DT health threshold requests the transition even from
+a flinch, so sustained shotgun fire cannot suppress the phase. Three interrupting heavy/light
+contacts cause the Beowulf warp escape; the native escape counter is not decoded, so this count is a
+port approximation. Both branches require variant 1 and leave M7 reactions unchanged.
