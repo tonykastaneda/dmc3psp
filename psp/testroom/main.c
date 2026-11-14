@@ -2172,6 +2172,7 @@ static void play_movie(const char *name) {
  * script's flags. See tools/gen_rooms.py. */
 static int lift_index = -1, lift_on;   /* this room's lift, and whether its switch has been struck */
 static int lift_dir, lift_rearm;       /* an elevator: which way it goes next, and stepped off since */
+static float elevator_left[16];         /* where each elevator was left this mission (0: not yet) */
 /* A catapult's flight: from one super jump pad to the next (or the top level), horizontal speed per second. */
 static int pad_flight;
 static float pad_vx, pad_vz;
@@ -2707,7 +2708,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
         if (lift_index >= 0 && room_lifts[lift_index].mission) {
             /* An elevator: it waits at the top unless Dante arrives standing on it, when it carries him on. */
             const RoomLift *l = &room_lifts[lift_index];
-            lift_y = l->high;
+            lift_y = lift_index < 16 && elevator_left[lift_index] != 0.0f ? elevator_left[lift_index] : l->high;
             lift_dir = -1;
             lift_rearm = 0;
             if (over_lift(l, s[0], s[2]) && s[1] > l->low - 300.0f && s[1] < l->high + 300.0f) {
@@ -2772,6 +2773,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         if (focus_cmp && (m7_tick++ % 30) == 0) {
             char line[160];
             m7_status(line, sizeof(line));
+            snprintf(line + strlen(line), sizeof(line) - strlen(line), " items=%d%d%d lift=%.0f", item_state[43], item_state[44], item_state[45], lift_y);
             vergil_boss_note(line, player->x, player->y, player->z, (float)enemy_alive_count());
         }
     }
@@ -2806,7 +2808,20 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (lift_y >= lift->high) { lift_y = lift->high; lift_on = 0; }
             player->y = lift_y;
             player->vy = 0.0f;
+            if (!lift_on) {
+                /* At the end of its run: the door it serves takes him on (100's into 137 is a thin box beside it). */
+                int k;
+                for (k = 0; k < rooms[mission_room].door_count; ++k) {
+                    const RoomDoor *d = &rooms[mission_room].doors[k];
+                    float dx = d->box[0] - lift->x, dz = d->box[2] - lift->z;
+                    if (dx * dx + dz * dz > 300.0f * 300.0f || fabsf(d->box[1] - lift_y) > 300.0f || d->next == ROOM_NONE) continue;
+                    if (lift_index < 16) elevator_left[lift_index] = lift_y == 0.0f ? 0.01f : lift_y;
+                    enter_room(d->next, d->start, player, camera);
+                    return 0;
+                }
+            }
         }
+        if (lift_index < 16) elevator_left[lift_index] = lift_y == 0.0f ? 0.01f : lift_y;
         stage_set_lift(lift_y - lift->switch_pos[1]);   /* its model rests where its top is in the stage */
     } else if (lift) {
         /* The switch: strike it or press O by it. Then the lift carries him up while he stands on it, and
@@ -3069,6 +3084,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     breakables_reset();
     if (choice->mission == 6) m6_reset(choice->difficulty);
     if (choice->mission == 7) m7_reset();
+    memset(elevator_left, 0, sizeof(elevator_left));
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
