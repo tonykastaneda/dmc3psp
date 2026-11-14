@@ -185,11 +185,13 @@ static void land(float damage, int heavy) {
     ak.landed_heavy = heavy;
     trace("landed");
 }
-/* A sweep of the tentacles over one side, on the script's attack frame [the reach is the zone's 700; damage estimated] */
-static void sweep(int zone, float at, float damage) {
+/* A sweep of the tentacles over one side, on the script's attack frame [the reach is the zone's 700]. Damage: the
+ * attack records (0x40 each from 0x5c1c80; damage +4, reaction +0x1c, heavy from 500): the right side's scripts
+ * name records 0 and 1 (800, reaction 200); the front and left scripts name none [their 500 is an estimate]. */
+static void sweep(int zone, float at, float damage, int heavy) {
     if (ak.hit_done || ak.frame < at) return;
     ak.hit_done = 1;
-    if (dante_zone() == zone) land(damage, 1);
+    if (dante_zone() == zone) land(damage, heavy);
 }
 static void fire_missiles(void) {
     int i, n = 0;
@@ -227,7 +229,7 @@ static void shells_update(float f) {
             for (k = 0; k < 3; ++k) m->vel[k] += (to[k] / d * 14.0f - m->vel[k]) * fminf(1.0f, 0.05f * f);
         }
         m->pos[0] += m->vel[0] * f; m->pos[1] += m->vel[1] * f; m->pos[2] += m->vel[2] * f;
-        if (d < 60.0f + DANTE_RADIUS) { fx_explosion(m->pos); land(300.0f, 1); m->on = 0; }
+        if (d < 60.0f + DANTE_RADIUS) { fx_explosion(m->pos); land(1500.0f, 1); m->on = 0; }   /* record 5: 1500, reaction 1000 */
     }
     for (i = 0; i < LEGIONS; ++i) {
         Legion *l = &ak.legions[i];
@@ -271,11 +273,11 @@ static void ai_step(float f) {
         { float d = wrap_angle(angle_to(ak.dante) - ak.yaw), r = 0x200 * UNITS * f; ak.yaw = wrap_angle(ak.yaw + fmaxf(-r, fminf(r, d))); }
         if (ak.timer > 120.0f) set_state(S_IDLE);
         break;
-    case S_FRONT: sweep(0, 45.0f, 500.0f); if (done()) next_state(); break;     /* 0xf: script 0:15, motion 31 */
-    case S_RIGHT: sweep(3, 105.0f, 500.0f); if (done()) next_state(); break;    /* 0xd: 0:13, motion 34, record 0 */
-    case S_RIGHT2: sweep(3, 40.0f, 500.0f); if (done()) next_state(); break;    /* 0xe: 0:14, motion 35, record 1 */
-    case S_LEFT: sweep(2, 105.0f, 500.0f); if (done()) next_state(); break;     /* 0x10: 0:16, motion 32 */
-    case S_LEFT2: sweep(2, 45.0f, 500.0f); if (done()) next_state(); break;     /* 0x11: 0:17, motion 33 */
+    case S_FRONT: sweep(0, 45.0f, 500.0f, 1); if (done()) next_state(); break;     /* 0xf: script 0:15, motion 31 */
+    case S_RIGHT: sweep(3, 105.0f, 800.0f, 0); if (done()) next_state(); break;    /* 0xd: 0:13, motion 34, record 0 */
+    case S_RIGHT2: sweep(3, 40.0f, 800.0f, 0); if (done()) next_state(); break;    /* 0xe: 0:14, motion 35, record 1 */
+    case S_LEFT: sweep(2, 105.0f, 500.0f, 1); if (done()) next_state(); break;     /* 0x10: 0:16, motion 32 */
+    case S_LEFT2: sweep(2, 45.0f, 500.0f, 1); if (done()) next_state(); break;     /* 0x11: 0:17, motion 33 */
     case S_GREEN: case S_GREEN2:
         if (done()) next_state();   /* 0x12 -> 0x13: the body turns green (0:18, 0:19) */
         break;
