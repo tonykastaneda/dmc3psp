@@ -3773,7 +3773,7 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     if (b->restart || arachne_motion_id[b->want] != e->motion) { arachne_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; giga_note("arachne landed", b->land, (int)b->land_damage); }
     if (b->remove) e->active = 0;
 }
 static void arachne_hit_glue(HitKind kind, float from_x, float from_z) {
@@ -3837,7 +3837,7 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     b->pos[1] = e->pos[1];
     e->hidden = (unsigned char)b->hidden;
     if (b->restart || nevan_motion_id[b->want] != e->motion) { nevan_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }
+    if (b->land) land_attack(b->land == 2);
     nevan_draw_fx(b);
     if (b->remove) e->active = 0;
 }
@@ -3899,7 +3899,7 @@ static void dullahan_update_glue(float f, float px, float py, float pz) {
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     if (b->restart || dullahan_motion_id[b->want] != e->motion) { dullahan_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; giga_note("dullahan landed", b->land, (int)b->land_damage); }
     if (b->remove) e->active = 0;
 }
 static void dullahan_hit_glue(HitKind kind, float from_x, float from_z) {
