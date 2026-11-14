@@ -14,6 +14,13 @@ static const struct { unsigned char dante; float radius, spread; } rows[8] = {
     {1, 100.0f, 900.0f}, {1, 150.0f, 600.0f}, {1, 100.0f, 400.0f}, {1, 150.0f, 600.0f},
 };
 
+int jester_pick(int *last, float (*unit)(void)) {
+    int n = (int)(unit() * 3.0f) % 3;
+    if (n == *last) n = (n + 1) % 3;
+    *last = n;
+    return n;
+}
+
 void jester_reappear(int row, float px, float pz, float *x, float *z, float (*unit)(void)) {
     float cx = rows[row & 7].dante ? px : *x, cz = rows[row & 7].dante ? pz : *z;
     float r = rows[row & 7].radius + rows[row & 7].spread * unit();

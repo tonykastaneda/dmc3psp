@@ -764,9 +764,18 @@ flinch js05, stun js14, launched js04, death js16.
   0-0x13 meets flag +0x4cd0 he does one of `00536b10` / `00536c70` / `00536dd0` instead (a third each), or with
   +0x481d set and +0x4818 clear `00536f30` / `00536fb0` (half each). Hits (`0053d0d0`, vfunc 0xc0) answer with
   reactions 0x67-0x6a (a coin flip, by the hit's type), 0x6d, 0x7b or 0x7d.
-- **Not found**: where his attacks are chosen. No function in the class requests an attack (0-0x15) by a constant;
-  each action's update chains the next (vfunc 0x370), so the choice is spread over the 383 functions. The port's
-  attack choice, timings, bombs, stun gauge and arena clamp stay the stand-in above.
+- **Attack choice** (`FUN_00534490`, his per-frame AI): while idling or flinching (actions 0x64, 0x67-0x6a) his idle
+  time (+0x168) runs; at `0x5e2e30[rank]` (500 frames on Easy and Normal, 450, 400) he requests one of three attacks,
+  0x75 / 0x76 / 0x77, picked a third each but never the last again (`0053e960`). With +0x481d set (later
+  encounters, below `0x5e2f64[encounter]` health) `0053ea40` adds 0x7f / 0x80 and 0x7b; not in room 422.
+- **Each attack** (actions 21-28, 29-36, 37-44; dispatch `0053bfc0`: 0x75 `00537750`, 0x76 `00538110`, 0x77
+  `00538ae0`): he vanishes to a spot 100-1000 cm from Dante (row 4, motion js32), then throws: js33, js30 or js31.
+  What he throws is picked the same no-repeat way (`0053e720`, +0x4d6c) from three shell classes (`0055c380`,
+  `0055bf40`, `0054d3a0`), not decoded. Motion ids map to jsNN directly (table `0x5e2db0`: pack, motion).
+- **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
+  the thrown shells are the stand-in's three rolling bombs, and between attacks he idles or walks (his idle
+  actions aren't decoded). The stun gauge, flinch-and-vanish and arena clamp stay the stand-in's. The old cane
+  swings and taunt are no longer chosen: the game's first encounter has no such attacks in its picker.
 
 ---
 
