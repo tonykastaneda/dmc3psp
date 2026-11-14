@@ -791,10 +791,11 @@ ar07, charge ar42, team run ar02, flinch ar30, knock-back ar44, death ar83. Heal
 - **Attack permission** (`003af5c0`): a timer from `0x5b7440[rank]` (300, 240, 180, 120, 60 frames; rank 0 for
   Easy and Normal) runs down at (2 − health fraction) a frame, × 2.5 while his brother is in state 36, × 2 for
   the survivor, × 0.75 within 650 and × 0.5 beyond. Paired, only one holds it at a time (flags 0x100).
-- **Attack choice** (`003ade30`), by sword set and zone (≤350 / ≤650 / ≤1000 / beyond), charged or not
-  (+0x2ee4, set for 1800 frames by `003ac280`): Agni's (set 0) 42 or 43 near, 50/46 or 52/47 mid, 56/52 far;
-  Rudra's (set 1) 44 or 53/45 near, 51/48 or 53/49 mid, 51/56 far; both (set 2) 45/43 with 1-in-8 54 near, 49/47
-  with 1-in-4 54 mid, 56/54 or 11/54 far. Dante 300 above them for 88 frames (`003afbe0`) → 55.
+- **Attack choice** (`003ade30`, with permission 1), by sword set and zone (≤350 / ≤650 / ≤1000), and whether the
+  sword is charged (+0x2ee4, 1800 frames from the charge states 50 / 51, `003ac280`): Agni's 42 charged 43, then
+  50 (charge) or 47 / 1-in-4 52, then 50 or 52; Rudra's 44 or 45 / 1-in-4 53, then 51 or 49 / 1-in-4 53, then 51 or
+  56; both swords 45 / 43 with 1-in-8 54, then 49 / 47 with 1-in-4 54, then 56 / 54. Beyond 1000 none. Dante 300
+  above them for 88 frames (`003afbe0`) → 55. After a guard (permission 2 or 4) a second table, not ported.
 - **Moves** (`003ad180` alone): beyond 1000 leap (11) unless role ≥ 3, then on a 12-frame wait 12; 650-1000 → 12, or
   3, or 14/15 at random; 350-650 → 12, 4, 14/15, or 13 when role ≥ 4; nearer → 4 or 13. Paired (`003ad5d0`) adds the
   flank: 14 / 6-7 / 15 / 9-10 / 3-4 for flank 4 / 3 / 2 / 1 / 0.
