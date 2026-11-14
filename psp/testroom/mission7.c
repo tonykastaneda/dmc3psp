@@ -32,6 +32,13 @@ void m7_reset(void) {
     ball_idle = ball_rise = spin = 0.0f;
 }
 void m7_enter(int room) { room_now = room; }
+/* 127's door into 114 lands on its balcony at 9000 (start 1), where the game has Dante drop over the railing to
+ * the ground floor; the port's collision there keeps him on the balcony, so the door takes him to the ground
+ * floor's start 0 instead [approximation]. He climbs back past the balcony on the jump pads. */
+int m7_door_route(int room, int door, int *next_room, int *start) {
+    if (room == 127 && door == 1) { *next_room = 114; *start = 0; return 1; }
+    return 0;
+}
 int m7_item_shown(int item) { return item != 45 || ball_broken; }
 void m7_status(char *out, int size) {
     snprintf(out, size, "m7 room=%d switch=%d/%d ball=%d/%d broken=%d rise=%.0f", room_now, switch_hits, switch_lit,

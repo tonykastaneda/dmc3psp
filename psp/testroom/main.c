@@ -2860,12 +2860,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         player->vy = up;
         player->on_ground = 0;
         player->jump_motion = -1;
+        player->air_kind = AIR_NONE;   /* a free fall: not the jump's own arc */
+        player->free_fall = 1;
         player->y += 1.0f;
         pad_flight = 1;
         break;
     }
     if (pad_flight) {
-        if (player->on_ground) pad_flight = 0;
+        if (player->on_ground) { pad_flight = 0; player->free_fall = 0; }
         else { player->x += pad_vx * dt; player->z += pad_vz * dt; }
     }
     for (i = 0; i < ROOM_SHOP_COUNT; ++i) {
@@ -2968,6 +2970,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         if (m6) {
             int next = 0, start = 0;
             if (m6_door_route(room_number(mission_room), i, &next, &start)) {
+                char want[16];
+                snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
+                if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
+            }
+        }
+        if (mission_choice.mission == 7) {
+            int next = 0, start = 0;
+            if (m7_door_route(room_number(mission_room), i, &next, &start)) {
                 char want[16];
                 snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
                 if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }

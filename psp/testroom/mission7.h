@@ -7,6 +7,8 @@
 void m7_reset(void);
 void m7_enter(int room);
 void m7_update(float dt);
+/* Leaving a room by one of its doors: returns 1 if Mission 7 sends it elsewhere. */
+int m7_door_route(int room, int door, int *next_room, int *start);
 /* A melee hit's frame. heavy: 1 for a heavy hit. */
 void m7_hit(float x, float y, float z, float yaw, float reach, int heavy);
 int m7_item_shown(int item);   /* 0 while the script still hides it */
