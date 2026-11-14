@@ -67,6 +67,7 @@ SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (221, 225, 231, 233, 235, 236
 SLOTS.update({"007": 300, "008": 304})
 # Mission 16 (Central Temen-ni-gru 1 and 2): room 1xx is GDATA 324 + 4 x (n - 100).
 SLOTS.update({f"{n}": 324 + 4 * (n - 100) for n in (106, 107, 108, 109, 116, 117, 118, 119, 146)})
+SLOTS.update({"411":780, "012":320})  # Mission 20 arena and ending street.
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -117,6 +118,7 @@ MISSIONS = {
     # 240 -> 217 Torture Chamber: Beowulf (group 0, EST 51).
     11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0]}),
     13: ("229", None, {"229": [0], "241": [0], "234": [0]}),
+    20: ("411", None, {"411": [0], "012": [0]}),
     # Mission 14, from EventTbl14 (GDATA 252): 237 Lair of Judgement Ruins (its combat adjudicator opens door 0) -> 235
     # Underwater Elevator -> 225 Subterranean Lake -> 231 Top Obsidian Path -> 233 Vestibule -> 214 Altar of Evil (group
     # 0 on entry) -> 239 -> (the wagon) -> 240 -> 236 Hell's Highway (the chessmen, groups 2-6) -> 221 Subterranean
