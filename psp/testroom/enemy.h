@@ -47,9 +47,11 @@ int enemy_alive_count(void);
 int enemy_alive_positions(float out[][3], int max);   /* feet of those not yet dead */
 void enemy_drop_below(float y);
 void enemy_gun_aimed(float x, float z);
+void enemy_dante_attack(int action, int gun);   /* Dante started a move (bosses that guard react) */
 void enemy_set_hit_weapon(int melee);   /* the melee weapon of the hits that follow (0 Rebellion, 1 Cerberus...) */   /* Dante fired from here */      /* those fallen far below a riding lift: gone */          /* those not yet dead */
 void enemy_kill_all(void);            /* for tests */
 void enemy_trim(int keep);
+void enemy_ar_force(int state);       /* tests: Agni or Rudra next takes this game state */
 void enemy_clear_minions(void);      /* tests: retain the boss and the script's alive-count gates */
 void enemy_remove_defeated(void);    /* encounter transition: retire completed wave actors */
 /* Keep the ones there are; add new ones in a ring around (x, z) or remove the last ones. */
