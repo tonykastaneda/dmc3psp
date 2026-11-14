@@ -212,6 +212,9 @@ static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
 static int pawn_init(void);
+static void greed_tick(int slot, float f, float px, float pz);
+static void coffins_update(float f);
+static void coffins_reset(void);
 static void pawn_spawn(void);
 static void pawn_update(float f, float px, float py, float pz);
 static void pawn_hit(HitKind kind);
@@ -439,6 +442,7 @@ void enemy_trim(int keep) {
 }
 void enemy_kill_all(void) {
     int i;
+    coffins_reset();
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
             if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
@@ -479,6 +483,7 @@ void enemy_clear_minions(void) {
 void enemy_set_count(int count, float x, float z) {
     int i;
     if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
+    if (count == 0) coffins_reset();
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
@@ -1490,6 +1495,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         e = &enemies[i];
         was_x = e->pos[0]; was_z = e->pos[2];
         update_one(dt, px, py, pz);
+        if (e->active && e->kind == ENEMY_GREED) greed_tick(i, dt * MOTION_FPS, px, pz);
         /* The room's walls, as for Dante: swept along everything that moved it this frame (its walk, root
          * motion, knockback, being pushed by him or the others), in steps of at most 15 cm, so a launch or a
          * shove can't carry it through. A spawn or a jump past 6 m is a placement, not a move: checked where it
@@ -1506,6 +1512,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         }
     }
     arrows_update(dt * MOTION_FPS, px, py, pz);
+    coffins_update(dt * MOTION_FPS);
     e = selected;
 }
 
@@ -2550,6 +2557,7 @@ static void jester_hit(HitKind kind) {
 }
 
 #include "pawn.inc"
+#include "greed.inc"
 
 /* ---- Agni & Rudra (class 27, EST 45; em026.pac, GDATA 131), Mission 5's boss in room 121 (docs/ENEMY_SPECS.md
  * section F). Class 27 (`FUN_00480bb0`, an object of 0x290 bytes) is a controller over the two brothers; their
