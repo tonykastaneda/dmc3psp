@@ -15,11 +15,13 @@ int leviathan_boss_update(float frames, float px, float py, float pz, int attack
 int leviathan_boss_hit(int part, float damage, int mortal);
 void leviathan_boss_select_target(float px, float pz);
 void leviathan_boss_target_position(float out[3]);
+float leviathan_boss_segment_hit(const float a[3], const float b[3]);
 float leviathan_boss_health(void);
 float leviathan_boss_max_health(void);
 int leviathan_boss_dying(void);
 int leviathan_boss_open(void);
 int leviathan_boss_target(void);
+const char *leviathan_boss_log(void);
 int leviathan_boss_active(void);
 int leviathan_boss_orb_sink(float out[3]);
 void leviathan_boss_collect_orbs(int value);

@@ -1,0 +1,20 @@
+frames 1400
+fps 30
+turbo 0
+realdt 0
+item 46 2
+gun 6
+fire 1
+clearminions 60
+r1 1 1399
+place 30 5700 75 3400 180
+place 300 4978 0 3100 180
+place 650 5700 75 3400 180
+place 950 4978 0 3100 180
+mkey cross 60
+psp_shot 80
+psp_shot 220
+psp_shot 400
+psp_shot 1000
+psp_shot 1300
+

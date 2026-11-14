@@ -503,7 +503,7 @@ def main() -> None:
     # A room with a lift also gets its lift and the lift's switch drawn from their own models (the lift tagged so
     # the runtime can raise it); other switches (Mission 3's crest switch) are drawn by the runtime.
     extra = ("LIFT", "SWITCH") if re.search(r"# SET\s+\d+\s+LIFT", game_text) else ()
-    for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra) if len(stage) > 5 else []):
+    for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra, static_efm=680 <= args.slot <= 732) if len(stage) > 5 else []):
         by_texture = {}
         for tri, texture in tris:
             by_texture.setdefault(texture, []).extend(subdivide(tri, play))

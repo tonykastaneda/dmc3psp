@@ -102,3 +102,12 @@ Ignis ITM/EVE placement, five native eye meshes, fang exit gate, goo-door gates,
 and boss/mission-clear hooks. `pM_m8_stomach` (40/160) and `pM_m8_ignis` (80/250) were inspected in PPSSPP.
 `run_mission8_logic.py` checks acid contact/timing, airborne avoidance, five-eye gating, persistence and reset.
 Eye durability and all-at-once fang removal are port approximations. Full route/clear verification follows.
+
+Combat follow-up: gun traces use the two native hurt-sphere radii and rest-bone
+attachments per organ (451950 / 4614e0), instead of the ordinary enemy cylinder.
+Animated displacement of these hurt attachments remains approximated by their
+rest positions. M8 STAY EFM tunnel walls are baked as static rest geometry;
+animated UVs and wall deformation remain unimplemented. Live eye seals now
+block player movement, preventing sword root motion from passing through them.
+`pM_m8_eyes_solid` completed all five seals and entered st301 through its real
+door (report: eyes=31, room=301).

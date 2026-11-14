@@ -93,6 +93,12 @@ float leviathan_boss_max_health(void) { return 6500.0f; }
 int leviathan_boss_dying(void) { return heart.state == HEART_DEAD; }
 int leviathan_boss_open(void) { return heart.state == HEART_EXPOSED || heart.state==HEART_CLOSING || (heart.state==HEART_OPENING && heart.timer<=64) || (heart.state == HEART_ATTACK && heart.attack_age>=55); }
 int leviathan_boss_target(void) { return heart.target; }
+const char *leviathan_boss_log(void) {
+    static char text[256];
+    snprintf(text,sizeof(text),"leviathan state=%d hp=%.0f lungs=%.0f,%.0f down=%.0f,%.0f target=%d charge=%.0f,%.0f\n",
+             heart.state,heart.hp,heart.lung_hp[0],heart.lung_hp[1],heart.down[0],heart.down[1],heart.target,heart.charge[0],heart.charge[1]);
+    return text;
+}
 void leviathan_boss_target_position(float out[3]) {
     memcpy(out, target_pos[heart.target], sizeof(float) * 3);
 }
@@ -105,6 +111,33 @@ void leviathan_boss_select_target(float px, float pz) {
         if (i && heart.down[i-1] > 0) continue;
         if (d < best) { best = d; heart.target = i; }
     }
+}
+/* Native hurt spheres (4614e0 / 451950), attached to the organs' rest
+ * bones. Their animated displacement is small; rest attachments are used by
+ * combat while the renderer continues sampling the authored animation. */
+float leviathan_boss_segment_hit(const float a[3], const float b[3]) {
+    static const float caps[3][2][4]={
+        {{4977.79f,246.10f,2566.36f,220.10f},{4988.54f,294.41f,2340.28f,90}},
+        {{5984.58f,620.42f,2665.30f,500},{5909.77f,365.68f,2953.51f,356}},
+        {{3494.31f,680.85f,3345.44f,1000},{4155.02f,233.08f,3618.65f,300}}
+    };
+    float best=-1, d[3],len=0; int part,k,cap,selected=heart.target;
+    if(!leviathan_boss_active())return -1;
+    for(k=0;k<3;++k){d[k]=b[k]-a[k];len+=d[k]*d[k];}
+    if(len<.001f)return -1;
+    for(part=0;part<3;++part){
+        if(part && heart.down[part-1]>0)continue;
+        for(cap=0;cap<2;++cap){
+            float dot=0,dist=0,t,disc;
+            for(k=0;k<3;++k){float q=a[k]-caps[part][cap][k];dot+=q*d[k];dist+=q*q;}
+            dist-=caps[part][cap][3]*caps[part][cap][3];
+            disc=dot*dot-len*dist;if(disc<0)continue;
+            t=dist<=0?0:(-dot-sqrtf(disc))/len;
+            if(t>=0 && t<=1 && (best<0 || t<best)){best=t;selected=part;}
+        }
+    }
+    if(best>=0)heart.target=selected;
+    return best;
 }
 void leviathan_boss_absorb(int part, float amount) {
     if (!heart.active || part < 1 || part > 2 || amount <= 0) return;
