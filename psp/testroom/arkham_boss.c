@@ -243,10 +243,11 @@ static void shells_update(float f) {
         l->yaw = atan2f(dx, dz);
         if (d > 1.0f) { l->pos[0] += dx / d * LEGION_SPEED * f; l->pos[2] += dz / d * LEGION_SPEED * f; }
         l->pos[1] += (ak.dante[1] + 100.0f - l->pos[1]) * fminf(1.0f, 0.05f * f);
-        /* They burst on touching him (the walkthrough; the explosion's record isn't read) */
+        /* They burst on touching him (the walkthrough), with the Legion class's one attack record (0x5db9d0, set up
+         * at 3ed244): 300, reaction 100, light */
         if (d < LEGION_RADIUS + DANTE_RADIUS && fabsf(ak.dante[1] + 100.0f - l->pos[1]) < 150.0f) {
             fx_explosion(l->pos);
-            land(400.0f, 1);
+            land(300.0f, 0);
             l->on = 0;
         }
     }
