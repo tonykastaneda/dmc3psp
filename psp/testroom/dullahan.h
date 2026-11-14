@@ -15,6 +15,7 @@ typedef struct {
     int want;                    /* out: the motion to play (DULLAHAN_M_*) */
     int restart;                 /* out: start it from the top (cleared by the caller) */
     int land;                    /* out: an attack landed on Dante this frame (1 light, 2 heavy) */
+    float land_damage;           /* out: its attack record's damage */
     int remove;                  /* out: the body is gone */
 } DullahanBrain;
 

@@ -50,9 +50,12 @@ static void forward(DullahanBrain *b, float speed, float f) {
 }
 
 /* Approximate swept shield contact in front of the body. */
-static void charge_contact(DullahanBrain *b, float px, float py, float pz, int heavy, int attacks) {
+/* Its attack scripts (em012 [10]) are 3:0 and 3:1, both on motion 300: 3:0 names attack record 1 (table 0x5cc7f0:
+ * 600, reaction 300) and 3:1 record 2 (500, reaction 250), both light (under 500). Which of the two charges plays
+ * which script is [inferred]. */
+static void charge_contact(DullahanBrain *b, float px, float py, float pz, int heavy, float damage, int attacks) {
     float hx = b->pos[0] + sinf(b->yaw) * 120.0f - px, hz = b->pos[2] + cosf(b->yaw) * 120.0f - pz;
-    if (attacks && hx * hx + hz * hz < HIT_REACH * HIT_REACH && fabsf(py - b->pos[1]) < 200.0f) b->land = heavy ? 2 : 1;
+    if (attacks && hx * hx + hz * hz < HIT_REACH * HIT_REACH && fabsf(py - b->pos[1]) < 200.0f) { b->land = heavy ? 2 : 1; b->land_damage = damage; }
 }
 
 void dullahan_think(DullahanBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks) {
@@ -77,13 +80,13 @@ void dullahan_think(DullahanBrain *b, float f, float px, float py, float pz, flo
     case A_LUNGE:
         if (b->frame < 30.0f) turn_to(b, px, pz, 0.02f, f);
         if(b->frame>=30 && b->frame<75)forward(b, LUNGE_SPEED, f);
-        if (!b->step && b->frame > 45.0f) { b->step = 1; charge_contact(b, px, py, pz, 0, attacks); }
+        if (!b->step && b->frame > 45.0f) { b->step = 1; charge_contact(b, px, py, pz, 0, 600.0f, attacks); }
         if (b->done) act(b, A_IDLE);
         break;
     case A_POUNCE:
         if (b->frame < 20.0f) turn_to(b, px, pz, 0.02f, f);
         if(b->frame>=30 && b->frame<75)forward(b, POUNCE_SPEED, f);
-        if (!b->step && b->frame > 70.0f) { b->step = 1; charge_contact(b, px, py, pz, 1, attacks); }
+        if (!b->step && b->frame > 70.0f) { b->step = 1; charge_contact(b, px, py, pz, 0, 500.0f, attacks); }
         if (b->done) act(b, A_IDLE);
         break;
     case A_FLINCH:
