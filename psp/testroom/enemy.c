@@ -579,7 +579,8 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
-    if (spawn_class == 35) return ENEMY_PAWN;   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
+    if (spawn_class == 35) return ENEMY_PAWN;
+    if (spawn_class == 36 || spawn_class == 37) return ENEMY_PAWN;   /* Mission 14's other chessmen: the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
