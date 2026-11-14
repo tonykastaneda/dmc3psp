@@ -41,3 +41,8 @@ Inspected captures: `analysis/testroom/pM_m20_clear_1000.png`, `_3000.png` (aren
 `docs/screenshots/mission20_vergil.png` retains the arena capture. Build and the combined Vergil
 host checks pass against master f26ebc4. The Easy ending group was decoded but this complete
 PPSSPP route check used Normal.
+
+Final integration: merged master 98d22f2 (M19), rebuilt successfully, reran all Vergil variant host
+checks, and ran `pM_m20_merged` for 900 frames. Inspected
+`analysis/testroom/pM_m20_merged_600.png`: the final arena and variant remain functional after the
+shared enemy/room additions. The full clear above precedes this unrelated M19 integration.
