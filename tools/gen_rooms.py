@@ -45,7 +45,7 @@ STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
 STORY["210"] = [(9, 20, ())]
 # COLLISION sets that belong to a story piece of the same number: 122's rubble (STAY 100) and its three walls
 # in front of the door to 127, which the Mute Goddess blasts away in Mission 6 (psp/testroom/mission6.c).
-STORY_WALLS = {"122": (100,)}
+STORY_WALLS = {"122": (100,), "237": (201,)}   # 237: the wall behind its combat adjudicator
 SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292, "006": 296, "009": 308,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428, "127": 432,
@@ -60,6 +60,9 @@ SLOTS.update({"114": 380, "115": 384, "127": 432, "134": 460, "135": 464, "136":
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in range(201, 212)})
 # Mission 11 (Forbidden Land 1F to the Torture Chamber).
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (212, 213, 214, 217, 239, 240)})
+# Mission 14 (Forbidden Land 3F down to the Residential Area): 0xx is GDATA 272 + 4 x n.
+SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (221, 225, 231, 233, 235, 236, 237)})
+SLOTS.update({"007": 300, "008": 304})
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -109,9 +112,16 @@ MISSIONS = {
     # psp/testroom/mission11.c) -> 239 the Temperance Wagon -> (216, the wagon ride: a stand-in, see EXTRA_DOORS) ->
     # 240 -> 217 Torture Chamber: Beowulf (group 0, EST 51).
     11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0]}),
+    # Mission 14, from EventTbl14 (GDATA 252): 237 Lair of Judgement Ruins (its combat adjudicator opens door 0) -> 235
+    # Underwater Elevator -> 225 Subterranean Lake -> 231 Top Obsidian Path -> 233 Vestibule -> 214 Altar of Evil (group
+    # 0 on entry) -> 239 -> (the wagon) -> 240 -> 236 Hell's Highway (the chessmen, groups 2-6) -> 221 Subterranean
+    # Garden -> 204 Subground Water Vein (its blue light, door 0, to 007) -> 007 Love Planet -> 008 13th Avenue, whose
+    # area 0 plays demo 326 and clears it (psp/testroom/mission14.c). The route between the script's rooms is the
+    # walkthrough's, matched by door links.
+    14: ("237", None, {"214": [0], "236": [2, 3, 4, 5, 6]}),
 }
 # Where a mission starts in its first room, when not at start 0.
-FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1}
+FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1, 14: 1}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
 CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211", 11: "217"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2

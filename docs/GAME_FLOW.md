@@ -335,6 +335,28 @@ In the port: the route plays from 212 to Mission Clear in PPSSPP. Stand-ins and 
 - **Soul Eaters** (class 16, em016) aren't ported and spawn as Prides. Mission Clear comes as Beowulf falls, not by
   demo 30 at the shiny object.
 
+### Mission 14: "Drive!"
+
+From EventTbl14 (GDATA 252; `orchestration/evt/evt_m14.txt` locally). After demos 327 and 39 it starts in 237 at
+start 1. The script has sections only for 237, 214, 236 and 008; the route between them is the walkthrough's,
+matched by door links (doors open from Mission 14 on). No boss. Chessmen: EST 35 the Damned Pawn, 36 and 37 the
+other pieces (not identified by name; the walkthrough's "new chess-type demon" that charges).
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 237 | Lair of Judgement Ruins | Item 27 (Beowulf) at area 0. Door 0 (to 235) is enabled by flag 32, bound to COMBO set 200, a combat adjudicator (weapon "fight", rank C); COLLISION 201 walls the door |
+| 235, 225, 231, 233 | Underwater Elevator, Subterranean Lake, Top Obsidian Path, Vestibule | No section |
+| 214 | Altar of Evil | Doors 2 and 3 locked, group 0 (5 of EST 30, class 12) until cleared |
+| 239, 240 | Temperance Wagon | No section (the wagon, as in Mission 11) |
+| 236 | Hell's Highway | 21 areas raise and lower the panels 101-118 as Dante walks the maze; areas 16-20 start groups 2-6 (chessmen: 7 Pawns; 3 of EST 36; 3 + 3; 2 + 1 of EST 37; 4 + 2), each opening more panels when beaten. Flag 1 at the end |
+| 221, 204, 007 | Subterranean Garden, Subground Water Vein (its blue light, door 0, takes him to 007), Love Planet | No section |
+| 008 | 13th Avenue: Aftermath | Door 0 disabled; area 0 plays demo 326, which clears the mission |
+
+In the port (`psp/testroom/mission14.c`): the route plays from 237 to Mission Clear in PPSSPP. Stand-ins: the
+adjudicator takes 20 melee hits of any weapon (no style rank, no Hyper Fist), drawn as a stone block, and takes
+COLLISION 201 with it (`STORY_WALLS`); 236 runs groups 2-6 one after another from the start, its panels stay as the
+stage has them; EST 36 and 37 spawn as Pawns; the wagon is Mission 11's door from 239 to 240.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
