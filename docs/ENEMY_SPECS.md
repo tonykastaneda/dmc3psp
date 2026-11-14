@@ -785,10 +785,12 @@ flinch js05, stun js14, launched js04, death js16.
     springing where it was put [where that is, is not read].
   - kind 2, `0054d3a0` (0x540 bytes, vtable `0x616e30`, update `0054d590`, then `0054da60` / `0054d850`), its count
     `0x5e3010[encounter]`: not read.
-  Not ported (the 45-minute cap): the projectiles' paths, hits and damage. The port still throws the stand-in's
-  three rolling bombs for all three.
+  Ported in `jester.c` (the projectile follow-up below) and thrown in the fight (enemy.c).
 - **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
-  the thrown shells are the stand-in's three rolling bombs, and between attacks he idles or walks (his idle
+  each throw starts the emitter its no-repeat pick names (`jester_projectiles_begin`, AI rank 0), the attack holds
+  its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;
+  what lands (the ball 1200 heavy, a trap 650, the cross 800) hurts Dante with that damage. They're drawn as motes
+  (`jester_projectiles_draw`): the effects themselves aren't ported. Between attacks he idles or walks (his idle
   actions aren't decoded). The stun gauge, flinch-and-vanish and arena clamp stay the stand-in's. The old cane
   swings and taunt are no longer chosen: the game's first encounter has no such attacks in its picker.
 

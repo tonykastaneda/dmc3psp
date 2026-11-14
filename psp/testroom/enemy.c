@@ -219,6 +219,7 @@ static int jester_init(void);
 static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
+static JesterProjectiles jester_world;   /* his emitters and what they throw (jester.c) */
 static void bishop_spawn_glue(void);
 static void bishop_update_glue(float f,float px,float py,float pz);
 static void bishop_hit_glue(HitKind kind,float from_x,float from_z);
@@ -1917,6 +1918,7 @@ void enemy_draw(void) {
         draw_one();
     }
     arrows_draw();
+    jester_projectiles_draw(&jester_world);
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     e = selected;
@@ -2628,6 +2630,8 @@ static int jester_init(void) {
 
 static void jester_state(int s) {
     int m = jester_motion[s];
+    /* The attack's end (however it ends) destroys its emitter (+0x4cec-+0x4cf4); what it threw finishes its life. */
+    if (e->action >= J_ATK0 && e->action <= J_ATK2 && (s < J_ATK0 || s > J_ATK2)) jester_projectiles_stop(&jester_world);
     e->action = (unsigned char)s;
     e->timer = 0.0f;
     e->step = 0;
@@ -2655,6 +2659,7 @@ static void jester_spawn(void) {
     e->health = 1;
     e->ar_health = jester_max_health(0);   /* room 422 is his first encounter */
     e->wake = 0.0f;
+    jester_projectiles_reset(&jester_world);
     jester_state(J_TAUNT);
     e->fade = 0.0f;
 }
@@ -2678,8 +2683,21 @@ static void jester_update(float f, float px, float py, float pz) {
     }
     if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
     if (e->plan == P_DEATH) {
+        jester_projectiles_reset(&jester_world);
         if (e->timer > 150.0f) { jester_puff(); e->active = 0; }
         return;
+    }
+    jester_projectiles_update(&jester_world, f, e->pos[0], e->pos[1], e->pos[2], e->yaw, px, py, pz, attacks_on, ai_unit);
+    {
+        float hx, hz, damage;
+        int heavy;
+        if (jester_projectiles_landed(&jester_world, &hx, &hz, &damage, &heavy)) {
+            float at[3] = {px, py + 100.0f, pz};
+            land_attack(heavy);
+            landed_x = hx; landed_z = hz; landed_damage = damage;
+            fx_explosion(at);
+            giga_note("jester shot landed", (int)damage, heavy);
+        }
     }
     s = sinf(e->yaw); c = cosf(e->yaw);
     if (e->action == J_IDLE || e->action == J_WALK || e->action == J_TAUNT || e->action == J_FLINCH) {
@@ -2707,19 +2725,20 @@ static void jester_update(float f, float px, float py, float pz) {
         if (e->done || e->timer > 60.0f) jester_state(J_ATK0 + (e->shoot_set > 0 ? e->shoot_set : 0));
         break;
     case J_ATK0: case J_ATK1: case J_ATK2:
-        /* The throw: js33, js30 or js31 by attack. What he throws (FUN_0053e720: one of three shell classes,
-         * 0055c380 / 0055bf40 / 0054d3a0) isn't decoded: the stand-in's three rolling bombs. */
+        /* The throw: js33, js30 or js31 by attack. What he throws is picked the same no-repeat way (FUN_0053e720,
+         * +0x4d6c) and made as an emitter (FUN_0053e800, jester.c): kind 0 the ball, 1 the traps, 2 the four-arm cross,
+         * at AI rank 0. It lives until the attack ends, which waits for the emitter's own cycle. */
         if (e->frame < 25.0f) goyle_turn_to(px, pz, 0.12f, f);
         if (!e->step && e->frame > 30.0f) {
-            int k;
+            int kind = jester_pick(&jester_last_throw, ai_unit);
             e->step = 1;
-            jester_pick(&jester_last_throw, ai_unit);
-            for (k = -1; k <= 1; ++k) {
-                float at[3] = {e->pos[0] + s * 120.0f + c * 80.0f * (float)k, e->pos[1] + 170.0f, e->pos[2] + c * 120.0f - s * 80.0f * (float)k};
-                giga_orb(at, 1, px + c * 150.0f * (float)k, py, pz - s * 150.0f * (float)k);
-            }
+            jester_projectiles_begin(&jester_world, kind, 0, e->pos[0], e->pos[1], e->pos[2], px, pz);
+            giga_note("jester throw", kind, e->ar_health);
         }
-        if (e->done) jester_state(J_IDLE);
+        if (e->done && e->step && e->timer >= jester_projectiles_minimum(&jester_world)) {
+            jester_projectiles_stop(&jester_world);
+            jester_state(J_IDLE);
+        }
         break;
     case J_IDLE:
         goyle_turn_to(px, pz, 0.08f, f);
@@ -4123,4 +4142,36 @@ static void lady_hit_glue(HitKind kind) {
     e->health = (signed char)b->health;
     lady_play(b->want, b->restart);
     b->restart = 0;
+}
+
+/* ---- The Jester's projectiles, drawn (their logic is jester.c's): motes, as the game's effects aren't ported.
+ * The ball glows in his hand and in flight; a trap shows a ring where it lies, and bursts as it springs (55-65);
+ * the cross's four arms are columns of light swept round where he stood. */
+int jester_projectiles_init(void) { return 1; }
+void jester_projectiles_draw(const JesterProjectiles *w) {
+    static const float still[3] = {0.0f, 0.0f, 0.0f};
+    int i, k;
+    for (i = 0; i < JESTER_SHOTS; ++i) {
+        const JesterShot *p = &w->shots[i];
+        if (!p->active) continue;
+        if (p->kind == 0) {
+            fx_mote(p->pos, still, p->phase == 2 ? 420.0f : 170.0f, p->phase == 2 ? 520.0f : 150.0f, 0.06f,
+                    p->phase == 2 ? 0xff2080ffu : 0xff40e0ffu);
+        } else {
+            float armed = p->age > 55.0f && p->age <= 65.0f;
+            for (k = 0; k < 8; ++k) {
+                float a = (float)k * 0.7853982f, at[3] = {p->pos[0] + sinf(a) * 75.0f, p->pos[1] + (armed ? 150.0f : 5.0f), p->pos[2] + cosf(a) * 75.0f};
+                fx_mote(at, still, armed ? 160.0f : 70.0f, armed ? 90.0f : 70.0f, 0.06f, armed ? 0xff2040ffu : 0xffa0f0ffu);
+            }
+        }
+    }
+    if (w->emitting && w->kind == 2) {
+        for (i = 0; i < 4; ++i) {
+            float a = w->angle + (float)i * 1.5707963f;
+            for (k = 1; k <= 6; ++k) {
+                float r = (float)k * 200.0f, at[3] = {w->cross[0] + sinf(a) * r, w->cross[1] + 90.0f, w->cross[2] + cosf(a) * r};
+                fx_mote(at, still, 220.0f, 220.0f, 0.06f, 0xfff060e0u);
+            }
+        }
+    }
 }
