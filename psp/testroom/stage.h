@@ -27,6 +27,8 @@ int stage_walkable_below(float x, float z);
 void stage_hide_group(int number);
 /* The room's lift (its batches, tagged by tools/gimmicks.py) is drawn this far above where it was baked. */
 void stage_set_lift(float raise);
+/* Rigid story-piece pose, about a world-space XZ pivot. Loading resets it. */
+void stage_set_group_pose(int tag,float px,float pz,float yaw,float raise);
 void stage_clear_boxes(void);
 void stage_add_box(float x, float y, float z, float hx, float hy, float hz, float yaw, int tag);
 /* Push a vertical capsule (feet at y, height ~180) out of the stage's

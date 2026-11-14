@@ -78,6 +78,16 @@ foreach ($M8Room in 300..313) {
     }
 }
 
+# M10 adds rigid motion tags to the existing bridge stages.
+foreach ($M10Room in @(201,206)) {
+    $M10Bin = Join-Path $Build ("ROOM_{0}.BIN" -f $M10Room)
+    if ($Regenerate -or -not (Test-Path $M10Bin) -or
+        (Get-Item (Join-Path $Root "tools\prepare_stage.py")).LastWriteTime -gt (Get-Item $M10Bin).LastWriteTime) {
+        $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+        Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $M10Bin, "--slot", [string](512+4*($M10Room-200)))
+    }
+}
+
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "gigapede_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
@@ -178,7 +188,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "arachne", "nevan_boss", "mission7", "geryon_boss", "mission12")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "arachne", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "geryon_boss", "mission12")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

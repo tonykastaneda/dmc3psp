@@ -275,6 +275,37 @@ script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run t
   vanishes to his far side. Her lightning and kiss aren't in; health, speeds and timings are estimates.
 - 210's STAY 150 (a white sheet over the stage) is hidden in Mission 9 on, as the script's gimmick_cmd10 [150, 0] does.
 
+### Mission 10: "The job"
+
+Decoded from EventTbl10 (GDATA 248, PS2 SE); local listings and the stage/EST census are in
+`build/mission10_re/evt_m10.txt`, `evt_m10.json`, and `rooms.json`. Demo 25 leads to room 209,
+start position 2. Entering area 0 of room 211 plays demo 26, whose AFTER_DEMO section clears the mission.
+There is no boss encounter in this script.
+
+Main route: 209 Limestone Cavern → 206 Subterranean Lake → 205 Rounded Pathway → 204 Subground Water Vein
+→ 203 Forbidden Land: Front → 202 Provisions Storeroom → 201 The Rotating Bridge → 211 Marble Throughway.
+Item 48 (Stone Mask) lies at 209's ITM position (3574.4,2109,826.6). Examine 206 area 0 to use it;
+the bridge gimmick 100 moves and barrier 101 disappears. Item 49 (Neo-Generator) is at the lake's ITM
+position (10790,3140.5,7390.5). In 201, entering area 1 while carrying it consumes it and enables
+bridge pieces 1/2/3 and control area 0. Subsequent examinations of area 0 toggle the bridge's direction.
+Room 206 also permits an optional item-31 pickup in area 1 if it was not obtained in M9.
+
+Encounters (Easy and Normal lists are identical unless noted):
+
+| Room | Event group | Enemies / trigger |
+|---|---|---|
+| 209 | 2 | 6 Hell Prides + 5 Hell Gluttonies on returning from 206. |
+| 209 | 1 | 5 Prides + 2 Gluttonies + 2 Sloths, conditional return from 210; no initial spawn from start 2. |
+| 207 | 1 | 1 Gluttony + 4 Greeds after entering area 0; optional side trip. |
+| 205 | 0 | 3 Dullahans (EST id 30, runtime class 12); group 2 is the cutscene-skip copy. |
+| 202 | 1 | 5 Arachnes (EST id 28, runtime class 10) after entering area 0. |
+
+Room-local seal flags 0/1/2 suppress repeated fights in 207/205/202 once cleared during this mission.
+The rooms 201/203/204/206/211 have no event-script enemy spawn. Room 211's EST group 0 belongs to
+other missions and must not run for M10. The bridge and lake cutscene choreography is a separate
+implementation concern from the decoded route and item gates above.
+
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
@@ -316,3 +347,4 @@ python tools/autolink.py status           # the recovery plugin
 ```
 
 In `CMP_SCRIPT.TXT`: `menu 1` runs the real flow, `movie n` plays n frames of each movie, `mkey button frame` and `gkey button frame` press buttons in menus and in game, `mshot frame` saves a menu picture, and `killevery n` kills everything every n frames.
+

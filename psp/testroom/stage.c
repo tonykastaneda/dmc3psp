@@ -42,6 +42,11 @@ static unsigned char group_hidden[256];   /* by breakable number */
 void stage_hide_group(int number) { if (number > 0 && number < 256) group_hidden[number] = 1; }
 #define LIFT_TAG 254   /* tools/gimmicks.py: a lift's batches */
 static float lift_raise;
+static struct {float x,z,yaw,raise;int active;} group_pose[256];
+void stage_set_group_pose(int tag,float px,float pz,float yaw,float raise) {
+    if(tag<=0 || tag>=256)return;
+    group_pose[tag].x=px;group_pose[tag].z=pz;group_pose[tag].yaw=yaw;group_pose[tag].raise=raise;group_pose[tag].active=1;
+}
 void stage_set_lift(float raise) { lift_raise = raise; }
 static StageInfo info;
 static unsigned char *chunk_visible;   /* per chunk, this frame */
@@ -49,6 +54,7 @@ static unsigned int chunk_total;
 
 int stage_load(const char *path) {
     memset(group_hidden, 0, sizeof(group_hidden));
+    memset(group_pose,0,sizeof(group_pose));
     lift_raise = 0.0f;
     stage_clear_boxes();   /* main.c adds the new room's */
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
@@ -176,12 +182,18 @@ void stage_draw(void) {
         const Batch *b = &batches[i];
         unsigned int k, visible = 0;
         if (b->pad[0] && b->pad[0] < 256 && group_hidden[b->pad[0]]) continue;   /* a broken prop */
-        int lift = b->pad[0] == LIFT_TAG;
+        int posed=b->pad[0]<256 && group_pose[b->pad[0]].active;
+        int lift = b->pad[0] == LIFT_TAG || posed;
         for (k = 0; k < b->chunk_count; ++k) visible += chunk_visible[b->chunk_first + k];
         if (!visible && !lift) continue;   /* a lift isn't where its chunks were baked */
         if (lift) {
             ScePspFVector3 up = {0.0f, lift_raise, 0.0f};
-            sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity(); sceGumTranslate(&up);
+            sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity();
+            if(posed) {
+                int tag=b->pad[0];ScePspFVector3 p={group_pose[tag].x,group_pose[tag].raise,group_pose[tag].z};
+                sceGumTranslate(&p);sceGumRotateY(group_pose[tag].yaw);
+                p.x=-p.x;p.y=0;p.z=-p.z;sceGumTranslate(&p);
+            } else sceGumTranslate(&up);
         }
         if ((int)b->texture != bound) {
             bind_texture(&textures[b->texture]);

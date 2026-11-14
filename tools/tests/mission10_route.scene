@@ -1,0 +1,32 @@
+frames 3600
+fps 30
+realdt 0
+turbo 0
+clearminions 60
+place 20 3574 2109 826 180 1
+circle 22 23
+gotoroom 100 206
+place 140 16070 2570 7520 0 1
+circle 142 143
+place 600 10790 3140 7390 0 1
+circle 602 603
+gotoroom 700 205
+gotoroom 1100 204
+gotoroom 1200 203
+gotoroom 1300 202
+gotoroom 1700 201
+place 1750 1935 45 3770 0
+place 2200 1250 45 3750 135
+walkto 3700 1300 2220 2700
+gotoroom 2800 211
+place 2900 2700 0 2300 0
+mkey cross 60
+mkey cross 120
+mkey cross 180
+mkey cross 240
+psp_shot 60
+psp_shot 500
+psp_shot 640
+psp_shot 2000
+psp_shot 2500
+psp_shot 2940
