@@ -357,6 +357,7 @@ ENEMY_KINDS = (
     # The Damned Pawn (CEm017, EST 35), em017.pac (GDATA 127, pack 12): [0] textures, [2] the Pawn (8 bones), its one
     # motion in [3]. The other chessmen are [7], [12] and [17].
     ("pawn", 127, 2, None),
+    ("dullahan", 123, 1, None),
     # Beowulf (class 33, EST 51), em030.pac: GDATA 135, pack 21 in the table at 0x58e740. [0] textures, [1] his body
     # (36 bones), motions in the PAC [2] (0x70-byte MOT headers).
     ("beowulf", BEOWULF_SLOT, 1, None),
@@ -565,6 +566,8 @@ def main() -> None:
         ar_pack = pnst_entries(read_slot(AR_SLOT))
         arachne_pack = pac_list(read_slot(ARACHNE_SLOT))
         nevan_pack = pac_list(read_slot(NEVAN_SLOT))
+        dullahan_pack = pac_list(read_slot(123))
+        dullahan_pack[0], dullahan_pack[1] = dullahan_pack[1], dullahan_pack[0]
         beowulf_pack = pac_list(read_slot(BEOWULF_SLOT))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
@@ -696,7 +699,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, BEOWULF_SLOT: beowulf_pack})
+    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack})
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack)
     write_devils(args.output, devil_packs)
 
@@ -713,6 +716,8 @@ def main() -> None:
     for weapon, slot, chunk in ((0, 97, 4), (1, 98, 4), (2, 99, 4), (3, 100, 3), (6, 103, 3), (7, 104, 3)):
         motions.extend(mots_in_pac(weapon_packs[slot][chunk], f"w{weapon}-"))
     motions.extend(mots_in_pac(enemy_pack[ENEMY_MOTIONS], "hl-"))
+    for chunk in (6,7,8,9):
+        motions.extend(mots_in_pac(dullahan_pack[chunk], f"du{chunk}"))
     # The Enigma's own: "eaNN" from [4], "ebNN" from [5].
     for chunk, prefix in ((4, "ea"), (5, "eb"), (7, "ec")):   # ec: the bow arms (motions 300-302)
         count = struct.unpack_from("<I", enigma_pack[chunk], 4)[0]

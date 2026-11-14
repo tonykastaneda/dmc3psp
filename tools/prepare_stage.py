@@ -507,6 +507,11 @@ def main() -> None:
     # the runtime can raise it); other switches (Mission 3's crest switch) are drawn by the runtime.
     extra = ("LIFT", "SWITCH") if re.search(r"# SET\s+\d+\s+LIFT", game_text) else ()
     for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra, static_efm=680 <= args.slot <= 732) if len(stage) > 5 else []):
+        # M10's two rotating bridge arms and the lake's rising bridge.
+        if args.slot == 516 and s["kind"] == "STAY" and s["number"] in (1,2):
+            numbers[s["index"]] = 239 + s["number"]
+        if args.slot == 536 and s["kind"] == "STAY" and s["number"] == 100:
+            numbers[s["index"]] = 242
         by_texture = {}
         for tri, texture in tris:
             by_texture.setdefault(texture, []).extend(subdivide(tri, play))

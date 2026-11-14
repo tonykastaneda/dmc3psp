@@ -750,7 +750,47 @@ rolling orb), vanishes in a puff and reappears behind Dante, and dances. He stay
 included. Hits fill a stun gauge (12, draining
 slowly); stunned for 200 frames he takes double damage. Which motion plays for each was chosen from their
 shapes and lengths [inferred]: idle js21, walk js03, swings js08/js09, bombs js10, vanish js26, dance js31,
-flinch js05, stun js14, launched js04, death js16. Health 1500 against the Pride's 250 [estimate].
+flinch js05, stun js14, launched js04, death js16.
+
+**Decoded** (`psp/testroom/jester.c`; decompiled 0x532800-0x556000):
+- **Health** by encounter (+0x481e, from the spawn record; `0x5e2f60`): **5000** (room 422, the first), 6500, 10000.
+  The parameter block is `0x5e3a60` (its own +0x2c, 7000, is overwritten by that). In the port Dante's hits take 42 /
+  84 as against the Vanguard's 3000.
+- **Where he reappears** (`FUN_00536230(row)`): table `0x5e2e40`, 12 bytes a row {about Dante?, radius, spread}: row 0
+  about himself 0-50, row 1 about Dante 50-550, 2: 200-1200, 3: 50-300, 4: 100-1000, 5: 150-750, 6: 100-500, 7:
+  150-750. A random bearing, turned 10° at a time up to 36 times until the spot is within 1000 cm of (3500, 3500).
+  The port's vanish uses row 1.
+- **Actions** are requested through vfunc 0x368 (`0053bf40`) and run by `0053bfc0`; when a request for actions
+  0-0x13 meets flag +0x4cd0 he does one of `00536b10` / `00536c70` / `00536dd0` instead (a third each), or with
+  +0x481d set and +0x4818 clear `00536f30` / `00536fb0` (half each). Hits (`0053d0d0`, vfunc 0xc0) answer with
+  reactions 0x67-0x6a (a coin flip, by the hit's type), 0x6d, 0x7b or 0x7d.
+- **Attack choice** (`FUN_00534490`, his per-frame AI): while idling or flinching (actions 0x64, 0x67-0x6a) his idle
+  time (+0x168) runs; at `0x5e2e30[rank]` (500 frames on Easy and Normal, 450, 400) he requests one of three attacks,
+  0x75 / 0x76 / 0x77, picked a third each but never the last again (`0053e960`). With +0x481d set (later
+  encounters, below `0x5e2f64[encounter]` health) `0053ea40` adds 0x7f / 0x80 and 0x7b; not in room 422.
+- **Each attack** (actions 21-28, 29-36, 37-44; dispatch `0053bfc0`: 0x75 `00537750`, 0x76 `00538110`, 0x77
+  `00538ae0`): he vanishes to a spot 100-1000 cm from Dante (row 4, motion js32), then throws: js33, js30 or js31.
+  What he throws is picked the same no-repeat way (`0053e720`, +0x4d6c) from three shell classes (`0055c380`,
+  `0055bf40`, `0054d3a0`), not decoded. Motion ids map to jsNN directly (table `0x5e2db0`: pack, motion).
+- **What he throws** (`0053e800`, by +0x4d6c): not shells but emitters that live until the attack ends (the Jester
+  destroys them through +0x4cec / +0x4cf0 / +0x4cf4), each made with a life of 10000 frames:
+  - kind 0, `0055c380` (vtable `0x617f90`, update `0055c5c0`): after a delay from `0x5e2fd0[encounter]` (140 for the
+    first), a cycle of five phases (`0055c690`, `0055c6e0`, `0055c820` 69 frames, `0055c880` 99, `0055c950` 60):
+    it plays the prop's motions 5, 6 and 0 and spawns a projectile `0054de00` (0xcc0 bytes, vtable `0x616f70`,
+    update `0054e240`) from the prop he holds (+0x4cd8, at +0xe90), launched at 1000 (`00550f10`) and set off at
+    99 frames (`0054edc0`).
+  - kind 1, `0055bf40` (vtable `0x617e50`, update `0055c130`): every `0x5e3000[encounter]` frames (180 for the
+    first) spawns `0054c660` (0xd40 bytes, vtable `0x616cf0`, set-up `0054caa0`, update `0054ce50`): placed on the
+    floor (y 500) turned at random, it lives 180 frames and at 55 arms its hit (`00294480`, 150 cm up), a trap
+    springing where it was put [where that is, is not read].
+  - kind 2, `0054d3a0` (0x540 bytes, vtable `0x616e30`, update `0054d590`, then `0054da60` / `0054d850`), its count
+    `0x5e3010[encounter]`: not read.
+  Not ported (the 45-minute cap): the projectiles' paths, hits and damage. The port still throws the stand-in's
+  three rolling bombs for all three.
+- **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
+  the thrown shells are the stand-in's three rolling bombs, and between attacks he idles or walks (his idle
+  actions aren't decoded). The stun gauge, flinch-and-vanish and arena clamp stay the stand-in's. The old cane
+  swings and taunt are no longer chosen: the game's first encounter has no such attacks in its picker.
 
 ---
 
