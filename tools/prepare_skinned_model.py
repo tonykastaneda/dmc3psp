@@ -344,6 +344,7 @@ ENEMY_KINDS = (
     # brothers share, [2] and [3] their swords; motions in [11] (a PAC of 100 slots, 54 used).
     ("agni", 131, 1, 2),
     ("rudra", 131, 1, 3),
+    ("envy", 119, 1, 26),
 )
 AR_SLOT = 131
 JESTER_SLOT = 140
@@ -528,6 +529,7 @@ def main() -> None:
         rebellion_moves = read_slot(REBELLION_MOTION_SLOT)
         study_moves = {slot: read_slot(slot) for slot in STUDY_MOTION_SLOTS}
         enemy_pack = pnst_entries(read_slot(ENEMY_SLOT))
+        envy_pack = pac_list(read_slot(119))
         enigma_pack = pac_list(read_slot(ENIGMA_SLOT))
         goyle_pack = pnst_entries(read_slot(GOYLE_SLOT))
         jester_pack = pac_list(read_slot(JESTER_SLOT))
@@ -662,8 +664,8 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack})
-    gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable)
+    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack})
+    gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack)
     write_devils(args.output, devil_packs)
 
     # Motions: every MOT in Dante's PAC chunks 2-4, embedded raw and parsed on

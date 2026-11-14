@@ -39,6 +39,7 @@
 /* The scene frame, for boss traces to line up with SHOT_n captures. */
 int testroom_frame;
 #include "cerberus_boss.h"
+#include "leviathan_boss.h"
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
@@ -558,7 +559,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -1883,7 +1884,7 @@ static void cmp_load(void) {
         }
         else if (strncmp(line, "startroom ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_start_room, &cmp_start_pos);
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
-        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
+        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
     }
@@ -2740,6 +2741,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
+    leviathan_boss_set_difficulty(choice->difficulty);
     if (choice->mission == MENU_DEBUG_ROOM) { start_debug_room(choice, player, camera); return; }
     mission_mode = 1;
     game_turbo = choice->turbo;
