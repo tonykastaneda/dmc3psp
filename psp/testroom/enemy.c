@@ -27,6 +27,7 @@
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
+#include "jester.h"
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
  * Three layers, as on the disc:
@@ -128,7 +129,7 @@ typedef struct {
      * height it hovers over Dante and when that's re-rolled, and its dive's aim. */
     float goyle_stone, goyle_shots, goyle_split, goyle_lift, goyle_lift_wait, goyle_aim;
     signed char goyle_splits;
-    float ar_health;                /* Agni & Rudra: 7000 each */
+    float ar_health;                /* Agni & Rudra: 7000 each; the Jester: 5000 */
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
 } Enemy;
 
@@ -224,6 +225,13 @@ static void nevan_update_glue(float f, float px, float py, float pz);
 static void nevan_hit_glue(HitKind kind, float from_x, float from_z);
 static void arachne_update_glue(float f, float px, float py, float pz);
 static void arachne_hit_glue(HitKind kind, float from_x, float from_z);
+static int pawn_init(void);
+static void greed_tick(int slot, float f, float px, float pz);
+static void coffins_update(float f);
+static void coffins_reset(void);
+static void pawn_spawn(void);
+static void pawn_update(float f, float px, float py, float pz);
+static void pawn_hit(HitKind kind);
 static int ar_init(void);
 static int ar_motion_map[AR_SCRIPTS];   /* em026 [11] slot -> motion, -1 where the slot is empty */
 static void ar_rudra_spawn(void);
@@ -264,6 +272,7 @@ int enemy_init(void) {
     if (!enigma_init()) return 0;
     if (!goyle_init()) return 0;
     if (!jester_init()) return 0;
+    if (!pawn_init()) return 0;
     if (!ar_init()) return 0;
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
@@ -324,6 +333,7 @@ static int kind_health(int kind) {
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 500 / 250;   /* an estimate */
     case ENEMY_NEVAN: return ENEMY_HEALTH * 2000 / 250;    /* an estimate */
+    case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
@@ -400,6 +410,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_DULLAHAN) { dullahan_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
+    if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_AGNI) { ar_spawn(); return; }
     if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
     script_play(0);
@@ -458,6 +469,7 @@ void enemy_trim(int keep) {
 }
 void enemy_kill_all(void) {
     int i;
+    coffins_reset();
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
             if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
@@ -498,6 +510,7 @@ void enemy_clear_minions(void) {
 void enemy_set_count(int count, float x, float z) {
     int i;
     if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
+    if (count == 0) coffins_reset();
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
@@ -543,6 +556,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
+    if (spawn_class == 35) return ENEMY_PAWN;   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
@@ -632,7 +646,7 @@ int enemy_boss_health(float *health, float *maximum) {
         *health=ar_health_total(maximum);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 1500 / 250;return 1;
+        *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_NEVAN && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * 2000 / 250;return 1;
@@ -1236,6 +1250,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_DULLAHAN) { ++hits; dullahan_hit_glue(kind,from_x,from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
+    if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
@@ -1497,6 +1512,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_DULLAHAN) { dullahan_update_glue(f,px,py,pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
@@ -1536,6 +1552,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         e = &enemies[i];
         was_x = e->pos[0]; was_z = e->pos[2];
         update_one(dt, px, py, pz);
+        if (e->active && e->kind == ENEMY_GREED) greed_tick(i, dt * MOTION_FPS, px, pz);
         /* The room's walls, as for Dante: swept along everything that moved it this frame (its walk, root
          * motion, knockback, being pushed by him or the others), in steps of at most 15 cm, so a launch or a
          * shove can't carry it through. A spawn or a jump past 6 m is a placement, not a move: checked where it
@@ -1552,6 +1569,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         }
     }
     arrows_update(dt * MOTION_FPS, px, py, pz);
+    coffins_update(dt * MOTION_FPS);
     e = selected;
 }
 
@@ -2418,9 +2436,11 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
 #define JESTER_HEALTH (ENEMY_HEALTH * 1500 / 250)
 #define JESTER_STUN_HITS 12.0f
 #define JESTER_ARENA 1400.0f   /* how far from the arena's centre he may go (its floor runs to 1550) */
-enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH };
+enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH,
+       J_ATK_TP, J_ATK0, J_ATK1, J_ATK2 };
+static int jester_last_attack = -1, jester_last_throw = -1;
 /* jsNN, in tools/prepare_skinned_model.py's order: [3] 0-2, [4] 3-20, [5] 21-29, [6] 30-33, [19] 34-40. */
-static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 26, 26, 31, 5, 14, 4, 16};
+static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 26, 26, 31, 5, 14, 4, 16, 32, 33, 30, 31};
 static int jester_motion[sizeof(jester_motion_index)];
 
 static int jester_init(void) {
@@ -2459,16 +2479,16 @@ static void jester_spawn(void) {
     e->plan = P_WATCH;
     e->motion = -1;
     e->goyle_stone = 0.0f;   /* his stun gauge */
+    e->health = 1;
+    e->ar_health = jester_max_health(0);   /* room 422 is his first encounter */
+    e->wake = 0.0f;
     jester_state(J_TAUNT);
     e->fade = 0.0f;
 }
 
+/* Between attacks: the stand-in's idling (his own idle actions, 0x64 and the walks, aren't decoded). */
 static void jester_decide(float d) {
-    float r = ai_unit();
-    if (d > 260.0f && r < 0.45f) { jester_state(J_WALK); return; }
-    if (d <= 260.0f && r < 0.55f) { jester_state(J_CANE); return; }
-    r = ai_unit();
-    jester_state(r < 0.4f ? J_BOMB : r < 0.75f ? J_VANISH : J_TAUNT);
+    jester_state(d > 400.0f && ai_unit() < 0.5f ? J_WALK : J_IDLE);
 }
 
 static void jester_update(float f, float px, float py, float pz) {
@@ -2489,7 +2509,45 @@ static void jester_update(float f, float px, float py, float pz) {
         return;
     }
     s = sinf(e->yaw); c = cosf(e->yaw);
+    if (e->action == J_IDLE || e->action == J_WALK || e->action == J_TAUNT || e->action == J_FLINCH) {
+        /* FUN_00534490: his idle time reaches the wait, and he picks an attack (FUN_0053e960). */
+        e->wake += f;
+        if (e->wake >= JESTER_ATTACK_WAIT) {
+            e->wake = 0.0f;
+            e->shoot_set = (signed char)jester_pick(&jester_last_attack, ai_unit);
+            giga_note("jester attack", e->shoot_set, e->ar_health);
+            jester_state(J_ATK_TP);
+            jester_puff();
+        }
+    }
     switch (e->action) {
+    case J_ATK_TP:
+        /* Each attack (0x75 / 0x76 / 0x77) begins by vanishing to a spot 100-1000 cm from Dante (FUN_00536230 row 4,
+         * motion js32), facing him. */
+        if (e->timer > 20.0f && !e->step) {
+            e->step = 1;
+            jester_reappear(4, px, pz, &e->pos[0], &e->pos[2], ai_unit);
+            if (floor_under(e->pos[0], py + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+            e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
+            jester_puff();
+        }
+        if (e->done || e->timer > 60.0f) jester_state(J_ATK0 + (e->shoot_set > 0 ? e->shoot_set : 0));
+        break;
+    case J_ATK0: case J_ATK1: case J_ATK2:
+        /* The throw: js33, js30 or js31 by attack. What he throws (FUN_0053e720: one of three shell classes,
+         * 0055c380 / 0055bf40 / 0054d3a0) isn't decoded: the stand-in's three rolling bombs. */
+        if (e->frame < 25.0f) goyle_turn_to(px, pz, 0.12f, f);
+        if (!e->step && e->frame > 30.0f) {
+            int k;
+            e->step = 1;
+            jester_pick(&jester_last_throw, ai_unit);
+            for (k = -1; k <= 1; ++k) {
+                float at[3] = {e->pos[0] + s * 120.0f + c * 80.0f * (float)k, e->pos[1] + 170.0f, e->pos[2] + c * 120.0f - s * 80.0f * (float)k};
+                giga_orb(at, 1, px + c * 150.0f * (float)k, py, pz - s * 150.0f * (float)k);
+            }
+        }
+        if (e->done) jester_state(J_IDLE);
+        break;
     case J_IDLE:
         goyle_turn_to(px, pz, 0.08f, f);
         if (e->timer > 50.0f) jester_decide(d);
@@ -2526,9 +2584,9 @@ static void jester_update(float f, float px, float py, float pz) {
     case J_VANISH:
         if (e->timer < 2.0f && !e->step) { e->step = 1; jester_puff(); }
         if (e->timer > 20.0f) {
-            /* Back behind Dante, in the arena. */
-            float a = atan2f(dx, dz);
-            e->pos[0] = px + sinf(a) * 320.0f; e->pos[2] = pz + cosf(a) * 320.0f;
+            /* Back near Dante, in the arena: FUN_00536230 row 1 (50-550 cm about him, kept within 1000 of the
+             * centre). */
+            jester_reappear(1, px, pz, &e->pos[0], &e->pos[2], ai_unit);
             if (floor_under(e->pos[0], py + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
             else { e->pos[0] = 3500.0f; e->pos[1] = 492.0f; e->pos[2] = 3500.0f; }
             e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
@@ -2574,10 +2632,12 @@ static void jester_hit(HitKind kind) {
     ++hits;
     fx_hit_spark(at);
     if (mortal) {
-        int dmg = kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
-        if (stunned) dmg *= 2;
-        e->health = (signed char)(e->health - dmg);
-        if (e->health <= 0) {
+        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]; stunned, double [stand-in]. */
+        float dmg = kind == HIT_PISTOL ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        if (stunned) dmg *= 2.0f;
+        e->ar_health -= dmg;
+        if (e->ar_health <= 0.0f) {
+            e->ar_health = 0.0f;
             e->plan = P_DEATH;
             jester_state(J_DEATH);
             e->plan = P_DEATH;
@@ -2594,6 +2654,9 @@ static void jester_hit(HitKind kind) {
         jester_state(J_FLINCH);
     }
 }
+
+#include "pawn.inc"
+#include "greed.inc"
 
 /* ---- Agni & Rudra (class 27, EST 45; em026.pac, GDATA 131), Mission 5's boss in room 121 (docs/ENEMY_SPECS.md
  * section F). Each brother runs the game's states (agni_rudra.c: the brain, FUN_003acfb0 / 003ace70, and what

@@ -40,6 +40,7 @@
 int testroom_frame;
 #include "cerberus_boss.h"
 #include "vergil_boss.h"
+#include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
 #include "nausika.h"
@@ -2178,6 +2179,7 @@ static void play_movie(const char *name) {
  * script's flags. See tools/gen_rooms.py. */
 static int lift_index = -1, lift_on;   /* this room's lift, and whether its switch has been struck */
 static int lift_dir, lift_rearm;       /* an elevator: which way it goes next, and stepped off since */
+static float elevator_left[16];         /* where each elevator was left this mission (0: not yet) */
 /* A catapult's flight: from one super jump pad to the next (or the top level), horizontal speed per second. */
 static int pad_flight;
 static float pad_vx, pad_vz;
@@ -2227,6 +2229,7 @@ static int item_area_inside(const RoomItemUse *u, float x, float y, float z) {
 /* The key items lying in this room that can be taken now. */
 static int key_item_shown(const RoomKeyItem *k) {
     return k->mission == mission_choice.mission && k->room == mission_room && item_is(k->item, 0)
+        && (k->mission != 7 || m7_item_shown(k->item))
         && (k->after < 0 || item_is(k->after, 2));
 }
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
@@ -2468,6 +2471,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if(mission_choice.mission==8){mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);nausika_hit(player->x,player->y,player->z,player->yaw,reach,kind);}
     switch_hit(player, reach, kind);
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
+    if (mission_choice.mission == 7) m7_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
         float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
@@ -2604,6 +2608,7 @@ static void mission_gimmicks_draw(void) {
     seal_draw();
     fight_seals_draw();
     if (mission_choice.mission == 6) m6_draw();
+    if (mission_choice.mission == 7) m7_draw();
     if (bridge_up()) {
         /* 112's bridge (mission_floor's ramp, 3000 at z 2650 to 3500 at z 4350): drawn as 20 stone steps,
          * alternating shades, each a box down to the step below. A stand-in: the game's own platform gimmick
@@ -2714,7 +2719,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
         if (lift_index >= 0 && room_lifts[lift_index].mission) {
             /* An elevator: it waits at the top unless Dante arrives standing on it, when it carries him on. */
             const RoomLift *l = &room_lifts[lift_index];
-            lift_y = l->high;
+            lift_y = lift_index < 16 && elevator_left[lift_index] != 0.0f ? elevator_left[lift_index] : l->high;
             lift_dir = -1;
             lift_rearm = 0;
             if (over_lift(l, s[0], s[2]) && s[1] > l->low - 300.0f && s[1] < l->high + 300.0f) {
@@ -2735,6 +2740,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
     script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
     if (mission_mode && mission_choice.mission == 6 && m6_enter(room_number(room))) script_at = 0;   /* mission6.c */
+    if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
     script_wait = 0.0f;
     script_waiting_alive = -1;
     player_spawn[0] = s[0];
@@ -2788,12 +2794,23 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }
     int m6 = mission_choice.mission == 6, held = room_held() || (m6 && m6_script_held(room_number(mission_room)));
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
+    if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
     fight_seal_on = !done || enemy_alive_count() > 0;
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
     hazards_update(dt, player);
+    if (mission_choice.mission == 7) {
+        static int m7_tick;
+        m7_update(dt);
+        if (focus_cmp && (m7_tick++ % 30) == 0) {
+            char line[160];
+            m7_status(line, sizeof(line));
+            snprintf(line + strlen(line), sizeof(line) - strlen(line), " items=%d%d%d lift=%.0f", item_state[43], item_state[44], item_state[45], lift_y);
+            vergil_boss_note(line, player->x, player->y, player->z, (float)enemy_alive_count());
+        }
+    }
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
@@ -2828,7 +2845,20 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (lift_y >= lift->high) { lift_y = lift->high; lift_on = 0; }
             player->y = lift_y;
             player->vy = 0.0f;
+            if (!lift_on) {
+                /* At the end of its run: the door it serves takes him on (100's into 137 is a thin box beside it). */
+                int k;
+                for (k = 0; k < rooms[mission_room].door_count; ++k) {
+                    const RoomDoor *d = &rooms[mission_room].doors[k];
+                    float dx = d->box[0] - lift->x, dz = d->box[2] - lift->z;
+                    if (dx * dx + dz * dz > 300.0f * 300.0f || fabsf(d->box[1] - lift_y) > 300.0f || d->next == ROOM_NONE) continue;
+                    if (lift_index < 16) elevator_left[lift_index] = lift_y == 0.0f ? 0.01f : lift_y;
+                    enter_room(d->next, d->start, player, camera);
+                    return 0;
+                }
+            }
         }
+        if (lift_index < 16) elevator_left[lift_index] = lift_y == 0.0f ? 0.01f : lift_y;
         stage_set_lift(lift_y - lift->switch_pos[1]);   /* its model rests where its top is in the stage */
     } else if (lift) {
         /* The switch: strike it or press O by it. Then the lift carries him up while he stands on it, and
@@ -2882,12 +2912,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         player->vy = up;
         player->on_ground = 0;
         player->jump_motion = -1;
+        player->air_kind = AIR_NONE;   /* a free fall: not the jump's own arc */
+        player->free_fall = 1;
         player->y += 1.0f;
         pad_flight = 1;
         break;
     }
     if (pad_flight) {
-        if (player->on_ground) pad_flight = 0;
+        if (player->on_ground) { pad_flight = 0; player->free_fall = 0; }
         else { player->x += pad_vx * dt; player->z += pad_vz * dt; }
     }
     for (i = 0; i < ROOM_SHOP_COUNT; ++i) {
@@ -2995,6 +3027,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
                 if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
             }
         }
+        if (mission_choice.mission == 7) {
+            int next = 0, start = 0;
+            if (m7_door_route(room_number(mission_room), i, &next, &start)) {
+                char want[16];
+                snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
+                if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
+            }
+        }
         if (d->next == ROOM_NONE) continue;           /* a room that isn't built */
         enter_room(d->next, d->start, player, camera);
         return 0;
@@ -3080,6 +3120,8 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     seal_index = -1;
     breakables_reset();
     if (choice->mission == 6) m6_reset(choice->difficulty);
+    if (choice->mission == 7) m7_reset();
+    memset(elevator_left, 0, sizeof(elevator_left));
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
@@ -3637,6 +3679,7 @@ int main(int argc, char *argv[]) {
                  * walking him into a corner, or Cerberus's paws, must not carry him into the scenery. */
                 float was_x = player.x, was_z = player.z;
                 enemy_push_out(&player.x, &player.z, player.y, PLAYER_RADIUS);
+                if (mission_mode && mission_choice.mission == 7) m7_push_out(&player.x, &player.z, player.y, PLAYER_RADIUS);
                 if(mission_mode && mission_choice.mission==8)mission8_push_out(&player.x,&player.z,player.y,PLAYER_RADIUS);
                 if (stage_loaded() && (player.x != was_x || player.z != was_z)) {
                     float mx = player.x - was_x, mz = player.z - was_z, cx = was_x, cz = was_z;

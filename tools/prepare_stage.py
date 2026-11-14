@@ -298,6 +298,7 @@ def _wall_near(walls, mx, mz, y):
     return False
 
 
+NO_EDGE_WALL_SLOTS = {380}   # st114
 EDGE_WALL_HEIGHT = 2000.0   # cm above the edge: past any jump, Air Hike and Sky Star
 
 
@@ -476,7 +477,9 @@ def main() -> None:
     door_boxes = [tuple(map(float, m)) for m in re.findall(
         r"^BoxIn\s+\S+\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)",
         stage_data[0].decode("latin1").replace("\r", ""), re.M)]
-    edge_walls = open_edge_walls(hit_floors, hit_walls, floor, door_boxes)
+    # Rooms whose open edges he's meant to drop from though no floor shows right under them: 114 Heavenrise
+    # Chamber's balconies over its shaft (the walkthrough: "drop down to the ground level").
+    edge_walls = [] if args.slot in NO_EDGE_WALL_SLOTS else open_edge_walls(hit_floors, hit_walls, floor, door_boxes)
     hit_walls += edge_walls
     xs = [v for t in floor for v in t[0::3]]
     zs = [v for t in floor for v in t[2::3]]

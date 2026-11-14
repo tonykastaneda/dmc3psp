@@ -353,10 +353,15 @@ ENEMY_KINDS = (
     # Nevan (class 31, EST 49), em028.pac: GDATA 133, pack 19 in the table at 0x58e740. [0] textures, [1] her body
     # (23 bones), motions in PACs [2] and [3]. Her other MODs ([4]-[6]) aren't drawn yet.
     ("nevan", NEVAN_SLOT, 1, None),
+    # The Damned Pawn (CEm017, EST 35), em017.pac (GDATA 127, pack 12): [0] textures, [2] the Pawn (8 bones), its one
+    # motion in [3]. The other chessmen are [7], [12] and [17].
+    ("pawn", 127, 2, None),
     ("dullahan", 123, 1, None),
+
 )
 AR_SLOT = 131
 JESTER_SLOT = 140
+PAWN_SLOT = 127
 JESTER_MOTION_CHUNKS = (3, 4, 5, 6, 19, 28, 29)
 GOYLE_SLOT = 125
 # The Arachne's motions the port plays, "anCNN" (chunk C, slot NN). Which is which is read from their root paths
@@ -549,6 +554,7 @@ def main() -> None:
         enigma_pack = pac_list(read_slot(ENIGMA_SLOT))
         goyle_pack = pnst_entries(read_slot(GOYLE_SLOT))
         jester_pack = pac_list(read_slot(JESTER_SLOT))
+        pawn_pack = pac_list(read_slot(PAWN_SLOT))
         ar_pack = pnst_entries(read_slot(AR_SLOT))
         arachne_pack = pac_list(read_slot(ARACHNE_SLOT))
         nevan_pack = pac_list(read_slot(NEVAN_SLOT))
@@ -684,7 +690,8 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, 123: dullahan_pack})
+    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack})
+
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack)
     write_devils(args.output, devil_packs)
 
@@ -728,6 +735,11 @@ def main() -> None:
             motions.append({"name": f"js{count:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
             count += 1
     print(f"Jester: {count} motions")
+    # The Damned Pawn's: "dpNN" by their slot in [3].
+    for slot, raw in enumerate(pac_list(pawn_pack[3])):
+        if raw:
+            parsed = parse_mot(raw)
+            motions.append({"name": f"dp{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     # Agni & Rudra's: "arNN" by their slot in [11].
     for slot, raw in enumerate(pac_list(ar_pack[11])):
         if not raw:
