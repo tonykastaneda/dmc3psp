@@ -39,6 +39,7 @@
 /* The scene frame, for boss traces to line up with SHOT_n captures. */
 int testroom_frame;
 #include "cerberus_boss.h"
+#include "vergil_boss.h"
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
@@ -1883,7 +1884,7 @@ static void cmp_load(void) {
         }
         else if (strncmp(line, "startroom ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_start_room, &cmp_start_pos);
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
-        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
+        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_VERGIL?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
     }
@@ -2740,6 +2741,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
+    vergil_boss_set_difficulty(choice->difficulty);
     if (choice->mission == MENU_DEBUG_ROOM) { start_debug_room(choice, player, camera); return; }
     mission_mode = 1;
     game_turbo = choice->turbo;
@@ -2864,6 +2866,9 @@ int main(int argc, char *argv[]) {
             vanguard_trace(path);
             path_in_game_dir(path,sizeof(path),"CERBERUS_LOG.TXT");
             cerberus_boss_trace(path);
+            path_in_game_dir(path,sizeof(path),"VERGIL_LOG.TXT");
+            remove(path);
+            vergil_boss_trace(path);
             vanguard_render_test(bench_no_texture,bench_no_lighting);
         }
     }
@@ -3250,6 +3255,7 @@ int main(int argc, char *argv[]) {
             int heavy;
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
+                vergil_boss_dante(combat.action, player.yaw);
                 enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
                 enemy_clamp_player(&player.z);
                 enemy_giga_ride(&player.x, &player.y, &player.z, player.on_ground);

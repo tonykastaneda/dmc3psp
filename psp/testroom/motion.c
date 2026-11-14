@@ -6,8 +6,9 @@
 #include "motion_runtime.h"
 #include "vanguard_motions.h"
 #include "boss_cerberus_motions.h"
+#include "boss_vergil_motions.h"
 
-#define TOTAL_MOTIONS (DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + CERBERUS_MOTION_COUNT)
+#define TOTAL_MOTIONS (DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + CERBERUS_MOTION_COUNT + VERGIL_MOTION_COUNT)
 static Motion motions[TOTAL_MOTIONS];
 
 static unsigned int rd16(const unsigned char *p) { return (unsigned int)p[0] | ((unsigned int)p[1] << 8); }
@@ -83,6 +84,10 @@ int motion_init(void) {
     for (i = 0; i < CERBERUS_MOTION_COUNT; ++i) {
         int at = DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + i;
         if (!parse(&cerberus_motion_blobs[i], &motions[at])) return -(at + 1);
+    }
+    for (i = 0; i < VERGIL_MOTION_COUNT; ++i) {
+        int at = DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + CERBERUS_MOTION_COUNT + i;
+        if (!parse(&vergil_motion_blobs[i], &motions[at])) return -(at + 1);
     }
     return TOTAL_MOTIONS;
 }
