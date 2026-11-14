@@ -224,6 +224,13 @@ static void nevan_update_glue(float f, float px, float py, float pz);
 static void nevan_hit_glue(HitKind kind, float from_x, float from_z);
 static void arachne_update_glue(float f, float px, float py, float pz);
 static void arachne_hit_glue(HitKind kind, float from_x, float from_z);
+static int pawn_init(void);
+static void greed_tick(int slot, float f, float px, float pz);
+static void coffins_update(float f);
+static void coffins_reset(void);
+static void pawn_spawn(void);
+static void pawn_update(float f, float px, float py, float pz);
+static void pawn_hit(HitKind kind);
 static int ar_init(void);
 static int ar_motion_map[AR_SCRIPTS];   /* em026 [11] slot -> motion, -1 where the slot is empty */
 static void ar_rudra_spawn(void);
@@ -264,6 +271,7 @@ int enemy_init(void) {
     if (!enigma_init()) return 0;
     if (!goyle_init()) return 0;
     if (!jester_init()) return 0;
+    if (!pawn_init()) return 0;
     if (!ar_init()) return 0;
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
@@ -324,6 +332,7 @@ static int kind_health(int kind) {
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 500 / 250;   /* an estimate */
     case ENEMY_NEVAN: return ENEMY_HEALTH * 2000 / 250;    /* an estimate */
+    case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * 3000 / 250;  /* an estimate */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
@@ -400,6 +409,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
+    if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_BEOWULF) { beowulf_spawn_glue(); return; }
     if (kind == ENEMY_AGNI) { ar_spawn(); return; }
     if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
@@ -459,6 +469,7 @@ void enemy_trim(int keep) {
 }
 void enemy_kill_all(void) {
     int i;
+    coffins_reset();
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
             if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
@@ -499,6 +510,7 @@ void enemy_clear_minions(void) {
 void enemy_set_count(int count, float x, float z) {
     int i;
     if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
+    if (count == 0) coffins_reset();
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
@@ -543,6 +555,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
+    if (spawn_class == 35) return ENEMY_PAWN;   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
@@ -1241,6 +1254,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
+    if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
@@ -1502,6 +1516,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_BEOWULF) { beowulf_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
@@ -1542,6 +1557,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         e = &enemies[i];
         was_x = e->pos[0]; was_z = e->pos[2];
         update_one(dt, px, py, pz);
+        if (e->active && e->kind == ENEMY_GREED) greed_tick(i, dt * MOTION_FPS, px, pz);
         /* The room's walls, as for Dante: swept along everything that moved it this frame (its walk, root
          * motion, knockback, being pushed by him or the others), in steps of at most 15 cm, so a launch or a
          * shove can't carry it through. A spawn or a jump past 6 m is a placement, not a move: checked where it
@@ -1558,6 +1574,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         }
     }
     arrows_update(dt * MOTION_FPS, px, py, pz);
+    coffins_update(dt * MOTION_FPS);
     e = selected;
 }
 
@@ -2600,6 +2617,9 @@ static void jester_hit(HitKind kind) {
         jester_state(J_FLINCH);
     }
 }
+
+#include "pawn.inc"
+#include "greed.inc"
 
 /* ---- Agni & Rudra (class 27, EST 45; em026.pac, GDATA 131), Mission 5's boss in room 121 (docs/ENEMY_SPECS.md
  * section F). Each brother runs the game's states (agni_rudra.c: the brain, FUN_003acfb0 / 003ace70, and what

@@ -209,6 +209,21 @@ Normal 4 Lusts and 3 Greeds) -> back up -> 138 Moonlight Mile -> 142 (demo 17) -
 (group 0, EST 58, class 40). Demo 322 after him clears the mission. Its script also carries Mission 6's rooms
 (122-126) and 111-113 for backtracking; 111's group 4 is 2 Enigmas and 5 Blood-goyles.
 
+**In the port** (`tools/gen_rooms.py` Mission 7, `psp/testroom/mission7.c`): the route above, start to Mission Clear.
+- Fights: 115 (6 Damned Pawns), 135 (Pawns), 136 (Greeds), 101 (groups 1 and 2), 105 (once the Crystal Skull's taken),
+  144 (Vergil, `docs/VERGIL_SPEC.md`); 136's return ambush (group 2) runs when Dante comes back with the Skull.
+- Items: the Orihalcon Fragment (43) in 115 opens 137's lift; the Siren's Shriek (44) in 136 opens 100's doors to
+  101; the Crystal Skull (45) in 105 opens 135's door to 138. (Item ids by the event script: 44 is used in 100, 45
+  taken in 105.)
+- 114's six super jump pads (CATAPULT) throw Dante to the next pad, the last to the top door [approximation: the arc].
+  137's and 100's lifts run as one elevator, both ways, and take their door at the end of the run.
+- 105: the crest switch brings the ball down; break its shell (it rises and regrows if left alone) and the Skull shows
+  [approximation: CStageSetHang isn't decoded; hit counts are estimates, drawn as stand-in blocks].
+- 142's area 0 (demo 17) leads to 144. No cutscenes, and 144 has no rain.
+- Approximation: 127's door into 114 lands on the ground floor (start 0), not the 9000 balcony Dante drops from.
+- Damned Pawns (`pawn.inc`): their hops and strike as decoded; the chess master that times their turns isn't ported.
+  Hell Greeds (`greed.inc`): the coffin's flight and summon as decoded; when they summon is an estimate.
+
 ### Mission 8: "Leviathan"
 
 Starts in 300 (Leviathan's Stomach, the eyeballs and tusks) after demo 323. Hell Envies (EST 25, class 7) in
@@ -228,10 +243,11 @@ BREAK meshes and must be struck before their nearby exit works. Their default du
 
 Acid uses the authored HITS triangles whose material byte is 13. PCSX2 Normal observation at
 (469,-131,3061) confirmed 25 HP losses about every seven frames, while the flesh sample caused none.
-The port applies that amount while grounded on those triangles. Rooms 303/307's Nausika chase actors,
-liquid UV animation, and the real-time story cameras are not implemented. Complete route and boss-clear
-validation is still in progress; room loading, native Envy waves, Ignis pickup and the acid floor have
-been captured in PPSSPP.
+The port applies that amount while grounded on those triangles. Rooms 303/307 now have the native
+Nausika model/motions following its authored chase path, bite attacks, and melee damage/stagger.
+Path steering and attack attachment interpolation remain approximate; liquid UV animation and
+real-time story cameras are not implemented. PPSSPP checks cover the full Ignis route and a
+full-health Heart defeat through normal shotgun damage, reaching Mission Clear.
 
 
 ### Mission 9: "Faded memories"

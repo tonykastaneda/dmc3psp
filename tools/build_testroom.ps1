@@ -118,6 +118,12 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $LeviathanHeader) -or
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_leviathan.py"), $Iso.FullName, "--output", $Generated)
 }
 
+$NausikaHeader = Join-Path $Generated "boss_nausika_runtime.h"
+if ($Regenerate -or -not (Test-Path -LiteralPath $NausikaHeader) -or
+    (Get-Item (Join-Path $Root "tools\prepare_nausika.py")).LastWriteTime -gt (Get-Item $NausikaHeader).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_nausika.py"), $Iso.FullName, "--output", $Generated)
+}
 $Mission8Header = Join-Path $Generated "mission8_runtime.h"
 if ($Regenerate -or -not (Test-Path -LiteralPath $Mission8Header) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_mission8.py")).LastWriteTime -gt (Get-Item -LiteralPath $Mission8Header).LastWriteTime) {
@@ -165,7 +171,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "agni_rudra", "arachne", "nevan_boss", "beowulf_boss", "mission11")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "arachne", "nevan_boss", "mission7", "beowulf_boss", "mission11")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

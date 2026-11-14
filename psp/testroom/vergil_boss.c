@@ -40,7 +40,7 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK };
 enum {
     S_THINK = 0x17, S_DEATH = 0x18, S_STRAFE = 0x1d, S_IDLE = 0x1f, S_TAUNT = 0x20,
     S_COMBO_A = 0x21, S_COMBO_B = 0x22, S_COMBO_C = 0x25, S_UPPER = 0x29, S_DASH = 0x2d, S_BEHIND = 0x31,
-    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50
+    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50, S_APPROACH = 0x19
 };
 
 typedef struct { float m[3][3], p[3]; } Transform;
@@ -379,8 +379,14 @@ static void ai_step(float f) {
         if (vb.step == 0) { vb.step = 1; set_action(0); }
         if (dante_lunges()) { react(); break; }
         if (gauge_ready()) { start_attack(); break; }
-        vb.last_wander = pick(wander_picks, 3, vb.last_wander);
-        set_state(vb.last_wander);
+        {
+            /* FUN_004d7050: a pick that repeats the last wander state becomes the list's first other entry,
+             * 0x19 (its weight is 0): the walk in. The PS2 does it (analysis/ref/vergil_ps2.txt). */
+            int w = pick(wander_picks, 3, -1);
+            if (w == vb.last_wander) w = S_APPROACH;
+            vb.last_wander = w;
+            set_state(w);
+        }
         break;
     case S_STRAFE:                                  /* FUN_004d7b60: walk sideways, drift in from beyond 500 */
         if (vb.step == 0) {
@@ -399,10 +405,16 @@ static void ai_step(float f) {
         if ((vb.timer -= f) < 0.0f) { set_state(S_THINK); break; }
         wander_checks();
         break;
+    case S_APPROACH:                                /* FUN_004d7530: action 1 (walk) toward him, 360 frames */
+        if (vb.step == 0) { vb.step = 1; set_action(1); vb.timer = 360.0f; break; }
+        turn_toward_dante(f);
+        if (act == ACT_DONE) set_action(1);
+        if ((vb.timer -= f) < 0.0f) { set_state(S_THINK); break; }
+        wander_checks();
+        break;
     case S_IDLE:                                    /* FUN_004d81c0 */
         if (vb.step == 0) { vb.step = 1; set_action(0); vb.timer = IDLE_TIME; break; }
-        turn_toward_dante(f);
-        if (act == ACT_DONE) set_action(0);
+        turn_toward_dante(f);   /* action 0 runs out and he holds (0x77), as the PS2 does */
         if ((vb.timer -= f) < 0.0f) { set_state(S_THINK); break; }
         wander_checks();
         break;
@@ -455,7 +467,7 @@ static void ai_step(float f) {
             set_action(0x54);
         } else if (vb.step == 4) {
             if (act == ACT_DONE) { vb.step = 5; vb.timer = 5.0f; }
-        } else if ((vb.timer -= f) < 0.0f) set_state(vb.previous_state == S_BEHIND ? S_THINK : S_UPPER);
+        } else if ((vb.timer -= f) < 0.0f) set_state(S_THINK);   /* its test reads the current state (0x31): always */
         break;
     case S_UPPER:                                   /* FUN_004d9680: 0x27, chains into the leap */
         if (vb.step == 0) { vb.step = 1; set_action(0x27); }
@@ -518,7 +530,7 @@ static void ai_step(float f) {
     case S_DEATH:
         break;
     }
-    if (vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT) fill_gauge(f);
+    if (vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT || vb.state == S_APPROACH) fill_gauge(f);
 }
 
 /* ---- Skeletal animation and drawing ------------------------------------------------------------------- */
@@ -552,12 +564,9 @@ static void build_skeleton(const VergilMesh *mesh, const MotionSample *sample, c
 }
 /* An attach record (FUN_004e4770): {position, rotation, bone}. */
 static void attach(int bone, float x, float y, float z, float rx, float ry, float rz, Transform *out) {
-    Transform offset, r;
-    int i, j;
-    /* The EE's matrices act on row vectors: its rotation is this one's transpose. */
-    euler(&r, rx, ry, rz);
-    identity(&offset);
-    for (i = 0; i < 3; ++i) for (j = 0; j < 3; ++j) offset.m[i][j] = r.m[j][i];
+    Transform offset;
+    /* As the PS2 shows it (room 144, the 100% save): sheathed, the scabbard rises behind his shoulder. */
+    euler(&offset, rx, ry, rz);
     offset.p[0] = x; offset.p[1] = y; offset.p[2] = z;
     multiply(out, &body_pose[bone], &offset);
 }
@@ -711,7 +720,7 @@ int vergil_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *d
     return 1;
 }
 static int interruptible(void) {
-    return vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT || vb.state == S_FLINCH;
+    return vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT || vb.state == S_APPROACH || vb.state == S_FLINCH;
 }
 int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     float at[3] = {vb.pos[0], vb.pos[1] + 110.0f, vb.pos[2]}, damage, toward;

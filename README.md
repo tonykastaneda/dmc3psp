@@ -46,6 +46,10 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 | Mission 5: the Surge of Fortunas lift, the room's own model, with a wave dropped onto it | |
 | ![Mission 6, the Trial of the Warrior](docs/screenshots/mission6_warrior.png) | ![Mission 6, the Trial of Skill](docs/screenshots/mission6_skill.png) |
 | Mission 6: the Trial of the Warrior, its crest switch and the barrier's mist | Mission 6: the Trial of Skill's spikes (a stand-in) |
+| ![Mission 7, Vergil](docs/screenshots/mission7_vergil.png) | ![Mission 7, Damned Pawns](docs/screenshots/mission7_pawns.png) |
+| Mission 7: Vergil on the Peak of Darkness, Yamato drawn | Mission 7: Damned Pawns closing in, in the Divine Library |
+| ![Mission 7, Hell Greeds](docs/screenshots/mission7_greeds.png) | |
+| Mission 7: Hell Greeds and the Prides their coffins summoned | |
 | ![Mission 9, Arachnes](docs/screenshots/mission9_arachne.png) | ![Mission 9, Nevan](docs/screenshots/mission9_nevan.png) |
 | Mission 9: Arachnes in the Provisions Storeroom | Mission 9: Nevan in the Sunken Opera House (her bats and dress aren't drawn yet) |
 
@@ -170,9 +174,18 @@ All downloaded tools are isolated under `.tools/` and excluded from Git. No glob
 The runtime test deploys the current EBOOT to `E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3PSP\EBOOT.PBP`. It only closes or stops the PPSSPP process that it launched.
 
 
-## Mission 8 (in progress)
+## Mission 7
+
+From the Dark Corridor to Mission Clear: the Heavenrise Chamber's jump pads, Damned Pawns, Hell Greeds and their
+coffins, the Orihalcon Fragment and the lift down to the Chamber of Echoes, the Siren's Shriek, the Cursed Skull
+Chamber's ball, the Crystal Skull and the return ambush, and Vergil (CEm035, decoded) on the Peak of Darkness.
+What's decoded and what's estimated: [the Vergil spec](docs/VERGIL_SPEC.md) and
+[game flow](docs/GAME_FLOW.md#mission-7-a-chance-meeting).
+
+## Mission 8
 
 Leviathan's rooms, native Hell Envy, three animated boss organs, charged attacks, acid floors and the
 five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and used in room 302.
-Full route and Mission Clear validation is ongoing; limitations are recorded in
+Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
+full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
 [the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).

@@ -1,0 +1,43 @@
+place 20 2500 0 1640 180
+triangle 30 31
+triangle 60 61
+triangle 90 91
+triangle 120 121
+triangle 150 151
+triangle 180 181
+triangle 210 211
+triangle 240 241
+triangle 270 271
+triangle 300 301
+place 360 2495 0 2890 180
+triangle 370 371
+triangle 400 401
+triangle 430 431
+triangle 460 461
+triangle 490 491
+triangle 520 521
+triangle 550 551
+triangle 580 581
+triangle 610 611
+triangle 640 641
+triangle 670 671
+triangle 700 701
+triangle 730 731
+triangle 760 761
+triangle 790 791
+triangle 820 821
+triangle 850 851
+triangle 880 881
+triangle 910 911
+triangle 940 941
+triangle 970 971
+triangle 1000 1001
+triangle 1030 1031
+triangle 1060 1061
+triangle 1090 1091
+triangle 1120 1121
+triangle 1150 1151
+triangle 1180 1181
+triangle 1210 1211
+triangle 1240 1241
+place 1290 2538 0 2780 180
