@@ -50,6 +50,8 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 | Mission 7: Vergil on the Peak of Darkness, Yamato drawn | Mission 7: Damned Pawns closing in, in the Divine Library |
 | ![Mission 7, Hell Greeds](docs/screenshots/mission7_greeds.png) | |
 | Mission 7: Hell Greeds and the Prides their coffins summoned | |
+| ![Mission 15, the Fallen](docs/screenshots/mission15_fallen.png) | ![Mission 15, the Provisions Storeroom](docs/screenshots/mission15_storeroom.png) |
+| Mission 15: two Fallen hovering round Dante in the Upper Subterran Garden | Mission 15: Arachnes in the Provisions Storeroom, by its flame portal |
 | ![Mission 12, Geryon on the bridge](docs/screenshots/mission12_geryon_bridge.png) | ![Mission 12, Geryon below](docs/screenshots/mission12_geryon_ground.png) |
 | Mission 12: Geryon and his carriage charging down the bridge | Mission 12: after the bridge falls, he gallops the ground below |
 | ![Mission 9, Arachnes](docs/screenshots/mission9_arachne.png) | ![Mission 9, Nevan](docs/screenshots/mission9_nevan.png) |
@@ -193,6 +195,13 @@ five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and us
 Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
 full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
 [the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).
+
+## Mission 15
+
+From the Upper Subterran Garden to Mission Clear: the Fallen (CEm011, its own model, motions and decoded hover and
+attack picks), the flame portals and the coloured doors they turn, the three Orihalcon Fragments and the
+Devilsprout Lift up to the Sun & Moon Chamber. What's decoded and what's estimated: [the Fallen spec](docs/FALLEN_SPEC.md)
+and [game flow](docs/GAME_FLOW.md#mission-15-the-gatecrasher).
 
 ## Mission 12
 
