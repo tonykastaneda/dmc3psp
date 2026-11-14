@@ -306,6 +306,29 @@ other missions and must not run for M10. The bridge and lake cutscene choreograp
 implementation concern from the decoded route and item gates above.
 
 
+### Mission 13: "Chaos' warm welcome"
+
+EventTbl13 (GDATA 251) is decoded locally to `build/mission13_re/evt_m13.txt` / `.json` under the hdref lock;
+the same directory contains the room/EST census. Demo 36 leads to room 229, start 0. Main route:
+229 → 230 → 241 → 233 (crystal-light puzzle and item 51) → 241 → 232 (use item 51 in area 0)
+→ demo 37 → 234. Defeating 234's group 0 plays demo 325 and clears the mission.
+
+| Room | Group / condition | Easy and Normal enemies |
+|---|---|---|
+| 229 | 0, first visit (flag 0 seals both doors) | 8 Damned Pawns (EST 35) + 3 Damned Bishops (EST 37) |
+| 241 | 0, arriving from 230 | 6 Pawns + 2 Bishops |
+| 241 | 1, arriving from 233 or itself | 4 Pawns + 3 Bishops |
+| 234 | 0 | Vergil (EST 58, class 40), EST op 8 [0,1] selects variant 1, Beowulf/Yamato |
+
+230, 232, 233 and 236 have no event-script enemy spawn. 236's chess groups and 228's Beowulf groups belong
+to other missions and must not run merely because those rooms have EST data. Room 228 is a disabled rear
+passage here. Room 232's door 1 is initially disabled and retargeted to demo 37; item 51 enables it after
+the seal-opening event. Item 51 is at 233's native ITM position (3885.3,189.6,131.8).
+
+In room 233, crest switch 100 is bound to flag 32 and timer 120; CRYSTAL set 102 supplies completion flag 34.
+Its start/end/relay/cover/no values are 1/2/0/3/1, at (1700,164,299). Flag 34 opens door piece 101 and
+sets persistent puzzle flag 1. This light puzzle and the additive Vergil variant are being implemented.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
