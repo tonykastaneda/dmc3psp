@@ -40,6 +40,7 @@
 int testroom_frame;
 #include "cerberus_boss.h"
 #include "leviathan_boss.h"
+#include "mission8.h"
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
@@ -2099,6 +2100,7 @@ static void start_camera(const Player *player, FollowCamera *camera) {
 /* The game's encounter scripts run here. Classes without their own port spawn as Prides; the ported
  * enemies and bosses (Cerberus, Gigapede, Vanguard, ...) are listed in docs/GAME_FLOW.md. */
 static int mission_room = ROOM_NONE, script_at;
+static int m8_boss_started;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
 #define ROOMS_MAX 256
@@ -2197,6 +2199,7 @@ static int key_item_shown(const RoomKeyItem *k) {
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
 static int room_held(void) {
     int i;
+    if(mission_choice.mission==8 && mission_room>=0 && atoi(rooms[mission_room].file+5)==302 && !item_is(46,2))return 1;
     for (i = 0; i < ROOM_ITEM_HOLD_COUNT; ++i)
         if (room_item_holds[i].mission == mission_choice.mission && room_item_holds[i].room == mission_room
             && item_is(room_item_holds[i].item, 0)) return 1;
@@ -2334,8 +2337,15 @@ static void seal_update(float frames) {
     sw_spin2 += 20.0f * sw_wing / 200.0f * frames;
     if (sw_lit && seal_alpha > 0.0f) seal_alpha = fmaxf(seal_alpha - frames / 32.0f, 0.0f);
 }
+static int m8_goo_door(const RoomDoor *d);
 static int door_gated(const RoomDoor *d) {
     int i;
+    if(mission_choice.mission==8 && mission_room>=0) {
+        int number=atoi(rooms[mission_room].file+5);
+        if(number==300 && !mission8_stomach_open())return 1;
+        if(number==305 && item_is(46,0))return 1;
+        if(m8_goo_door(d))return 1;
+    }
     {
         const RoomSwitchSeal *w = room_seal();
         if (w && !sw_lit && d->number == w->next_number) return 1;   /* the seal's door: flag 33 */
@@ -2386,6 +2396,15 @@ static void breakables_reset(void) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) { breakable_hits[i] = room_breakables[i].hits; breakable_broken[i] = 0; }
 }
+static int m8_goo_door(const RoomDoor *d) {
+    int i;
+    for(i=0;i<ROOM_BREAKABLE_COUNT;++i) {
+        const RoomBreakable *b=&room_breakables[i];
+        float dx=b->x-d->box[0],dz=b->z-d->box[2];
+        if(b->room==mission_room && !breakable_broken[i] && !b->crystal && dx*dx+dz*dz<300*300)return 1;
+    }
+    return 0;
+}
 static void breakables_enter(int room) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i)
@@ -2406,6 +2425,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;
     float fx = sinf(player->yaw), fz = cosf(player->yaw);
     if (!mission_mode || mission_room == ROOM_NONE) return;
+    if(mission_choice.mission==8)mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);
     switch_hit(player, reach, kind);
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
@@ -2530,6 +2550,7 @@ static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
     if (!mission_mode || mission_room == ROOM_NONE) return;
+    if(mission_choice.mission==8) {mission8_draw();leviathan_boss_draw_preview();}
     sceGuDisable(GU_TEXTURE_2D);
     sceGuDisable(GU_LIGHTING);
     sceGumMatrixMode(GU_MODEL);
@@ -2630,6 +2651,12 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     breakables_enter(room);
     seal_enter(room);
     mission_room = room;
+    if(mission_choice.mission==8) {
+        int number=atoi(rooms[room].file+5);
+        mission8_enter(number);
+        leviathan_boss_kill();
+        if(number==302 && !m8_boss_started)leviathan_boss_preview();
+    }
     item_opens_apply();
     doors_armed = 0;
     fight_seal_alpha = 0.0f;
@@ -2668,6 +2695,16 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
+    if(mission_choice.mission==8) {
+        int number=atoi(rooms[mission_room].file+5);
+        float acid=mission8_acid(dt*60,player->x,player->y,player->z,player->on_ground);
+        player->health=fmaxf(1,player->health-acid);
+        if(number==305 && !item_is(46,0))stage_hide_group(228); /* native set 200 mouth */
+        if(number==302 && item_is(46,2) && !m8_boss_started) {
+            enemy_add_kind(ENEMY_LEVIATHAN,4978,2651);m8_boss_started=1;
+        }
+        if(m8_boss_started && leviathan_boss_dying())enemy_clear_minions();
+    }
     int held = room_held(), done = held || script_run(dt, player->y), i, in_a_box = 0;
     fight_seal_on = !done || enemy_alive_count() > 0;
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
@@ -2756,7 +2793,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         return 0;
     }
     if (!held) room_set_cleared(mission_room);
-    if (info->clear_room == mission_room) {
+    if (info->clear_room == mission_room && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
@@ -2835,6 +2872,8 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
     leviathan_boss_set_difficulty(choice->difficulty);
+    leviathan_boss_kill();m8_boss_started=0;
+    if(choice->mission==8)mission8_reset();
     if (choice->mission == MENU_DEBUG_ROOM) { start_debug_room(choice, player, camera); return; }
     mission_mode = 1;
     game_turbo = choice->turbo;

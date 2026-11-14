@@ -23,7 +23,7 @@
  * encounter state. See docs/LEVIATHAN_SPEC.md for remaining approximations. */
 enum { HEART_CLOSED, HEART_OPENING, HEART_EXPOSED, HEART_CLOSING, HEART_ATTACK, HEART_DEAD };
 static struct {
-    int active, state, target, difficulty, attack_kind, attack_step, landed, charge_fx, pending_open, double_open;
+    int active, dormant, state, target, difficulty, attack_kind, attack_step, landed, charge_fx, pending_open, double_open;
     float hp, timer, age, lung_hp[2], charge[2], down[2];
     float attack_age, hit_cooldown, landed_damage, drain_timer;
 } heart;
@@ -57,7 +57,11 @@ void leviathan_boss_spawn(void) {
     heart.lung_hp[1] = 2000.0f; /* DAT_005c98cc, type 1 */
 }
 void leviathan_boss_kill(void) { clear_shells();heart.active = 0; }
-int leviathan_boss_active(void) { return heart.active && heart.state!=HEART_DEAD; }
+int leviathan_boss_active(void) { return heart.active && !heart.dormant && heart.state!=HEART_DEAD; }
+void leviathan_boss_preview(void) {
+    if(leviathan_boss_init()) {leviathan_boss_spawn();heart.dormant=1;}
+}
+void leviathan_boss_draw_preview(void) {if(heart.dormant)leviathan_boss_draw();}
 int leviathan_boss_orb_sink(float out[3]) {
     if(!leviathan_boss_active() || heart.down[1]>0)return 0;
     memcpy(out,target_pos[2],sizeof(float)*3);
@@ -139,7 +143,7 @@ int leviathan_boss_update(float frames, float px, float py, float pz, int attack
         while(frames>0) {float step=fminf(1,frames);finished|=leviathan_boss_update(step,px,py,pz,attacks);frames-=step;}
         return finished;
     }
-    if (!heart.active || frames <= 0) return 0;
+    if (!heart.active || heart.dormant || frames <= 0) return 0;
     heart.age += frames;
     heart.hit_cooldown=fmaxf(0,heart.hit_cooldown-frames);
     tick_shells(frames,px,py,pz,attacks);

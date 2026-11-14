@@ -6,6 +6,8 @@
 enum { LEVIATHAN_HEART, LEVIATHAN_RIGHT_LUNG, LEVIATHAN_LEFT_LUNG };
 int leviathan_boss_init(void);
 void leviathan_boss_draw(void);
+void leviathan_boss_preview(void);
+void leviathan_boss_draw_preview(void);
 void leviathan_boss_set_difficulty(int difficulty);
 void leviathan_boss_spawn(void);
 void leviathan_boss_kill(void);

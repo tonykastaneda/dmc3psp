@@ -95,3 +95,10 @@ Charged attack verification: PPSSPP `pM_heart_laser` at 80/180/240 and
 scene commands supply charge without waiting for minion drops. Host tests also
 check laser damage, projectile retirement, orb diversion/healing, and restoration
 of ordinary orb collection after encounter exit.
+
+
+Mission integration checkpoint: all st300-st313 assets are registered as M8, with the native Envy groups,
+Ignis ITM/EVE placement, five native eye meshes, fang exit gate, goo-door gates, dormant organ preview,
+and boss/mission-clear hooks. `pM_m8_stomach` (40/160) and `pM_m8_ignis` (80/250) were inspected in PPSSPP.
+`run_mission8_logic.py` checks acid contact/timing, airborne avoidance, five-eye gating, persistence and reset.
+Eye durability and all-at-once fang removal are port approximations. Full route/clear verification follows.

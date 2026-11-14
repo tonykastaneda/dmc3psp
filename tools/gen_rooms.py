@@ -45,7 +45,9 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428,
          # SE: the Jester's arenas follow st400 at 736, four slots a room. 422 is Mission 5's.
-         "422": 824}
+         "422": 824,
+         "300": 680, "301": 684, "302": 688, "303": 692, "304": 696, "305": 700, "306": 704,
+         "307": 708, "308": 712, "309": 716, "310": 720, "311": 724, "312": 728, "313": 732}
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -69,11 +71,13 @@ MISSIONS = {
     # (groups 0-3, waves as it climbs) -> 120 Azure Garden (the Divinity Statue) -> 121 Firestorm Chamber: Agni
     # & Rudra (group 0, EST 45 = CEm027). Their fall clears the mission. 110 (groups 1, 0) is off the route.
     5: ("111", None, {"111": [1], "422": [0], "102": [3], "113": [0, 1, 2, 3], "110": [1], "121": [0]}),
+    # EventTbl08: Heart/lungs are stage actors, woken by item 46 at 302 area 0.
+    8: ("300", None, {"302": [0], "304": [0], "305": [0], "308": [0], "312": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121"}
+CLEAR_ROOMS = {5: "121", 8: "302"}
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -103,9 +107,9 @@ START_ITEMS = {5: [36]}   # Mission 5 begins with Mission 4's Astronomical Board
 # (mission, item, room it lies in, the item that must be used before it shows). The Vajura shows once the Board's
 # set in 100 and the Soul of Steel once the Vajura's set in 102: the script reveals them with gimmicks (100's
 # 200/201/400, 102's 100-104) that aren't converted, so they simply appear [inferred from the script's order].
-KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37)]
+KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37), (8, 46, "305", -1)]
 # (mission, item, room, EVE area index).
-ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1)]
+ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1), (8, 46, "302", 0)]
 # A room whose fight waits for an item to be picked up: 102's group 3 starts as the Soul of Steel's taken
 # (block 1: sw_item_got 39 == 1, door_lock, spawn_group 3).
 ITEM_HOLDS = [(5, "102", 39)]
