@@ -3837,7 +3837,7 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     b->pos[1] = e->pos[1];
     e->hidden = (unsigned char)b->hidden;
     if (b->restart || nevan_motion_id[b->want] != e->motion) { nevan_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }
+    if (b->land) land_attack(b->land == 2);
     nevan_draw_fx(b);
     if (b->remove) e->active = 0;
 }
