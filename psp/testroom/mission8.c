@@ -30,6 +30,11 @@ int mission8_stomach_open(void) {
     int i;for(i=0;i<5;++i)if(eye_hp[i]>0)return 0;
     return 1;
 }
+unsigned int mission8_eye_bits(void) {
+    unsigned int bits=0;int i;
+    for(i=0;i<5;++i)if(eye_hp[i]<=0)bits|=1u<<i;
+    return bits;
+}
 static int init(void) {
     int i;
     if(render_ready)return 1;
@@ -70,6 +75,17 @@ void mission8_hit(float x,float y,float z,float yaw,float reach,int kind) {
             eye_hp[i]=0;fx_explosion(eye->pos);
             if(mission8_stomach_open())stage_hide_group(128);
         }
+    }
+}
+void mission8_push_out(float *x,float *z,float y,float radius) {
+    int i;
+    if(current_room!=300)return;
+    for(i=0;i<5;++i)if(eye_hp[i]>0) {
+        const M8Eye *e=&m8_eyes[i];
+        float dx=*x-e->pos[0],dz=*z-e->pos[2],d=sqrtf(dx*dx+dz*dz),limit=100+radius;
+        if(y>e->pos[1]+150 || y+220<e->pos[1] || d>=limit)continue;
+        if(d<1) {dx=sinf(e->rot[1]*.0174532925f);dz=cosf(e->rot[1]*.0174532925f);d=1;}
+        *x=e->pos[0]+dx/d*limit;*z=e->pos[2]+dz/d*limit;
     }
 }
 float mission8_acid(float frames,float x,float y,float z,int grounded) {

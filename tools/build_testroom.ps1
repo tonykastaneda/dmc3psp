@@ -63,6 +63,21 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_ru
     Invoke-Native $Python @((Join-Path $Root "tools\gen_rooms.py"), $Iso.FullName, "--output", $Build, "--header", (Join-Path $Generated "rooms_runtime.h"))
 }
 
+# Leviathan's tunnel walls are EFM STAY meshes, unlike earlier static stages.
+$Python = (Get-Command python -ErrorAction Stop).Source
+$Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+foreach ($M8Room in 300..313) {
+    $M8Bin = Join-Path $Build ("ROOM_{0}.BIN" -f $M8Room)
+    $M8Sources = @("tools\prepare_stage.py", "tools\gimmicks.py")
+    $M8Stale = -not (Test-Path -LiteralPath $M8Bin)
+    foreach ($M8Source in $M8Sources) {
+        if (-not $M8Stale -and (Get-Item (Join-Path $Root $M8Source)).LastWriteTime -gt (Get-Item $M8Bin).LastWriteTime) { $M8Stale = $true }
+    }
+    if ($Regenerate -or $M8Stale) {
+        Invoke-Native $Python @((Join-Path $Root "tools\prepare_stage.py"), $Iso.FullName, "--output", $M8Bin, "--slot", [string](680 + 4 * ($M8Room - 300)))
+    }
+}
+
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "gigapede_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
@@ -74,6 +89,13 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $CerberusHeader) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_cerberus.py")).LastWriteTime -gt (Get-Item -LiteralPath $CerberusHeader).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_cerberus.py"), $Iso.FullName, "--output", $Generated)
+}
+
+$AgniHeader = Join-Path $Generated "agni_rudra_scripts.h"
+if ($Regenerate -or -not (Test-Path -LiteralPath $AgniHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_agni_rudra.py")).LastWriteTime -gt (Get-Item -LiteralPath $AgniHeader).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_agni_rudra.py"), $Iso.FullName, "--output", $Generated)
 }
 
 $VergilHeader = Join-Path $Generated "boss_vergil_runtime.h"
@@ -143,7 +165,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "arachne", "nevan_boss")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "agni_rudra", "arachne", "nevan_boss")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj
@@ -179,3 +201,4 @@ try {
 }
 finally { Pop-Location }
 Write-Log ("Test room build completed: {0} ({1:N0} bytes)" -f $Eboot, (Get-Item -LiteralPath $Eboot).Length)
+
