@@ -355,7 +355,7 @@ static int kind_health(int kind) {
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
     case ENEMY_ENVY: return ENEMY_HEALTH * 400 / 250;
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
-    case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
+    case ENEMY_GOYLE: return ENEMY_HEALTH * 600 / 250;   /* 0x5bf4c0 +0x2c (class 14, FUN_0039c608) */
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
     case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
