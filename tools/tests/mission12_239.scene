@@ -1,0 +1,4 @@
+walkto 3450 4250 20 300
+walkto 1200 4250 300 1200
+circle 500 1200
+psp_shot 700

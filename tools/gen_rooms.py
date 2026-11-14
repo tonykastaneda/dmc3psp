@@ -196,7 +196,21 @@ ITEM_GATES += [(10, "201", "211", 49)]
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}
 # Mission 11: 239's area 0 boards the wagon (its door 1, to 216, is an event door). The ride itself (216's TRUCK set,
 # its clock and its ambushes) isn't in: the wagon arrives at once, at 240's start 3, as the ride's end does.
-EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3)]
+EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3, 11, 11),
+                      ((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3, 14, 14)]   # Missions 11 and 14
+
+# ---- Mission 12, "Hunter and hunted", from EventTbl12 (GDATA 250; docs/GAME_FLOW.md). After demo 31 it starts in 217
+# (Torture Chamber) at start 1 -> 240 -> the Temperance Wagon ride (216: the wagon's waves 2-4) -> 239 -> 214 (group 1)
+# -> 213 Altar of Evil (group 0) -> 212 (group 2) -> 211 Gears of Madness (group 0) -> 201 The Rotating Bridge -> 218
+# -> 228 Underground Arena: Geryon (group 0, EST 50 = CEm029; psp/testroom/geryon_boss.c), whose fall clears it.
+SLOTS.update({"211": 556, "212": 560, "213": 564, "214": 568, "216": 576, "217": 580, "218": 584, "228": 624,
+              "239": 668, "240": 672})
+MISSIONS[12] = ("217", None, {"214": [1], "213": [0], "212": [2], "211": [0], "216": [2, 3, 4], "228": [0]})
+FIRST_START[12] = 1
+CLEAR_ROOMS[12] = "228"
+GATES += [(12, "218", "448", "999")]   # 218's door to the Jester (448) is disabled in Mission 12
+# 240's door into the ride (216) is a box the wagon carries Dante into: here, a box on the wagon at start 0.
+EXTRA_DOORS["240"] = [((6400.0, 1500.0, 7001.0, 500.0, 400.0, 500.0), "216", 1, 12, 12)]   # Mission 12's wagon only
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
@@ -384,8 +398,9 @@ def main():
             stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
             game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
             doors = parse_doors(data[0].decode("latin1").replace("\r", ""))
-            doors += [dict(box=list(box), next=nxt, start=start, press=False, low=0, high=99)
-                      for box, nxt, start in EXTRA_DOORS.get(name, [])]
+            # An extra door may name the missions it's for: (box, next, start[, first mission, last mission]).
+            doors += [dict(box=list(e[0]), next=e[1], start=e[2], press=False, low=e[3] if len(e) > 3 else 0,
+                           high=e[4] if len(e) > 4 else 99) for e in EXTRA_DOORS.get(name, [])]
             rooms[name] = dict(doors=doors, starts=parse_starts(data),
                                groups=parse_groups(data), lifts=parse_lifts(game),
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],

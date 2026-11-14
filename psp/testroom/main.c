@@ -40,6 +40,8 @@
 int testroom_frame;
 #include "cerberus_boss.h"
 #include "vergil_boss.h"
+#include "geryon_boss.h"
+#include "mission12.h"
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
@@ -556,6 +558,7 @@ static int kind_max_health(int kind) {
     case ENEMY_AGNI: case ENEMY_RUDRA: return 2000;
     case ENEMY_GIGAPEDE: return 2800;
     case ENEMY_CERBERUS: return 7200;
+    case ENEMY_GERYON: return 9000;
     case ENEMY_ENVY: return 400;
     case ENEMY_LEVIATHAN: return 6500;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
@@ -1819,6 +1822,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup;
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at;
 static int cmp_fastwaves, cmp_clear_minions;
+static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": the boss takes n heavy hits then */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
 static int cmp_goto[16][2], cmp_goto_count;
@@ -1881,6 +1885,9 @@ static void cmp_load(void) {
         else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
+        else if (strncmp(line, "bosshits ", 9) == 0) {
+            if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
+        }
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
@@ -1928,7 +1935,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "cleared ", 8) == 0) { if (cmp_cleared_count < 8) cmp_cleared[cmp_cleared_count++] = atoi(line + 8); }
         else if (strncmp(line, "item ", 5) == 0) { if (cmp_item_count < 8 && sscanf(line + 5, "%d %d", &cmp_item[cmp_item_count][0], &cmp_item[cmp_item_count][1]) == 2) ++cmp_item_count; }
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
-        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_VERGIL||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
+        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_VERGIL||kind==ENEMY_GERYON||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
     }
@@ -2843,6 +2850,17 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
     }
     if (mission_choice.mission == 11) m11_update(dt);
+    if (mission_choice.mission == 12) {
+        float to[4];
+        if (m12_warp(room_number(mission_room), to)) {   /* mission12.c: the bridge falls */
+            player->x = to[0]; player->y = to[1]; player->z = to[2];
+            player->yaw = to[3] * 0.0174533f;
+            player->vy = 0.0f;
+            player->on_ground = 1;
+            combat_reset(&combat);
+            start_camera(player, camera);
+        }
+    }
     if (mission_choice.mission == 14 && m14_update(dt, player->x, player->y, player->z)) return 1;   /* 008's area 0: demo 326 */
     if (m6) {
         int prompt = 0;
@@ -3027,6 +3045,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         return 0;
     }
     if (!held) room_set_cleared(mission_room);
+    if (mission_choice.mission == 12) {
+        int next = 0, start = 0;
+        if (m12_room_done(room_number(mission_room), &next, &start)) {   /* mission12.c: the ride's end */
+            char want[16];
+            snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
+            if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
+        }
+    }
     if (info->clear_room == mission_room && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
@@ -3123,6 +3149,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
     vergil_boss_set_difficulty(choice->difficulty);
+    geryon_boss_set_difficulty(choice->difficulty);
     leviathan_boss_set_difficulty(choice->difficulty);
     leviathan_boss_kill();m8_boss_started=0;
     if(choice->mission==8)mission8_reset();
@@ -3272,6 +3299,9 @@ int main(int argc, char *argv[]) {
             path_in_game_dir(path,sizeof(path),"VERGIL_LOG.TXT");
             remove(path);
             vergil_boss_trace(path);
+            path_in_game_dir(path,sizeof(path),"GERYON_LOG.TXT");
+            remove(path);
+            geryon_boss_trace(path);
             vanguard_render_test(bench_no_texture,bench_no_lighting);
         }
     }
@@ -3519,6 +3549,15 @@ int main(int argc, char *argv[]) {
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
             if (cmp_trim_at && frames == cmp_trim_at) enemy_trim(cmp_trim_keep);
+            {
+                int h, k, n;
+                for (h = 0; h < cmp_boss_hit_count; ++h) if (cmp_boss_hits[h][0] == frames)
+                    for (k = 0; k < ENEMY_MAX; ++k) {
+                        enemy_select(k);
+                        if (!enemy_active() || enemy_kind() < 100) continue;
+                        for (n = 0; n < cmp_boss_hits[h][1]; ++n) enemy_hit(HIT_HEAVY, player.x, player.z);
+                    }
+            }
             if (cmp_force_at && frames == cmp_force_at) enemy_ar_force(cmp_force_state);
             if (focus_cmp && cmp_clear_minions && frames%cmp_clear_minions==0) enemy_clear_minions();
             {
