@@ -2082,8 +2082,8 @@ static void start_camera(const Player *player, FollowCamera *camera) {
     camera->lead_x = camera->lead_z = 0.0f;
 }
 
-/* The game's encounter scripts run here. All classes are Prides for now: CEm002, CEm004, CEm013 and the
- * bosses aren't in, so their spawns hold Prides. See docs/GAME_FLOW.md. */
+/* The game's encounter scripts run here. Classes without their own port spawn as Prides; the ported
+ * enemies and bosses (Cerberus, Gigapede, Vanguard, ...) are listed in docs/GAME_FLOW.md. */
 static int mission_room = ROOM_NONE, script_at;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
