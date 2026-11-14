@@ -33,14 +33,14 @@
 extern unsigned int enemy_ai_random(void);
 extern int testroom_frame;
 
-enum { PART_BODY, PART_COAT, PART_YAMATO, PART_SCABBARD, PART_BEOWULF, PART_DT_BODY };
+enum { PART_BODY, PART_COAT, PART_YAMATO, PART_SCABBARD, PART_BEOWULF, PART_DT_BODY, PART_FORCE_EDGE };
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK };
 
 /* AI states (+0xb9d4), from the switch in FUN_004d6770. */
 enum {
     S_THINK = 0x17, S_DEATH = 0x18, S_STRAFE = 0x1d, S_IDLE = 0x1f, S_TAUNT = 0x20,
     S_COMBO_A = 0x21, S_COMBO_B = 0x22, S_COMBO_C = 0x25, S_UPPER = 0x29, S_DASH = 0x2d, S_BEHIND = 0x31,
-    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_DT=0x39
+    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_FORCE_A=0x23, S_FORCE_B=0x24, S_JUDGMENT=0x30, S_SUMMON=0x3a, S_STORM=0x3c, S_DT=0x39
 };
 
 typedef struct { float m[3][3], p[3]; } Transform;
@@ -62,7 +62,7 @@ static struct {
     int landed, landed_heavy;
     float landed_x, landed_z, landed_damage;
     int tick, variant, dt, dt_unlocked, m13_chain;
-    float dt_left,dt_cooldown;
+    float dt_left,dt_cooldown, cut[3];
 } vb;
 
 static int motion_ids[4][100];
@@ -73,9 +73,10 @@ static Transform body_pose[24], coat_pose[40], yamato_pose[2], scabbard_pose[7];
 static char trace_path[320];
 static int trace_on, boss_difficulty = 1, boss_variant;
 static Transform beowulf_pose[11];
-void vergil_boss_set_variant(int variant){boss_variant=variant==1?1:0;}
+void vergil_boss_set_variant(int variant){boss_variant=variant>=0 && variant<=2?variant:0;}
 int vergil_boss_variant(void){return vb.variant;}
 int vergil_boss_devil(void){return vb.dt;}
+static float max_health(void){return vb.variant==2?10000.0f:MAX_HEALTH;}
 static int (*floor_fn)(float x, float y, float z, float *out);
 
 void vergil_boss_set_difficulty(int difficulty) { boss_difficulty = difficulty; }
@@ -95,6 +96,13 @@ static const Pick far_picks[] = {{S_BEHIND, 100}};                             /
 static const Pick m13_wander[]={{S_APPROACH,20},{S_STRAFE,40},{S_IDLE,20},{S_TAUNT,20}};
 static const Pick m13_near[]={{S_COMBO_A,35},{S_COMBO_B,35},{S_BEOWULF_WARP,30}};
 static const Pick m13_mid[]={{S_COMBO_C,20},{S_BEOWULF_WARP,20},{S_DASH,30},{S_BEHIND,30}};
+/* Variant 2, Force Edge, rank 0: 5ddd80 / 5ddf00 / 5de080. */
+static const Pick m20_wander[]={{S_APPROACH,65},{S_STRAFE,20},{S_IDLE,15}};
+static const Pick m20_near[]={{S_FORCE_A,40},{S_FORCE_B,40},{S_DASH,20}};
+static const Pick m20_mid[]={{S_COMBO_C,20},{S_DASH,30},{S_JUDGMENT,20},{S_BEHIND,30}};
+static const Pick m20_far[]={{S_JUDGMENT,40},{S_BEHIND,40},{S_SUMMON,20}};
+static const Pick m20_dt_near[]={{S_FORCE_B,65},{S_STORM,35}};
+static const Pick m20_dt_far[]={{S_STORM,35},{S_BEHIND,65}};
 static const Pick counter_picks[] = {{S_COMBO_C, 50}, {S_DASH, 50}};
 /* Gauge fill while Dante is inside a band (0x5df360: distance, half angle, rate a frame). */
 static const float gauge_bands[3][2] = {{350.0f, 20.0f}, {400.0f, 4.0f}, {500.0f, 1.0f}};
@@ -331,8 +339,8 @@ static void hide(int on) {
 /* FUN_004e5ff0: move toward a point at TRAVEL_SPEED a frame; 1 once there. */
 static int travel(const float target[3], float frames) {
     float point[3]={target[0],target[1],target[2]},d[3],len,step=TRAVEL_SPEED*frames;
-    if(vb.variant==1){float x=point[0]-vb.centre[0],z=point[2]-vb.centre[2],r=sqrtf(x*x+z*z);
-        if(r>1100){point[0]=vb.centre[0]+x/r*1100;point[2]=vb.centre[2]+z/r*1100;}}
+    if(vb.variant>=1){float x=point[0]-vb.centre[0],z=point[2]-vb.centre[2],r=sqrtf(x*x+z*z);
+        if(r>(vb.variant==2?1650:1100)){float limit=vb.variant==2?1650:1100;point[0]=vb.centre[0]+x/r*limit;point[2]=vb.centre[2]+z/r*limit;}}
     d[0]=point[0]-vb.pos[0];d[1]=0;d[2]=point[2]-vb.pos[2];
     len = sqrtf(d[0] * d[0] + d[2] * d[2]);
     if (len <= step) {
@@ -362,6 +370,11 @@ static int gauge_ready(void) { return vb.gauge > GAUGE_READY; }
 static void start_attack(void) {
     float d = dante_distance();
     vb.gauge = 0.0f;
+    if(vb.variant==2){
+        if(vb.dt)set_state(d<=350?pick(m20_dt_near,2,-1):pick(m20_dt_far,2,-1));
+        else set_state(d<=350?pick(m20_near,3,-1):d<=500?pick(m20_mid,4,-1):pick(m20_far,3,-1));
+        return;
+    }
     if(vb.variant==1 && d<=350) {set_state(pick(m13_near,3,-1));return;}
     if(vb.variant==1 && d<=500) {set_state(pick(m13_mid,4,-1));return;}
     if (d <= 350.0f) set_state(pick(near_picks, 2, -1));
@@ -379,7 +392,7 @@ static int dante_lunges(void) {
     return fabsf(wrap_angle(angle_to_dante() - vb.yaw)) < PI / 4.0f;
 }
 /* FUN_004deca0: rank 0, variant 0 guards every time (0x5df8f0: 100%). */
-static void react(void) { set_state(vb.variant==1 && unit_random()>=.9f?S_AWAY:S_GUARD); }
+static void react(void) { set_state(vb.variant>=1 && unit_random()>=(vb.variant==2?.8f:.9f)?S_AWAY:S_GUARD); }
 
 /* ---- AI states (FUN_004d6770's handlers) --------------------------------------------------------------- */
 static void wander_checks(void) {
@@ -391,13 +404,13 @@ static void ai_step(float f) {
     switch (vb.state) {
     case S_THINK:                                   /* FUN_004d7050 */
         if (vb.step == 0) { vb.step = 1; set_action(0); }
-        if(vb.variant==1 && vb.hp<MAX_HEALTH*.75f && !vb.dt_unlocked){set_state(S_DT);break;}
+        if(vb.variant>=1 && vb.hp<max_health()*.75f && !vb.dt_unlocked){set_state(S_DT);break;}
         if (dante_lunges()) { react(); break; }
         if (gauge_ready()) { start_attack(); break; }
         {
             /* FUN_004d7050: a pick that repeats the last wander state becomes the list's first other entry,
              * 0x19 (its weight is 0): the walk in. The PS2 does it (analysis/ref/vergil_ps2.txt). */
-            int w = vb.variant==1?pick(m13_wander,4,-1):pick(wander_picks, 3, -1);
+            int w = vb.variant==2?pick(m20_wander,3,-1):vb.variant==1?pick(m13_wander,4,-1):pick(wander_picks, 3, -1);
             if (w == vb.last_wander) w = S_APPROACH;
             vb.last_wander = w;
             set_state(w);
@@ -452,6 +465,34 @@ static void ai_step(float f) {
         } else if (act == ACT_DONE) set_state(S_THINK);
         break;
     }
+    case S_FORCE_A: /* 4d8830: 18 -> 19 -> 65, optional follow-up assumed. */
+    case S_FORCE_B: { /* 4d8a20: 18 -> 19 -> 1b, then teleport/dive. */
+        static const unsigned char a[]={0x18,0x19,0x65},b[]={0x18,0x19,0x1b};
+        const unsigned char *seq=vb.state==S_FORCE_A?a:b;
+        if(vb.step==0){vb.step=1;set_action(seq[0]);}
+        else if(vb.step<3 && (vb.body.window1==1 || act==ACT_DONE))set_action(seq[vb.step++]);
+        else if(vb.step==3 && act==ACT_DONE){if(vb.state==S_FORCE_B)set_state(S_STORM);else set_state(S_THINK);}
+        break;
+    }
+    case S_JUDGMENT: /* Native 30 uses 2b -> 2c -> 2d plus spatial cut effects. */
+        if(vb.step==0){vb.step=1;vb.yaw=angle_to_dante();set_action(0x2b);vb.timer=60;}
+        else if(vb.step==1 && act==ACT_DONE){vb.step=2;memcpy(vb.cut,vb.dante,sizeof(vb.cut));set_action(0x2c);}
+        else if(vb.step==2){
+            fx_guard_flash(vb.cut);
+            if((vb.timer-=f)<=0){float x=vb.dante[0]-vb.cut[0],z=vb.dante[2]-vb.cut[2];
+                fx_hit_spark(vb.cut);vb.step=3;set_action(0x2d);
+                if(x*x+z*z<180*180 && fabsf(vb.dante[1]-vb.cut[1])<220){vb.landed=1;vb.landed_x=vb.cut[0];vb.landed_z=vb.cut[2];vb.landed_damage=1000;vb.landed_heavy=1;}
+            }
+        }else if(vb.step==3 && act==ACT_DONE)set_state(S_THINK);
+        break;
+    case S_SUMMON: /* 4dcc80, action 69. Sword effects approximated by a warned cut. */
+        if(vb.step==0){vb.step=1;set_action(0x69);}
+        else if(act==ACT_DONE)set_state(S_JUDGMENT);
+        break;
+    case S_STORM: /* 4dd290: teleport/dive storm. Reuse the native leap collision path. */
+        if(vb.step==0){vb.step=1;set_action(0x54);}
+        else if(act==ACT_DONE){point_from_dante(-350,vb.travel);travel(vb.travel,100);hide(0);set_state(S_LEAP);}
+        break;
     case S_COMBO_C:                                 /* FUN_004d9220: 0x1b 0x1c, then 0x47 */
         if (vb.step == 0) { vb.step = 1; set_action(0x1b); }
         else if (vb.step == 1) { if (vb.body.window1 == 1) { vb.step = 2; set_action(0x1c); } }
@@ -548,7 +589,7 @@ static void ai_step(float f) {
         break;
     case S_DT: /* 4e6310: first activation below 75%; 4db950: 56 -> 57, hold 240. */
         if(vb.step==0){vb.step=1;set_action(0x56);}
-        else if(vb.step==1 && act==ACT_DONE){vb.step=2;vb.dt=1;vb.dt_unlocked=1;vb.dt_left=840;vb.timer=240;set_action(0x57);}
+        else if(vb.step==1 && act==ACT_DONE){vb.step=2;vb.dt=1;vb.dt_unlocked=1;vb.dt_left=vb.variant==2?660:840;vb.timer=vb.variant==2?60:240;set_action(0x57);}
         else if(vb.step==2 && (vb.timer-=f)<=0)set_state(S_THINK);
         break;
     case S_FLINCH:                                  /* [approximation] the hit reaction isn't decoded */
@@ -633,6 +674,7 @@ static void evaluate_poses(void) {
 }
 static const Transform *part_transforms(int part) {
     switch (part) {
+    case PART_FORCE_EDGE:return yamato_pose;
     case PART_BEOWULF:return beowulf_pose;
     case PART_COAT: return coat_pose;
     case PART_YAMATO: return yamato_pose;
@@ -689,7 +731,7 @@ void vergil_boss_draw(void) {
     int i;
     if (!vb.active || vb.hidden) return;
     evaluate_poses();
-    for (i = 0; i < VERGIL_PART_COUNT; ++i) if(i<4 || vb.variant==1)skin_part(i);
+    for (i = 0; i < VERGIL_PART_COUNT; ++i) if(i<4 || vb.variant>=1)skin_part(i);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     {
@@ -709,7 +751,9 @@ void vergil_boss_draw(void) {
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     for (i = 0; i < VERGIL_PART_COUNT; ++i) {
-        if(i>=4 && vb.variant!=1)continue;
+        if(i==PART_BEOWULF && vb.variant!=1)continue;
+        if(i==PART_FORCE_EDGE && vb.variant!=2)continue;
+        if(i==PART_DT_BODY && vb.variant==0)continue;
         if((i==PART_BODY || i==PART_COAT) && vb.dt)continue;
         if(i==PART_DT_BODY && !vb.dt)continue;
         draw_part(i);
@@ -770,7 +814,7 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     /* As Cerberus's: a light hit 42, a heavy one 84, x1.1; Easy x2. Guns: the param block's 20% [inferred]. */
     damage = kind == HIT_PISTOL ? 10.0f * 0.2f : (kind == HIT_LIGHT || kind == HIT_AIR ? 42.0f : 84.0f) * 1.1f;
     if (boss_difficulty == 0) damage *= 2.0f;
-    if(vb.variant==1 && vb.dt)damage*=.5f; /* DT damage resistance: port approximation. */
+    if(vb.variant>=1 && vb.dt)damage*=.5f; /* DT damage resistance: port approximation. */
     if (!mortal) damage = 0.0f;
     vb.hp = fmaxf(0.0f, vb.hp - damage);
     trace("hit");
@@ -781,13 +825,13 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
         vb.action = 0x13;
         return 1;
     }
-    if(vb.variant==1 && vb.hp<MAX_HEALTH*.75f && !vb.dt_unlocked && vb.state!=S_DT){
+    if(vb.variant>=1 && vb.hp<max_health()*.75f && !vb.dt_unlocked && vb.state!=S_DT){
         vb.m13_chain=0;set_state(S_DT);return 0;
     }
     /* M13's simplified reaction escape prevents indefinite heavy-shot flinches.
      * Three interrupting contacts trigger the Beowulf warp; native count not decoded. */
-    if(vb.variant==1 && kind!=HIT_PISTOL && interruptible() && ++vb.m13_chain>=3){
-        vb.m13_chain=0;set_state(S_BEOWULF_WARP);return 0;
+    if(vb.variant>=1 && kind!=HIT_PISTOL && interruptible() && ++vb.m13_chain>=3){
+        vb.m13_chain=0;set_state(vb.variant==2?S_BEHIND:S_BEOWULF_WARP);return 0;
     }
     /* Flinches only between attacks [approximation: CEm035's reaction table 0x5dcc90 isn't decoded]. */
     if (kind != HIT_PISTOL && interruptible()) {
@@ -803,12 +847,12 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     float dx, dz, c, s;
     if (!vb.active) return;
     ++vb.tick;
-    if(vb.variant==1 && vb.dt && !vb.dying){
+    if(vb.variant>=1 && vb.dt && !vb.dying){
         vb.dt_left-=frames;
         if(vb.dt_left<=0){vb.dt=0;vb.dt_cooldown=1200;trace("dt_end");}
-        else vb.hp=fminf(MAX_HEALTH,vb.hp+frames*.5f); /* healing rate / duration approximated */
+        else vb.hp=fminf(max_health(),vb.hp+frames*.5f); /* healing rate / duration approximated */
     }
-    if(vb.variant==1 && vb.dt_unlocked && !vb.dt && vb.hp>0 && vb.hp<MAX_HEALTH*.75f && (vb.dt_cooldown-=frames)<=0 && vb.state==S_THINK){vb.dt_unlocked=0;}
+    if(vb.variant>=1 && vb.dt_unlocked && !vb.dt && vb.hp>0 && vb.hp<max_health()*.75f && (vb.dt_cooldown-=frames)<=0 && vb.state==S_THINK){vb.dt_unlocked=0;}
 
     vb.dante[0] = px; vb.dante[1] = py; vb.dante[2] = pz;
     if (attacks && !vb.dying) ai_step(frames);
@@ -820,8 +864,8 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     vb.pos[2] += -s * dx + c * dz;
     /* M13's room floor is bounded about (2500,2500); keep root-driven charges
      * and escape teleports on its combat deck. Conservative port boundary. */
-    if(vb.variant==1){float x=vb.pos[0]-vb.centre[0],z=vb.pos[2]-vb.centre[2],r=sqrtf(x*x+z*z);
-        if(r>1100){vb.pos[0]=vb.centre[0]+x/r*1100;vb.pos[2]=vb.centre[2]+z/r*1100;}}
+    if(vb.variant>=1){float x=vb.pos[0]-vb.centre[0],z=vb.pos[2]-vb.centre[2],r=sqrtf(x*x+z*z);
+        if(r>(vb.variant==2?1650:1100)){float limit=vb.variant==2?1650:1100;vb.pos[0]=vb.centre[0]+x/r*limit;vb.pos[2]=vb.centre[2]+z/r*limit;}}
     if (vb.body.window0 == 1) vb.yamato_drawn = 1;
     else if (vb.body.window0 == 2) vb.yamato_drawn = 0;
     vb.body.window0 = 0;
@@ -844,9 +888,10 @@ void vergil_boss_spawn(float x, float y, float z) {
     if (fabsf(x - 2700.0f) < 1.0f && fabsf(z - 3500.0f) < 1.0f) { vb.centre[0] = 3500.0f; vb.centre[2] = 3500.0f; }
     else { vb.centre[0] = x; vb.centre[2] = z; }
     if(vb.variant==1){vb.centre[0]=2500;vb.centre[2]=2500;}
+    if(vb.variant==2){vb.centre[0]=2500;vb.centre[2]=3750;}
     vb.centre[1] = y;
     vb.yaw = PI;
-    vb.hp = MAX_HEALTH;
+    vb.hp = max_health();
     vb.body.motion = vb.body.previous_motion = -1;
     vb.last_wander = -1;
     vb.state = S_THINK;
@@ -857,7 +902,7 @@ void vergil_boss_kill(void) { if (vb.active && !vb.dying) { vb.hp = 0.0f; vb.dyi
 int vergil_boss_dying(void) { return vb.dying; }
 int vergil_boss_hidden(void) { return vb.hidden; }
 float vergil_boss_health(void) { return vb.hp; }
-float vergil_boss_max_health(void) { return MAX_HEALTH; }
+float vergil_boss_max_health(void) { return max_health(); }
 void vergil_boss_position(float out[3]) { memcpy(out, vb.pos, sizeof(vb.pos)); }
 void vergil_boss_target_position(float out[3]) { out[0] = vb.pos[0]; out[1] = vb.pos[1] + 110.0f; out[2] = vb.pos[2]; }
 void vergil_boss_push_out(float *x, float *z, float y, float r) {

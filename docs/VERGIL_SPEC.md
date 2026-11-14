@@ -159,3 +159,30 @@ M13 arena safety: native centre `5df970[1]` is (2500,100,2500); the authored nea
 bounds are x=1246..3751, z=1229..3750. Escape destinations and root-driven movement use a conservative
 1100-cm radial limit about that centre. This approximates native room collision and prevents repeated
 escapes from leaving the deck. The M7 branch retains its existing movement handling.
+
+## Mission 20 additive variant (2)
+
+Room 411 EST op 8 [0,2] selects variant 2, with 10000 HP (`5dca50 + 2*54 + 2c`). Its native centre
+`5df970[2]` is (2500,-200,3750). The port selects it before spawn and keeps M7/M13 branches isolated.
+Rank-0 wander list `5df430` is approach 65, strafe 20, idle 15. Force Edge normal lists selected by
+`4e55e0` are `5ddd80` (23:40,24:40,2d:20), `5ddf00` (25:20,2d:30,30:20,31:30) and
+`5de080` (30:40,31:40,3a:20). DT lists `5de260/280/2a0` choose 24/3c near (65/35), and
+3c/31 beyond (35/65). Guard chance is 80% (`5df8f0[2]`).
+
+The port's Force Edge chain 23 follows native `4d8830` actions 18→19→65; the optional follow-up is
+assumed. Chain 24 follows 18→19→1b then a simplified teleport/dive; the original `4d8a20` has more
+movement phases. Judgment Cut state 30 uses native 2b→2c→2d (`4da300`), with one stationary 60-frame
+warning at Dante's sampled position and a 180-cm, 1000-damage burst. Summoned sword state 3a plays
+native action 69, then uses that warned burst in place of the native sword projectiles. DT storm 3c
+is one teleport/leap using the existing native leap cap path, rather than the original repeated
+54/55/6f/70/71 dive cycle. Those effect shapes, counts and timing are approximations.
+
+M20 DT uses native 56→57 with a 60-frame entry hold (`4db950`, M13 uses 240). The port reuses M13's
+75%-health trigger, 600-frame active duration, healing and damage resistance; M20's original
+weapon-mode/cooldown activation rule (`4e6310`) is different and remains an approximation. Native
+rank-0 DT duration table `5df950` also contains 600. The conservative 1650-cm arena radius, first
+Force Edge weapon mode, fixed three-hit escape counter, DT body reuse and weapon attachment are
+port estimates. Normal Force Edge uses native model chunk 32 and textures 31, appended after the
+existing parts. Weapon-mode switching and the full DT coat/layers are not reproduced.
+
+`run_vergil_variants.py` adds M20 HP/DT/Force Edge/Judgment Cut checks to the M7/M13 regression checks.
