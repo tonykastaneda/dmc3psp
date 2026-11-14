@@ -63,6 +63,8 @@ SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (212, 213, 214, 217, 239, 240
 # Mission 14 (Forbidden Land 3F down to the Residential Area): 0xx is GDATA 272 + 4 x n.
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (221, 225, 231, 233, 235, 236, 237)})
 SLOTS.update({"007": 300, "008": 304})
+# Mission 16 (Central Temen-ni-gru 1 and 2): room 1xx is GDATA 324 + 4 x (n - 100).
+SLOTS.update({f"{n}": 324 + 4 * (n - 100) for n in (106, 107, 108, 109, 116, 117, 118, 119, 146)})
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -119,6 +121,12 @@ MISSIONS = {
     # area 0 plays demo 326 and clears it (psp/testroom/mission14.c). The route between the script's rooms is the
     # walkthrough's, matched by door links.
     14: ("237", None, {"214": [0], "236": [2, 3, 4, 5, 6]}),
+    # Mission 16, from EventTbl16 (GDATA 254): 106 Sun & Moon Chamber -> 108 -> 109 Waking Sun Chamber (the Golden Sun,
+    # item 56; group 1 as it's taken: 2 Damned Rooks, EST 29) -> 105 Cursed Skull Chamber (group 1) -> 102 Living Statue
+    # Room (group 2: 2 Enigmas, 4 Blood-goyles) -> 146 Chamber of Sins (the Onyx Moonshard, item 55; group 0: 4 of EST
+    # 38, 1 of EST 36) -> back to 106, both set at area 1, door 0 opens -> 107 -> 118 -> 117 -> 111 -> 116 -> 115 The
+    # Divine Library: Lady (group 0, EST 55). The route between the script's rooms is by door links.
+    16: ("106", None, {"105": [1], "109": [1], "102": [2], "146": [0], "115": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1, 14: 1}
@@ -186,6 +194,13 @@ KEY_ITEMS += [(9, 47, "208", -1)]
 ITEM_HOLDS += [(9, "208", 47)]
 ITEM_USES += [(9, 47, "209", 0)]
 ITEM_GATES += [(9, "209", "210", 47)]
+# Mission 16: the Golden Sun (56) in 109 and the Onyx Moonshard (55) in 146, each starting its room's fight as it's
+# taken; both set at 106's area 1 enable its door 0 (to 107). The puzzles that free them (109's crest switches and
+# hanging sphere, 146's swinging spheres) aren't in: the items simply lie there.
+KEY_ITEMS += [(16, 56, "109", -1), (16, 55, "146", -1)]
+ITEM_HOLDS += [(16, "109", 56), (16, "146", 55)]
+ITEM_USES += [(16, 56, "106", 1), (16, 55, "106", 1)]
+ITEM_GATES += [(16, "106", "107", 56), (16, "106", "107", 55)]
 # Mission 10: Stone Mask at 209, Neo-Generator beyond the lake bridge.
 KEY_ITEMS += [(10, 48, "209", -1), (10, 49, "206", 48)]
 ITEM_USES += [(10, 48, "206", 0), (10, 49, "201", 1)]
@@ -208,6 +223,7 @@ SLOTS.update({"211": 556, "212": 560, "213": 564, "214": 568, "216": 576, "217":
 MISSIONS[12] = ("217", None, {"214": [1], "213": [0], "212": [2], "211": [0], "216": [2, 3, 4], "228": [0]})
 FIRST_START[12] = 1
 CLEAR_ROOMS[12] = "228"
+CLEAR_ROOMS[16] = "115"   # Lady; the game then plays demo 45 and Dante climbs 119, the High-fly Zone, to its exit
 GATES += [(12, "218", "448", "999")]   # 218's door to the Jester (448) is disabled in Mission 12
 # 240's door into the ride (216) is a box the wagon carries Dante into: here, a box on the wagon at start 0.
 EXTRA_DOORS["240"] = [((6400.0, 1500.0, 7001.0, 500.0, 400.0, 500.0), "216", 1, 12, 12)]   # Mission 12's wagon only

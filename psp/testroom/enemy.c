@@ -226,6 +226,9 @@ static void dullahan_hit_glue(HitKind kind,float from_x,float from_z);
 static void arachne_spawn_glue(void);
 static void nevan_spawn_glue(void);
 static void beowulf_spawn_glue(void);
+static void lady_spawn_glue(void);
+static void lady_update_glue(float f, float px, float py, float pz);
+static void lady_hit_glue(HitKind kind);
 static void beowulf_update_glue(float f, float px, float py, float pz);
 static void beowulf_hit_glue(HitKind kind);
 static void nevan_update_glue(float f, float px, float py, float pz);
@@ -344,6 +347,7 @@ static int kind_health(int kind) {
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1500 / 250;   /* an estimate (fallen.c) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * 3000 / 250;  /* an estimate */
+    case ENEMY_LADY: return ENEMY_HEALTH * 3500 / 250;     /* an estimate */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
@@ -431,6 +435,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_BEOWULF) { beowulf_spawn_glue(); return; }
+    if (kind == ENEMY_LADY) { lady_spawn_glue(); return; }
     if (kind == ENEMY_AGNI) { ar_spawn(); return; }
     if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
     script_play(0);
@@ -580,7 +585,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
     if (spawn_class == 35) return ENEMY_PAWN;
-    if (spawn_class == 36 || spawn_class == 37) return ENEMY_PAWN;   /* Mission 14's other chessmen: the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
+    if (spawn_class >= 36 && spawn_class <= 38) return ENEMY_PAWN;   /* the other chessmen (Missions 14, 16): the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
@@ -591,6 +596,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 28) return ENEMY_ARACHNE;
     if (spawn_class == 49) return ENEMY_NEVAN;
     if (spawn_class == 51) return ENEMY_BEOWULF;
+    if (spawn_class == 55) return ENEMY_LADY;
     return ENEMY_PRIDE;
 }
 void enemy_set_anim_auto(int on) { anim_auto = on; }
@@ -655,6 +661,8 @@ const char *enemy_boss_name(void) {
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_BEOWULF) return "BEOWULF";
     for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_LADY) return "LADY";
+    for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && (enemies[i].kind == ENEMY_AGNI || enemies[i].kind == ENEMY_RUDRA)) return "AGNI & RUDRA";
     return "HELL VANGUARD";
 }
@@ -681,6 +689,9 @@ int enemy_boss_health(float *health, float *maximum) {
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_LADY && enemies[i].plan!=P_DEATH) {
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3500 / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_BEOWULF && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3000 / 250;return 1;
@@ -1295,6 +1306,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind); return; }
+    if (e->kind == ENEMY_LADY) { ++hits; lady_hit_glue(kind); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
@@ -1577,6 +1589,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_BEOWULF) { beowulf_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_LADY) { lady_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
@@ -3594,6 +3607,7 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
         }
     }
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->floor_y = e->floor_y;
     b->frame = e->frame; b->done = e->done;
     arachne_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
@@ -3887,5 +3901,69 @@ static void fallen_hit_glue(HitKind kind, float from_x, float from_z) {
         died();
     }
     fallen_play(b->want, b->restart);
+    b->restart = 0;
+}
+
+/* ---- Lady (lady_boss.c decides; here her body). Her health is the Enemy's own, for the boss bar. */
+#include "lady_boss.h"
+static LadyBrain lady_brain;
+static int lady_motion_id[LADY_M_COUNT] = {-2};
+static void lady_play(int m, int restart) {
+    int id;
+    if (lady_motion_id[0] == -2) { int k; for (k = 0; k < LADY_M_COUNT; ++k) lady_motion_id[k] = motion_find(lady_motion_names[k]); }
+    id = lady_motion_id[m];
+    if (id < 0) return;
+    if (id != e->motion || restart) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 10.0f;
+        e->motion = id; e->frame = 0.0f; e->done = 0;
+    }
+}
+static void lady_spawn_glue(void) {
+    LadyBrain *b = &lady_brain;
+    float g;
+    e->motion = -1;
+    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    lady_spawn(b, e->health);
+    lady_play(b->want, 1);
+    b->restart = 0;
+    e->fade = 0.0f;
+}
+static void lady_update_glue(float f, float px, float py, float pz) {
+    LadyBrain *b = &lady_brain;
+    const Motion *m;
+    float g;
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->motion >= 0) {
+        m = motion_get(e->motion);
+        e->frame += f;
+        if (e->frame >= m->end_frame) {
+            e->done = 1;
+            e->frame = lady_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+        }
+    }
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->frame = e->frame; b->done = e->done;
+    lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
+    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    if (b->restart || lady_motion_id[b->want] != e->motion) { lady_play(b->want, b->restart); b->restart = 0; }
+    if (b->land) land_attack(b->land == 2);
+    lady_draw_fx(b);
+    if (e->plan == P_DEATH) { e->timer += f; if (e->timer > 300.0f) e->active = 0; }
+}
+static void lady_hit_glue(HitKind kind) {
+    LadyBrain *b = &lady_brain;
+    float at[3] = {e->pos[0], e->pos[1] + 110.0f, e->pos[2]};
+    if (e->plan == P_DEATH) return;
+    fx_hit_spark(at);
+    if (lady_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), mortal)) {
+        e->plan = P_DEATH;
+        e->timer = 0.0f;
+        died();
+    }
+    e->health = (signed char)b->health;
+    lady_play(b->want, b->restart);
     b->restart = 0;
 }
