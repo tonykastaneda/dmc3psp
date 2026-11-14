@@ -18,8 +18,9 @@ The dummy exits in both rooms are disabled. Mission 20 and its native banner are
 mission menu; sparse mission indexing keeps unported mission slots disabled.
 
 The final fight reuses `vergil_boss.c`: native Force Edge model/texture, native motion scripts,
-rank-0 normal/DT move weights, guard probability and health. The additional attack effects,
-DT activation rule and weapon-mode handling remain approximations described in the Vergil spec.
+rank-0 normal/DT move weights, guard probability and health. The follow-up fidelity pass replaces the DT activation/timers and form, adds native dive chains and
+Round Trip release events, and uses the low-health move tables. Effect collision, cloth drivers and
+some weapon-mode handling remain approximations described in the Vergil spec.
 
 Verification: `tools/tests/run_vergil_variants.py` covers M7 isolation, M13 regression and M20 HP,
 DT, Force Edge follow-up and spatial Judgment Cut hit. The end-to-end PPSSPP scene is

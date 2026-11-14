@@ -203,8 +203,8 @@ DT uses native actions 56→57 and a 60-frame entry hold (`4db950`), then a 600-
 (`5df950[0]`). `4dee00` clears DT at the next state boundary after expiry, sets a **2700-frame**
 cooldown (`5df930[0]`), and `4e22a0` counts that cooldown down only in human form. M20 animation/root
 motion advances at **1.2x** in DT (`4e22a0`); AI/phase timers retain native-frame units. These replace
-the previous 1200-frame cooldown and unscaled DT animation. The DT parameter block `5dcbf4` has 50 rather than 100 at +20/+24, supporting the existing half-damage
-resistance. Healing remains an estimate. The conservative 1650-cm arena radius, fixed three-hit escape
+the previous 1200-frame cooldown and unscaled DT animation. The DT parameter block `5dcbf4` has 50
+rather than 100 at +20/+24, supporting the existing half-damage resistance. Healing remains an estimate. The conservative 1650-cm arena radius, fixed three-hit escape
 counter, weapon attachment selection remain port estimates; the DT form update below replaces body reuse.
 
 `run_vergil_variants.py` adds M20 HP/DT/Force Edge/Judgment Cut checks to the M7/M13 regression checks.
@@ -218,3 +218,10 @@ are unchanged, and invisible new parts are not skinned for those fights. Force E
 own pose, with native carry record `5dc160` (bone 14) and draw record `5dc130` (bone 13), replacing
 the shared Yamato pose. Draw-mode selection by action range is still an approximation. Active Round Trip replaces that carry pose
 with the independently moving/spinning sword pose.
+
+Area-cut form detail (`4ddff0`): entering 3f/40 from human form sets the form-toggle latch before
+6a, then toggles back before 6e. These attacks now temporarily display the native DT form and use
+its animation rate/resistance without granting a fresh maintained-DT duration. Human cooldown is
+paused during this temporary form and resumes on recovery. Entering from maintained DT leaves its
+existing duration intact. A host regression covers the temporary form's entry, recovery and paused
+cooldown. This replaces another form transition omitted by the first M20 port.

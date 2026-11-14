@@ -54,8 +54,8 @@ int main(void){int i,seen=0;
  set_state(S_ROUND_TRIP);vb.sword=0;seen=0;
  for(i=0;i<1200;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.sword)seen=1;if(seen && !vb.sword)break;}
  assert(seen && !vb.sword);
- set_state(S_CUT_RANDOM);seen=0;
- for(i=0;i<2400;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.action==0x6e)seen=1;if(vb.state==S_THINK)break;}
- assert(seen && vb.state==S_THINK);
+ vb.dt=0;vb.dt_cooldown=1000;set_state(S_CUT_RANDOM);vergil_boss_update(1,2500,-208,2800,1);assert(vb.dt && vb.m20_temp_dt);seen=0;
+ for(i=0;i<2400;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.m20_temp_dt)assert(vb.dt_cooldown==999);if(vb.action==0x6e)seen=1;if(vb.state==S_THINK)break;}
+ assert(seen && vb.state==S_THINK && !vb.dt && !vb.m20_temp_dt && vb.dt_cooldown>0 && vb.dt_cooldown<999);
  puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut, four dives, Round Trip and area-cut recovery passed");return 0;
 }

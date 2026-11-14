@@ -61,7 +61,7 @@ static struct {
     ScriptPlayer body;
     int landed, landed_heavy;
     float landed_x, landed_z, landed_damage;
-    int tick, variant, dt, dt_unlocked, m13_chain, m20_low, repeats, waves, cut_index, sword, sword_hit;
+    int tick, variant, dt, dt_unlocked, m13_chain, m20_low, m20_temp_dt, repeats, waves, cut_index, sword, sword_hit;
     float dt_left,dt_cooldown, cut[3], dive_height, retreat_speed, retreat_distance;
     float sword_pos[3], sword_dir[3], sword_age, sword_spin, sword_wait, sword_rehit;
 } vb;
@@ -327,7 +327,7 @@ static void set_action(int action) {
 static int current_action(void) { return vb.body.done ? ACT_DONE : vb.action; }
 static void set_state(int state) {
     /* 4dee00 ends M20 DT at a state boundary, not halfway through an attack. */
-    if(vb.variant==2 && vb.dt && vb.dt_left<=0 && state!=S_DT){
+    if(vb.variant==2 && vb.dt && !vb.m20_temp_dt && vb.dt_left<=0 && state!=S_DT){
         vb.dt=0;vb.dt_cooldown=2700;trace("dt_end");
     }
     vb.previous_state = vb.state;
@@ -526,7 +526,7 @@ static void ai_step(float f) {
         break;
     case S_CUT_RANDOM:
     case S_CUT_RING: /* 4ddff0: 6a -> 6b, patterned cuts every 15 frames, 6c -> 6e. */
-        if(vb.step==0){vb.step=1;set_action(0x6a);}
+        if(vb.step==0){vb.step=1;if(!vb.dt){vb.dt=1;vb.m20_temp_dt=1;}set_action(0x6a);}
         else if(vb.step==1 && act==ACT_DONE){vb.step=2;set_action(0x6b);}
         else if(vb.step==2 && act==ACT_DONE){vb.step=3;vb.timer=15;vb.cut_index=0;vb.waves=vb.state==S_CUT_RANDOM?3:1;vb.repeats=vb.state==S_CUT_RANDOM?6:15;}
         else if(vb.step==3 && (vb.timer-=f)<0){
@@ -539,7 +539,7 @@ static void ai_step(float f) {
             ++vb.cut_index;vb.timer=15;
             if(--vb.repeats<=0){if(--vb.waves>0){vb.repeats=6;vb.timer=0;}else{vb.step=4;vb.timer=60;}}
         }else if(vb.step==4 && (vb.timer-=f)<0){vb.step=5;set_action(0x6c);}
-        else if(vb.step==5 && act==ACT_DONE){vb.step=6;set_action(0x6e);}
+        else if(vb.step==5 && act==ACT_DONE){vb.step=6;if(vb.m20_temp_dt){vb.dt=0;vb.m20_temp_dt=0;}set_action(0x6e);}
         else if(vb.step==6 && act==ACT_DONE)set_state(S_THINK);
         break;
     case S_ROUND_TRIP: /* 4dcc80: action 69 is Round Trip, released by event byte 4 == 3. */
@@ -955,7 +955,7 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     float dx, dz, c, s;
     if (!vb.active) return;
     ++vb.tick;
-    if(vb.variant>=1 && vb.dt && !vb.dying){
+    if(vb.variant>=1 && vb.dt && !vb.m20_temp_dt && !vb.dying){
         vb.dt_left-=frames;
         if(vb.dt_left<=0 && vb.variant==1){vb.dt=0;vb.dt_cooldown=1200;trace("dt_end");}
         else vb.hp=fminf(max_health(),vb.hp+frames*.5f); /* healing rate / duration approximated */
