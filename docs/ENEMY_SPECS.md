@@ -762,13 +762,19 @@ bones, 3,148 vertices, 3 m tall), [2] and [3] their swords, [6] [7] `em026_03.cl
 [11] a PAC of 100 motion slots (54 used), [12] [13] a motion script each. Hands: bones 7 and 11. Classes 28-30
 also use pack 18 but are made by `FUN_0039ee10`, in the Blood-goyle's code. Slot 132 (em027) is a lighter copy.
 
-**In the port** (`psp/testroom/enemy.c`, "Agni & Rudra"): their code isn't ported. One spawn brings both: Agni
-(tinted red, sword in bone 7) and Rudra (blue, bone 11), each 956 triangles. They walk in and slash (a three-hit
-combo or an overhead), dash in and out, leap in, or charge their swords and drive them in (Agni sends a wave
-along the floor, Rudra a pair of orbs); sometimes both dash through Dante together. Heavy hits knock them back.
-The last one standing moves 25% faster and takes the attack token sooner. They start as statues (their one-frame poses ar71/ar72) and wake when Dante comes within 900 cm, strikes one, or after 600 frames (the game plays a cutscene). One boss bar for both. Motions by
-shape and root motion [inferred]: idle ar00, walk ar01, combo ar36-38, overhead ar39, dash ar03/ar04, leap
-ar07, charge ar42, team run ar02, flinch ar30, knock-back ar44, death ar83. Health 1200 each [estimate].
+**In the port** (`psp/testroom/agni_rudra.c`: the brain and the state table; `enemy.c`, "Agni & Rudra": the
+bodies). One spawn brings both: Agni (tinted red, sword in bone 7) and Rudra (blue, bone 11), each 956 triangles.
+Each runs the game's states, playing their motion scripts (em026 [12] Agni's, [13] Rudra's, exported by
+`tools/prepare_agni_rudra.py` with the caps [14]/[15] and the attack records at `0x5cf6f0`) through the Seven Hells'
+script runner, so motions, hit windows, caps and damage are the game's. Health 7000 each; Dante's hits take 42 /
+84 as against the Vanguard's 3000. Ported from the decoding below: the attack timer, the zones, the attack choice
+and the lone brother's moves; the survivor takes up both swords. Not yet: the reactions to Dante's attacks (guards
+and counters, 21-35), the paired picker's roles and flank (both use the lone one, role 1), the pair's openings and
+team moves (63, 64), the hops (16-21) beyond their scripts, 52-54 (47 / 49 stand in), the stagger gauge (heavy
+hits flinch them out of idling and moving, state 0), the swords' fire and wind shells, and the script events.
+Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.
+They start as statues (ar71/ar72) and wake within 900 cm, when struck, or after 600 frames (the game plays a
+cutscene). One boss bar for both.
 
 **Decoded** (the brothers' class: constructor `0039f790`, vtable `0x609960`, init `0039fd70`, per-frame `003a0d50`):
 - **One object per brother**; +0x2dd5 says which (1 Agni, 2 Rudra), +0x2f40 which swords he holds (0, 1, or 2 =
