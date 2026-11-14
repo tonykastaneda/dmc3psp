@@ -413,6 +413,12 @@ int enemy_alive_count(void) {
     return n;
 }
 
+/* For tests: only the first `keep` living ones stay; the rest are removed outright. */
+void enemy_trim(int keep) {
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].plan != P_DEATH && keep-- <= 0) enemies[i].active = 0;
+}
 void enemy_kill_all(void) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
@@ -1954,7 +1960,7 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
 #define GOYLE_SPLITS 5
 enum { G_HOVER = 0, G_STRAFE_L = 2, G_STRAFE_R = 3, G_APPROACH = 4, G_BACK = 5, G_FLINCH = 6, G_FLINCH_HEAVY = 7,
        G_SPLIT = 8, G_EMERGE = 9, G_WINDUP = 11, G_AIM = 12, G_SHOOT = 13, G_DIVE = 14, G_STONE = 15, G_STONE_FALL = 16,
-       G_STATUE = 17, G_REVIVE = 18, G_STONE_HIT = 19, G_DEATH = 26 };
+       G_STATUE = 17, G_REVIVE = 18, G_STONE_HIT = 19, G_DEATH = 26, G_GATHER = 27 };
 static int goyle_motion[28];
 
 static int goyle_init(void) {
@@ -1975,7 +1981,7 @@ static int goyle_count(void) {
 
 static void goyle_state(int s) {
     int m = goyle_motion[s < 28 ? s : 0];
-    if (s == G_SPLIT || s == G_EMERGE || s == G_STONE || s == G_STATUE || s == G_REVIVE || s == G_DEATH || s == G_DIVE)
+    if (s == G_GATHER || s == G_SPLIT || s == G_EMERGE || s == G_STONE || s == G_STATUE || s == G_REVIVE || s == G_DEATH || s == G_DIVE)
         giga_note("goyle", s * 100 + (int)(e - enemies), e->goyle_stone);
     e->action = (unsigned char)s;
     e->step = 0;
@@ -2005,18 +2011,61 @@ static void goyle_spawn(void) {
     e->fade = 0.0f;
 }
 
-/* What to do next (FUN_0039e660, its tables simplified). */
+/* FUN_0039e660's tables (0x5bf814: per state, a list of {table, distance}; the first whose distance Dante's
+ * within picks the table). Each row: a weight per distance band (under 350, under 700, beyond; 0x5bf240) and
+ * the next state. A 0-100 roll walks the cumulative weights. 1000 stands for the data's 999.9 (the rest). */
+typedef struct { unsigned char next; unsigned short w[3]; } GoyleRow;
+static void goyle_split_off(void);
+static const GoyleRow goyle_near[] = {{G_WINDUP,{10,10,15}},{G_STRAFE_L,{25,20,20}},{G_STRAFE_R,{25,20,20}},{G_BACK,{25,30,30}},{G_HOVER,{1000,1000,1000}}};
+static const GoyleRow goyle_mid[] = {{G_WINDUP,{40,42,45}},{G_APPROACH,{10,30,30}},{G_STRAFE_L,{13,13,10}},{G_STRAFE_R,{13,13,10}},{G_BACK,{1000,1000,1000}}};
+static const GoyleRow goyle_far[] = {{G_WINDUP,{10,15,20}},{G_APPROACH,{60,60,1000}},{G_HOVER,{1000,1000,1000}}};
+/* After a flinch (states 6 and 7, 0x5bf7c0). */
+static const GoyleRow goyle_hurt_near[] = {{G_WINDUP,{10,10,10}},{G_STRAFE_L,{30,30,40}},{G_STRAFE_R,{30,30,40}},{G_BACK,{1000,1000,1000}}};
+static const GoyleRow goyle_hurt_mid[] = {{G_WINDUP,{10,15,20}},{G_STRAFE_L,{25,20,20}},{G_STRAFE_R,{25,20,20}},{G_APPROACH,{20,20,20}},{G_BACK,{5,10,10}},{G_HOVER,{1000,1000,1000}}};
+static const GoyleRow goyle_hurt_far[] = {{G_WINDUP,{10,15,20}},{G_APPROACH,{1000,1000,1000}}};
+
+static int goyle_in(int s0, int s1, int s2, int s3) {
+    int i, n = 0;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        const Enemy *o = &enemies[i];
+        if (o->active && o->kind == ENEMY_GOYLE && o->plan != P_DEATH && (o->action == s0 || o->action == s1 || o->action == s2 || o->action == s3)) ++n;
+    }
+    return n;
+}
+
+/* What to do next (FUN_0039e660). */
 static void goyle_decide(float d) {
-    float r = ai_unit();
-    if (d > 1000.0f) { goyle_state(G_APPROACH); return; }
-    if (attacks_on && attack_token <= 0.0f && r < 0.6f) {
-        /* From further off it may shoot instead of diving. */
-        attack_token = 3.0f;
-        goyle_state(d > 500.0f && ai_unit() < 0.5f ? G_SHOOT : G_WINDUP);
+    const GoyleRow *t;
+    int rows, i, band = d < 350.0f ? 0 : d < 700.0f ? 1 : 2, hurt = e->action == G_FLINCH || e->action == G_FLINCH_HEAVY;
+    float roll, acc = 0.0f;
+    /* Fewer out than its limit (+0x461) and splits left (+0x45c), none splitting now (flag 0x80000000): it
+     * splits of its own accord (state 27, FUN_004324e0, then 8). */
+    if (e->goyle_splits > 0 && goyle_count() < GOYLE_MAX_OUT && !goyle_in(G_GATHER, G_SPLIT, G_GATHER, G_GATHER)) {
+        goyle_state(G_GATHER);
         return;
     }
-    r = ai_unit();
-    goyle_state(r < 0.4f ? G_HOVER : r < 0.6f ? G_BACK : r < 0.8f ? G_STRAFE_L : G_STRAFE_R);
+    if (d < 400.0f) { t = hurt ? goyle_hurt_near : goyle_near; rows = hurt ? 4 : 5; }
+    else if (d < 1000.0f) { t = hurt ? goyle_hurt_mid : goyle_mid; rows = hurt ? 6 : 5; }
+    else { t = hurt ? goyle_hurt_far : goyle_far; rows = hurt ? 2 : 3; }
+    roll = ai_unit() * 100.0f;
+    for (i = 0; i < rows; ++i) {
+        int next = t[i].next;
+        acc += (float)t[i].w[band];
+        if (acc <= roll) continue;
+        if (next == e->action) { e->timer = 0.0f; return; }   /* the same state: carry on */
+        if (next == G_WINDUP) {
+            /* An attack needs fewer than 2 attacking (FUN_002fbdc0(mgr, 1)) and the attack token (3 s). Else the
+             * next row. Under 350 the game also asks a check of its own (vfunc 0x1c8) that isn't decoded. */
+            if (!attacks_on || attack_token > 0.0f || goyle_in(G_WINDUP, G_AIM, G_DIVE, G_SHOOT) >= 2) continue;
+            attack_token = 3.0f;
+            /* From further off it may shoot instead of diving [the port's choice; state 11's own pick isn't read]. */
+            goyle_state(d > 500.0f && ai_unit() < 0.5f ? G_SHOOT : G_WINDUP);
+            return;
+        }
+        goyle_state(next);
+        return;
+    }
+    goyle_state(G_HOVER);
 }
 
 static void goyle_turn_to(float px, float pz, float rate, float f) {
@@ -2069,6 +2118,23 @@ static void goyle_update(float f, float px, float py, float pz) {
         e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f;
         e->vel[0] *= 0.9f;
         if (e->done) goyle_decide(d);
+        break;
+    case G_GATHER:
+        /* State 27 (FUN_004324e0): it gathers itself; at frame 149 the split effect (0x194), and at the motion's
+         * end it splits (state 8). */
+        goyle_turn_to(px, pz, 0.06f, f);
+        if (!e->step && (e->frame >= 149.0f || e->done)) {
+            float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
+            e->step = 1;
+            fx_explosion(at);
+        }
+        if (e->done) {
+            --e->goyle_splits;
+            e->goyle_split = 300.0f;
+            e->vel[0] = 10.0f;
+            goyle_state(G_SPLIT);
+            goyle_split_off();
+        }
         break;
     case G_SPLIT: case G_EMERGE:
         /* Thrown apart, frames 11-40 (FUN_00430330 / 00430480). */

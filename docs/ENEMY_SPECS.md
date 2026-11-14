@@ -682,6 +682,7 @@ from table `0x5bf814`):
 | 17 | Statue (grey, `0x80808080`) until the stone gauge is back to 0 → 18 |
 | 18 | Back to life (effect 0x36d) |
 | 19, 21 | Stone struck: knocked up at 23.1, falling 0.7 a frame |
+| 27 | Splits of its own accord (`FUN_004324e0`): chosen before the tables when fewer than +0x461 are out, splits are left (+0x45c) and none is splitting (flag 0x80000000). Effect 0x194 at frame 149, then state 8 |
 
 **Hits** (`FUN_0039d9e0`):
 - The table at `0x5bf240` is indexed by +0x41b, a **distance band** (`FUN_0039e660`: under 350, under 700,
@@ -696,8 +697,27 @@ from table `0x5bf814`):
 
 **In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above. The shots' bullets fly at 25 a frame for 120 frames [estimate]; it shoots
 instead of diving half the time from beyond 500 cm. The dodge from aimed guns is taken from Dante's shots (within 500 hovering, 300
-approaching, 50/50 left or right). The decision tables are a fixed choice (approach beyond 1000; with the
-attack token, 60% attack; else hover, back off or strafe). The body is drawn once per surface and cut to 490
+approaching, 50/50 left or right). The decision tables are the game's (below).
+
+**Decision tables** (`0x5bf814`, 11 words a state): a list of {row table, s16 yaw offset 0, s16 -18, float
+distance}; the first whose distance Dante's within (400, 1000, 100000) picks the rows. States 6 and 7 use the list at
+`0x5bf7c0`, the rest `0x5bf790`. A row is 4 float weights (one per band, the 4th unused) and the u16 next state;
+a 0-100 roll walks the cumulative weights of Dante's band (999.9 = the rest). The same state as now: it carries on.
+An attack (11) needs fewer than 2 attacking and the attack token (taking it for 3 s), else the next row; under 350
+it also needs a check (vfunc 0x1c8) that isn't decoded, so the port skips it. Weights, under 350 / under 700 / beyond:
+
+| Table | Rows |
+| --- | --- |
+| under 400 | attack 10/10/15, strafe L 25/20/20, strafe R 25/20/20, back 25/30/30, else hover |
+| under 1000 | attack 40/42/45, approach 10/30/30, strafe L 13/13/10, strafe R 13/13/10, else back |
+| beyond | attack 10/15/20, approach 60/60/rest, else hover |
+| flinched, under 400 | attack 10/10/10, strafe L 30/30/40, strafe R 30/30/40, else back |
+| flinched, under 1000 | attack 10/15/20, strafe L 25/20/20, strafe R 25/20/20, approach 20, back 5/10/10, else hover |
+| flinched, beyond | attack 10/15/20, else approach |
+
+Shooting (13) isn't in these tables; where state 11 goes to 13 isn't read, so the port still shoots instead of
+diving half the time from beyond 500 [port's choice]. It re-decides after 70 frames hovering, 90 approaching and
+45 otherwise [estimate]. The body is drawn once per surface and cut to 490
 triangles with `tools/decimate_rigid.py` (skin-aware), as up to a dozen can be on screen. A pistol shot's power
 is taken as 5 [inferred]; stone takes triple sword damage [inferred]. Stone is drawn untextured grey.
 
