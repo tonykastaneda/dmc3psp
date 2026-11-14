@@ -271,7 +271,7 @@ static void raid_step(Player *player, const float stick[2], float magnitude, flo
             player->running = 0;
             player->air_timer = LOCO_RUN_HOLD_FRAMES;
         }
-        player->speed = player->running ? PLAYER_RUN_SPEED : PLAYER_WALK_SPEED;
+        player->speed = player->running ? PLAYER_DT_RUN_SPEED : PLAYER_WALK_SPEED;   /* always in Devil Trigger: row 1 */
         player->x = clampf(player->x + sinf(yaw) * player->speed * dt, -limit, limit);
         player->z = clampf(player->z + cosf(yaw) * player->speed * dt, -limit, limit);
         if (player->jump_motion != motion_find("s26-52") || player->jump_frame > 20.0f) raid_motion(player, "s26-57");
@@ -333,7 +333,7 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
             if (player->loco_timer <= 0.0f) {
                 /* All at once: the walk, then the run, on the HD Collection's traces. */
                 player->running = 1;
-                player->speed = PLAYER_RUN_SPEED;
+                player->speed = player->devil ? PLAYER_DT_RUN_SPEED : PLAYER_RUN_SPEED;
                 player->accel = 0.0f;
             }
         } else {
@@ -347,7 +347,8 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
     }
     if (player->running) {
         player->speed += player->accel * frames;
-        if (player->speed >= PLAYER_RUN_SPEED) { player->speed = PLAYER_RUN_SPEED; player->accel = 0.0f; }
+        float run = player->devil ? PLAYER_DT_RUN_SPEED : PLAYER_RUN_SPEED;
+        if (player->speed >= run) { player->speed = run; player->accel = 0.0f; }
     }
     return stick_yaw;
 }

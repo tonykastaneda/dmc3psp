@@ -104,6 +104,8 @@ SCRIPTS = {
     "wart": (130, [("gun", 7, 0), ("enemy", 3000, 0), ("square", 20, 22), ("shot", 10, 0), ("shot", 30, 0), ("shot", 60, 0)]),
     # Run from a stop, let go.
     "run": (240, [("lup", 20, 140)]),
+    "swingrun": (320, [("triangle", 20, 24), ("lup", 90, 300)]),
+    "dtrun": (380, [("l1", 20, 24), ("lup", 140, 360)]),
     # Run, reverse the stick.
     "turn": (260, [("lup", 20, 120), ("ldown", 121, 200)]),
     # Standing jump.

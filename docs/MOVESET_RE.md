@@ -18,8 +18,10 @@ Implemented in `psp/testroom/player.c` (`locomotion_step`).
   wasn't confirmed from the pad code.
 - **Table** (`player+0x2830`, Dante at `0x5a85c0`, per 60 fps frame): walk 3.5,
   run 8.5, turn 0x800 angle units, start turn 8 frames, run acceleration 6
-  frames, full tilt held 4 frames before running. The second row (`player+0x28a7`,
-  set from `FUN_0021f500`) raises run to 11.0755. The test room uses row 0 only.
+  frames, full tilt held 4 frames before running. The second row (`player+0x28a7`)
+  raises run to 11.0755. Devil Trigger sets `+0x28a7` (read on the PS2 in PCSX2: 0 running normally and after a
+  swing, 1 in Devil Trigger, where he runs 12.18 cm a frame, 11.0755 x 1.1); the port runs row 1's speed in Devil
+  Trigger (`PLAYER_DT_RUN_SPEED`). `tools/ref_compare.py` scripts `run`, `swingrun`, `dtrun`.
 - **States**: `FUN_00221ba0` start (walk toward the direction held on entry,
   turning evenly over 8 frames, motion 2-01), `FUN_00221d20` move (motion 2-01,
   then 2-02 or 2-51 if `player+0x28a0`), `FUN_002217a0` idle (2-00, long idle 2-03).

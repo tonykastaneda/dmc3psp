@@ -14,8 +14,8 @@
  *   5  604  break every prop in the room within 40 seconds
  *   6  605  collect every red orb (the room's 45 item records): most float over the drops, reached with Air Raid
  *   7  606  reach the far end (the room's area 1, where the Blue Orb Fragment lies) within 30 seconds
- *           [the route on the port's floor is about 160 m: about 29 s even at Devil Trigger's 1.1x run, so it
- *           doesn't clear yet; riding an enemy, the quicker way, isn't in]
+ *           [the route is about 160 m, round the corner at (6118, 5668) and down the ramp: in Devil Trigger, at
+ *           the PS2's 731 cm/s, it clears in about 28.6 s. Riding an enemy, the guide's quicker way, isn't in]
  *   8  607  beat every enemy (5 Arachnes, 2 Hell Vanguards)
  *  10  609  light the end crystal: the beam puzzle below, from the game's own code and layouts
  *  11  610  reach the far end (area 2) [the spike trap, CStageSetNeedle, isn't in]
