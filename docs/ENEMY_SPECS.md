@@ -772,6 +772,21 @@ flinch js05, stun js14, launched js04, death js16.
   `00538ae0`): he vanishes to a spot 100-1000 cm from Dante (row 4, motion js32), then throws: js33, js30 or js31.
   What he throws is picked the same no-repeat way (`0053e720`, +0x4d6c) from three shell classes (`0055c380`,
   `0055bf40`, `0054d3a0`), not decoded. Motion ids map to jsNN directly (table `0x5e2db0`: pack, motion).
+- **What he throws** (`0053e800`, by +0x4d6c): not shells but emitters that live until the attack ends (the Jester
+  destroys them through +0x4cec / +0x4cf0 / +0x4cf4), each made with a life of 10000 frames:
+  - kind 0, `0055c380` (vtable `0x617f90`, update `0055c5c0`): after a delay from `0x5e2fd0[encounter]` (140 for the
+    first), a cycle of five phases (`0055c690`, `0055c6e0`, `0055c820` 69 frames, `0055c880` 99, `0055c950` 60):
+    it plays the prop's motions 5, 6 and 0 and spawns a projectile `0054de00` (0xcc0 bytes, vtable `0x616f70`,
+    update `0054e240`) from the prop he holds (+0x4cd8, at +0xe90), launched at 1000 (`00550f10`) and set off at
+    99 frames (`0054edc0`).
+  - kind 1, `0055bf40` (vtable `0x617e50`, update `0055c130`): every `0x5e3000[encounter]` frames (180 for the
+    first) spawns `0054c660` (0xd40 bytes, vtable `0x616cf0`, set-up `0054caa0`, update `0054ce50`): placed on the
+    floor (y 500) turned at random, it lives 180 frames and at 55 arms its hit (`00294480`, 150 cm up), a trap
+    springing where it was put [where that is, is not read].
+  - kind 2, `0054d3a0` (0x540 bytes, vtable `0x616e30`, update `0054d590`, then `0054da60` / `0054d850`), its count
+    `0x5e3010[encounter]`: not read.
+  Not ported (the 45-minute cap): the projectiles' paths, hits and damage. The port still throws the stand-in's
+  three rolling bombs for all three.
 - **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
   the thrown shells are the stand-in's three rolling bombs, and between attacks he idles or walks (his idle
   actions aren't decoded). The stun gauge, flinch-and-vanish and arena clamp stay the stand-in's. The old cane
