@@ -16,6 +16,7 @@ typedef struct {
     int want;                    /* out: the motion to play (ARACHNE_M_*) */
     int restart;                 /* out: start it from the top (cleared by the caller) */
     int land;                    /* out: an attack landed on Dante this frame (1 light, 2 heavy) */
+    float land_damage;           /* out: its attack record's damage, or -1 for the estimate */
     int remove;                  /* out: the body is gone */
 } ArachneBrain;
 

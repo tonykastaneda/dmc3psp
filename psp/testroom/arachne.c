@@ -53,9 +53,9 @@ static void forward(ArachneBrain *b, float speed, float f) {
 }
 
 /* Its jaws reach HIT_REACH in front, at its height: a hit if Dante's there. */
-static void bite(ArachneBrain *b, float px, float py, float pz, int heavy, int attacks) {
+static void bite(ArachneBrain *b, float px, float py, float pz, int heavy, float damage, int attacks) {
     float hx = b->pos[0] + sinf(b->yaw) * 120.0f - px, hz = b->pos[2] + cosf(b->yaw) * 120.0f - pz;
-    if (attacks && hx * hx + hz * hz < HIT_REACH * HIT_REACH && fabsf(py - b->pos[1]) < 200.0f) b->land = heavy ? 2 : 1;
+    if (attacks && hx * hx + hz * hz < HIT_REACH * HIT_REACH && fabsf(py - b->pos[1]) < 200.0f) { b->land = heavy ? 2 : 1; b->land_damage = damage; }
 }
 
 void arachne_think(ArachneBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks) {
@@ -78,15 +78,17 @@ void arachne_think(ArachneBrain *b, float f, float px, float py, float pz, float
         else if (b->timer > 150.0f) act(b, A_IDLE);
         break;
     case A_LUNGE:
+        /* an1011 is script 3:11, which names attack record 6 (table 0x5c3330, its variant 0's: 800, reaction 300,
+         * light). The pounce's 3:8 names none and turns no cap on: its hit stays the fallback. */
         if (b->frame < 30.0f) turn_to(b, px, pz, 0.1f, f);
         forward(b, LUNGE_SPEED, f);
-        if (!b->step && b->frame > 45.0f) { b->step = 1; bite(b, px, py, pz, 0, attacks); }
+        if (!b->step && b->frame > 45.0f) { b->step = 1; bite(b, px, py, pz, 0, 800.0f, attacks); }
         if (b->done) act(b, A_IDLE);
         break;
     case A_POUNCE:
         if (b->frame < 20.0f) turn_to(b, px, pz, 0.1f, f);
         forward(b, POUNCE_SPEED, f);
-        if (!b->step && b->frame > 70.0f) { b->step = 1; bite(b, px, py, pz, 1, attacks); }
+        if (!b->step && b->frame > 70.0f) { b->step = 1; bite(b, px, py, pz, 1, -1.0f, attacks); }
         if (b->done) act(b, A_IDLE);
         break;
     case A_FLINCH:
