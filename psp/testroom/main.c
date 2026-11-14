@@ -39,6 +39,8 @@
 /* The scene frame, for boss traces to line up with SHOT_n captures. */
 int testroom_frame;
 #include "cerberus_boss.h"
+#include "leviathan_boss.h"
+#include "mission8.h"
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
@@ -547,6 +549,8 @@ static int kind_max_health(int kind) {
     case ENEMY_AGNI: case ENEMY_RUDRA: return 2000;
     case ENEMY_GIGAPEDE: return 2800;
     case ENEMY_CERBERUS: return 7200;
+    case ENEMY_ENVY: return 400;
+    case ENEMY_LEVIATHAN: return 6500;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
     default: return 250;
     }
@@ -558,7 +562,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -1765,6 +1769,8 @@ static BenchStep bench_steps[ENEMY_MAX + 1];
 static int bench_step_frames, bench_count, bench_fire, bench_quicksilver, bench_devil, bench_attack = 1, bench_anim = 1, bench_start = 1, bench_max = ENEMY_MAX;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
+static struct { int frame, part; float amount; } cmp_lv_charge[8];
+static int cmp_lv_charge_count; /* "lvcharge frame part amount": deterministic boss attack capture */
 static unsigned int bench_ai_us;
 static int bench_measuring;
 static unsigned int bench_began;
@@ -1876,6 +1882,10 @@ static void cmp_load(void) {
         else if (strncmp(line, "hit ", 4) == 0) {
             if (cmp_hit_count < 16 && sscanf(line + 4, "%d %d", &cmp_hits[cmp_hit_count][0], &cmp_hits[cmp_hit_count][1]) == 2) ++cmp_hit_count;
         }
+        else if (strncmp(line,"lvcharge ",9)==0 && cmp_lv_charge_count<8) {
+            int n=cmp_lv_charge_count;
+            if(sscanf(line+9,"%d %d %f",&cmp_lv_charge[n].frame,&cmp_lv_charge[n].part,&cmp_lv_charge[n].amount)==3)++cmp_lv_charge_count;
+        }
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
@@ -1888,7 +1898,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "cleared ", 8) == 0) { if (cmp_cleared_count < 8) cmp_cleared[cmp_cleared_count++] = atoi(line + 8); }
         else if (strncmp(line, "item ", 5) == 0) { if (cmp_item_count < 8 && sscanf(line + 5, "%d %d", &cmp_item[cmp_item_count][0], &cmp_item[cmp_item_count][1]) == 2) ++cmp_item_count; }
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
-        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
+        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
     }
@@ -2090,6 +2100,7 @@ static void start_camera(const Player *player, FollowCamera *camera) {
 /* The game's encounter scripts run here. Classes without their own port spawn as Prides; the ported
  * enemies and bosses (Cerberus, Gigapede, Vanguard, ...) are listed in docs/GAME_FLOW.md. */
 static int mission_room = ROOM_NONE, script_at;
+static int m8_boss_started;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
 #define ROOMS_MAX 256
@@ -2188,6 +2199,7 @@ static int key_item_shown(const RoomKeyItem *k) {
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
 static int room_held(void) {
     int i;
+    if(mission_choice.mission==8 && mission_room>=0 && atoi(rooms[mission_room].file+5)==302 && !item_is(46,2))return 1;
     for (i = 0; i < ROOM_ITEM_HOLD_COUNT; ++i)
         if (room_item_holds[i].mission == mission_choice.mission && room_item_holds[i].room == mission_room
             && item_is(room_item_holds[i].item, 0)) return 1;
@@ -2325,8 +2337,15 @@ static void seal_update(float frames) {
     sw_spin2 += 20.0f * sw_wing / 200.0f * frames;
     if (sw_lit && seal_alpha > 0.0f) seal_alpha = fmaxf(seal_alpha - frames / 32.0f, 0.0f);
 }
+static int m8_goo_door(const RoomDoor *d);
 static int door_gated(const RoomDoor *d) {
     int i;
+    if(mission_choice.mission==8 && mission_room>=0) {
+        int number=atoi(rooms[mission_room].file+5);
+        if(number==300 && !mission8_stomach_open())return 1;
+        if(number==305 && item_is(46,0))return 1;
+        if(m8_goo_door(d))return 1;
+    }
     {
         const RoomSwitchSeal *w = room_seal();
         if (w && !sw_lit && d->number == w->next_number) return 1;   /* the seal's door: flag 33 */
@@ -2377,6 +2396,15 @@ static void breakables_reset(void) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) { breakable_hits[i] = room_breakables[i].hits; breakable_broken[i] = 0; }
 }
+static int m8_goo_door(const RoomDoor *d) {
+    int i;
+    for(i=0;i<ROOM_BREAKABLE_COUNT;++i) {
+        const RoomBreakable *b=&room_breakables[i];
+        float dx=b->x-d->box[0],dz=b->z-d->box[2];
+        if(b->room==mission_room && !breakable_broken[i] && !b->crystal && dx*dx+dz*dz<300*300)return 1;
+    }
+    return 0;
+}
 static void breakables_enter(int room) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i)
@@ -2397,6 +2425,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;
     float fx = sinf(player->yaw), fz = cosf(player->yaw);
     if (!mission_mode || mission_room == ROOM_NONE) return;
+    if(mission_choice.mission==8)mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);
     switch_hit(player, reach, kind);
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
@@ -2521,6 +2550,7 @@ static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
     if (!mission_mode || mission_room == ROOM_NONE) return;
+    if(mission_choice.mission==8) {mission8_draw();leviathan_boss_draw_preview();}
     sceGuDisable(GU_TEXTURE_2D);
     sceGuDisable(GU_LIGHTING);
     sceGumMatrixMode(GU_MODEL);
@@ -2621,6 +2651,12 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     breakables_enter(room);
     seal_enter(room);
     mission_room = room;
+    if(mission_choice.mission==8) {
+        int number=atoi(rooms[room].file+5);
+        mission8_enter(number);
+        leviathan_boss_kill();
+        if(number==302 && !m8_boss_started)leviathan_boss_preview();
+    }
     item_opens_apply();
     doors_armed = 0;
     fight_seal_alpha = 0.0f;
@@ -2659,6 +2695,16 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
+    if(mission_choice.mission==8) {
+        int number=atoi(rooms[mission_room].file+5);
+        float acid=mission8_acid(dt*60,player->x,player->y,player->z,player->on_ground);
+        player->health=fmaxf(1,player->health-acid);
+        if(number==305 && !item_is(46,0))stage_hide_group(228); /* native set 200 mouth */
+        if(number==302 && item_is(46,2) && !m8_boss_started) {
+            enemy_add_kind(ENEMY_LEVIATHAN,4978,2651);m8_boss_started=1;
+        }
+        if(m8_boss_started && leviathan_boss_dying())enemy_clear_minions();
+    }
     int held = room_held(), done = held || script_run(dt, player->y), i, in_a_box = 0;
     fight_seal_on = !done || enemy_alive_count() > 0;
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
@@ -2747,7 +2793,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         return 0;
     }
     if (!held) room_set_cleared(mission_room);
-    if (info->clear_room == mission_room) {
+    if (info->clear_room == mission_room && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
@@ -2825,6 +2871,9 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
+    leviathan_boss_set_difficulty(choice->difficulty);
+    leviathan_boss_kill();m8_boss_started=0;
+    if(choice->mission==8)mission8_reset();
     if (choice->mission == MENU_DEBUG_ROOM) { start_debug_room(choice, player, camera); return; }
     mission_mode = 1;
     game_turbo = choice->turbo;
@@ -3053,6 +3102,7 @@ int main(int argc, char *argv[]) {
         enemy_died_fn = enemy_died;
         combat_hit_fn = breakable_hit;
         menu_shop = &shop_state;
+        menu_set_mission_mask(MISSION_PRESENT_MASK);
         if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;
             mission_stage = 2;   /* what's loaded */
@@ -3067,7 +3117,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(boot, sizeof(boot), "BOOT_MISSION.TXT");
                 bf = fopen(boot, "r");
                 if (bf) { if (fscanf(bf, "%d %d", &boot_mission, &boot_difficulty) < 1) boot_mission = 0; fclose(bf); }
-                if ((boot_mission >= 1 && boot_mission <= MISSION_COUNT) || boot_mission == MENU_DEBUG_ROOM) {   /* 99: the Debug Room */
+                if ((boot_mission >= 1 && boot_mission <= MISSION_COUNT && (MISSION_PRESENT_MASK & (1u << (boot_mission-1)))) || boot_mission == MENU_DEBUG_ROOM) {
                     mission_choice.mission = boot_mission;
                     mission_choice.difficulty = boot_difficulty & 1;
                 } else {
@@ -3346,6 +3396,8 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+                if(leviathan_boss_drain_trigger(dt*60,player.devil))player.devil=0;
+                orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);
                 enemy_clamp_player(&player.z);
                 enemy_giga_ride(&player.x, &player.y, &player.z, player.on_ground);
                 orbs_update(dt, player.x, player.y, player.z);
@@ -3510,6 +3562,9 @@ int main(int argc, char *argv[]) {
             }
         }
         if (focus && focus_cmp) {
+            int lv;
+            for(lv=0;lv<cmp_lv_charge_count;++lv)
+                if(frames==cmp_lv_charge[lv].frame)leviathan_boss_absorb(cmp_lv_charge[lv].part,cmp_lv_charge[lv].amount);
             if (frames == 1 && !cmp_menu) { float gy; player.x = (float)cmp_spot_x; player.z = (float)cmp_spot_z; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = cmp_face_yaw != 9999 ? (float)cmp_face_yaw * 0.0174533f : -1.985f; coat_reset();
                 /* The HD Collection test spot (tools/hd_ref.py), so the same stick goes the same way. */
                 camera.x = player.x - sinf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.z = player.z - cosf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.y = player.y + 255.0f;

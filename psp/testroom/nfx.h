@@ -6,7 +6,7 @@
  * runtime (FUN_00208590): E sprites (kind 1 billboard, kind 2 placed) and E models (kind 5). P particle
  * programs and G generators are skipped. Times are 60 Hz frames, distances centimetres. */
 
-enum { NFX_STATIC = 0, NFX_CERBERUS = 1 };
+enum { NFX_STATIC = 0, NFX_CERBERUS = 1, NFX_LEVIATHAN = 2 };
 
 void nfx_reset(void);
 /* Start a V timeline at pos, turned by yaw (the PSP's RotateY convention). loop: as the game's

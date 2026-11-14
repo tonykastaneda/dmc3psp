@@ -82,6 +82,20 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "ICON0.PNG"))
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_xmb.py"), $Iso.FullName, "--output", $Build, "--focus", "0.6", "--top", "0.02")
 }
 
+$LeviathanHeader = Join-Path $Generated "boss_leviathan_runtime.h"
+if ($Regenerate -or -not (Test-Path -LiteralPath $LeviathanHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_leviathan.py")).LastWriteTime -gt (Get-Item -LiteralPath $LeviathanHeader).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_leviathan.py"), $Iso.FullName, "--output", $Generated)
+}
+
+$Mission8Header = Join-Path $Generated "mission8_runtime.h"
+if ($Regenerate -or -not (Test-Path -LiteralPath $Mission8Header) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_mission8.py")).LastWriteTime -gt (Get-Item -LiteralPath $Mission8Header).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_mission8.py"), $Iso.FullName, "--output", $Generated)
+}
+
 $MenuBin = Join-Path $Build "MENU.BIN"
 if ($Regenerate -or -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
@@ -122,7 +136,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

@@ -17,6 +17,7 @@ typedef enum { PAUSE_NONE, PAUSE_RESUME, PAUSE_RESTART, PAUSE_QUIT, PAUSE_OPTION
 
 int menu_load(const char *path);      /* 1 on success */
 int menu_loaded(void);
+void menu_set_mission_mask(unsigned int mask); /* only generated mission slots are selectable */
 
 /* Runs the flow from the title to Mission Start, with its own frames. pad returns the buttons held,
  * and after_frame, if set, runs after each frame is shown; tests use both. */
