@@ -6,6 +6,7 @@
 The game writes its own frames (SHOT_n.BMP, main.c's "psp_shot" and "psp_video"), so the pictures are the
 PSP's 480x272 framebuffer, not the emulator window. Output: analysis/testroom/<name>_*.png and <name>.mp4.
 """
+import os
 import argparse
 import shutil
 import subprocess
@@ -18,7 +19,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / "build" / "testroom"
 EMU = Path(r"E:\SYSTEMS\PPSSPP\PPSSPPWindows64.exe")
-GAME = EMU.parent / "memstick" / "PSP" / "GAME" / "DMC3TESTROOM"
+GAME = EMU.parent / "memstick" / "PSP" / "GAME" / ("DMC3TESTROOM" + (("_" + os.environ["DMC3_SLOT"]) if os.environ.get("DMC3_SLOT") else ""))
 OUT = ROOT / "analysis" / "testroom"
 FFMPEG = Path(r"C:\ffmpeg\bin\ffmpeg.exe")
 

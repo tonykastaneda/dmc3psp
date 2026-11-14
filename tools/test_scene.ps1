@@ -9,7 +9,7 @@ param(
 # Capture only the game's framebuffer. Own a separate game directory and stop only our process.
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
-$Game = Join-Path (Split-Path -Parent $Emulator) 'memstick\PSP\GAME\DMC3SCENE'
+$Game = Join-Path (Split-Path -Parent $Emulator) "memstick\PSP\GAME\DMC3SCENE$(if ($env:DMC3_SLOT) { "_$($env:DMC3_SLOT)" } else { '' })"
 New-Item -ItemType Directory -Force -Path $Game, $Out | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $Root 'build\testroom') -File |
     Where-Object { $_.Extension -in '.BIN', '.PBP' } |

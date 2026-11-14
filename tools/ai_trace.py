@@ -3,13 +3,14 @@
     python tools/ai_trace.py [enemies] [frames] [extra script lines...]
 
 Reads AI_TRACE.TXT: one line per change of plan or action, and per attack landing."""
+import os
 import collections
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-GAME_DIR = Path(r"E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3TESTROOM")
+GAME_DIR = Path(r"E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3TESTROOM" + (("_" + os.environ["DMC3_SLOT"]) if os.environ.get("DMC3_SLOT") else ""))
 PLANS = {23: "decide", 24: "watch", 27: "swing", 28: "wide swing", 32: "leap", 33: "step left", 34: "step right",
          35: "step back", 51: "taunt A", 52: "taunt B", 0: "flinch", 1: "flinch back", 2: "launched", 9: "air hit"}
 

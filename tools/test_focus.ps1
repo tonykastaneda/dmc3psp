@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $EmuDir = Split-Path -Parent $Emulator
-$GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM"
+$GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM$(if ($env:DMC3_SLOT) { "_$($env:DMC3_SLOT)" } else { '' })"
 $Evidence = Join-Path $Root "analysis\testroom"
 Copy-Item -LiteralPath (Join-Path $Root "build\testroom\EBOOT.PBP") -Destination (Join-Path $GameDir "EBOOT.PBP") -Force
 $Report = Join-Path $GameDir "FOCUS_DONE.TXT"

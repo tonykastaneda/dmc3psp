@@ -2087,7 +2087,10 @@ static void start_camera(const Player *player, FollowCamera *camera) {
 static int mission_room = ROOM_NONE, script_at;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
-static unsigned long long rooms_cleared;   /* this mission: a room's fight doesn't come back */
+#define ROOMS_MAX 256
+static unsigned char rooms_cleared[ROOMS_MAX / 8];   /* this mission: a room's fight doesn't come back */
+static int room_is_cleared(int r) { return r >= 0 && r < ROOMS_MAX && (rooms_cleared[r >> 3] >> (r & 7) & 1); }
+static void room_set_cleared(int r) { if (r >= 0 && r < ROOMS_MAX) rooms_cleared[r >> 3] |= (unsigned char)(1 << (r & 7)); }
 static float mission_clear_wait;
 static int mission_stage;
 static MenuChoice mission_choice;
@@ -2154,7 +2157,7 @@ static int room_named(const char *file) {
 static int bridge_up(void) {
     static int room_112 = -2, room_102 = -2;
     if (room_112 == -2) { room_112 = room_named("ROOM_112.BIN"); room_102 = room_named("ROOM_102.BIN"); }
-    return mission_mode && mission_choice.mission == 5 && mission_room == room_112 && room_102 >= 0 && (rooms_cleared >> room_102 & 1ull);
+    return mission_mode && mission_choice.mission == 5 && mission_room == room_112 && room_102 >= 0 && room_is_cleared(room_102);
 }
 /* On it: the pit's edge walls (prepare_stage.py puts walls on open floor edges) don't stop him there. */
 static int on_bridge(float x, float z, float y) {
@@ -2284,7 +2287,7 @@ static int door_gated(const RoomDoor *d) {
     for (i = 0; i < DOOR_GATE_COUNT; ++i) {
         const DoorGate *g = &door_gates[i];
         if (g->mission != mission_choice.mission || g->room != mission_room || g->next_number != d->number) continue;
-        if (g->needs_room >= 64 || !(rooms_cleared >> g->needs_room & 1ull)) return 1;
+        if (!room_is_cleared(g->needs_room)) return 1;
     }
     return 0;
 }
@@ -2468,7 +2471,7 @@ static void mission_gimmicks_draw(void) {
     seal_draw();
     fight_seals_draw();
     info = &missions[mission_choice.mission - 1];
-    if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull)) {
+    if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) {
         /* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
         float core[3] = {info->goal[0], info->goal[1] + 70.0f, info->goal[2]}, still[3] = {0.0f, 0.0f, 0.0f};
         goal_spin += 1.0f;
@@ -2567,7 +2570,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
         }
     }
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
-    script_at = (rooms_cleared >> room & 1ull) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
+    script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
     script_wait = 0.0f;
     script_waiting_alive = -1;
     player_spawn[0] = s[0];
@@ -2628,7 +2631,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             return 0;
         }
     }
-    if (info->goal_room == mission_room && (rooms_cleared >> info->goal_after & 1ull) && done && enemy_alive_count() == 0) {
+    if (info->goal_room == mission_room && room_is_cleared(info->goal_after) && done && enemy_alive_count() == 0) {
         /* The mission's item: walk up to it and press O. */
         float gx = player->x - info->goal[0], gz = player->z - info->goal[2];
         if (gx * gx + gz * gz < 160.0f * 160.0f && fabsf(player->y - info->goal[1]) < 300.0f) {
@@ -2658,7 +2661,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
         return 0;
     }
-    rooms_cleared |= 1ull << mission_room;
+    room_set_cleared(mission_room);
     if (info->clear_room == mission_room) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
@@ -2748,7 +2751,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     enemy_set_anim_auto(dummy_anim_auto);
     enemy_set_mortal(1);
     mission_clear_wait = 0.0f;
-    rooms_cleared = 0;
+    memset(rooms_cleared, 0, sizeof rooms_cleared);
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
@@ -3134,7 +3137,7 @@ int main(int argc, char *argv[]) {
                     if (cmp_goto[g][1] < 0) {
                         /* "gotoroom frame -1": to the mission's goal item, and press O. */
                         const MissionInfo *gi = &missions[mission_choice.mission - 1];
-                        rooms_cleared |= 1ull << mission_room;
+                        room_set_cleared(mission_room);
                         player.x = gi->goal[0]; player.y = gi->goal[1] + 10.0f; player.z = gi->goal[2];
                         debug_pressed |= PSP_CTRL_CIRCLE;
                     }

@@ -15,7 +15,7 @@ $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Eboot = Join-Path $Root "build\testroom\EBOOT.PBP"
 $EmuDir = Split-Path -Parent $Emulator
-$GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM"
+$GameDir = Join-Path $EmuDir "memstick\PSP\GAME\DMC3TESTROOM$(if ($env:DMC3_SLOT) { "_$($env:DMC3_SLOT)" } else { '' })"
 $Done = Join-Path $GameDir "RECORD_DONE.TXT"
 if (-not [System.IO.Path]::IsPathRooted($Output)) { $Output = Join-Path $Root $Output }
 

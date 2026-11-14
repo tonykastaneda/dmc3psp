@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "analysis" / "ref"
-GAME_DIR = Path(r"E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3TESTROOM")
+GAME_DIR = Path(r"E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3TESTROOM" + (("_" + os.environ["DMC3_SLOT"]) if os.environ.get("DMC3_SLOT") else ""))
 PLAYER = 0x17E0A40
 CAMERA_EYE, CAMERA_TARGET = 0xEC6F60, 0xEC6F70
 # Both games start at the test spot (2750, 2450). The PS2's street camera there looks along CAMERA_YAW (degrees

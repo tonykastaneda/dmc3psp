@@ -1312,3 +1312,13 @@
 [2026-11-07 03:25:07.061 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (14,644,807 bytes)
 [2026-11-07 03:26:01.017 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (14,644,807 bytes)
 [2026-11-07 03:27:56.193 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (14,645,255 bytes)
+[2026-11-07 03:29:36.124 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (14,645,351 bytes)
+[2026-11-07 03:40:51.606 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 00440730,00440b30,00440b60 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-07 03:40:58.836 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-07 03:41:10.125 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 00459b70 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-07 03:41:16.616 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-07 03:41:33.296 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 00459eb0 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-07 03:41:39.841 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-07 03:42:30.409 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (14,646,663 bytes)
+[2026-11-09 13:05:11.060 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (14,646,871 bytes)
+[2026-11-13 22:19:24.298 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (14,646,839 bytes)
