@@ -48,7 +48,9 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428, "127": 432,
          # SE: the Jester's arenas follow st400 at 736, four slots a room. 422 is Mission 5's.
-         "422": 824}
+         "422": 824,
+         "300": 680, "301": 684, "302": 688, "303": 692, "304": 696, "305": 700, "306": 704,
+         "307": 708, "308": 712, "309": 716, "310": 720, "311": 724, "312": 728, "313": 732}
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -77,11 +79,13 @@ MISSIONS = {
     # group 0 under a barrier the two crest switches lift) -> 122, the Essences into the statue -> 127 The Dark
     # Corridor, whose area 0 (demo 15) clears it. When 126's and 125's groups run is psp/testroom/mission6.c's.
     6: ("122", None, {"124": [0], "125": [0], "126": [0]}),
+    # EventTbl08: Heart/lungs are stage actors, woken by item 46 at 302 area 0.
+    8: ("300", None, {"302": [0], "304": [0], "305": [0], "308": [0], "312": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121"}
+CLEAR_ROOMS = {5: "121", 8: "302"}
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -111,9 +115,9 @@ START_ITEMS = {5: [36]}   # Mission 5 begins with Mission 4's Astronomical Board
 # (mission, item, room it lies in, the item that must be used before it shows). The Vajura shows once the Board's
 # set in 100 and the Soul of Steel once the Vajura's set in 102: the script reveals them with gimmicks (100's
 # 200/201/400, 102's 100-104) that aren't converted, so they simply appear [inferred from the script's order].
-KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37)]
+KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37), (8, 46, "305", -1)]
 # (mission, item, room, EVE area index).
-ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1)]
+ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1), (8, 46, "302", 0)]
 # A room whose fight waits for an item to be picked up: 102's group 3 starts as the Soul of Steel's taken
 # (block 1: sw_item_got 39 == 1, door_lock, spawn_group 3).
 ITEM_HOLDS = [(5, "102", 39)]
@@ -320,7 +324,8 @@ def main():
              "typedef struct { short room; float x, z, yaw, half_x, half_z, low, high, switch_pos[3]; } RoomLift;",
              "#define ROOM_NONE (-1)",
              "enum { ROOM_OP_SPAWN, ROOM_OP_WAIT, ROOM_OP_WAIT_ALIVE };",
-             f"#define MISSION_COUNT {len(MISSIONS)}"]
+             f"#define MISSION_COUNT {max(MISSIONS)}",
+             f"#define MISSION_PRESENT_MASK 0x{sum(1 << (m - 1) for m in MISSIONS):x}u"]
     for name in names:
         r = rooms[name]
         lines.append(f"static const float room_{name}_starts[][4] = {{" + ",".join("{%.1ff,%.1ff,%.1ff,%.1ff}" % tuple(s) for s in r["starts"]) + "};")
@@ -483,7 +488,7 @@ def main():
         tail = (f',{index[goal[0]]},{index[goal[2]]},{{{goal[1][0]:.1f}f,{goal[1][1]:.1f}f,{goal[1][2]:.1f}f}}' if goal
                 else ',ROOM_NONE,ROOM_NONE,{0,0,0}')
         tail += f',{FIRST_START.get(mission, 0)},{index[CLEAR_ROOMS[mission]] if mission in CLEAR_ROOMS else "ROOM_NONE"}'
-        lines.append(f'    {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
+        lines.append(f'    [{mission - 1}] = {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
     lines.append("};")
     args.header.write_text("\n".join(lines) + "\n")
 

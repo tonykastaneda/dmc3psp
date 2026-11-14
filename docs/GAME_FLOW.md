@@ -215,6 +215,25 @@ Starts in 300 (Leviathan's Stomach, the eyeballs and tusks) after demo 323. Hell
 302 (Easy 4, Normal 6), 304 (8), 305 (10), 308 (10) and 312 (10), each group 0. The Heart of Leviathan in 302
 isn't an EST enemy: it's gimmicks 1000-1002 (flag 32), woken by using the Ignis Fatuus (item 46) at area 0. Its fall plays demo 20, which clears the mission.
 
+The port now registers M8 and all st300-st313 assets. Main route: 300 -> 301 -> 302 -> 303 -> 304 -> 305,
+then 306 -> 307 -> 308 -> 309 -> 302. Room 305 gives Ignis Fatuus at its native ITM position after its
+Envy wave; O in 302's native EVE area 0 uses it and wakes the Heart/lungs plus the native Envy group.
+The three organs use their native models and skeletal motions (`LEVIATHAN_SPEC.md`). The protected core,
+side-organ collapse/recovery, charged laser/projectiles, and orb absorption are implemented.
+
+Five native eye meshes at 300's BREAK sets 120/130/140/150/160 gate its exit. They currently take three
+light hits, persist through room visits, and remove the complete fang mesh once all five are broken;
+the original's progressive fang poses and blinking are not reproduced yet. Goo doors use the room's
+BREAK meshes and must be struck before their nearby exit works. Their default durability is approximate.
+
+Acid uses the authored HITS triangles whose material byte is 13. PCSX2 Normal observation at
+(469,-131,3061) confirmed 25 HP losses about every seven frames, while the flesh sample caused none.
+The port applies that amount while grounded on those triangles. Rooms 303/307's Nausika chase actors,
+liquid UV animation, and the real-time story cameras are not implemented. Complete route and boss-clear
+validation is still in progress; room loading, native Envy waves, Ignis pickup and the acid floor have
+been captured in PPSSPP.
+
+
 ### Mission 9: "Faded memories"
 
 Starts in 201 (The Rotating Bridge) after demo 324. 202 Provisions Storeroom: group 0, 4 Arachnes (EST 28,

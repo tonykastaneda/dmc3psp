@@ -24,7 +24,14 @@
 #define DIM 0xff707070
 #define BRIGHT 0xffffffff
 #define LOCKED 0x60ffffff
-#define MENU_MISSIONS 6
+#define MENU_MISSIONS 8
+static unsigned int mission_mask = 0xffffffffu;
+void menu_set_mission_mask(unsigned int mask) { mission_mask = mask | 1u; }
+static int next_mission(int current, int step) {
+    do { current += step; if(current<1)current=MENU_MISSIONS; if(current>MENU_MISSIONS)current=1; }
+    while (!(mission_mask & (1u << (current-1))));
+    return current;
+}
 
 typedef struct {
     char magic[4];
@@ -327,7 +334,7 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
     unsigned int held = 0xffffffffu;   /* a button down when this starts isn't a press */
     int frame = 0, title_cursor = TITLE_NEW, row = c->difficulty & 1, fade = FADE_FRAMES, leaving = 0, briefing_cursor = 0;
     Screen next = screen;
-    if (c->mission < 1 || c->mission > MENU_MISSIONS) c->mission = 1;   /* back from the Debug Room */
+    if (c->mission < 1 || c->mission > MENU_MISSIONS || !(mission_mask & (1u << (c->mission-1)))) c->mission = 1;
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
     while (screen != SCREEN_DONE) {
@@ -358,8 +365,8 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 if (pressed & PSP_CTRL_UP) row = (row + SELECT_ROWS - 1) % SELECT_ROWS;
                 if (pressed & PSP_CTRL_DOWN) row = (row + 1) % SELECT_ROWS;
                 if ((pressed & PSP_CTRL_CROSS) && row == ROW_DEBUG) { c->mission = MENU_DEBUG_ROOM; next = SCREEN_DONE; leaving = 1; break; }
-                if (pressed & PSP_CTRL_LEFT) c->mission = c->mission > 1 ? c->mission - 1 : MENU_MISSIONS;
-                if (pressed & PSP_CTRL_RIGHT) c->mission = c->mission < MENU_MISSIONS ? c->mission + 1 : 1;
+                if (pressed & PSP_CTRL_LEFT) c->mission = next_mission(c->mission,-1);
+                if (pressed & PSP_CTRL_RIGHT) c->mission = next_mission(c->mission,1);
                 if (pressed & PSP_CTRL_SQUARE) c->turbo = !c->turbo;
                 if (pressed & PSP_CTRL_CROSS) { c->difficulty = row; next = SCREEN_BRIEFING; leaving = 1; }
                 if (pressed & PSP_CTRL_CIRCLE) { next = SCREEN_TITLE; leaving = 1; }
