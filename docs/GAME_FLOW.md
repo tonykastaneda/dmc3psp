@@ -598,6 +598,37 @@ port). The award, a Blue Orb Fragment, is only named.
 | 11 | 610 | Avoid the spikes and reach the Blue Orb | Its area 2; the spikes (NEEDLE) aren't in |
 | 12 | 611 | Reach the Blue Orb Fragment | Its area 0; the moving blocks aren't in |
 
+## Regression sweep (2026-11-14, master 98e84b6 with Missions 1-20)
+
+Each mission run in PPSSPP (`tools/ppsspp_scene.py`, Normal) from the room and with the scene shown; **Pass** means
+the Mission Clear screen came up. `killevery n` kills the room's enemies every n frames; `gotoroom` goes through the
+room's door to that room. Rooms are entered at start 0 unless the scene places Dante.
+
+| Mission | Run | Result |
+| --- | --- | --- |
+| 1 | from the start, `killevery 60` | Pass |
+| 2 | from the start, `killevery 60` (groups 0, 1, the Hell Vanguard) | Pass |
+| 3 | 006, Cerberus with `killevery 100`, then its door to 100 | Pass |
+| 4 | 111, the Gigapede with `killevery 100` (all down); 110 with 111 cleared, `gotoroom -1` (the Astronomical Board) | Pass |
+| 5 | 121, Agni & Rudra, `killevery 60` | Pass |
+| 6 | 127, area 0 (demo 15) | Pass |
+| 7 | 144, Vergil, `killevery 100` | Pass |
+| 8 | `mission8_route.scene` from the start (300 to 309, the Heart of Leviathan in 302) | Pass |
+| 9 | 210, Nevan, `killevery 100` | Pass |
+| 10 | `mission10_route.scene` from the start (209 to 211) | Pass |
+| 11 | 217, Beowulf, `killevery 100` | Pass |
+| 12 | 228, `mission12_geryon.scene` (both phases) | Pass |
+| 13 | 234, `mission13_boss.scene` | Pass |
+| 14 | 008, area 0 (demo 326) | Pass |
+| 15 | 219, `mission15_lift.scene` (the fragments, the lift to 106) | Pass |
+| 16 | 115, `killevery 100` | Pass |
+| 17 | 143, `mission17_end.scene` (area 0, the Doppelganger in 139, back to area 1) | Pass |
+| 18 | 412, `mission18_bingo.scene` (Cerberus, Gigapede, Agni & Rudra: the board's top row, then 403's mirror) | Pass |
+| 19 | 421, `mission19_arkham.scene` (both rounds) | Pass |
+| 20 | `mission20_clear.scene` from the start (411, then 012) | Pass |
+
+No regressions were found. These are boss-room and route checks: whole missions weren't walked end to end here.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.

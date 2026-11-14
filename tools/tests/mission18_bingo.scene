@@ -1,0 +1,9 @@
+killevery 100
+gotoroom 500 403
+gotoroom 600 413
+gotoroom 1500 403
+gotoroom 1600 414
+gotoroom 2400 403
+place 2500 4150 4125 1225 0
+psp_shot 1400
+psp_shot 2300
