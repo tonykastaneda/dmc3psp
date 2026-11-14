@@ -108,10 +108,15 @@ static int pick(FallenBrain *b, float d, float (*unit)(void)) {
     if (d > 800.0f) return r < 75.0f ? S_LUNGE : S_THROW;
     return r < 80.0f ? S_LUNGE : S_THROW;
 }
-static void strike(FallenBrain *b, float px, float py, float pz, float reach, int heavy, int attacks) {
+/* The attack records (0x40 each from 0x5c2dd0, FUN_00342224's cap set-up): damage at +4, reaction at +0x1c (heavy
+ * from 500). Record 0 (the throw) 900, 2 (the first two slashes) 500, 4 (the lunge) 700, 5 (the last slash) 800;
+ * all have reactions under 500: light hits. */
+static void strike(FallenBrain *b, float px, float py, float pz, float reach, float damage, int attacks) {
     float hx = b->pos[0] + sinf(b->yaw) * 120.0f - px, hz = b->pos[2] + cosf(b->yaw) * 120.0f - pz;
-    if (attacks && hx * hx + hz * hz < reach * reach && fabsf(py + 100.0f - (b->pos[1] + 100.0f)) < 220.0f)
-        b->land = heavy ? 2 : 1;
+    if (attacks && hx * hx + hz * hz < reach * reach && fabsf(py + 100.0f - (b->pos[1] + 100.0f)) < 220.0f) {
+        b->land = 1;
+        b->land_damage = damage;
+    }
 }
 
 void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int *token) {
@@ -173,7 +178,7 @@ void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (
          * attack record 4 on frames 35-45. */
         if (b->timer < LUNGE_WIND) { turn_to(b, px, pz, 0x100 * UNITS * 4.0f, f); b->speed = LUNGE_SPEED; }
         else if (b->speed > 0.0f) { forward(b, b->speed, f); b->speed -= f; }
-        if (b->step == 0 && b->frame >= 35.0f) { b->step = 1; strike(b, px, py, pz, 200.0f, 1, attacks); }
+        if (b->step == 0 && b->frame >= 35.0f) { b->step = 1; strike(b, px, py, pz, 200.0f, 700.0f, attacks); }   /* record 4 */
         if (b->done) set_state(b, S_THINK);
         break;
     case S_THROW:
@@ -188,9 +193,9 @@ void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (
          * at 10 a frame [0x41200000]. */
         if (b->timer < 20.0f) turn_to(b, px, pz, 0.08f, f);
         if (b->state != S_SLASH_A && b->frame < 90.0f && d > 150.0f) forward(b, 10.0f, f);
-        if (b->step == 0 && b->frame >= 25.0f) { b->step = 1; strike(b, px, py, pz, 220.0f, 0, attacks); }
-        if (b->step == 1 && b->frame >= 60.0f) { b->step = 2; strike(b, px, py, pz, 220.0f, 0, attacks); }
-        if (b->step == 2 && b->frame >= 90.0f) { b->step = 3; strike(b, px, py, pz, 240.0f, 1, attacks); }
+        if (b->step == 0 && b->frame >= 25.0f) { b->step = 1; strike(b, px, py, pz, 220.0f, 500.0f, attacks); }   /* record 2 */
+        if (b->step == 1 && b->frame >= 60.0f) { b->step = 2; strike(b, px, py, pz, 220.0f, 500.0f, attacks); }   /* record 2 */
+        if (b->step == 2 && b->frame >= 90.0f) { b->step = 3; strike(b, px, py, pz, 240.0f, 800.0f, attacks); }   /* record 5 */
         if (b->done) set_state(b, S_THINK);
         break;
     case S_REACT:

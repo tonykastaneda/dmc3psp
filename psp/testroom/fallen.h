@@ -17,6 +17,7 @@ typedef struct {
     int state, action, step, side, mode, health;
     int want, restart;           /* out: the motion to play (FALLEN_M_*), from its start */
     int land;                    /* out: an attack landed on Dante this frame (1 light, 2 heavy) */
+    float land_damage;           /* out: its attack record's damage */
     int spear;                   /* out: let a spear fly at Dante this frame */
     int remove;                  /* out: the body is gone */
 } FallenBrain;

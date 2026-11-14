@@ -69,6 +69,10 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 /* How much a Pride takes, in units of a light hit. An estimate: on the HD Collection a maxed Dante kills
  * one in about three to five hits on Easy. The game's health and damage values aren't read yet. */
 #define ENEMY_HEALTH 6
+/* Bosses' health from their classes' parameter blocks (+0x2c, the value FUN_002f0560 starts the health with). */
+#define NEVAN_MAX 7000
+#define BEOWULF_MAX 10000
+#define LADY_MAX 4000
 /* Dante as the attack spheres see him. Not read from the game. */
 #define DANTE_RADIUS 40.0f
 #define DANTE_LOW 20.0f
@@ -113,7 +117,7 @@ typedef struct {
     float shoot_timer[3], shoot_t;
     signed char shoot_set;
     unsigned char shoot_fan, shoot_phase;
-    signed char health;
+    short health;                   /* units of a light hit (42); bosses run past 127 */
     short script_at, stop;
     float gauge, timer, wake;
     float vel[3], acc[3];
@@ -211,7 +215,7 @@ static void goyle_spawn(void);
 static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
-static void goyle_bullet(const float from[3], const float to[3]);
+static int goyle_bullet(const float from[3], const float to[3]);
 static int enemy_giga_part(int k, float out[3]);
 static void enemy_giga_struck(const float at[3], float damage);
 #define GIGA_PARTS_PUBLIC 8
@@ -345,17 +349,21 @@ static int kind_health(int kind) {
      * Enigma 600 (build/hdref/enemy_specs.md). */
     switch (kind) {
     case ENEMY_GLUTTONY: return ENEMY_HEALTH * 700 / 250;
+    case ENEMY_LUST: return ENEMY_HEALTH * 750 / 250;    /* 0x5ac100 +0x2c (class 2, FUN_002c5d90) */
+    case ENEMY_GREED: return ENEMY_HEALTH * 1000 / 250;  /* 0x5b0080 +0x2c (class 5, FUN_00356538) */
+    case ENEMY_WRATH: return ENEMY_HEALTH * 500 / 250;   /* 0x5b10f0 +0x2c (class 4, FUN_00354560) */
+    case ENEMY_DULLAHAN: return ENEMY_HEALTH * 300 / 250;   /* 0x5ccad0 +0x2c (class 12, FUN_003cc200) */
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
     case ENEMY_ENVY: return ENEMY_HEALTH * 400 / 250;
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
-    case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
+    case ENEMY_GOYLE: return ENEMY_HEALTH * 600 / 250;   /* 0x5bf4c0 +0x2c (class 14, FUN_0039c608) */
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
-    case ENEMY_ARACHNE: return ENEMY_HEALTH * 500 / 250;   /* an estimate */
-    case ENEMY_NEVAN: return ENEMY_HEALTH * 2000 / 250;    /* an estimate */
+    case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
+    case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
-    case ENEMY_FALLEN: return ENEMY_HEALTH * 1500 / 250;   /* an estimate (fallen.c) */
-    case ENEMY_BEOWULF: return ENEMY_HEALTH * 3000 / 250;  /* an estimate */
-    case ENEMY_LADY: return ENEMY_HEALTH * 3500 / 250;     /* an estimate */
+    case ENEMY_FALLEN: return ENEMY_HEALTH * 1300 / 250;   /* 0x5c32a0 +0x2c (class 11, copied by FUN_00342450) */
+    case ENEMY_BEOWULF: return ENEMY_HEALTH * BEOWULF_MAX / 250;   /* 0x5b84e0 +0x2c (class 33, FUN_002d95a4) */
+    case ENEMY_LADY: return ENEMY_HEALTH * LADY_MAX / 250;   /* 0x5cbe40 +0x2c (class 37, FUN_00444a8c) */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
@@ -752,13 +760,13 @@ int enemy_boss_health(float *health, float *maximum) {
         *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_LADY && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3500 / 250;return 1;
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * LADY_MAX / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_BEOWULF && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3000 / 250;return 1;
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * BEOWULF_MAX / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_NEVAN && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 2000 / 250;return 1;
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * NEVAN_MAX / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GIGAPEDE) {
         *health=enemy_giga_health();*maximum=enemy_giga_max_health();return 1;
@@ -1395,7 +1403,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
     if (mortal) {
-        e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->air = 0;
             plan_set(P_DEATH);
@@ -1953,7 +1961,7 @@ void enemy_draw(void) {
 #define ARROW_TOP_SPEED 65.0f
 #define ARROW_RADIUS 30.0f
 /* type 0 an Enigma's arrow; 1 the Gigapede's homing sphere; 2 its orb that drops, then rolls. */
-typedef struct { int active, homing, type; float pos[3], vel[3], life, lift, goal[2]; } Arrow;
+typedef struct { int active, homing, type; float pos[3], vel[3], life, lift, goal[2], damage; } Arrow;   /* damage 0: the fallback */
 static Arrow arrows[ARROW_MAX];
 static int enigma_motion_idle, enigma_motion_flinch, enigma_motion_heavy, enigma_motion_death;
 static int enigma_motion_aim, enigma_motion_release, enigma_motion_fan;
@@ -2014,6 +2022,7 @@ static void fire_arrow(float px, float py, float pz, float offset) {
     dx = px - hand[0]; dy = py + 100.0f - hand[1]; dz = pz - hand[2];
     d = sqrtf(dx * dx + dz * dz);
     arrows[i].active = 1;
+    arrows[i].damage = 0.0f;
     arrows[i].type = 0;
     arrows[i].life = ARROW_LIFE;
     memcpy(arrows[i].pos, hand, sizeof(hand));
@@ -2108,6 +2117,7 @@ static void arrows_update(float f, float px, float py, float pz) {
             landed_x = a->pos[0] - a->vel[0];
             landed_z = a->pos[2] - a->vel[2];
             landed_heavy = 0;
+            landed_damage = a->damage > 0.0f ? a->damage : -1.0f;   /* not the last hit's */
             a->active = 0;
             continue;
         }
@@ -2231,7 +2241,7 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
     }
     if (e->plan == P_DEATH) return;
     if (mortal) {
-        e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->plan = P_DEATH;
             died();
@@ -2542,15 +2552,16 @@ void enemy_gun_aimed(float x, float z) {
     e = was;
 }
 
-static void goyle_bullet(const float from[3], const float to[3]) {
+static int goyle_bullet(const float from[3], const float to[3]) {
     int i;
     float dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], l = sqrtf(dx * dx + dy * dy + dz * dz) + 0.01f;
     for (i = 0; i < ARROW_MAX && arrows[i].active; ++i) {}
-    if (i >= ARROW_MAX) return;
+    if (i >= ARROW_MAX) return -1;
     memset(&arrows[i], 0, sizeof(arrows[i]));
     arrows[i].active = 1; arrows[i].type = 4; arrows[i].life = 120.0f;
     memcpy(arrows[i].pos, from, sizeof(arrows[i].pos));
     arrows[i].vel[0] = dx / l * 25.0f; arrows[i].vel[1] = dy / l * 25.0f; arrows[i].vel[2] = dz / l * 25.0f;
+    return i;
 }
 
 static void goyle_split_off(void) {
@@ -2591,9 +2602,9 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
         /* Struck stone: up it goes, and it takes three times the damage. */
         e->vel[1] = 23.0f; e->vel[0] = kind == HIT_HEAVY ? 12.0f : 4.0f;
         goyle_state(G_STONE_HIT);
-        if (mortal) e->health = (signed char)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 3 : 6));
+        if (mortal) e->health = (short)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 3 : 6));
     } else {
-        if (mortal) e->health = (signed char)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2));
+        if (mortal) e->health = (short)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2));
         if (e->health > 0 && e->goyle_split <= 0.0f && e->goyle_splits > 0 && goyle_count() < GOYLE_MAX_OUT && ai_unit() < 0.75f) {
             --e->goyle_splits;
             e->goyle_split = 300.0f;
@@ -3819,7 +3830,7 @@ static void nevan_hit_glue(HitKind kind, float from_x, float from_z) {
         e->plan = P_DEATH;
         died();
     }
-    e->health = (signed char)b->health;
+    e->health = (short)b->health;
     nevan_play(b->want, b->restart);
     b->restart = 0;
 }
@@ -3844,6 +3855,7 @@ static void dullahan_spawn_glue(void) {
     e->motion = -1;
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     dullahan_spawn(b, e->health);
+    giga_note("dullahan spawn health", e->health, 0.0f);   /* tests */
     dullahan_play(b->want, 1);
     b->restart = 0;
     e->fade = 0.0f;
@@ -4004,7 +4016,7 @@ static void beowulf_hit_glue(HitKind kind) {
         e->timer = 0.0f;
         died();
     }
-    e->health = (signed char)b->health;
+    e->health = (short)b->health;
     beowulf_play(b->want, b->restart);
     b->restart = 0;
 }
@@ -4073,12 +4085,12 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     e->floor_y = b->floor_y;
     e->air = fallen_flying(b);
     if (b->restart || fallen_motion_id[b->want] != e->motion) { fallen_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* its attack record's damage */
     if (b->spear) {
         /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
         float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
         float to[3] = {px, py + 100.0f, pz};
-        goyle_bullet(from, to);
+        { int k = goyle_bullet(from, to); if (k >= 0) arrows[k].damage = 900.0f; }   /* record 0 (0x5c2dd0): 900 */
     }
     if (b->remove) e->active = 0;
 }
@@ -4154,7 +4166,7 @@ static void lady_hit_glue(HitKind kind) {
         e->timer = 0.0f;
         died();
     }
-    e->health = (signed char)b->health;
+    e->health = (short)b->health;
     lady_play(b->want, b->restart);
     b->restart = 0;
 }
