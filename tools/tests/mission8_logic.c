@@ -19,7 +19,7 @@ int main(void) {
     assert(mission8_acid(7,1700,705,4715,1)==0);
     for(i=0;i<5;++i) {
         const M8Eye *e=&m8_eyes[i];
-        for(j=0;j<3;++j)mission8_hit(e->pos[0],e->pos[1],e->pos[2]-100,0,200,HIT_LIGHT);
+        for(j=0;j<1;++j)mission8_hit(e->pos[0],e->pos[1],e->pos[2]-100,0,200,HIT_LIGHT);
         assert(eye_hp[i]==0);
         if(i<4)assert(!mission8_stomach_open());
     }
