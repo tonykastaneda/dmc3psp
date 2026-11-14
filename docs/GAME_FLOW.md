@@ -89,7 +89,7 @@ the room numbers are matched to them through the event scripts.
 | 003 | Bullseye | No fight. Sword hits charge the crest switch behind the dart machines and open the blue seal to Love Planet. The Shotgun pickup isn't in |
 | 004 | Love Planet | Doors sealed; groups 1 then 0: Hell Sloths and Prides |
 | 005 | 13th Avenue | No fight |
-| 006 | Ice Guardian's Chamber | Cerberus (class 43) isn't ported, so no fight. Its door to 100 ends the mission |
+| 006 | Ice Guardian's Chamber | Cerberus (EST 43, class 25 = `CEm025`, `psp/testroom/cerberus_boss.c`, `docs/CERBERUS_SPEC.md`), with a boss bar. His death opens the door to 100, which ends the mission |
 
 The Enigmas' spawn points and timing match the HD Collection's census of 002 (2150, 2330 and 2750, 2200,
 2.5 s apart). Love Planet couldn't be checked there: the teleporting route can't pass Bullseye's blue seal.
@@ -137,9 +137,10 @@ From its event script (EventTbl05, GDATA 243; `build/hdref/evt_m5.txt` locally).
 | --- | --- |
 | 111 | 7 Blood-goyles (group 1, EST 32 = CEm014, `docs/ENEMY_SPECS.md` D). The door to 422 opens when they're gone |
 | 422 | The Jester (EST 62 = class 44, `CEm044`, SE only), on his own model (em037, GDATA 140) with a simplified fight (`docs/ENEMY_SPECS.md` E). Arena st422, GDATA 824 |
-| 102 | Group 3: Enigmas and Gluttonies (the Soul of Steel) |
+| 100 | Chamber of Echoes. At the top, O at the tablet (EVE area 3) sets the Astronomical Board; the Vajura then shows on its ledge above the door to 101 (100's ITM record) |
+| 102 | O at the stand (EVE area 0) with the Vajura opens the cage round the Soul of Steel. Taking it starts group 3: Enigmas and Gluttonies |
 | 113 | Surge of Fortunas: strike the switch (or O by it) and ride the lift. Each of groups 0-3 (Prides, set at 2000-5000 high) drops onto it as it comes within 1200 of their height, and it holds still while they're alive; any that fall 1500 below it are gone. It rises at 250 cm a second (an estimate) to the door to 120 |
-| 120 | Azure Garden, the Divinity Statue |
+| 120 | Azure Garden. The Divinity Statue (in its stage): O by it opens the shop. Its place is the room's EVE area of type 5, which opens the shop on examine (FUN_00209c00) |
 | 121 | Agni & Rudra (EST 45, class 27), on their own model (em026, GDATA 131) with a simplified fight (`docs/ENEMY_SPECS.md` F). Both down clears the mission |
 
 Load, against what's been measured on the PSP: 111's seven Blood-goyles skin about 3,900 vertices (Mission 2's
@@ -147,10 +148,63 @@ street, at 30 FPS on hardware, skins about 7,700 for its six Prides); Agni & Rud
 Jester 1,387, and the Gigapede about 2,100 rigid triangles (parts in the walls skipped). None of Mission 5 has
 been run on hardware yet: PPSSPP only.
 
-Gates: 111's doors to 112 and 110 wait for 422; 112's door to 113 waits for 102, and then an unseen bridge
-spans 112's pit (from its floor at 3000 to the one at 3500), standing in for the Soul of Steel's platform.
-120's Divinity Statue isn't in: neither its stage nor the Mission 5 script places one. The Astronomical Board,
-Vajura and Soul of Steel aren't items: the gates stand in for them.
+Gates: 111's doors to 112 and 110 wait for 422. 112's door to 113 waits for the Soul of Steel, set at 112's EVE area 1
+(by the pit), which also raises a bridge over the pit (from its floor at 3000 to the one at 3500). The bridge is
+drawn as 20 plain stone steps (the game's platform gimmick, sets 105-107, isn't converted).
+
+Key items (gen_rooms.py KEY_ITEMS, ITEM_USES, ITEM_HOLDS, ITEM_GATES, ITEM_OPENS): the mission starts with the
+Astronomical Board (36, from Mission 4). Each lies as a glow at its ITM record and is taken with O within 200; each
+is used with O inside the EVE area the script checks. Approximations: the script's reveals (100's wall 201 and the
+Vajura's stand 400, 102's cage 100-104) aren't animated. The cage is hidden once the Vajura's set, and the Vajura's
+model stays after it's taken. There are no messages or event cameras.
+
+### Missions 6 to 9: what their event scripts run
+
+Decoded from EventTbl06-09 (GDATA 244-247) the way Mission 3-5's were. The decoded listings and a group census
+are kept locally (`orchestration/evt/evt_m6..m9.txt`, `groups_m6_m9.txt`), not in the repo. Stage slots: room
+1xx is GDATA 324 + 4 x (n - 100), 2xx is 512 + 4 x (n - 200), 3xx is 680 + 4 x (n - 300); each room's data is
+the next slot. Enemies are EST spawn ids, then the class from the table at `0x599690`. Classes named from
+the walkthrough where it names a new enemy in that room: 5 Greed, 7 Envy, 10 Arachne, 17 Damned Pawn (EST
+35-38 and 56 all share its pack, so the chessmen), 31 Nevan, 40 Vergil. Room names are matched by door links
+and the walkthrough's order. Easy and Normal are listed; where they're the same, once.
+
+### Mission 6: "Family ties"
+
+After demo 321 and the start screen, it starts in 122 at start 0. Only 122, 124, 125, 126 and 127 have script
+sections; 120, 121 and 123 run nothing.
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 122 | Mute Goddess' Chamber | The statue (gimmick 300) takes the three Essences (items 40-42) by O in area 0, one at a time, counter 5 counting them. The second blasts the rubble off the front door (gimmick 200, effects 436-438) and closes area 1; the third reveals Artemis (item 30, given if Dante hasn't got it). No fight |
+| 123 | Chamber of 3 Trials | No section: the pedestals' messages and the Divinity Statue only |
+| 126 | Trial of Wisdom | Counter 0 steps 0 -> 1 -> 2 -> 3 only through the right doorway in turn: door 3, then 1, then 2 (the walkthrough's 4, 2, 3 lights: right, left, centre); a wrong one sets 4, locks all four doors and starts group 0 until it's cleared. At 3 the doors retarget to 123 start 3 and the Essence of Intelligence (item 42) is open. Group 0: Easy 5 Prides + 2 Blood-goyles, Normal 3 Prides, 2 Lusts, 2 Blood-goyles |
+| 125 | Trial of Skill | Area 0 starts the spikes (gimmick 100); area 1 stops them. The Essence of Technique is item 41. Once it's taken, group 0 on the way back: 4 Gluttonies, 2 Blood-goyles |
+| 124 | Trial of the Warrior | Area 0 starts it: group 0 (5 Prides, 3 Gluttonies, 2 Lusts, 2 Sloths, 1 Wrath) under a barrier (enemy_mgr_19 1). Crest switches 100 and 101 (flags 32, 33) both lit drop the barrier; they run down after 2400 frames (Easy, Normal), 1800 (Hard), 1200 (Very Hard, DMD), and the barrier comes back. All dead: the Essence of Fighting (item 40). Group 1 is the cutscene-skip copy of group 0 |
+| 127 | The Dark Corridor | Area 0 plays demo 15, which clears the mission |
+
+### Mission 7: "A chance meeting"
+
+Starts in 127 at start 2 after demo 16. 127 -> 114 Heavenrise Chamber -> 115 Divine Library (group 1: 6
+Damned Pawns; the Orihalcon Fragment, item 43) -> 114 -> 134 Pitch-Black Void -> 135 Skull Spire (group 0: Easy
+6, Normal 8 Pawns) -> 136 Tranquil Souls Room (groups 0, 1: Easy 3, Normal 4 Greeds; group 2: 2 Greeds and a
+Hell Vanguard; item 45, Siren's Shriek) -> 137 Lift Room (item 43 restores the lift) -> 100 -> 101 Entranceway
+(group 1: Gluttony and 3 Lusts; group 2: 4 Lusts, a Wrath) -> 105 Cursed Skull Chamber (groups 0, 2: Easy 3,
+Normal 4 Lusts and 3 Greeds) -> back up -> 138 Moonlight Mile -> 142 (demo 17) -> 144 Peak of Darkness: Vergil
+(group 0, EST 58, class 40). Demo 322 after him clears the mission. Its script also carries Mission 6's rooms
+(122-126) and 111-113 for backtracking; 111's group 4 is 2 Enigmas and 5 Blood-goyles.
+
+### Mission 8: "Leviathan"
+
+Starts in 300 (Leviathan's Stomach, the eyeballs and tusks) after demo 323. Hell Envies (EST 25, class 7) in
+302 (Easy 4, Normal 6), 304 (8), 305 (10), 308 (10) and 312 (10), each group 0. The Heart of Leviathan in 302
+isn't an EST enemy: it's gimmicks 1000-1002 (flag 32), woken by using the Ignis Fatuus (item 46) at area 0. Its fall plays demo 20, which clears the mission.
+
+### Mission 9: "Faded memories"
+
+Starts in 201 (The Rotating Bridge) after demo 324. 202 Provisions Storeroom: group 0, 4 Arachnes (EST 28,
+class 10; group 4 the skip copy). 206 Subterranean Lake gives item 31. 208: groups 0, 1, 5 Arachnes each
+(item 47). 209 Limestone Cavern: 6 Prides and 5 Gluttonies. 210 Sunken Opera House: Nevan (group 0, EST 49,
+class 31), with demos 22 and 23 around the fight; the script's AFTER_DEMO 24 clears the mission. 210 also gives item 26.
 
 ## What the missions do now, and what's a stand-in
 
@@ -161,7 +215,7 @@ Stand-ins and estimates:
 - **Enemies:** each of the six Seven Hells has its own model. The Pride, Sloth and Gluttony use their own
   decision tables, the Sloth warps and the Gluttony spews (`docs/ENEMY_AI.md`). The Lust, Wrath and Greed use
   the Pride's table, so the Wrath doesn't explode yet. The Enigma has its own logic, and the Gigapede is a full boss fight. Classes
-  not ported spawn as Prides, except Cerberus, whose room has no fight. Mission 2 now runs groups 0 and 1,
+  not ported spawn as Prides. Cerberus is his own boss fight (`docs/CERBERUS_SPEC.md`). Mission 2 now runs groups 0 and 1,
   then the Hell Vanguard in group 3; his health bar, teleport attacks and death lead into Mission Clear
   (`docs/VANGUARD_SPEC.md`).
 - **Encounters run from the game's scripts**, with Easy and Normal each using their own column.
@@ -178,7 +232,7 @@ Stand-ins and estimates:
 
 1. The Lust's, Wrath's and Greed's own tables and moves (the Wrath's explosion).
 2. The seals' own models (the lifts and their switches are in; the seals are tinted boards).
-3. Cerberus; Vanguard fidelity improvements are listed in VANGUARD_SPEC.md.
+3. Boss fidelity improvements, listed in CERBERUS_SPEC.md and VANGUARD_SPEC.md.
 4. Enemy health and Dante's damage from the game, then dying and Game Over.
 5. Result screen values and ranks.
 6. Customize, Options, Load and Save.

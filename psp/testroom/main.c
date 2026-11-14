@@ -1815,6 +1815,8 @@ static unsigned int menu_script_pad(int frame) {
 static struct { float x, y, z, yaw, dt, floor, cframe; short move, script, ground, room; } cmp_log[CMP_MAX_FRAMES];
 static int cmp_realdt;   /* "realdt 1": the real clock, as in play, not a fixed step */
 static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": for a test, the mission begins in that room */
+static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
+static int cmp_item[8][2], cmp_item_count, cmp_trim_at, cmp_trim_keep;      /* "item id state": for a test, a key item starts got (1) or used (2) */
 static void cmp_load(void) {
     char path[320], line[64];
     FILE *f;
@@ -1849,6 +1851,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
+        else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
@@ -1891,6 +1894,8 @@ static void cmp_load(void) {
                        &cmp_walks[cmp_walk_count].first, &cmp_walks[cmp_walk_count].last) == 4) ++cmp_walk_count;
         }
         else if (strncmp(line, "startroom ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_start_room, &cmp_start_pos);
+        else if (strncmp(line, "cleared ", 8) == 0) { if (cmp_cleared_count < 8) cmp_cleared[cmp_cleared_count++] = atoi(line + 8); }
+        else if (strncmp(line, "item ", 5) == 0) { if (cmp_item_count < 8 && sscanf(line + 5, "%d %d", &cmp_item[cmp_item_count][0], &cmp_item[cmp_item_count][1]) == 2) ++cmp_item_count; }
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
         else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
@@ -2091,8 +2096,8 @@ static void start_camera(const Player *player, FollowCamera *camera) {
     camera->lead_x = camera->lead_z = 0.0f;
 }
 
-/* The game's encounter scripts run here. All classes are Prides for now: CEm002, CEm004, CEm013 and the
- * bosses aren't in, so their spawns hold Prides. See docs/GAME_FLOW.md. */
+/* The game's encounter scripts run here. Classes without their own port spawn as Prides; the ported
+ * enemies and bosses (Cerberus, Gigapede, Vanguard, ...) are listed in docs/GAME_FLOW.md. */
 static int mission_room = ROOM_NONE, script_at;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
@@ -2162,11 +2167,53 @@ static int room_named(const char *file) {
     for (i = 0; i < (int)(sizeof(rooms) / sizeof(rooms[0])); ++i) if (!strcmp(rooms[i].file, file)) return i;
     return -1;
 }
-/* Mission 5's bridge over 112's pit, once 102 is cleared (see mission_floor). */
+/* Key items (CItemKey) this mission: 0 not got, 1 got, 2 used. Where they lie, where they're used, and what waits
+ * on them come from the event script (tools/gen_rooms.py KEY_ITEMS, ITEM_USES, ITEM_HOLDS, ITEM_GATES). */
+#define ITEM_ID_MAX 64
+static unsigned char item_state[ITEM_ID_MAX];
+static void items_reset(int mission) {
+    int i;
+    memset(item_state, 0, sizeof item_state);
+    for (i = 0; i < START_ITEM_COUNT; ++i) if (start_items[i][0] == mission) item_state[start_items[i][1]] = 1;
+    for (i = 0; i < cmp_item_count; ++i) if (cmp_item[i][0] >= 0 && cmp_item[i][0] < ITEM_ID_MAX) item_state[cmp_item[i][0]] = (unsigned char)cmp_item[i][1];
+}
+static int item_is(int id, int state) { return id >= 0 && id < ITEM_ID_MAX && item_state[id] == state; }
+/* Inside an EVE area: its four corners (either winding), and from its floor up its height (FUN_001c1510). */
+static int item_area_inside(const RoomItemUse *u, float x, float y, float z) {
+    int k, pos = 0, neg = 0;
+    if (y < u->y - 100.0f || y > u->y + u->height) return 0;
+    for (k = 0; k < 4; ++k) {
+        const float *a = u->xz[k], *b = u->xz[(k + 1) & 3];
+        float c = (b[0] - a[0]) * (z - a[1]) - (b[1] - a[1]) * (x - a[0]);
+        if (c > 0.0f) pos = 1; else if (c < 0.0f) neg = 1;
+    }
+    return !(pos && neg);
+}
+/* The key items lying in this room that can be taken now. */
+static int key_item_shown(const RoomKeyItem *k) {
+    return k->mission == mission_choice.mission && k->room == mission_room && item_is(k->item, 0)
+        && (k->after < 0 || item_is(k->after, 2));
+}
+/* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
+static int room_held(void) {
+    int i;
+    for (i = 0; i < ROOM_ITEM_HOLD_COUNT; ++i)
+        if (room_item_holds[i].mission == mission_choice.mission && room_item_holds[i].room == mission_room
+            && item_is(room_item_holds[i].item, 0)) return 1;
+    return 0;
+}
+/* What used items have taken away in this room (102's cage, once the Vajura's set). */
+static void item_opens_apply(void) {
+    int i;
+    for (i = 0; i < ROOM_ITEM_OPEN_COUNT; ++i)
+        if (room_item_opens[i].mission == mission_choice.mission && room_item_opens[i].room == mission_room
+            && item_is(room_item_opens[i].item, 2)) stage_hide_group(room_item_opens[i].tag);
+}
+/* Mission 5's bridge over 112's pit, once the Soul of Steel is set there (see mission_floor). */
 static int bridge_up(void) {
-    static int room_112 = -2, room_102 = -2;
-    if (room_112 == -2) { room_112 = room_named("ROOM_112.BIN"); room_102 = room_named("ROOM_102.BIN"); }
-    return mission_mode && mission_choice.mission == 5 && mission_room == room_112 && room_102 >= 0 && room_is_cleared(room_102);
+    static int room_112 = -2;
+    if (room_112 == -2) room_112 = room_named("ROOM_112.BIN");
+    return mission_mode && mission_choice.mission == 5 && mission_room == room_112 && item_is(39, 2);
 }
 /* On it: the pit's edge walls (prepare_stage.py puts walls on open floor edges) don't stop him there. */
 static int on_bridge(float x, float z, float y) {
@@ -2180,7 +2227,7 @@ static int mission_floor(float x, float y, float z, float step, float *out) {
     if (pad_on && (x - pad[0]) * (x - pad[0]) + (z - pad[2]) * (z - pad[2]) < PAD_RADIUS * PAD_RADIUS && pad[1] <= y + step + LIFT_STEP
         && (!found || pad[1] > *out)) { *out = pad[1]; found = 1; }
     {
-        /* Mission 5: with the Soul of Steel (102's fight over), an unseen bridge where 112's stairs fell: from
+        /* Mission 5: with the Soul of Steel set, a bridge (drawn in mission_gimmicks_draw) where 112's stairs fell: from
          * the floor at 3000 (z 2650) up to the one at 3500 (z 4350), over the pit to 104 (the stage's own
          * floors, from its collision). The game's invisible platform gimmick isn't read. */
         if (bridge_up() && x > 2150.0f && x < 2850.0f && z > 2600.0f && z < 4400.0f) {
@@ -2297,6 +2344,10 @@ static int door_gated(const RoomDoor *d) {
         const DoorGate *g = &door_gates[i];
         if (g->mission != mission_choice.mission || g->room != mission_room || g->next_number != d->number) continue;
         if (!room_is_cleared(g->needs_room)) return 1;
+    }
+    for (i = 0; i < ROOM_ITEM_GATE_COUNT; ++i) {
+        const RoomItemGate *g = &room_item_gates[i];
+        if (g->mission == mission_choice.mission && g->room == mission_room && g->next_number == d->number && !item_is(g->item, 2)) return 1;
     }
     return 0;
 }
@@ -2464,6 +2515,17 @@ static void seal_draw(void) {
         sceGuDepthMask(GU_FALSE);
     }
 }
+/* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
+static void key_glow(const float *p) {
+    float core[3] = {p[0], p[1] + 70.0f, p[2]}, still[3] = {0.0f, 0.0f, 0.0f};
+    fx_mote(core, still, 70.0f + 12.0f * sinf(goal_spin * 0.15f), 60.0f, 0.05f, 0xffa0f0ffu);
+    if (((int)goal_spin % 4) == 0) {
+        unsigned int r = fx_random_u32();
+        float at[3] = {core[0] + (float)((int)(r & 63) - 32), core[1] - 20.0f, core[2] + (float)((int)(r >> 8 & 63) - 32)};
+        float up[3] = {0.0f, 50.0f + (float)(r >> 16 & 31), 0.0f};
+        fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
+    }
+}
 static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
@@ -2479,18 +2541,24 @@ static void mission_gimmicks_draw(void) {
     }
     seal_draw();
     fight_seals_draw();
-    info = &missions[mission_choice.mission - 1];
-    if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) {
-        /* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
-        float core[3] = {info->goal[0], info->goal[1] + 70.0f, info->goal[2]}, still[3] = {0.0f, 0.0f, 0.0f};
-        goal_spin += 1.0f;
-        fx_mote(core, still, 70.0f + 12.0f * sinf(goal_spin * 0.15f), 60.0f, 0.05f, 0xffa0f0ffu);
-        if (((int)goal_spin % 4) == 0) {
-            unsigned int r = fx_random_u32();
-            float at[3] = {core[0] + (float)((int)(r & 63) - 32), core[1] - 20.0f, core[2] + (float)((int)(r >> 8 & 63) - 32)};
-            float up[3] = {0.0f, 50.0f + (float)(r >> 16 & 31), 0.0f};
-            fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
+    if (bridge_up()) {
+        /* 112's bridge (mission_floor's ramp, 3000 at z 2650 to 3500 at z 4350): drawn as 20 stone steps,
+         * alternating shades, each a box down to the step below. A stand-in: the game's own platform gimmick
+         * isn't converted. */
+        int s;
+        for (s = 0; s < 20; ++s) {
+            float za = 2650.0f + 85.0f * s, y1 = 3000.0f + 25.0f * (s + 1);
+            draw_box(2500.0f, y1 - 60.0f, y1, za + 42.5f, 330.0f, 42.5f, 0.0f,
+                     (s & 1) ? 0xff2c3238u : 0xff353c43u, 0xff1c2024u);
         }
+    }
+    info = &missions[mission_choice.mission - 1];
+    goal_spin += 1.0f;
+    if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) key_glow(info->goal);
+    {
+        int i;
+        for (i = 0; i < ROOM_KEY_ITEM_COUNT; ++i)
+            if (key_item_shown(&room_key_items[i])) key_glow(&room_key_items[i].x);
     }
     sceGuEnable(GU_TEXTURE_2D);
 }
@@ -2562,6 +2630,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     breakables_enter(room);
     seal_enter(room);
     mission_room = room;
+    item_opens_apply();
     doors_armed = 0;
     fight_seal_alpha = 0.0f;
     {
@@ -2599,7 +2668,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
-    int done = script_run(dt, player->y), i, in_a_box = 0;
+    int held = room_held(), done = held || script_run(dt, player->y), i, in_a_box = 0;
     fight_seal_on = !done || enemy_alive_count() > 0;
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
     const RoomLift *lift = room_lift();
@@ -2640,6 +2709,22 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             return 0;
         }
     }
+    for (i = 0; done && enemy_alive_count() == 0 && i < ROOM_KEY_ITEM_COUNT; ++i) {
+        /* A key item: O by it (CItemKey's 200 cm) takes it. */
+        const RoomKeyItem *k = &room_key_items[i];
+        float kx = player->x - k->x, kz = player->z - k->z;
+        if (!key_item_shown(k) || kx * kx + kz * kz > 200.0f * 200.0f || fabsf(player->y - k->y) > 300.0f) continue;
+        door_prompt_time = 1.0f;
+        if (pressed & PSP_CTRL_CIRCLE) { float at[3] = {k->x, k->y, k->z}; item_state[k->item] = 1; fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE; }
+    }
+    for (i = 0; done && enemy_alive_count() == 0 && i < ROOM_ITEM_USE_COUNT; ++i) {
+        /* Where one's used: examine inside its area while holding it. */
+        const RoomItemUse *u = &room_item_uses[i];
+        if (u->mission != mission_choice.mission || u->room != mission_room || !item_is(u->item, 1)) continue;
+        if (!item_area_inside(u, player->x, player->y, player->z)) continue;
+        door_prompt_time = 1.0f;
+        if (pressed & PSP_CTRL_CIRCLE) { float at[3] = {player->x, player->y + 100.0f, player->z}; item_state[u->item] = 2; item_opens_apply(); fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE; }
+    }
     if (info->goal_room == mission_room && room_is_cleared(info->goal_after) && done && enemy_alive_count() == 0) {
         /* The mission's item: walk up to it and press O. */
         float gx = player->x - info->goal[0], gz = player->z - info->goal[2];
@@ -2670,7 +2755,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
         return 0;
     }
-    room_set_cleared(mission_room);
+    if (!held) room_set_cleared(mission_room);
     if (info->clear_room == mission_room) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
@@ -2762,6 +2847,15 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     enemy_set_mortal(1);
     mission_clear_wait = 0.0f;
     memset(rooms_cleared, 0, sizeof rooms_cleared);
+    {
+        int c;
+        for (c = 0; c < cmp_cleared_count; ++c) {
+            char want[16];
+            snprintf(want, sizeof(want), "ROOM_%03d.BIN", cmp_cleared[c]);
+            room_set_cleared(room_named(want));
+        }
+    }
+    items_reset(choice->mission);
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
@@ -3119,6 +3213,7 @@ int main(int argc, char *argv[]) {
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
+            if (cmp_trim_at && frames == cmp_trim_at) enemy_trim(cmp_trim_keep);
             if (focus_cmp && cmp_clear_minions && frames%cmp_clear_minions==0) enemy_clear_minions();
             {
                 int g, k;
