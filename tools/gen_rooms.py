@@ -95,8 +95,26 @@ GATES = [
     (4, "111", "422", "999"),   # the Jester's door is Mission 5's
     (5, "111", "112", "422"),   # 111 unlocks when the Jester's beaten (flag 2)
     (5, "111", "110", "422"),
-    (5, "112", "113", "102"),   # the Soul of Steel, from 102, opens 112's way to 113
 ]
+# Key items (CItemKey) and where they're used, from EventTbl05: item ids 36 Astronomical Board, 37 Vajura, 39 Soul
+# of Steel. A key item's place is its record in the room's ITM chunk (20 bytes: id, x, y, z, a word); a use spot
+# is the EVE area the script checks (sw_in_area n, examine, sw_item_got id == 1, then take_item id).
+START_ITEMS = {5: [36]}   # Mission 5 begins with Mission 4's Astronomical Board
+# (mission, item, room it lies in, the item that must be used before it shows). The Vajura shows once the Board's
+# set in 100 and the Soul of Steel once the Vajura's set in 102: the script reveals them with gimmicks (100's
+# 200/201/400, 102's 100-104) that aren't converted, so they simply appear [inferred from the script's order].
+KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37)]
+# (mission, item, room, EVE area index).
+ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1)]
+# A room whose fight waits for an item to be picked up: 102's group 3 starts as the Soul of Steel's taken
+# (block 1: sw_item_got 39 == 1, door_lock, spawn_group 3).
+ITEM_HOLDS = [(5, "102", 39)]
+# Sets an item's use takes away: the Vajura opens 102's cage round the Soul of Steel (STAY 100-103 slide aside,
+# gimmick_cmd2c, and COLLISION 104 goes, gimmick_cmd10). The port hides them instead of moving them. 100's STAY
+# 400 (the Vajura on its stand) is above the story tags' range, so it stays after the Vajura's taken.
+ITEM_OPENS = [(5, "102", 37, [100, 101, 102, 103, 104])]
+# Doors that stay shut until an item's used: 112's door 2 (to 113) is enabled by the Soul of Steel.
+ITEM_GATES = [(5, "112", "113", 39)]
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
@@ -130,6 +148,30 @@ def parse_starts(data):
     chunk = next(c for c in data if c and c[:4] == b"POS\0")
     count = struct.unpack_from("<H", chunk, 6)[0]
     return [struct.unpack_from("<4f", chunk, 0x14 + i * 0x30) for i in range(count)]
+
+
+def parse_items(data):
+    """The ITM chunk: {item id: (x, y, z)}, the first place of each id."""
+    chunk = next((c for c in data if c and c[:4] == b"ITM\0"), None)
+    out = {}
+    if chunk is None:
+        return out
+    for i in range(struct.unpack_from("<H", chunk, 6)[0]):
+        at = 0x10 + i * 20
+        if at + 20 > len(chunk):
+            break
+        item, x, y, z = struct.unpack_from("<I3f", chunk, at)
+        out.setdefault(item, (x, y, z))
+    return out
+
+
+def parse_area(data, index):
+    """An EVE area's 4 corners (x, z), its floor y and its height."""
+    chunk = next(c for c in data if c and c[:4] == b"EVE\0")
+    at = 0x10 + index * 0x80
+    corners = [struct.unpack_from("<3f", chunk, at + 0x20 + k * 16) for k in range(4)]
+    height = struct.unpack_from("<f", chunk, at + 0x60)[0]
+    return [(c[0], c[2]) for c in corners], corners[0][1], height
 
 
 def parse_shop_area(data):
@@ -238,7 +280,12 @@ def main():
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
                                story=gimmicks.story_tags(game), sets={g["number"]: g for g in gimmicks.parse_game(game)})
             tags = {s["index"]: n for n, s, *_ in rooms[name]["breakables"]}
+            opened = {n for m, r, item, numbers in ITEM_OPENS if r == name for n in numbers}
+            tags.update({s["index"]: gimmicks.STORY_TAG + s["number"] - 100 for s in gimmicks.parse_game(game)
+                         if s["kind"] == "COLLISION" and s["number"] in opened})
             rooms[name]["boxes"] = gimmicks.collision_boxes(game, tags)
+            rooms[name]["items"] = parse_items(data)
+            rooms[name]["areas"] = {a: parse_area(data, a) for m, _, r, a in ITEM_USES if r == name}
             shop = parse_shop_area(data)
             if shop and name not in SHOPS:
                 SHOPS[name] = shop
@@ -288,6 +335,40 @@ def main():
     gates = [(m, index[r], int(n), index.get(need, 99)) for m, r, n, need in GATES if r in index]
     lines.append(f"#define DOOR_GATE_COUNT {len(gates)}")
     lines.append("static const DoorGate door_gates[] = {" + ",".join("{%d,%d,%d,%d}" % g for g in gates) + "};")
+    # Key items (mission_items.c): where they lie, where they're used, fights and doors that wait on them.
+    lines.append("/* A key item lying in a room (its ITM record), shown once item `after` is used (-1: always). */")
+    lines.append("typedef struct { short mission, item, room, after; float x, y, z; } RoomKeyItem;")
+    cells = []
+    for m, item, r, after in KEY_ITEMS:
+        x, y, z = rooms[r]["items"][item]
+        cells.append(f"{{{m},{item},{index[r]},{after},{x:.1f}f,{y:.1f}f,{z:.1f}f}}")
+    lines.append(f"#define ROOM_KEY_ITEM_COUNT {len(cells)}")
+    lines.append("static const RoomKeyItem room_key_items[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("/* Where a key item is used: an EVE area, its corners (x z), floor and height. */")
+    lines.append("typedef struct { short mission, item, room; float xz[4][2], y, height; } RoomItemUse;")
+    cells = []
+    for m, item, r, a in ITEM_USES:
+        corners, y, height = rooms[r]["areas"][a]
+        cells.append(f"{{{m},{item},{index[r]},{{" + ",".join(f"{{{x:.1f}f,{z:.1f}f}}" for x, z in corners) + f"}},{y:.1f}f,{height:.1f}f}}")
+    lines.append(f"#define ROOM_ITEM_USE_COUNT {len(cells)}")
+    lines.append("static const RoomItemUse room_item_uses[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("/* A room whose fight waits until an item is picked up, and doors held until an item's used. */")
+    lines.append("typedef struct { short mission, room, item; } RoomItemHold;")
+    cells = [f"{{{m},{index[r]},{item}}}" for m, r, item in ITEM_HOLDS]
+    lines.append(f"#define ROOM_ITEM_HOLD_COUNT {len(cells)}")
+    lines.append("static const RoomItemHold room_item_holds[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("typedef struct { short mission, room, next_number, item; } RoomItemGate;")
+    cells = [f"{{{m},{index[r]},{int(n)},{item}}}" for m, r, n, item in ITEM_GATES]
+    lines.append(f"#define ROOM_ITEM_GATE_COUNT {len(cells)}")
+    lines.append("static const RoomItemGate room_item_gates[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("/* A stage tag hidden once an item's used (a cage opened). */")
+    lines.append("typedef struct { short mission, room, item, tag; } RoomItemOpen;")
+    cells = [f"{{{m},{index[r]},{item},{gimmicks.STORY_TAG + n - 100}}}" for m, r, item, numbers in ITEM_OPENS for n in numbers]
+    lines.append(f"#define ROOM_ITEM_OPEN_COUNT {len(cells)}")
+    lines.append("static const RoomItemOpen room_item_opens[] = {" + (",".join(cells) or "{0}") + "};")
+    cells = [f"{{{m},{item}}}" for m, items in START_ITEMS.items() for item in items]
+    lines.append(f"#define START_ITEM_COUNT {len(cells)}")
+    lines.append("static const short start_items[][2] = {" + (",".join(cells) or "{0}") + "};")
     lifts = []
     for name in names:
         if name not in LIFT_ROOMS:
