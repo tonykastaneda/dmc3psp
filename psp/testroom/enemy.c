@@ -27,6 +27,7 @@
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
+#include "jester.h"
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
  * Three layers, as on the disc:
@@ -128,7 +129,7 @@ typedef struct {
      * height it hovers over Dante and when that's re-rolled, and its dive's aim. */
     float goyle_stone, goyle_shots, goyle_split, goyle_lift, goyle_lift_wait, goyle_aim;
     signed char goyle_splits;
-    float ar_health;                /* Agni & Rudra: 7000 each */
+    float ar_health;                /* Agni & Rudra: 7000 each; the Jester: 5000 */
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
 } Enemy;
 
@@ -613,7 +614,7 @@ int enemy_boss_health(float *health, float *maximum) {
         *health=ar_health_total(maximum);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 1500 / 250;return 1;
+        *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GIGAPEDE) {
         *health=enemy_giga_health();*maximum=enemy_giga_max_health();return 1;
@@ -2431,6 +2432,8 @@ static void jester_spawn(void) {
     e->plan = P_WATCH;
     e->motion = -1;
     e->goyle_stone = 0.0f;   /* his stun gauge */
+    e->health = 1;
+    e->ar_health = jester_max_health(0);   /* room 422 is his first encounter */
     jester_state(J_TAUNT);
     e->fade = 0.0f;
 }
@@ -2498,9 +2501,9 @@ static void jester_update(float f, float px, float py, float pz) {
     case J_VANISH:
         if (e->timer < 2.0f && !e->step) { e->step = 1; jester_puff(); }
         if (e->timer > 20.0f) {
-            /* Back behind Dante, in the arena. */
-            float a = atan2f(dx, dz);
-            e->pos[0] = px + sinf(a) * 320.0f; e->pos[2] = pz + cosf(a) * 320.0f;
+            /* Back near Dante, in the arena: FUN_00536230 row 1 (50-550 cm about him, kept within 1000 of the
+             * centre). */
+            jester_reappear(1, px, pz, &e->pos[0], &e->pos[2], ai_unit);
             if (floor_under(e->pos[0], py + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
             else { e->pos[0] = 3500.0f; e->pos[1] = 492.0f; e->pos[2] = 3500.0f; }
             e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
@@ -2546,10 +2549,12 @@ static void jester_hit(HitKind kind) {
     ++hits;
     fx_hit_spark(at);
     if (mortal) {
-        int dmg = kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
-        if (stunned) dmg *= 2;
-        e->health = (signed char)(e->health - dmg);
-        if (e->health <= 0) {
+        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]; stunned, double [stand-in]. */
+        float dmg = kind == HIT_PISTOL ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        if (stunned) dmg *= 2.0f;
+        e->ar_health -= dmg;
+        if (e->ar_health <= 0.0f) {
+            e->ar_health = 0.0f;
             e->plan = P_DEATH;
             jester_state(J_DEATH);
             e->plan = P_DEATH;
