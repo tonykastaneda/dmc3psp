@@ -434,6 +434,13 @@ int enemy_alive_count(void) {
     return n;
 }
 
+int enemy_alive_positions(float out[][3], int max) {
+    int i, n = 0;
+    for (i = 0; i < ENEMY_MAX && n < max; ++i)
+        if (enemies[i].active && enemies[i].plan != P_DEATH) { out[n][0] = enemies[i].pos[0]; out[n][1] = enemies[i].pos[1]; out[n][2] = enemies[i].pos[2]; ++n; }
+    return n;
+}
+
 /* For tests: only the first `keep` living ones stay; the rest are removed outright. */
 void enemy_trim(int keep) {
     int i;

@@ -91,9 +91,31 @@ def parse_game(text):
     return sets
 
 
-def model_triangles(data):
-    """Model space triangles: [((x, y, z, u, v, r, g, b) x 3, texture)]. SCMs only; effect models (EFM) and
-    MODs give nothing."""
+def model_triangles(data, static_efm=False):
+    """Model space triangles: [((x, y, z, u, v, r, g, b) x 3, texture)]. SCMs, plus optional rest-pose EFM stage meshes.
+    Other effect models and MODs give nothing."""
+    if static_efm and data[:4] == b"EFM ":
+        # Leviathan's tunnel walls are animated MOD-layout effect meshes.
+        # Bake their rest geometry; the room's UV and bone animation is not
+        # yet available in stage.c. Other missions retain the SCM-only path.
+        from mod_ps2 import parse_mod
+        from mod_skeleton import strip_faces
+        raw = b"MOD " + data[4:]
+        objects, _ = parse_mod(raw, split_submeshes=True)
+        out = []
+        for obj in objects:
+            words = struct.unpack_from("<%dH" % obj["vertex_count"], raw, obj["weight_offset"])
+            # Some EFM streams end with zero-weight padding. They are not
+            # skinned here; omit triangles touching padding and retain ADC.
+            for face in strip_faces([bool(w & 0x8000) for w in words]):
+                if any((words[i] & 0x7fff) == 0 for i in face):
+                    continue
+                tri = []
+                for i in face:
+                    shade = 112.0 + 32.0 * max(0.0, obj["normals"][i][1])
+                    tri.append(tuple(obj["positions"][i]) + tuple(obj["uvs"][i]) + (shade, shade, shade))
+                out.append((tuple(tri), obj["header_count"]))
+        return out
     if data[:4] != b"SCM ":
         return []
     out = []
@@ -118,7 +140,7 @@ def _rotation(rot):
 LIFT_TAG = 254
 
 
-def placed(game_text, pnst, extra=()):
+def placed(game_text, pnst, extra=(), static_efm=False):
     """[(set, kind, [(tri, texture)])] for every drawn set with a model that has geometry, in the room's order.
     Breakables are numbered by their place in this list among the breakable kinds (see breakables())."""
     found = models(pnst)
@@ -126,13 +148,14 @@ def placed(game_text, pnst, extra=()):
     for s in parse_game(game_text):
         if (s["kind"] not in DRAWN and s["kind"] not in extra) or s["model"] is None or s["model"] not in found:
             continue
-        if s["model"] not in cache:
-            cache[s["model"]] = model_triangles(found[s["model"]])
-        if not cache[s["model"]]:
+        key = (s["model"], static_efm and s["kind"] == "STAY")
+        if key not in cache:
+            cache[key] = model_triangles(found[s["model"]], key[1])
+        if not cache[key]:
             continue
         r, sc, p = _rotation(s["rot"]), s["scale"], s["pos"]
         tris = []
-        for tri, texture in cache[s["model"]]:
+        for tri, texture in cache[key]:
             vs = []
             for v in tri:
                 x, y, z = v[0] * sc[0], v[1] * sc[1], v[2] * sc[2]
