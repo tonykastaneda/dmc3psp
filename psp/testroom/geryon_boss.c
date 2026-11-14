@@ -84,6 +84,8 @@ static const float bridge_start[3] = {2950.0f, 7016.0f, 2950.0f};
 static const float ground_start[3] = {2500.0f, 0.0f, 2500.0f};
 /* 228's start 2, where the event script puts Dante after the bridge falls (demo 33). */
 static const float dante_below[4] = {1437.8f, -0.1f, 2004.2f, 60.0f};
+static int start_on_ground;   /* geryon_boss_start_on_ground: Mission 18's 417 */
+void geryon_boss_start_on_ground(int on) { start_on_ground = on; }
 
 void geryon_boss_set_difficulty(int difficulty) { boss_difficulty = difficulty; }
 void geryon_boss_set_floor(int (*fn)(float x, float y, float z, float *out)) { floor_fn = fn; }
@@ -630,6 +632,14 @@ void geryon_boss_spawn(float x, float y, float z) {
     gb.yaw = wrap_angle(atan2f(bridge_b[0] - bridge_a[0], bridge_b[2] - bridge_a[2]) + PI);
     gb.hp = MAX_HEALTH;
     gb.horse.motion = gb.horse.previous = gb.cart.motion = gb.cart.previous = -1;
+    if (start_on_ground) {
+        /* As S_SWITCH leaves him, without the bridge or Dante's warp. */
+        gb.phase = 1;
+        memcpy(gb.pos, ground_start, sizeof(gb.pos));
+        gb.floor_y = ground_start[1];
+        memcpy(gb.centre, ground_start, sizeof(gb.centre));
+        gb.yaw = angle_to(dante_below);
+    }
     go_think();
     trace("spawn");
 }

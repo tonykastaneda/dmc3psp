@@ -67,6 +67,8 @@ SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (221, 225, 231, 233, 235, 236
 SLOTS.update({"007": 300, "008": 304})
 # Mission 16 (Central Temen-ni-gru 1 and 2): room 1xx is GDATA 324 + 4 x (n - 100).
 SLOTS.update({f"{n}": 324 + 4 * (n - 100) for n in (106, 107, 108, 109, 116, 117, 118, 119, 146)})
+# Mission 18 (the Netherworld): room 4xx is GDATA 736 + 4 x (n - 400).
+SLOTS.update({f"{n}": 736 + 4 * (n - 400) for n in (400, 401, 402, 403, 406, 412, 413, 414, 415, 416, 417, 418, 419, 420)})
 SLOTS.update({"411":780, "012":320})  # Mission 20 arena and ending street.
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
@@ -132,6 +134,13 @@ MISSIONS = {
     # 38, 1 of EST 36) -> back to 106, both set at area 1, door 0 opens -> 107 -> 118 -> 117 -> 111 -> 116 -> 115 The
     # Divine Library: Lady (group 0, EST 55). The route between the script's rooms is by door links.
     16: ("106", None, {"105": [1], "109": [1], "102": [2], "146": [0], "115": [0]}),
+    # Mission 18, from EventTbl18 (GDATA 256): 400 Unsacred Hellgate -> 401 Damned Chess Board (group 0, the chessmen) ->
+    # 402 Road to Despair (group 0: 2 Fallen) -> 403 Lost Souls Nirvana, the hub: its doors 0-8 lead to the bosses in
+    # 412-420 (Cerberus, Gigapede, Agni & Rudra, Nevan, Beowulf, Geryon, Doppelganger, Leviathan's heart, two Hell
+    # Vanguards). Each beaten lights its cell on the bingo board (BINGO 888); a line of them opens the mirror (GATE 501)
+    # to 406, demo 50 and Mission Clear (psp/testroom/mission18.c).
+    18: ("400", None, {"401": [0], "402": [0], "412": [0], "413": [0], "414": [0], "415": [0], "416": [0], "417": [0],
+                       "418": [0], "419": [0], "420": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1, 14: 1}
@@ -236,6 +245,11 @@ CLEAR_ROOMS[12] = "228"
 CLEAR_ROOMS[16] = "115"   # Lady; the game then plays demo 45 and Dante climbs 119, the High-fly Zone, to its exit
 GATES += [(12, "218", "448", "999")]   # 218's door to the Jester (448) is disabled in Mission 12
 # 240's door into the ride (216) is a box the wagon carries Dante into: here, a box on the wagon at start 0.
+# Mission 18: the Netherworld's rooms are joined by GATE sets (mirrors), not doors: each one's place and next room
+# (next00 room, start). A box 400 across and 800 high round it stands in for stepping into it.
+EXTRA_DOORS["400"] = [((2300.0, 1050.0, -1075.0, 400.0, 800.0, 400.0), "401", 0, 18, 18)]
+EXTRA_DOORS["401"] = [((2500.0, -50.0, 3400.0, 400.0, 800.0, 400.0), "402", 0, 18, 18)]
+EXTRA_DOORS["402"] = [((2271.0, 1638.0, -1580.0, 400.0, 800.0, 400.0), "403", 0, 18, 18)]
 EXTRA_DOORS["240"] = [((6400.0, 1500.0, 7001.0, 500.0, 400.0, 500.0), "216", 1, 12, 12)]   # Mission 12's wagon only
 
 # ---- Mission 15, "The gatecrasher", from EventTbl15 (GDATA 253; docs/GAME_FLOW.md). After demo 41 it starts in 222

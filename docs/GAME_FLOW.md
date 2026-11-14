@@ -493,6 +493,41 @@ route above, start to Mission Clear.
 - The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
 - No cutscenes; demo 48's item 35 isn't given.
 
+### Mission 18: "Invading hell"
+
+From EventTbl18 (GDATA 256; `orchestration/evt/evt_m18.txt` locally). After demo 49 it starts in 400 at start 0.
+Rooms 4xx are GDATA 736 + 4 x (n - 400). The Netherworld's rooms are joined by GATE sets (mirrors: a place and the
+next room and start), not doors.
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 400 | Unsacred Hellgate | Rocks (set 200, flag 11) rise into a path to the mirror (GATE 555, to 401) |
+| 401 | Damned Chess Board | Group 0: 8 Pawns, 2 each of EST 36, 37, 38 and one each of 39 and 40 (the Queen and King). Cleared (flag 13), GATE 500 opens to 402 |
+| 402 | Road to Despair | Group 0: 2 Fallen; GATE 555 to 403 |
+| 403 | Lost Souls Nirvana | The hub: doors 0-8 lead to 412-420. Coming back from 412 + k lights cell k + 1 of the bingo board (BINGO 888, flags 1-9) and disables door k. A line of lit cells opens GATE 501, the mirror, to 406 and demo 50, Mission Clear. Two green orbs (pickup 9) |
+| 412 | | Cerberus (EST 43) |
+| 413 | | Gigapede (EST 41) |
+| 414 | | Agni & Rudra (EST 45) |
+| 415 | | Nevan (EST 49) |
+| 416 | | Beowulf (EST 51) |
+| 417 | | Geryon (EST 50), on 228's ground |
+| 418 | | Doppelganger (EST 52) |
+| 419 | | Envies (EST 25: Easy 4, Normal 6) about Leviathan's heart, a gimmick as in 302 |
+| 420 | | Two Hell Vanguards (EST 26) and 21 Seven Hells |
+
+Each boss room's door 0 (back to 403) is disabled until its fight is over (door_enable).
+
+In the port (`psp/testroom/mission18.c`): the route plays from 400 to Mission Clear in PPSSPP, and each boss room
+runs its boss from its existing file. Stand-ins and estimates:
+
+- The gates are doors (`EXTRA_DOORS`, Mission 18 only): a box 400 across and 800 high round each GATE's place.
+- **The bingo board's rule** (CStageSetBingo) isn't decoded: the board is read as 3 x 3 in door order (0 1 2 / 3 4 5 /
+  6 7 8), and a full row, column or diagonal opens the mirror (a glow; stepping into it ends the mission).
+- 419's heart is spawned as Mission 8 does it (`enemy_add_kind(ENEMY_LEVIATHAN, ...)`); in 417 Geryon starts in his
+  ground phase (`geryon_boss_start_on_ground`, added for this). The bosses' arenas are their missions' rooms again, so
+  their code runs unchanged.
+- 401's Queen and King (EST 39, 40) and the other chessmen spawn as Pawns or Prides; 400's rocks are the stage's own
+  floor, climbed with jumps.
 ### Mission 20: "Screaming souls"
 
 EventTbl20 (GDATA 258), decoded under the hdref lock to local `build/mission20_re/evt_m20.*`,
