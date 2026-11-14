@@ -113,7 +113,7 @@ typedef struct {
     float shoot_timer[3], shoot_t;
     signed char shoot_set;
     unsigned char shoot_fan, shoot_phase;
-    signed char health;
+    short health;                   /* units of a light hit (42); bosses run past 127 */
     short script_at, stop;
     float gauge, timer, wake;
     float vel[3], acc[3];
@@ -1380,7 +1380,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
     if (mortal) {
-        e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->air = 0;
             plan_set(P_DEATH);
@@ -2216,7 +2216,7 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
     }
     if (e->plan == P_DEATH) return;
     if (mortal) {
-        e->health = (signed char)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->plan = P_DEATH;
             died();
@@ -2576,9 +2576,9 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
         /* Struck stone: up it goes, and it takes three times the damage. */
         e->vel[1] = 23.0f; e->vel[0] = kind == HIT_HEAVY ? 12.0f : 4.0f;
         goyle_state(G_STONE_HIT);
-        if (mortal) e->health = (signed char)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 3 : 6));
+        if (mortal) e->health = (short)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 3 : 6));
     } else {
-        if (mortal) e->health = (signed char)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2));
+        if (mortal) e->health = (short)(e->health - (kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2));
         if (e->health > 0 && e->goyle_split <= 0.0f && e->goyle_splits > 0 && goyle_count() < GOYLE_MAX_OUT && ai_unit() < 0.75f) {
             --e->goyle_splits;
             e->goyle_split = 300.0f;
@@ -3804,7 +3804,7 @@ static void nevan_hit_glue(HitKind kind, float from_x, float from_z) {
         e->plan = P_DEATH;
         died();
     }
-    e->health = (signed char)b->health;
+    e->health = (short)b->health;
     nevan_play(b->want, b->restart);
     b->restart = 0;
 }
@@ -3989,7 +3989,7 @@ static void beowulf_hit_glue(HitKind kind) {
         e->timer = 0.0f;
         died();
     }
-    e->health = (signed char)b->health;
+    e->health = (short)b->health;
     beowulf_play(b->want, b->restart);
     b->restart = 0;
 }
@@ -4139,7 +4139,7 @@ static void lady_hit_glue(HitKind kind) {
         e->timer = 0.0f;
         died();
     }
-    e->health = (signed char)b->health;
+    e->health = (short)b->health;
     lady_play(b->want, b->restart);
     b->restart = 0;
 }

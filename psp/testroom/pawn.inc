@@ -111,7 +111,7 @@ static void pawn_hit(HitKind kind) {
     fx_hit_spark(at);
     if (mortal) {
         int dmg = kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
-        e->health = (signed char)(e->health - dmg);
+        e->health = (short)(e->health - dmg);
         if (e->health <= 0) {
             int k;
             e->plan = P_DEATH;
