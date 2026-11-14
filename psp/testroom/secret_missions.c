@@ -123,16 +123,17 @@ static void crystal_start(void) {
 }
 
 /* ---- Secret Mission 6's red orbs: every item record in 605 (tools/gen_rooms.py write_secret_orbs), most of them in
- * the air over the drop, where only Air Raid reaches (player.c). Orbs fly to him once he's close: here, any within
- * 2.5 m of his chest are his [an estimate]. The time limit isn't decoded: none is applied. */
+ * the air over the drop, where only Air Raid reaches (player.c). CItemOrb's update (FUN_002f2fa0) sets an orb
+ * homing once it's within 300 cm of his position (+0x50, his feet), flying to him at up to 50 cm a frame, and
+ * takes it within 50: here, within 300 cm it's his. The time limit isn't decoded: none is applied. */
 static unsigned char orb_taken[SECRET_ORB_COUNT];
 static int orbs_left;
 static void orbs_start(void) { int k; for (k = 0; k < SECRET_ORB_COUNT; ++k) orb_taken[k] = 0; orbs_left = SECRET_ORB_COUNT; }
 static void orbs_update(const SmView *v) {
     int k;
     for (k = 0; k < SECRET_ORB_COUNT; ++k) {
-        float dx = secret_orbs[k][0] - v->x, dz = secret_orbs[k][2] - v->z, dy = secret_orbs[k][1] - (v->y + 100.0f);
-        if (orb_taken[k] || dx * dx + dy * dy + dz * dz > 250.0f * 250.0f) continue;
+        float dx = secret_orbs[k][0] - v->x, dz = secret_orbs[k][2] - v->z, dy = secret_orbs[k][1] - v->y;
+        if (orb_taken[k] || dx * dx + dy * dy + dz * dz > 300.0f * 300.0f) continue;
         orb_taken[k] = 1;
         --orbs_left;
     }
