@@ -2217,7 +2217,16 @@ static float lift_y;
 static int pad_on;
 static float pad[3];
 #define PAD_RADIUS 220.0f
-#define LIFT_SPEED 400.0f              /* cm a second: an estimate, the game's isn't read */
+/* CStageSetLift (update FUN_003e43c0, by the set's type): type 2 (103) rises and falls 5 cm a frame
+ * (FUN_003e45b0 states 3 and 4); types 4 and 5 (113, 603, the riding lifts; FUN_003e4e40 state 3) climb 2.5, 2.3,
+ * 2.1, 1.9, 1.5 or 1.0 cm a frame by how many enemies are on it (FUN_003e5d30; six or more stop it) and drop back
+ * 8 cm a frame once Dante has fallen off (state 4). */
+#define LIFT_SPEED (5.0f * 60.0f)
+#define RIDING_FALL_SPEED (8.0f * 60.0f)
+static float riding_lift_speed(int aboard) {
+    static const float per_frame[6] = {2.5f, 2.3f, 2.1f, 1.9f, 1.5f, 1.0f};
+    return aboard >= 6 ? 0.0f : per_frame[aboard] * 60.0f;
+}
 #define LIFT_STEP 60.0f
 static const RoomLift *room_lift(void) { return lift_index >= 0 ? &room_lifts[lift_index] : 0; }
 /* Is (x, z) over the lift's top? */
@@ -2474,10 +2483,18 @@ static void draw_box(float x, float y0, float y1, float z, float hx, float hz, f
 static float goal_spin;
 /* Breakable props (rooms_runtime.h's room_breakables): hits left each, and broken ones stay broken this mission. */
 static short breakable_hits[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+/* Red orb crystals (CStageSetORBreak: hit FUN_00366f10, update FUN_00366d50): the first hit starts a 720-frame
+ * clock; each hit adds its damage to a total, and at most every 30 frames a hit pays total x 0.1 x the table at
+ * 0x5b1800 (1, 1.5, 2, 3, 5, 5, 8 by total / 750) in red orbs; it cracks at 100-400 frames and shatters at 720.
+ * The damage is the port's (42 a light hit, 84 heavy): Dante's real attack power isn't read. */
+static float crystal_clock[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+static float crystal_total[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+static float crystal_cool[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
+
 static unsigned char breakable_broken[ROOM_BREAKABLE_COUNT > 0 ? ROOM_BREAKABLE_COUNT : 1];
 static void breakables_reset(void) {
     int i;
-    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) { breakable_hits[i] = room_breakables[i].hits; breakable_broken[i] = 0; }
+    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) { breakable_hits[i] = room_breakables[i].hits; breakable_broken[i] = 0; crystal_clock[i] = -1.0f; crystal_total[i] = 0.0f; crystal_cool[i] = 0.0f; }
 }
 static int m8_goo_door(const RoomDoor *d) {
     int i;
@@ -2504,6 +2521,15 @@ static void breakables_enter(int room) {
         if (room_story[i].room == room && mission_choice.mission >= room_story[i].first && mission_choice.mission <= room_story[i].last)
             stage_hide_group(room_story[i].tag);
 }
+static void crystals_update(float dt) {
+    int i;
+    for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
+        if (!room_breakables[i].crystal || breakable_broken[i] || crystal_clock[i] < 0.0f) continue;
+        crystal_clock[i] += dt * 60.0f;
+        if (crystal_cool[i] > 0.0f) crystal_cool[i] -= dt * 60.0f;
+        if (crystal_clock[i] >= 720.0f) { breakable_broken[i] = 1; stage_hide_group(room_breakables[i].number); }
+    }
+}
 static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;
     float fx = sinf(player->yaw), fz = cosf(player->yaw);
@@ -2529,8 +2555,21 @@ static void breakable_hit(const Player *player, float reach, int kind) {
             float at[3] = {b->x, b->y + b->height * 0.5f, b->z};
             fx_hit_spark(at);
         }
+        if (b->crystal) {
+            static const float pay[7] = {1.0f, 1.5f, 2.0f, 3.0f, 5.0f, 5.0f, 8.0f};
+            int band;
+            if (crystal_clock[i] < 0.0f) crystal_clock[i] = 0.0f;
+            crystal_total[i] += kind == HIT_LIGHT || kind == HIT_AIR ? 42.0f : 84.0f;
+            band = (int)(crystal_total[i] / 750.0f);
+            if (band > 6) band = 6;
+            if (crystal_cool[i] <= 0.0f) {
+                int n = (int)(crystal_total[i] * 0.1f * pay[band]);
+                if (n > 0) orbs_burst(b->x, b->y + b->height * 0.5f, b->z, n);
+                crystal_cool[i] = 30.0f;
+            }
+            continue;   /* it shatters on its clock (crystals_update) */
+        }
         breakable_hits[i] -= kind == HIT_LIGHT || kind == HIT_AIR ? 1 : 2;
-        if (b->crystal) orbs_burst(b->x, b->y + b->height * 0.5f, b->z, b->orbs[0]);   /* a crystal pays each hit */
         if (breakable_hits[i] > 0) continue;
         breakable_broken[i] = 1;
         stage_hide_group(b->number);
@@ -2820,8 +2859,8 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
 }
 
 /* Parts of the room that hurt on touch (room_hazards: 205's and 207's bladed pillars). Touching one hurts once
- * per its interval (60 frames), as an enemy's hit, from its middle. The 700 is the Seven Hells' light fallback,
- * an estimate: the sets' damage isn't read. */
+ * per its interval (60 frames), as an enemy's hit, from its middle, for its kind's attack record's damage
+ * (CStageSetCollision, FUN_00399c70: the record at 0x5b63d0 + kind * 0x40; kind 0, both rooms' pillars, is 900). */
 static float hazard_wait;
 static void hazards_update(float dt, Player *player) {
     int i;
@@ -2833,7 +2872,7 @@ static void hazards_update(float dt, Player *player) {
         if (player->y + 170.0f < h->y || player->y > h->y + h->height) continue;
         {
             float chest[3] = {player->x, player->y + 110.0f, player->z};
-            if (combat_player_hit_damage(&combat, player, h->x, h->z, 0, 700.0f)) fx_hit_spark(chest);
+            if (combat_player_hit_damage(&combat, player, h->x, h->z, 0, h->damage)) fx_hit_spark(chest);
         }
         hazard_wait = h->interval;
         return;
@@ -2881,6 +2920,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
     hazards_update(dt, player);
+    crystals_update(dt);
     if (mission_choice.mission == 7) {
         static int m7_tick;
         m7_update(dt);
@@ -2973,7 +3013,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (!line[0] || sm_active()) sm_status(line, sizeof(line));
             float ep[3] = {0, 0, 0};
             if (enemy_active()) enemy_position(ep);
-            if ((f = fopen(path, "a"))) { fprintf(f, "%d ak=%d dv=%d mw=%d att=%d jm=%d og=%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d e=%.0f,%.0f,%.0f %s\n", m_tick, player->air_kind, player->devil, player->melee_weapon, player->attacking, player->jump_motion, player->on_ground, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], ep[0], ep[1], ep[2], line); fclose(f); }
+            if ((f = fopen(path, "a"))) { fprintf(f, "%d orbs=%d ak=%d dv=%d mw=%d att=%d jm=%d og=%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d e=%.0f,%.0f,%.0f %s\n", m_tick, shop_state.red_orbs, player->air_kind, player->devil, player->melee_weapon, player->attacking, player->jump_motion, player->on_ground, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], ep[0], ep[1], ep[2], line); fclose(f); }
         }
     }
     if (focus_cmp && lift && (testroom_frame % 30) == 0) vergil_boss_note("lift", player->x, player->y, player->z, lift_y);
@@ -2989,7 +3029,10 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             lift_rearm = 0;
         }
         if (lift_on && on) {
-            lift_y += lift_dir * 750.0f * dt;   /* [estimate] about 8 s for 100's shaft, as the script's sounds run */
+            /* CStageSetLift types 9 (137, FUN_003e5ed0) and 10 (100, FUN_003e6410): down 8 cm a frame; up 5 (137) or
+             * 10 (100). */
+            float speed = lift_dir < 0 ? 8.0f : room_number(mission_room) == 137 ? 5.0f : 10.0f;
+            lift_y += lift_dir * speed * 60.0f * dt;
             if (lift_y <= lift->low) { lift_y = lift->low; lift_on = 0; }
             if (lift_y >= lift->high) { lift_y = lift->high; lift_on = 0; }
             player->y = lift_y;
@@ -3018,15 +3061,15 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             door_prompt_time = 1.0f;
             if (pressed & (PSP_CTRL_CIRCLE | PSP_CTRL_SQUARE | PSP_CTRL_TRIANGLE)) lift_on = 1;
         }
-        /* A riding lift holds still while there's a wave on it. */
+        /* A riding lift slows with each enemy on it (the room's living ones stand in for FUN_003e5d30's count). */
         int riding = lift->high - lift->low > 3000.0f;
         if (riding && lift_on && lift_y > lift->low + 1500.0f) enemy_drop_below(lift_y - 1500.0f);   /* fell off the lift */
-        if (lift_on && on && lift_y < lift->high && !(riding && enemy_alive_count() > 0)) {
-            lift_y += (riding ? 250.0f : LIFT_SPEED) * dt;
+        if (lift_on && on && lift_y < lift->high && (!riding || riding_lift_speed(enemy_alive_count()) > 0.0f)) {
+            lift_y += (riding ? riding_lift_speed(enemy_alive_count()) : LIFT_SPEED) * dt;
             if (lift_y > lift->high) lift_y = lift->high;
             player->y = lift_y;
         } else if (lift_on && !on && lift_y > lift->low) {
-            lift_y -= LIFT_SPEED * dt;
+            lift_y -= (riding ? RIDING_FALL_SPEED : LIFT_SPEED) * dt;
             if (lift_y < lift->low) lift_y = lift->low;
         }
         stage_set_lift(lift_y - lift->low);
