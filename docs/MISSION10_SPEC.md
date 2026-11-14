@@ -19,5 +19,27 @@ pose renderer through thin hooks. `tools/tests/dullahan_logic.c` checks frontal 
 immortality and death. PPSSPP `pM_m10_dullahan_close`, frame 150/300, shows the native animated shield.
 
 Mission registration includes the exact M10 groups, first room/start, clear room, native key-item
-positions and use areas. Returning-to-209 conditional waves and moving bridge implementation are
-still in progress. Full Mission Clear verification follows once these gates are complete.
+positions and use areas. A return from 206 to 209 runs group 2; the initial visit holds that script. The less common 210-return
+group-1 variant is not selected yet.
+
+Lake/bridge gimmicks live in `mission10.c`. Using the Stone Mask removes native collision set 101 and
+raises the lake's SCM bridge by 829.36 cm over 600 frames (the endpoint delta in native st206's motion).
+The Neo-Generator automatically reacts in 201 EVE area 1, returns Dante to native start 0, and rotates
+the two major native bridge arms about their authored pivots (1250,3750) / (3750,1250). Control area 0
+then toggles the bridge. Native arms are tagged 240/241, lake bridge 242; the stage's small generic
+rigid-group API leaves other missions' geometry unchanged. Bridge rotation is a 45-degree rigid
+approximation over 600 frames; gears, articulated arm details and authored easing are not sampled.
+Their deck collision uses an approximate diagonal strip / lake ramp, rather than animated HITS.
+Optional 206 item 31, the story cameras and the bridge's long helper-thread choreography are omitted.
+
+Clear requires entering the actual 211 EVE area 0, not just entering the room. The first combined
+PPSSPP `pM_m10_route` run recorded `M10_CLEAR.TXT`: mission=10 mask=2 generator=2 room=211. It scripts
+placements and minion clears to test item gates and event connectivity, then walks the powered bridge
+using normal movement (frame 2500 shows Dante at 211's door). Host tests in `mission10_logic.c` check
+conditional cave entry, powered deck collision, toggle/reset, and the native clear-area polygon.
+
+Final regression: `pM_m10_verified` repeats the complete route after adding the Neo-Generator arrival
+warp and the repeatable bridge control. A newly created `M10_CLEAR.TXT` confirms mask=2, generator=2,
+room=211. Host shield/death and bridge-toggle/clear-polygon tests pass. Captures are checked into
+`docs/screenshots/mission10_clear.png` and `mission10_dullahan.png`. Native group data and key-item
+placements were decoded under the requested hdref lock.

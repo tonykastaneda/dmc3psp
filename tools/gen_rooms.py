@@ -101,7 +101,7 @@ MISSIONS = {
     # guess from the walkthrough (Enigmas in 204, demons by the blades in 205 and 207).
     9: ("201", None, {"202": [0], "204": [0], "205": [0], "207": [0], "208": [0], "209": [0], "210": [0]}),
     # EventTbl10 (GDATA 248): return from Limestone Cavern with the Neo-Generator.
-    10: ("209", None, {"205": [0], "202": [1], "207": [1]}),
+    10: ("209", None, {"209": [2], "205": [0], "202": [1], "207": [1]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2, 7: 2, 10: 2}
