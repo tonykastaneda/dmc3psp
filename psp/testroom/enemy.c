@@ -2481,6 +2481,8 @@ static void jester_hit(HitKind kind) {
 #define AR_STATUE_STATE 100
 static int ar_statue_motion[2];
 static ArBrain ar_brains[2];
+static float ar_formation_time;            /* the pair's controller: frames left on this formation */
+static int ar_formation = 5;
 static unsigned short ar_dante_moves;   /* counts Dante's melee moves (enemy_dante_attack) */
 void enemy_dante_attack(int action, int gun) { (void)action; if (!gun) ++ar_dante_moves; }
 
@@ -2570,6 +2572,7 @@ static void ar_update(float f, float px, float py, float pz) {
             float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
             fx_dust(at); fx_explosion(at);
             ar_brain_reset(b, e->kind == ENEMY_AGNI ? 0 : 1);
+            ar_formation_time = 0.0f;
             ar_go(AR_IDLE);
         }
         return;
@@ -2588,6 +2591,20 @@ static void ar_update(float f, float px, float py, float pz) {
     s.brother_alive = bro != 0;
     s.brother_state = bro ? bro->action : -1;
     s.brother_attacking = bro && bro->action >= 42 && bro->action <= 60;
+    s.flank = 0;
+    if (bro) {
+        /* FUN_003acae0: the angle at Dante between the two; 0x1400 and 0x4800 of 65536 a circle. */
+        float da = wrap_angle(atan2f(e->pos[0] - px, e->pos[2] - pz) - atan2f(bro->pos[0] - px, bro->pos[2] - pz));
+        float off = PI - fabsf(da);
+        s.flank = off < 0x1400 * (2.0f * PI / 65536.0f) ? 0 : off < 0x4800 * (2.0f * PI / 65536.0f) ? (da > 0.0f ? 1 : 3) : (da > 0.0f ? 2 : 4);
+        if (e->kind == ENEMY_AGNI && (ar_formation_time -= f) <= 0.0f) {
+            /* The pair's controller: the next formation every 1800 frames, the healthier brother first. */
+            ar_formation_time = 1800.0f;
+            ar_formation = ar_formation == 5 ? 6 : 5;
+            if (e->ar_health >= bro->ar_health) ar_pair_formation(&ar_brains[0], &ar_brains[1], ar_formation);
+            else ar_pair_formation(&ar_brains[1], &ar_brains[0], ar_formation);
+        }
+    }
     ar_brain_tick(b, &s, f);
     in = ar_state_info(e->action);
     if (e->ar_seen != ar_dante_moves) {

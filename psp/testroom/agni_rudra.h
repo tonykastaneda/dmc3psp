@@ -24,6 +24,8 @@ typedef struct {
     float move_wait;     /* +0x2e24 / +0x2e28: frames before another move */
     float high;          /* +0x2f38: frames Dante's been 300 above */
     float charged;       /* +0x2eec: frames left on the charged sword (+0x2ee4) */
+    unsigned short flags; /* +0x2ede, from the pair's formation (0x5cf6a0): role in bits 0-3, 0x10 / 0x20 which way
+                            to flank, 0x100 / 0x200 no attack permission, 0x1000 stand */
 } ArBrain;
 
 /* What the brain sees. */
@@ -31,6 +33,7 @@ typedef struct {
     float distance, above;   /* to Dante: on the ground, and his height over them */
     float health_fraction;
     int brother_alive, brother_state, brother_attacking;
+    int flank;               /* +0x2ee3 (FUN_003acae0): 0 across Dante from his brother, 1 / 3 part way, 2 / 4 near */
 } ArSense;
 
 const ArStateInfo *ar_state_info(int state);
@@ -43,6 +46,9 @@ int ar_brain_decide(ArBrain *b, const ArSense *s, int state);
 void ar_brain_charged(ArBrain *b);
 /* A guard turned a blow (22, 24, 26 set +0x2de6 = 2): he may counter at once, from the second table. */
 void ar_brain_counter(ArBrain *b);
+/* The pair's controller (class 27, FUN_004810f0 / 004811b0) at rank 0: every 1800 frames the next formation, 6
+ * then 5; the healthier brother takes the first slot's flags. Fills both brains' flags. */
+void ar_pair_formation(ArBrain *first, ArBrain *second, int formation);
 /* A dash record: speeds by phase (0x5b7600; start, top, held frames, slowing a frame). */
 void ar_dash(int dash, float *start, float *top, float *hold, float *slow, int *sideways);
 

@@ -65,6 +65,7 @@ void ar_brain_reset(ArBrain *b, int set) {
     b->move_wait = 0.0f;
     b->high = 0.0f;
     b->charged = 0.0f;
+    b->flags = 0x12;
 }
 
 void ar_brain_charged(ArBrain *b) { b->charged = 1800.0f; }
@@ -81,7 +82,7 @@ void ar_brain_tick(ArBrain *b, const ArSense *s, float f) {
     /* FUN_003af5c0: the attack timer runs (2 - health fraction) a frame, faster for the survivor and the
      * nearer, slower while his brother attacks (he's the one with permission then: flag 0x100). */
     if (b->may_attack) return;
-    if (s->brother_alive && s->brother_attacking) return;
+    if (s->brother_alive && (b->flags & 0x300)) return;   /* the formation keeps him from attacking */
     rate = (2.0f - s->health_fraction) * f;
     if (s->brother_alive && s->brother_state == 36) rate *= 2.5f;
     if (b->set == 2) rate *= 2.0f;
@@ -136,9 +137,59 @@ static int pick_attack(ArBrain *b, const ArSense *s) {
     return -1;
 }
 
-/* FUN_003ad180 (alone; the role +0x2ee2 is 1 then). The paired picker (FUN_003ad5d0) also weighs the flank
- * between the brothers and a role the pair's controller hands out; with role 1 its choices are these. */
+void ar_pair_formation(ArBrain *first, ArBrain *second, int formation) {
+    /* 0x5cf600 records 5 and 6: {0x12, 0x213} and {0x22, 0x223}. */
+    first->flags = formation == 5 ? 0x12 : 0x22;
+    second->flags = formation == 5 ? 0x213 : 0x223;
+}
+
+/* +0x2ee2: the role, [2,0,1,2,3,4][flags & 15] (0x6195d8). */
+static int role(const ArBrain *b) { static const unsigned char r[6] = {2, 0, 1, 2, 3, 4}; return (b->flags & 15) < 6 ? r[b->flags & 15] : 1; }
+
+/* FUN_003ad5d0's three ways round Dante, by the flank. */
+static int round_a(int flank) { static const signed char t[5] = {3, 9, 15, 6, 14}; return t[flank]; }
+static int round_c(int flank) { static const signed char t[5] = {4, 10, 15, 7, 14}; return t[flank]; }
+static int round_b(ArBrain *b, int flank) {
+    static const signed char t[5] = {-1, 8, 15, 5, 14};
+    if (flank) return t[flank];
+    if (b->flags & 0x10) return 5;
+    if (b->flags & 0x20) return 8;
+    b->move_wait = 0.0f;
+    return 2;
+}
+
+/* FUN_003ad5d0, with his brother up. */
+static int pick_move_paired(ArBrain *b, const ArSense *s) {
+    int r = role(b), f = s->flank;
+    switch (zone(s->distance)) {
+    case 4:
+        if (r < 3) return 11;
+        if (b->move_wait > 0.0f) return -1;
+        b->move_wait = 12.0f;
+        return r < 4 ? round_a(f) : round_b(b, f);
+    case 3:
+        if (r < 2) return 12;
+        if (b->move_wait > 0.0f) return -1;
+        b->move_wait = 12.0f;
+        return r < 3 ? round_a(f) : r < 4 ? round_b(b, f) : round_c(f);
+    case 2:
+        if (r >= 4) return 13;
+        if (b->move_wait > 0.0f) return -1;
+        b->move_wait = 12.0f;
+        return r == 3 ? round_c(f) : r < 2 ? round_a(f) : round_b(b, f);
+    case 1:
+        if (r >= 3) return 13;
+        if (b->move_wait > 0.0f) return -1;
+        b->move_wait = 12.0f;
+        return r == 2 ? round_c(f) : round_b(b, f);
+    default:
+        return r < 2 ? (r ? 4 : -1) : 13;
+    }
+}
+
+/* FUN_003ad180 (alone; the role +0x2ee2 is 1 then). */
 static int pick_move(ArBrain *b, const ArSense *s) {
+    if (s->brother_alive) return pick_move_paired(b, s);
     switch (zone(s->distance)) {
     case 4: return 11;
     case 3: case 2: return 12;
