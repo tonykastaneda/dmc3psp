@@ -591,10 +591,10 @@ port). The award, a Blue Orb Fragment, is only named.
 | 4 | 603 | Ride the elevator to the top | 113's riding lift (`LIFT_TOPS`: to 4225); its four waves hold it |
 | 5 | 604 | Break every prop within 40 seconds | The room's breakables |
 | 6 | 605 | Collect every red orb in time | Not in: the orbs float where only Air Raid reaches |
-| 7 | 606 | Reach the Blue Orb Fragment within 30 seconds | Its area 1. Not cleared yet: running there takes about 43 s in the port, and the ways the game expects (Devil Trigger's speed, riding an enemy) aren't in; the time-out fails it as it should |
+| 7 | 606 | Reach the Blue Orb Fragment within 30 seconds | Its area 1. Not cleared yet: the shortest route on the port's floor is about 160 m, about 29 s even at Devil Trigger's 1.1x run (already in), and tests stall at the room's neck at about 21 s; riding an enemy isn't in. The time-out fails it as it should |
 | 8 | 607 | Beat every enemy | 5 Arachnes, 2 Hell Vanguards |
 | 9 | 608 | Let no enemy escape the wagons | Not in: the wagons (TRUCK) |
-| 10 | 609 | Solve the crystal puzzle | Not in: CRYSTAL isn't decoded |
+| 10 | 609 | Solve the crystal puzzle | CStageSetCrystal, decoded: one of layouts 2-7 at random (the set's "no 2"), read from the game's executable at build time (`tools/gen_rooms.py` `write_crystals`). The beam leaves the start crystal on its heading, cell by cell on a 20 x 20 grid of 2 m cells; relays turn it, the cover stops it, the end crystal clears the mission. Melee smashes relays and the cover; striking crest switch 100 puts every crystal back. Crystals are glows, the beam a line |
 | 11 | 610 | Avoid the spikes and reach the Blue Orb | Its area 2; the spikes (NEEDLE) aren't in |
 | 12 | 611 | Reach the Blue Orb Fragment | Its area 0; the moving blocks aren't in |
 

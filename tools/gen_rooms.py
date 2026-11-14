@@ -316,6 +316,32 @@ SEAL_BOX = ((0.0, 0.0, -50.0), (200.0, 180.0, 50.0))   # local centre, half size
 SEAL_BOARD = (154.8, -218.1, 203.7)                     # model 17: half width, bottom, top
 
 
+def write_crystals(iso_path, out):
+    """CStageSetCrystal's eight layouts (the light-beam puzzles: Mission 9's 203, Secret Mission 10's 609), read from
+    the player's SLUS_213.61: the pointers at 0x5bef40, each to up to 24 records {type, dir, x, y} (shorts; type 0
+    the start, 1 the end, 2 a relay, 3 the cover, 4 the end of the list). FUN_0041f460 lays them out, FUN_0041fbf0
+    runs the beam."""
+    with Iso9660(iso_path) as iso:
+        elf = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
+    phoff, count = struct.unpack_from("<I", elf, 0x1c)[0], struct.unpack_from("<H", elf, 0x2c)[0]
+    segs = [struct.unpack_from("<6I", elf, phoff + k * 32) for k in range(count)]
+    def off(va):
+        return next(o + va - v for t, o, v, p, fs, ms in segs if t == 1 and v <= va < v + fs)
+    rows = []
+    for layout, ptr in enumerate(struct.unpack_from("<8I", elf, off(0x5bef40))):
+        recs = []
+        for j in range(24):
+            kind, direction, x, y = struct.unpack_from("<4h", elf, off(ptr) + 8 * j)
+            if kind == 4:
+                break
+            recs.append(f"{{{kind},{direction},{x},{y}}}")
+        rows.append("{" + str(len(recs)) + ",{" + ",".join(recs or ["{0,0,0,0}"]) + "}}")
+    out.write_text("/* Generated from the player's SLUS_213.61 by tools/gen_rooms.py (write_crystals). */\n"
+                   "typedef struct { short type, dir, x, y; } CrystalRecord;\n"
+                   "typedef struct { short count; CrystalRecord recs[24]; } CrystalLayout;\n"
+                   "static const CrystalLayout crystal_layouts[8] = {" + ",".join(rows) + "};\n")
+
+
 def parse_hazards(game_text):
     """COLLISION sets that hurt Dante on touch ("atk true", "platk true": 205's and 207's bladed pillars): their
     cylinders, as (x, y, z, height, radius, interval frames). A cylinder is "cx, cy, cz h, r" around its pos (the
@@ -725,6 +751,7 @@ def main():
         lines.append(f'    [{mission - 1}] = {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
     lines.append("};")
     args.header.write_text("\n".join(lines) + "\n")
+    write_crystals(args.iso, args.header.parent / "crystal_runtime.h")
 
 
 if __name__ == "__main__":
