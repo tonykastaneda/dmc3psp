@@ -58,6 +58,8 @@ SLOTS.update({"114": 380, "115": 384, "127": 432, "134": 460, "135": 464, "136":
               "142": 492, "144": 500})
 # Mission 9 (Forbidden Land): room 2xx is GDATA 512 + 4 x (n - 200).
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in range(201, 212)})
+# Mission 11 (Forbidden Land 1F to the Torture Chamber).
+SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (212, 213, 214, 217, 239, 240)})
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -102,11 +104,16 @@ MISSIONS = {
     9: ("201", None, {"202": [0], "204": [0], "205": [0], "207": [0], "208": [0], "209": [0], "210": [0]}),
     # EventTbl10 (GDATA 248): return from Limestone Cavern with the Neo-Generator.
     10: ("209", None, {"209": [2], "205": [0], "202": [1], "207": [1]}),
+    # Mission 11, from EventTbl11 (GDATA 249): 212 Gears of Madness (group 0, 2 Enigmas) -> 213 Altar of Evil Pathway
+    # (group 1, Soul Eaters) -> 214 Altar of Evil (the slide blocks, then group 2: a Hell Vanguard and Soul Eaters;
+    # psp/testroom/mission11.c) -> 239 the Temperance Wagon -> (216, the wagon ride: a stand-in, see EXTRA_DOORS) ->
+    # 240 -> 217 Torture Chamber: Beowulf (group 0, EST 51).
+    11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
-FIRST_START = {5: 2, 7: 2, 10: 2}
+FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
+CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211", 11: "217"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -177,6 +184,9 @@ ITEM_GATES += [(10, "201", "211", 49)]
 # Doors that aren't in a room's door list: 142's area 0 plays demo 17, whose AFTER_DEMO is goto_room 144, 0.
 # (room, box centre and full sizes as BoxIn, next room, its start)
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}
+# Mission 11: 239's area 0 boards the wagon (its door 1, to 216, is an event door). The ride itself (216's TRUCK set,
+# its clock and its ambushes) isn't in: the wagon arrives at once, at 240's start 3, as the ride's end does.
+EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3)]
 
 # ---- Mission 12, "Hunter and hunted", from EventTbl12 (GDATA 250; docs/GAME_FLOW.md). After demo 31 it starts in 217
 # (Torture Chamber) at start 1 -> 240 -> the Temperance Wagon ride (216: the wagon's waves 2-4) -> 239 -> 214 (group 1)
