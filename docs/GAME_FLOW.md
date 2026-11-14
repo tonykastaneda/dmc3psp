@@ -305,6 +305,35 @@ The rooms 201/203/204/206/211 have no event-script enemy spawn. Room 211's EST g
 other missions and must not run for M10. The bridge and lake cutscene choreography is a separate
 implementation concern from the decoded route and item gates above.
 
+### Mission 11: "Revenge"
+
+From EventTbl11 (GDATA 249; `orchestration/evt/evt_m11.txt` locally). After demo 27 it starts in 212 at start 1.
+Rooms 212-217 are GDATA 560-580, 239 and 240 are 668 and 672. Classes: EST 31 Enigma, EST 34 class 16 (em016,
+pack 11: the Soul Eater, from the walkthrough), EST 26 Hell Vanguard, EST 51 class 33 (em030, pack 21: Beowulf).
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 212 | Gears of Madness | Group 0: 2 Enigmas. Door 1 (to 211) disabled; door 0 leads on |
+| 213 | Altar of Evil Pathway | Area 0 (x 3200-3300) locks both doors and starts group 1: 5 Soul Eaters |
+| 214 | Altar of Evil | Two SLIDE blocks (300, 301) bound to flags 32 and 33: pushed by melee into their holes, each counts (counter 5). With both, gimmick 200 opens the hidden passage, door 1 (to 239) is enabled and sealed, and group 2 runs: a Hell Vanguard and Soul Eaters (Easy 3, Normal 2). Cleared, the doors open |
+| 239 | Temperance Wagon | No section. Area 0 boards the wagon (door 1, an event door, to 216) |
+| 216 | (the wagon ride) | A TRUCK set on rails, a 36000-frame clock; as it runs, object waves and groups 0 (5 Prides) and 1 (3 Prides, a Wrath), then on to 240 start 3 (or 239 start 3, riding back) |
+| 240 | (the far platform) | Arriving from 216, a camera; area 0 rides back. Door 1 (up the stairs) to 217 |
+| 217 | Torture Chamber | Area 0 plays demo 28, then group 0: Beowulf. Beaten, demo 29; area 0 again plays demo 30, which clears the mission |
+
+In the port: the route plays from 212 to Mission Clear in PPSSPP. Stand-ins and estimates:
+
+- **214's slide blocks** (`mission11.c`): melee from behind pushes a block along -z (300 x its zure a hit), and within
+  100 cm of its hole it drops in. They're drawn as stone boxes and don't stop Dante. With both in, STAY 200 is hidden
+  for the passage, door 1 opens and group 2 runs; until then doors 0 and 1 are held, as block 1 does.
+- **The wagon ride (216)** isn't in: 239's area 0 is a door straight to 240's start 3 (`EXTRA_DOORS`), so its clock,
+  its object waves and groups 0 and 1 are skipped.
+- **Beowulf** (em030, GDATA 135, pack 21) has his own model and motions (`beowulf_boss.c`): the three punches, a
+  charge on all fours, a leaping rush, a stomp that sends a pillar rolling at Dante, and a volley of light feathers
+  after his body flashes; super armour, a gauge staggers him. Which motion is which is read from their root paths;
+  timings, health and damage are estimates, and the pillars are glows that can't be broken.
+- **Soul Eaters** (class 16, em016) aren't ported and spawn as Prides. Mission Clear comes as Beowulf falls, not by
+  demo 30 at the shiny object.
 
 ### Mission 13: "Chaos' warm welcome"
 
