@@ -189,3 +189,12 @@ still use the documented estimates. The conservative 1650-cm arena radius, fixed
 counter, current DT body reuse and weapon attachment remain port estimates pending the form update.
 
 `run_vergil_variants.py` adds M20 HP/DT/Force Edge/Judgment Cut checks to the M7/M13 regression checks.
+
+M20 DT form follow-up: the earlier chunk-51 stand-in was a Beowulf body. Variant 2's Yamato DT
+setup (`4d0d60`, `4d3130`, `4e5ea0`) uses body **15**, with attachments **16/17/18**, and texture
+bank **14**. These are now exported separately, appended after the existing parts and rendered
+only for M20 DT. The 24-bone body follows the native motion sample; the 15/4/31-bone attachments
+use authored rest poses, so their native cloth drivers remain an approximation. M7/M13 mesh choices
+are unchanged, and invisible new parts are not skinned for those fights. Force Edge now has its
+own pose, with native carry record `5dc160` (bone 14) and draw record `5dc130` (bone 13), replacing
+the shared Yamato pose. Draw-mode selection by action range is still an approximation.

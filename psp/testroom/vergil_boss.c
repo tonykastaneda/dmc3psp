@@ -33,7 +33,7 @@
 extern unsigned int enemy_ai_random(void);
 extern int testroom_frame;
 
-enum { PART_BODY, PART_COAT, PART_YAMATO, PART_SCABBARD, PART_BEOWULF, PART_DT_BODY, PART_FORCE_EDGE };
+enum { PART_BODY, PART_COAT, PART_YAMATO, PART_SCABBARD, PART_BEOWULF, PART_DT_BODY, PART_FORCE_EDGE, PART_M20_DT_BODY, PART_M20_DT_WINGS, PART_M20_DT_DETAIL, PART_M20_DT_CLOTH };
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK };
 
 /* AI states (+0xb9d4), from the switch in FUN_004d6770. */
@@ -72,7 +72,7 @@ static void *textures[VERGIL_TEXTURE_COUNT];
 static Transform body_pose[24], coat_pose[40], yamato_pose[2], scabbard_pose[7];
 static char trace_path[320];
 static int trace_on, boss_difficulty = 1, boss_variant;
-static Transform beowulf_pose[11];
+static Transform beowulf_pose[11], force_edge_pose[2], m20_wing_pose[15], m20_detail_pose[4], m20_cloth_pose[31];
 void vergil_boss_set_variant(int variant){boss_variant=variant>=0 && variant<=2?variant:0;}
 int vergil_boss_variant(void){return vb.variant;}
 int vergil_boss_devil(void){return vb.dt;}
@@ -649,12 +649,18 @@ static void evaluate_poses(void) {
     else memset(&current, 0, sizeof(current));
     if (vb.body.fade > 0.0f && vb.body.previous_motion >= 0)
         motion_sample(motion_get(vb.body.previous_motion), vb.body.previous_frame, &previous);
-    build_skeleton(&vergil_parts[PART_BODY], &current, vb.body.fade > 0.0f ? &previous : 0, vb.body.fade, 0, body_pose, 1);
+    build_skeleton(&vergil_parts[vb.variant==2 && vb.dt?PART_M20_DT_BODY:PART_BODY], &current, vb.body.fade > 0.0f ? &previous : 0, vb.body.fade, 0, body_pose, 1);
     /* The coat hangs from body bone 3 (its cloth is bound to the bone list's entry 3, as Dante's is);
      * drawn rigid [approximation: no cloth]. */
     memset(&current, 0, sizeof(current));
     build_skeleton(&vergil_parts[PART_COAT], &current, 0, 0.0f, &body_pose[3], coat_pose, 0);
     {int b;for(b=0;b<11;++b)beowulf_pose[b]=body_pose[vergil_beowulf_bodymap[b]];}
+    if(vb.variant==2 && vb.dt){
+        /* Native DT attachments; cloth uses authored rest poses until its drivers are ported. */
+        build_skeleton(&vergil_parts[PART_M20_DT_WINGS], &current,0,0,0,m20_wing_pose,0);
+        build_skeleton(&vergil_parts[PART_M20_DT_DETAIL], &current,0,0,0,m20_detail_pose,0);
+        build_skeleton(&vergil_parts[PART_M20_DT_CLOTH], &current,0,0,0,m20_cloth_pose,0);
+    }
     /* Scabbard in the left hand (0x5dc010: bone 13); Yamato in it (0x5dbfe0) or drawn in the right (0x5dc0a0). */
     attach(13, 19.0f, -0.5f, 11.0f, 0.0f, 3.84f, 0.0f, &at);
     build_skeleton(&vergil_parts[PART_SCABBARD], &current, 0, 0.0f, &at, scabbard_pose, 0);
@@ -675,10 +681,19 @@ static void evaluate_poses(void) {
     }
     if (vb.yamato_drawn) attach(9, -7.5f, -2.0f, 0.0f, 0.0f, 0.0f, 0.0f, &at);
     build_skeleton(&vergil_parts[PART_YAMATO], &current, 0, 0.0f, &at, yamato_pose, 0);
+    if(vb.variant==2){
+        /* 5dc160: carried on bone 14; 5dc130: drawn in the left hand (13). */
+        if(vb.action>=0x61 && vb.action<=0x71)attach(13,9,0,-1,0,.52359879f,0,&at);
+        else attach(14,15,10,20,-3.05432606f,-.87266463f,-1.57079625f,&at);
+        build_skeleton(&vergil_parts[PART_FORCE_EDGE],&current,0,0,&at,force_edge_pose,0);
+    }
 }
 static const Transform *part_transforms(int part) {
     switch (part) {
-    case PART_FORCE_EDGE:return yamato_pose;
+    case PART_FORCE_EDGE:return force_edge_pose;
+    case PART_M20_DT_WINGS:return m20_wing_pose;
+    case PART_M20_DT_DETAIL:return m20_detail_pose;
+    case PART_M20_DT_CLOTH:return m20_cloth_pose;
     case PART_BEOWULF:return beowulf_pose;
     case PART_COAT: return coat_pose;
     case PART_YAMATO: return yamato_pose;
@@ -731,11 +746,19 @@ static void draw_part(int part) {
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[part] + o->index_start, vertices[part]);
     }
 }
+static int part_visible(int i){
+    if(i==PART_BEOWULF)return vb.variant==1;
+    if(i==PART_FORCE_EDGE)return vb.variant==2;
+    if(i==PART_DT_BODY)return vb.variant==1 && vb.dt;
+    if(i>=PART_M20_DT_BODY)return vb.variant==2 && vb.dt;
+    if(i==PART_BODY || i==PART_COAT)return !vb.dt;
+    return 1;
+}
 void vergil_boss_draw(void) {
     int i;
     if (!vb.active || vb.hidden) return;
     evaluate_poses();
-    for (i = 0; i < VERGIL_PART_COUNT; ++i) if(i<4 || vb.variant>=1)skin_part(i);
+    for (i = 0; i < VERGIL_PART_COUNT; ++i) if(part_visible(i))skin_part(i);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     {
@@ -755,11 +778,7 @@ void vergil_boss_draw(void) {
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     for (i = 0; i < VERGIL_PART_COUNT; ++i) {
-        if(i==PART_BEOWULF && vb.variant!=1)continue;
-        if(i==PART_FORCE_EDGE && vb.variant!=2)continue;
-        if(i==PART_DT_BODY && vb.variant==0)continue;
-        if((i==PART_BODY || i==PART_COAT) && vb.dt)continue;
-        if(i==PART_DT_BODY && !vb.dt)continue;
+        if(!part_visible(i))continue;
         draw_part(i);
     }
     sceGuDisable(GU_ALPHA_TEST);

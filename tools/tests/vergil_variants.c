@@ -45,5 +45,7 @@ int main(void){int i,seen=0;
  assert(seen);set_state(S_JUDGMENT);vb.landed=0;
  for(i=0;i<400 && !vb.landed;++i)vergil_boss_update(1,2500,-208,2800,1);
  assert(vb.landed && vb.landed_damage==1000);
+ vb.dt=1;evaluate_poses();
+ for(i=PART_M20_DT_BODY;i<VERGIL_PART_COUNT;++i){int j;skin_part(i);for(j=0;j<vergil_parts[i].vertices;++j)assert(isfinite(vertices[i][j].x));}
  puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut passed");return 0;
 }
