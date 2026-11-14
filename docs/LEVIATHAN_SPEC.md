@@ -136,3 +136,12 @@ Full-health boss verification: `pM_m8_clear_guns` reached the Mission Clear
 screen through ordinary shotgun traces and native shield cycles. Positions
 were automated and Envies cleared to isolate the boss, with no injected boss
 damage or reduced HP. Capture: `analysis/testroom/pM_m8_clear_guns_menu.png`.
+
+Combined start-to-clear regression: `pM_m8_start_to_clear` starts in 300,
+breaks all five eyes, traverses the native goo-door route, waits for the
+Ignis wave, collects/uses Ignis, and kills the full-health Heart by shotgun.
+`M8_CLEAR.TXT`: mission=8, clears=1, ignis=2, eyes=31; Heart state=5, hp=0.
+The scene scripts positions and clears Envies; boss HP and bullet damage
+are unchanged. This verifies event connectivity and combat/clear integration,
+not a manual movement/combat playthrough. Screenshots are checked into
+`docs/screenshots/mission8_clear.png` and `mission8_chase.png`.
