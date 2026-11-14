@@ -2150,6 +2150,8 @@ static void start_camera(const Player *player, FollowCamera *camera) {
  * enemies and bosses (Cerberus, Gigapede, Vanguard, ...) are listed in docs/GAME_FLOW.md. */
 static int mission_room = ROOM_NONE, script_at;
 static int m8_boss_started;
+static float m20_ending_frames;
+static int m20_boss_defeated;
 static int m8_clears_seen;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
@@ -2406,6 +2408,7 @@ static void seal_update(float frames) {
 static int m8_goo_door(const RoomDoor *d);
 static int door_gated(const RoomDoor *d) {
     int i;
+    if(mission_choice.mission==20)return 1;
     if(mission_choice.mission==13 && (mission13_busy() || (room_number(mission_room)==228 && d->number==218)))return 1;
     if(mission_choice.mission==8 && mission_room>=0) {
         int number=atoi(rooms[mission_room].file+5);
@@ -2687,6 +2690,8 @@ static int script_run(float dt, float floor_y) {
         }
         switch (op->op) {
         case ROOM_OP_SPAWN:
+            /* M20's EST 55 variant 1 is Lady as an ally, not a boss target. */
+            if(mission_choice.mission==20 && room_number(mission_room)==12 && op->a==55)break;
             if(mission_choice.mission==2 && op->a==26) {
                 /* The pre-boss waves are over. Their still-drawing death actors
                  * do not belong in Vanguard's solo encounter. */
@@ -2854,6 +2859,11 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     int m6 = mission_choice.mission == 6, held = room_held() || (m6 && m6_script_held(room_number(mission_room)))
         || (mission_choice.mission == 11 && m11_script_held(room_number(mission_room)));
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
+    if(mission_choice.mission==20 && room_number(mission_room)==12){
+        /* EventTbl20 op 8c 13620 then wait 300; cinematic side effects omitted. */
+        m20_ending_frames+=dt*60;
+        if(m20_ending_frames>=13920){enemy_kill_all();return 1;}
+    }
     if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
     fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
@@ -3100,6 +3110,13 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
         }
     }
+    if(mission_choice.mission==20){
+        if(room_number(mission_room)==411 && vergil_boss_dying()){
+            m20_boss_defeated=1;m20_ending_frames=0;
+            enter_room(room_named("ROOM_012.BIN"),0,player,camera);
+        }
+        return 0; /* The timed ending, not the arena's dummy exit, clears M20. */
+    }
     if (info->clear_room == mission_room && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
@@ -3220,7 +3237,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
     vergil_boss_set_difficulty(choice->difficulty);
-    vergil_boss_set_variant(choice->mission==13?1:0);
+    vergil_boss_set_variant(choice->mission==20?2:choice->mission==13?1:0);
     geryon_boss_set_difficulty(choice->difficulty);
     doppelganger_boss_set_difficulty(choice->difficulty);
     arkham_boss_set_difficulty(choice->difficulty);
@@ -3254,6 +3271,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     items_reset(choice->mission);
     mission10_reset();
     mission13_reset(choice->difficulty);
+    m20_ending_frames=0;m20_boss_defeated=0;
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
@@ -3663,8 +3681,8 @@ int main(int argc, char *argv[]) {
                 }
                 /* Position-only automation: all damage still passes through gun
                  * traces or normal melee windows and native shield states. */
-                if(cmp_vr_auto_from>=0 && frames>=cmp_vr_auto_from && frames%45==0 && !vergil_boss_dying() && mission_mode && (mission_choice.mission==7 || mission_choice.mission==13)) {
-                    float p[3],cx=mission_choice.mission==13?2500:3500,cz=cx,dx,dz,d,h;
+                if(cmp_vr_auto_from>=0 && frames>=cmp_vr_auto_from && frames%45==0 && !vergil_boss_dying() && mission_mode && (mission_choice.mission==7 || mission_choice.mission==13 || (mission_choice.mission==20 && room_number(mission_room)==411))) {
+                    float p[3],cx=(mission_choice.mission==13 || mission_choice.mission==20)?2500:3500,cz=mission_choice.mission==20?3750:cx,dx,dz,d,h;
                     vergil_boss_position(p);dx=cx-p[0];dz=cz-p[2];d=sqrtf(dx*dx+dz*dz);
                     if(d<1){dx=0;dz=1;d=1;}player.x=p[0]+dx/d*350;player.z=p[2]+dz/d*350;player.y=p[1];
                     if(player_floor_fn && player_floor_fn(player.x,p[1]+150,player.z,0,&h))player.y=h;
@@ -3720,6 +3738,10 @@ int main(int argc, char *argv[]) {
                 if(focus_cmp && mission_choice.mission==13){
                     char path[320];FILE*r;path_in_game_dir(path,sizeof(path),"M13_CLEAR.TXT");r=fopen(path,"w");
                     if(r){fprintf(r,"mission=13 room=%d key=%d puzzle=%d broken=%u vergil_variant=%d hp=%.0f\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health());fclose(r);}
+                }
+                if(focus_cmp && mission_choice.mission==20){
+                    char path[320];FILE *r;path_in_game_dir(path,sizeof(path),"M20_CLEAR.TXT");r=fopen(path,"w");
+                    if(r){fprintf(r,"mission=20 room=%d boss_defeated=%d ending_frames=%.0f variant=%d hp=%.0f\n",room_number(mission_room),m20_boss_defeated,m20_ending_frames,vergil_boss_variant(),vergil_boss_health());fclose(r);}
                 }
                 if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;

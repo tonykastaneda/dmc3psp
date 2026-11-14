@@ -493,6 +493,24 @@ route above, start to Mission Clear.
 - The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
 - No cutscenes; demo 48's item 35 isn't given.
 
+### Mission 20: "Screaming souls"
+
+EventTbl20 (GDATA 258), decoded under the hdref lock to local `build/mission20_re/evt_m20.*`,
+plays demo 55, the start screen and demo 56 before entering room 411, start 0.
+Room 411 group 0 is one Vergil (EST 58, class 40), with EST op 8 [0,2] selecting variant 2.
+All five difficulty records use that variant; native HP is 10000. Dante starts at
+(2500.9,-208.1,4000.6), Vergil at (2500,-208,2400). Native arena centre is (2500,-200,3750).
+
+After his defeat: demos 57 and 58, then room 012 start 0, group 0. Easy/Normal's ending group
+contains Lady (EST 55, variant 1, an ally), 95 Prides (0), 2 Lusts (8), a Greed (12), a Gluttony (4)
+and a Vanguard (26). This is a timed ending sequence: op 8c [13620], op 7e [2], op 7e [3],
+wait 300, op 7e [4], then demos 59 and 60 and Mission Clear. The exact 8c/7e side effects remain
+undecoded; the numeric delay is recorded rather than assigning an unverified opcode name.
+
+In the port: room 411 runs variant 2, then automatically enters 012. Its native ending waves run
+with hostile Lady omitted (she is an ally here); the port treats 13620 + 300 as the ending delay
+before Mission Clear. No ending demos or credits. See `docs/MISSION20_SPEC.md` for verification
+and the boss/ending approximations.
 ### Mission 19: "Forces collide"
 
 Decoded from EventTbl19 (GDATA 257; `tools/event_dump.py <iso> 19 --out <dir>`). Demo 51 leads to 406 at start 0.
