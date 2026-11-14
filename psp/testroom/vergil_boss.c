@@ -61,7 +61,7 @@ static struct {
     ScriptPlayer body;
     int landed, landed_heavy;
     float landed_x, landed_z, landed_damage;
-    int tick, variant, dt, dt_unlocked, m13_chain;
+    int tick, variant, dt, dt_unlocked, m13_chain, m20_low;
     float dt_left,dt_cooldown, cut[3];
 } vb;
 
@@ -319,6 +319,10 @@ static void set_action(int action) {
 }
 static int current_action(void) { return vb.body.done ? ACT_DONE : vb.action; }
 static void set_state(int state) {
+    /* 4dee00 ends M20 DT at a state boundary, not halfway through an attack. */
+    if(vb.variant==2 && vb.dt && vb.dt_left<=0 && state!=S_DT){
+        vb.dt=0;vb.dt_cooldown=2700;trace("dt_end");
+    }
     vb.previous_state = vb.state;
     vb.state = state;
     vb.step = 0;
@@ -404,7 +408,7 @@ static void ai_step(float f) {
     switch (vb.state) {
     case S_THINK:                                   /* FUN_004d7050 */
         if (vb.step == 0) { vb.step = 1; set_action(0); }
-        if(vb.variant>=1 && vb.hp<max_health()*.75f && !vb.dt_unlocked){set_state(S_DT);break;}
+        if((vb.variant==1 && vb.hp<max_health()*.75f && !vb.dt_unlocked) || (vb.variant==2 && vb.m20_low && !vb.dt && vb.dt_cooldown<=0)){set_state(S_DT);break;}
         if (dante_lunges()) { react(); break; }
         if (gauge_ready()) { start_attack(); break; }
         {
@@ -590,7 +594,7 @@ static void ai_step(float f) {
     case S_DT: /* 4e6310: first activation below 75%; 4db950: 56 -> 57, hold 240. */
         if(vb.step==0){vb.step=1;set_action(0x56);}
         else if(vb.step==1 && act==ACT_DONE){vb.step=2;vb.dt=1;vb.dt_unlocked=1;vb.dt_left=vb.variant==2?660:840;vb.timer=vb.variant==2?60:240;set_action(0x57);}
-        else if(vb.step==2 && (vb.timer-=f)<=0)set_state(S_THINK);
+        else if(vb.step==2 && (vb.timer-=f)<=0){if(vb.variant==2)vb.dt_left=600;set_state(S_THINK);}
         break;
     case S_FLINCH:                                  /* [approximation] the hit reaction isn't decoded */
         if (act == ACT_DONE) set_state(S_THINK);
@@ -825,7 +829,8 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
         vb.action = 0x13;
         return 1;
     }
-    if(vb.variant>=1 && vb.hp<max_health()*.75f && !vb.dt_unlocked && vb.state!=S_DT){
+    if(vb.variant==2 && vb.hp<max_health()*.39f)vb.m20_low=1; /* 4e6d20 / 5dfae8[2], latched. */
+    if(vb.variant==1 && vb.hp<max_health()*.75f && !vb.dt_unlocked && vb.state!=S_DT){
         vb.m13_chain=0;set_state(S_DT);return 0;
     }
     /* M13's simplified reaction escape prevents indefinite heavy-shot flinches.
@@ -849,15 +854,16 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     ++vb.tick;
     if(vb.variant>=1 && vb.dt && !vb.dying){
         vb.dt_left-=frames;
-        if(vb.dt_left<=0){vb.dt=0;vb.dt_cooldown=1200;trace("dt_end");}
+        if(vb.dt_left<=0 && vb.variant==1){vb.dt=0;vb.dt_cooldown=1200;trace("dt_end");}
         else vb.hp=fminf(max_health(),vb.hp+frames*.5f); /* healing rate / duration approximated */
     }
-    if(vb.variant>=1 && vb.dt_unlocked && !vb.dt && vb.hp>0 && vb.hp<max_health()*.75f && (vb.dt_cooldown-=frames)<=0 && vb.state==S_THINK){vb.dt_unlocked=0;}
+    if(vb.variant==2 && !vb.dt && vb.dt_cooldown>0)vb.dt_cooldown=fmaxf(0,vb.dt_cooldown-frames);
+    if(vb.variant==1 && vb.dt_unlocked && !vb.dt && vb.hp>0 && vb.hp<max_health()*.75f && (vb.dt_cooldown-=frames)<=0 && vb.state==S_THINK){vb.dt_unlocked=0;}
 
     vb.dante[0] = px; vb.dante[1] = py; vb.dante[2] = pz;
     if (attacks && !vb.dying) ai_step(frames);
     vb.action_time += frames;
-    script_tick(&vb.body, frames, &dx, &dz);
+    script_tick(&vb.body, frames*(vb.variant==2 && vb.dt?1.2f:1.0f), &dx, &dz);
     /* FUN_004e4570: the root's motion, turned by his facing, moves him. */
     c = cosf(vb.yaw); s = sinf(vb.yaw);
     vb.pos[0] += c * dx + s * dz;

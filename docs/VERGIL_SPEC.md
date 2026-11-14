@@ -177,12 +177,15 @@ native action 69, then uses that warned burst in place of the native sword proje
 is one teleport/leap using the existing native leap cap path, rather than the original repeated
 54/55/6f/70/71 dive cycle. Those effect shapes, counts and timing are approximations.
 
-M20 DT uses native 56→57 with a 60-frame entry hold (`4db950`, M13 uses 240). The port reuses M13's
-75%-health trigger, 600-frame active duration, healing and damage resistance; M20's original
-weapon-mode/cooldown activation rule (`4e6310`) is different and remains an approximation. Native
-rank-0 DT duration table `5df950` also contains 600. The conservative 1650-cm arena radius, first
-Force Edge weapon mode, fixed three-hit escape counter, DT body reuse and weapon attachment are
-port estimates. Normal Force Edge uses native model chunk 32 and textures 31, appended after the
-existing parts. Weapon-mode switching and the full DT coat/layers are not reproduced.
+M20 phase follow-up: `4e6d20` latches `+bb58` after a damaging contact takes health strictly below
+`5dfae8[2]` = **39%**. This replaces the reused 75% approximation; M13 retains its own 75% rule.
+`4e6310` requests DT from Think once that latch is set, human form is active and cooldown is zero.
+DT uses native actions 56→57 and a 60-frame entry hold (`4db950`), then a 600-frame active timer
+(`5df950[0]`). `4dee00` clears DT at the next state boundary after expiry, sets a **2700-frame**
+cooldown (`5df930[0]`), and `4e22a0` counts that cooldown down only in human form. M20 animation/root
+motion advances at **1.2x** in DT (`4e22a0`); AI/phase timers retain native-frame units. These replace
+the previous 1200-frame cooldown and unscaled DT animation. Healing and incoming-damage resistance
+still use the documented estimates. The conservative 1650-cm arena radius, fixed three-hit escape
+counter, current DT body reuse and weapon attachment remain port estimates pending the form update.
 
 `run_vergil_variants.py` adds M20 HP/DT/Force Edge/Judgment Cut checks to the M7/M13 regression checks.
