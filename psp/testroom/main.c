@@ -2998,7 +2998,10 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             lift_rearm = 0;
         }
         if (lift_on && on) {
-            lift_y += lift_dir * 750.0f * dt;   /* [estimate] about 8 s for 100's shaft, as the script's sounds run */
+            /* CStageSetLift types 9 (137, FUN_003e5ed0) and 10 (100, FUN_003e6410): down 8 cm a frame; up 5 (137) or
+             * 10 (100). */
+            float speed = lift_dir < 0 ? 8.0f : room_number(mission_room) == 137 ? 5.0f : 10.0f;
+            lift_y += lift_dir * speed * 60.0f * dt;
             if (lift_y <= lift->low) { lift_y = lift->low; lift_on = 0; }
             if (lift_y >= lift->high) { lift_y = lift->high; lift_on = 0; }
             player->y = lift_y;
