@@ -211,6 +211,9 @@ static int jester_init(void);
 static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
+static void arachne_spawn_glue(void);
+static void arachne_update_glue(float f, float px, float py, float pz);
+static void arachne_hit_glue(HitKind kind, float from_x, float from_z);
 static int ar_init(void);
 static void ar_rudra_spawn(void);
 static void ar_spawn(void);
@@ -308,6 +311,7 @@ static int kind_health(int kind) {
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
     case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
+    case ENEMY_ARACHNE: return ENEMY_HEALTH * 500 / 250;   /* an estimate */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
@@ -381,6 +385,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
+    if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_AGNI) { ar_spawn(); return; }
     if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
     script_play(0);
@@ -529,6 +534,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 58) return ENEMY_VERGIL;
     if (spawn_class == 26) return ENEMY_VANGUARD;
     if (spawn_class == 25) return ENEMY_ENVY;
+    if (spawn_class == 28) return ENEMY_ARACHNE;
     return ENEMY_PRIDE;
 }
 void enemy_set_anim_auto(int on) { anim_auto = on; }
@@ -1195,6 +1201,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
+    if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
@@ -1448,6 +1455,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
@@ -3368,3 +3376,62 @@ int enemy_giga_focus(float out[3]) {
 }
 float enemy_giga_health(void) { return giga.health; }
 float enemy_giga_max_health(void) { return GIGA_HEALTH; }
+
+/* ---- The Arachne (arachne.c decides; here its body: motion, pose, floor, attacks). */
+#include "arachne.h"
+static ArachneBrain arachne_brain[ENEMY_MAX];
+static int arachne_motion_id[ARACHNE_M_COUNT] = {-2};
+static void arachne_play(int m, int restart) {
+    int id;
+    if (arachne_motion_id[0] == -2) { int k; for (k = 0; k < ARACHNE_M_COUNT; ++k) arachne_motion_id[k] = motion_find(arachne_motion_names[k]); }
+    id = arachne_motion_id[m];
+    if (id < 0) return;
+    if (id != e->motion || restart) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 8.0f;
+        e->motion = id; e->frame = 0.0f; e->done = 0;
+    }
+}
+static void arachne_spawn_glue(void) {
+    ArachneBrain *b = &arachne_brain[e - enemies];
+    e->motion = -1;
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    arachne_spawn(b, e->health);
+    arachne_play(b->want, 1);
+    b->restart = 0;
+    e->fade = 0.0f;
+}
+static void arachne_update_glue(float f, float px, float py, float pz) {
+    ArachneBrain *b = &arachne_brain[e - enemies];
+    const Motion *m;
+    float g;
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->motion >= 0) {
+        m = motion_get(e->motion);
+        e->frame += f;
+        if (e->frame >= m->end_frame) {
+            e->done = 1;
+            e->frame = arachne_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+        }
+    }
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->frame = e->frame; b->done = e->done;
+    arachne_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
+    if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    if (b->restart || arachne_motion_id[b->want] != e->motion) { arachne_play(b->want, b->restart); b->restart = 0; }
+    if (b->land) land_attack(b->land == 2);
+    if (b->remove) e->active = 0;
+}
+static void arachne_hit_glue(HitKind kind, float from_x, float from_z) {
+    ArachneBrain *b = &arachne_brain[e - enemies];
+    float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
+    fx_hit_spark(at);
+    if (e->plan == P_DEATH) return;
+    if (arachne_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
+        e->plan = P_DEATH;
+        died();
+    }
+    arachne_play(b->want, b->restart);
+    b->restart = 0;
+}
