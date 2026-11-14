@@ -282,7 +282,7 @@ Encounters (Easy and Normal lists are identical unless noted):
 | 209 | 2 | 6 Hell Prides + 5 Hell Gluttonies on returning from 206. |
 | 209 | 1 | 5 Prides + 2 Gluttonies + 2 Sloths, conditional return from 210; no initial spawn from start 2. |
 | 207 | 1 | 1 Gluttony + 4 Greeds after entering area 0; optional side trip. |
-| 205 | 0 | 3 Dullahans (EST id 30, runtime class 9); group 2 is the cutscene-skip copy. |
+| 205 | 0 | 3 Dullahans (EST id 30, runtime class 12); group 2 is the cutscene-skip copy. |
 | 202 | 1 | 5 Arachnes (EST id 28, runtime class 10) after entering area 0. |
 
 Room-local seal flags 0/1/2 suppress repeated fights in 207/205/202 once cleared during this mission.
@@ -332,3 +332,4 @@ python tools/autolink.py status           # the recovery plugin
 ```
 
 In `CMP_SCRIPT.TXT`: `menu 1` runs the real flow, `movie n` plays n frames of each movie, `mkey button frame` and `gkey button frame` press buttons in menus and in game, `mshot frame` saves a menu picture, and `killevery n` kills everything every n frames.
+
