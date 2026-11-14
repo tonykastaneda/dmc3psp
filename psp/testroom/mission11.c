@@ -59,7 +59,7 @@ void m11_update(float dt) {
         step = fminf(b->push, 300.0f * b->zure / PUSH_FRAMES * frames);
         b->push -= step;
         b->moved += step;
-        if (b->moved >= b->dist) {
+        if (b->moved >= b->dist - 100.0f && b->push <= step) {   /* close enough: it drops into its hole */
             b->moved = b->dist; b->push = 0.0f; b->fitted = 1;
             {
                 float at[3] = {b->x, b->y, b->start_z - b->dist};

@@ -291,6 +291,20 @@ pack 11: the Soul Eater, from the walkthrough), EST 26 Hell Vanguard, EST 51 cla
 | 240 | (the far platform) | Arriving from 216, a camera; area 0 rides back. Door 1 (up the stairs) to 217 |
 | 217 | Torture Chamber | Area 0 plays demo 28, then group 0: Beowulf. Beaten, demo 29; area 0 again plays demo 30, which clears the mission |
 
+In the port: the route plays from 212 to Mission Clear in PPSSPP. Stand-ins and estimates:
+
+- **214's slide blocks** (`mission11.c`): melee from behind pushes a block along -z (300 x its zure a hit), and within
+  100 cm of its hole it drops in. They're drawn as stone boxes and don't stop Dante. With both in, STAY 200 is hidden
+  for the passage, door 1 opens and group 2 runs; until then doors 0 and 1 are held, as block 1 does.
+- **The wagon ride (216)** isn't in: 239's area 0 is a door straight to 240's start 3 (`EXTRA_DOORS`), so its clock,
+  its object waves and groups 0 and 1 are skipped.
+- **Beowulf** (em030, GDATA 135, pack 21) has his own model and motions (`beowulf_boss.c`): the three punches, a
+  charge on all fours, a leaping rush, a stomp that sends a pillar rolling at Dante, and a volley of light feathers
+  after his body flashes; super armour, a gauge staggers him. Which motion is which is read from their root paths;
+  timings, health and damage are estimates, and the pillars are glows that can't be broken.
+- **Soul Eaters** (class 16, em016) aren't ported and spawn as Prides. Mission Clear comes as Beowulf falls, not by
+  demo 30 at the shiny object.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
