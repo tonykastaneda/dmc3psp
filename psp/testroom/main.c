@@ -572,7 +572,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "LADY"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -2877,7 +2877,9 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (m6) m6_status(line, sizeof(line));
             if (mission_choice.mission == 11) m11_status(line, sizeof(line));
             if (mission_choice.mission == 14) m14_status(line, sizeof(line));
-            if ((f = fopen(path, "a"))) { fprintf(f, "%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d %s\n", m_tick, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], line); fclose(f); }
+            float ep[3] = {0, 0, 0};
+            if (enemy_active()) enemy_position(ep);
+            if ((f = fopen(path, "a"))) { fprintf(f, "%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d e=%.0f,%.0f,%.0f %s\n", m_tick, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], ep[0], ep[1], ep[2], line); fclose(f); }
         }
     }
     if (focus_cmp && lift && (testroom_frame % 30) == 0) vergil_boss_note("lift", player->x, player->y, player->z, lift_y);
