@@ -22,7 +22,7 @@ from prepare_stage import pac_entries
 SLOT = 139
 OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK = range(6)
 END_FRAME = 0x7FFF
-PARTS = (("body", 1), ("coat", 3), ("yamato", 25), ("scabbard", 28), ("beowulf", 55), ("dt_body", 51))
+PARTS = (("body", 1), ("coat", 3), ("yamato", 25), ("scabbard", 28), ("beowulf", 55), ("dt_body", 51), ("force_edge", 32))
 MOTION_CHUNKS = (7, 8, 9, 10)          # motion files 0-3 (the set-up's list at +0xb570)
 SCRIPT_CHUNK, CAP_CHUNK, SHAPE_CHUNK = 11, 12, 13
 ATTACKS = 0x5DC4D0                      # attack records, 0x40 each (FUN_002942e0's table)
@@ -132,7 +132,7 @@ def write_models(pack, output):
              " int vertices, indices_count, objects_count, bone_count;",
              "} VergilMesh;"]
     table, manifest = [], []
-    texture_banks = {0: decode_textures(pack[0]), 54: decode_textures(pack[54]), 50: decode_textures(pack[50])}
+    texture_banks = {0: decode_textures(pack[0]), 54: decode_textures(pack[54]), 50: decode_textures(pack[50]), 31: decode_textures(pack[31])}
     offsets={};textures=[]
     for bank,values in texture_banks.items():offsets[bank]=len(textures);textures.extend(values)
     triple = lambda values: "{" + ",".join(map(str, values)) + "}"
@@ -140,7 +140,7 @@ def write_models(pack, output):
         raw = pack[chunk]
         skeleton = parse_skeleton(raw)
         mesh = build_mesh(raw, skeleton["count"])
-        texture_offset=offsets[54 if chunk==55 else 50 if chunk==51 else 0]
+        texture_offset=offsets[54 if chunk==55 else 50 if chunk==51 else 31 if chunk==32 else 0]
         for obj in mesh["objects"]:obj["texture"]+=texture_offset
         prefix = "vv_" + name
         arrays = (("Dmc3Vec3", "positions", mesh["positions"], vec),

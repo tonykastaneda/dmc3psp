@@ -26,5 +26,16 @@ int main(void){int i,seen=0;
  evaluate_poses();
  for(i=0;i<VERGIL_PART_COUNT;++i){int j;skin_part(i);for(j=0;j<vergil_parts[i].vertices;++j)assert(isfinite(vertices[i][j].x));}
  assert(vergil_boss_hit(HIT_HEAVY,0,100,1)==0);
- puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain and finite poses passed");return 0;
+ vergil_boss_set_variant(2);vergil_boss_spawn(2500,-208,2400);
+ assert(vergil_boss_variant()==2 && vergil_boss_health()==10000 && vergil_boss_max_health()==10000);
+ assert(vb.centre[0]==2500 && vb.centre[2]==3750);
+ vb.hp=7400;vergil_boss_update(1,2500,-208,2800,1);assert(vb.state==S_DT);
+ seen=0;for(i=0;i<600;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.dt)seen=1;}
+ assert(seen);vb.dt=0;vb.dt_unlocked=1;vb.dt_cooldown=10000;
+ set_state(S_FORCE_A);seen=0;
+ for(i=0;i<600;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.action==0x65)seen=1;}
+ assert(seen);set_state(S_JUDGMENT);vb.landed=0;
+ for(i=0;i<400 && !vb.landed;++i)vergil_boss_update(1,2500,-208,2800,1);
+ assert(vb.landed && vb.landed_damage==1000);
+ puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut passed");return 0;
 }

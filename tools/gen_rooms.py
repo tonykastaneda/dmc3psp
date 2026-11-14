@@ -69,6 +69,7 @@ SLOTS.update({"007": 300, "008": 304})
 SLOTS.update({f"{n}": 324 + 4 * (n - 100) for n in (106, 107, 108, 109, 116, 117, 118, 119, 146)})
 # Mission 18 (the Netherworld): room 4xx is GDATA 736 + 4 x (n - 400).
 SLOTS.update({f"{n}": 736 + 4 * (n - 400) for n in (400, 401, 402, 403, 406, 412, 413, 414, 415, 416, 417, 418, 419, 420)})
+SLOTS.update({"411":780, "012":320})  # Mission 20 arena and ending street.
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -119,6 +120,7 @@ MISSIONS = {
     # 240 -> 217 Torture Chamber: Beowulf (group 0, EST 51).
     11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0]}),
     13: ("229", None, {"229": [0], "241": [0], "234": [0]}),
+    20: ("411", None, {"411": [0], "012": [0]}),
     # Mission 14, from EventTbl14 (GDATA 252): 237 Lair of Judgement Ruins (its combat adjudicator opens door 0) -> 235
     # Underwater Elevator -> 225 Subterranean Lake -> 231 Top Obsidian Path -> 233 Vestibule -> 214 Altar of Evil (group
     # 0 on entry) -> 239 -> (the wagon) -> 240 -> 236 Hell's Highway (the chessmen, groups 2-6) -> 221 Subterranean
