@@ -88,10 +88,11 @@ static float enemy_segment_hit(const float a[3], const float b[3]) {
 }
 
 /* One instant shot: stops at a wall, hurts the dummy if it comes first. */
+int bullets_through_walls;
 static int hitscan(int kind, const float from[3], const float to[3]) {
     float end[3], wall = 1.0f, t;
     int hit = 0, k;
-    if (stage_loaded()) {
+    if (stage_loaded() && !bullets_through_walls) {
         float s;
         if (stage_raycast(from, to, &s)) wall = s;
     }

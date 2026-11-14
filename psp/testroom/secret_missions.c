@@ -20,7 +20,7 @@
  *  10  609  light the end crystal: the beam puzzle below, from the game's own code and layouts
  *  11  610  reach the far end (area 2) [the spike trap, CStageSetNeedle, isn't in]
  *  12  611  reach area 0 [its moving blocks aren't in: the room's own floor]
- * Not in yet: 9 (the wagons, 608's TRUCK).
+ *   9  608  let no enemy escape: the wagons below, a stand-in for CStageSetTruck
  * The award, a Blue Orb Fragment, is only named: the port has no Devil Trigger gauge to lengthen yet. */
 #include <math.h>
 #include <stdio.h>
@@ -30,8 +30,10 @@
 #include <stdlib.h>
 #include "crystal_runtime.h"
 #include "secret_orbs_runtime.h"
+#include "enemy.h"
+#include "bullets.h"
 
-enum { R_KILL, R_KILL_CLEAN, R_AIR, R_LIFT, R_BREAK, R_REACH, R_CRYSTAL, R_ORBS, R_NONE };
+enum { R_KILL, R_KILL_CLEAN, R_AIR, R_LIFT, R_BREAK, R_REACH, R_CRYSTAL, R_ORBS, R_WAGONS, R_NONE };
 typedef struct {
     short host;                  /* the main mission's room it's entered from */
     float at[3];                 /* the kind-7 area's centre there */
@@ -48,7 +50,7 @@ static const SecretMission secrets[12] = {
     {206, {10221.0f, 3000.0f, 7087.0f}, R_ORBS, 0.0f, {0}},
     {212, {2428.0f, 811.0f, 3133.0f}, R_REACH, 30.0f, {11221.0f, 11570.0f, 7001.0f, 7350.0f}},
     {230, {3645.0f, 580.0f, 3529.0f}, R_KILL, 0.0f, {0}},
-    {233, {2911.0f, 401.0f, 1220.0f}, R_NONE, 0.0f, {0}},
+    {233, {2911.0f, 401.0f, 1220.0f}, R_WAGONS, 0.0f, {0}},
     {146, {3784.0f, -34.0f, 2507.0f}, R_CRYSTAL, 0.0f, {0}},
     {140, {2496.0f, 856.0f, 2395.0f}, R_REACH, 0.0f, {9116.0f, 9462.0f, 1757.0f, 1898.0f}},
     {402, {2413.0f, 1720.0f, -3093.0f}, R_REACH, 0.0f, {3837.0f, 3937.0f, 3306.0f, 3706.0f}},
@@ -142,6 +144,54 @@ static void orbs_draw(void) {
         if (!orb_taken[k]) fx_mote(secret_orbs[k], still, 40.0f + 6.0f * sinf(k + 0.0f), 30.0f, 0.04f, 0xff2020ffu);
 }
 
+/* ---- Secret Mission 9's wagons. 608 is Dante on a rail wagon (STAY 4, a riding box; start 0 on it) beside a second
+ * track: its TRUCK set (100) places the enemies' wagon at em_base (10000, 1325, 11625), 7.25 m off his line, with a
+ * 400 x 100 x 200 hit box. The wagons' timetable and riders are in CStageSetTruck's code, not decoded; the port runs
+ * the walkthrough's: eight wagons one after another (Wraths, with a Pride or a Lust on some), passing from 35 m ahead
+ * to 35 m behind at 2.5 m a second [estimate]. A wagon that goes by with anyone still on it fails the mission; all
+ * eight emptied clears it. The wagon is drawn as glows: its model (the set's em_model 2) isn't converted. */
+#define WAGONS 8
+#define WAGON_Z 11625.0f
+#define WAGON_DECK 1425.0f
+#define WAGON_FROM 13500.0f
+#define WAGON_TO 6500.0f
+#define WAGON_SPEED 250.0f
+static const signed char wagon_riders[WAGONS][3] = {
+    {ENEMY_WRATH, ENEMY_WRATH, ENEMY_PRIDE}, {ENEMY_WRATH, ENEMY_PRIDE, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_LUST},
+    {ENEMY_WRATH, ENEMY_LUST, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_LUST}, {ENEMY_WRATH, -1, -1},
+    {ENEMY_WRATH, ENEMY_WRATH, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_WRATH}};
+static int wagon, wagon_live, wagon_result;
+static float wagon_x, wagon_gap;
+static void wagons_start(void) { wagon = 0; wagon_live = 0; wagon_result = 0; wagon_gap = 2.0f; }
+static void wagons_update(float dt) {
+    float dx;
+    if (wagon_result) return;
+    if (!wagon_live) {
+        int k;
+        if (wagon >= WAGONS) { wagon_result = 1; return; }
+        if ((wagon_gap -= dt) > 0.0f) return;
+        wagon_x = WAGON_FROM;
+        enemy_spawn_height(WAGON_DECK + 100.0f);
+        for (k = 0; k < 3; ++k) if (wagon_riders[wagon][k] >= 0) enemy_add_kind(wagon_riders[wagon][k], wagon_x - 120.0f + 120.0f * k, WAGON_Z);
+        wagon_live = 1;
+    }
+    dx = -WAGON_SPEED * dt;
+    wagon_x += dx;
+    enemy_ride(wagon_x - 200.0f, wagon_x + 200.0f, WAGON_Z - 100.0f, WAGON_Z + 100.0f, dx, WAGON_DECK);
+    if (enemy_alive_count() == 0) { wagon_live = 0; ++wagon; wagon_gap = 1.5f; return; }
+    if (wagon_x < WAGON_TO) wagon_result = -1;   /* gone by with riders on it */
+}
+static void wagons_draw(void) {
+    float still[3] = {0.0f, 0.0f, 0.0f};
+    int k;
+    if (!wagon_live) return;
+    for (k = 0; k < 6; ++k) {
+        float at[3] = {wagon_x - 200.0f + 80.0f * k, WAGON_DECK - 60.0f, WAGON_Z - 100.0f}, at2[3] = {at[0], at[1], WAGON_Z + 100.0f};
+        fx_mote(at, still, 50.0f, 40.0f, 0.04f, 0xff2050a0u);
+        fx_mote(at2, still, 50.0f, 40.0f, 0.04f, 0xff2050a0u);
+    }
+}
+
 #define AIR_NEEDED 20.0f
 #define ENTRY_RANGE 200.0f
 #define END_WAIT 2.5f
@@ -168,6 +218,7 @@ static int rule_met(const SecretMission *s, const SmView *v) {
     case R_REACH: return v->x > s->goal[0] && v->x < s->goal[1] && v->z > s->goal[2] && v->z < s->goal[3];
     case R_CRYSTAL: return solved;
     case R_ORBS: return orbs_left == 0;
+    case R_WAGONS: return wagon_result == 1;
     }
     return 0;
 }
@@ -177,6 +228,9 @@ int sm_update(float dt, const SmView *v, int *prompt, int *go_room, int *go_star
     spin += dt;
     room_seen = v->room;
     crystal_seen = v->room;
+    /* 608's cart is caged by walls (attribute 0x18260001) that stop Dante, not his shots; the port's stage data
+     * doesn't keep the attribute, so the shots go through every wall here. */
+    bullets_through_walls = current >= 0 && secrets[current].rule == R_WAGONS && v->room == 600 + current;
     if (caption_time > 0.0f) caption_time -= dt;
     go_place[3] = 0.0f;
     if (current < 0) {
@@ -193,6 +247,7 @@ int sm_update(float dt, const SmView *v, int *prompt, int *go_room, int *go_star
                 *go_room = 600 + n; *go_start = 0;
                 if (s->rule == R_CRYSTAL) crystal_start();
                 if (s->rule == R_ORBS) orbs_start();
+                if (s->rule == R_WAGONS) wagons_start();
                 return 1;
             }
         }
@@ -213,6 +268,10 @@ int sm_update(float dt, const SmView *v, int *prompt, int *go_room, int *go_star
         clock_ += dt;
         if (!v->on_ground) air += dt;
         if (s->rule == R_ORBS) orbs_update(v);
+        if (s->rule == R_WAGONS) {
+            wagons_update(dt);
+            if (wagon_result < 0) { ending = 2; end_wait = END_WAIT; say("MISSION FAILED", END_WAIT); return 0; }
+        }
         if (s->rule == R_KILL_CLEAN && v->health < start_health - 0.5f) {
             ending = 2; end_wait = END_WAIT; say("MISSION FAILED", END_WAIT);
             return 0;
@@ -264,6 +323,7 @@ static void crystal_draw(void) {
 void sm_draw(void) {
     if (current >= 0 && secrets[current].rule == R_CRYSTAL && crystal_seen == 600 + current && layout >= 0) crystal_draw();
     if (current >= 0 && secrets[current].rule == R_ORBS && crystal_seen == 600 + current && !ending) orbs_draw();
+    if (current >= 0 && secrets[current].rule == R_WAGONS && crystal_seen == 600 + current && !ending) wagons_draw();
     /* The red structure: a red glow where one can be entered. */
     int n;
     for (n = 0; current < 0 && n < 12; ++n) {
@@ -311,5 +371,5 @@ static unsigned int gone_mask(void) {
 }
 
 void sm_status(char *out, int size) {
-    snprintf(out, size, "sm=%d end=%d clock=%.1f air=%.1f cleared=%03x layout=%d solved=%d beam=%d gone=%06x orbs=%d end=%d,%d", current + 1, ending, clock_, air, cleared, layout, solved, beam_count, gone_mask(), orbs_left, beam_count ? beam[beam_count - 1][0] : -1, beam_count ? beam[beam_count - 1][1] : -1);
+    snprintf(out, size, "sm=%d end=%d clock=%.1f air=%.1f cleared=%03x layout=%d solved=%d beam=%d gone=%06x orbs=%d wagon=%d/%d x=%.0f end=%d,%d", current + 1, ending, clock_, air, cleared, layout, solved, beam_count, gone_mask(), orbs_left, wagon, wagon_result, wagon_x, beam_count ? beam[beam_count - 1][0] : -1, beam_count ? beam[beam_count - 1][1] : -1);
 }

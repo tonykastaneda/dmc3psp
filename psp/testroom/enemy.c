@@ -494,6 +494,21 @@ int enemy_add_kind(int kind, float x, float z) {
     return 0;
 }
 
+/* Secret Mission 9 (secret_missions.c): those in or by a wagon's box ride it, carried dx along and kept on its deck. */
+void enemy_ride(float x0, float x1, float z0, float z1, float dx, float deck_y) {
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        Enemy *r = &enemies[i];
+        if (!r->active || r->pos[0] < x0 - 300.0f || r->pos[0] > x1 + 300.0f || r->pos[2] < z0 - 300.0f || r->pos[2] > z1 + 300.0f) continue;
+        r->pos[0] += dx;
+        if (r->pos[0] < x0) r->pos[0] = x0;
+        if (r->pos[0] > x1) r->pos[0] = x1;
+        if (r->pos[2] < z0) r->pos[2] = z0;
+        if (r->pos[2] > z1) r->pos[2] = z1;
+        r->pos[1] = deck_y;
+    }
+}
+
 void enemy_drop_below(float y) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i)
