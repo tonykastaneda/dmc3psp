@@ -22,6 +22,8 @@ int sm_active(void);                  /* in a Secret Mission now */
  * go_place's x, y, z. prompt: set when O does something here. */
 int sm_update(float dt, const SmView *v, int *prompt, int *go_room, int *go_start, float go_place[4]);
 const char *sm_caption(float *alpha);   /* a line to show, or 0 */
+void sm_hit(float x, float y, float z, float yaw, float reach);   /* a melee hit's frame */
+void sm_test_layout(int n);              /* tests: Secret Mission 10 uses crystal layout n */
 void sm_draw(void);                     /* the entry markers and goals, world space */
 void sm_status(char *out, int size);
 
