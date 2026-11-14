@@ -1834,7 +1834,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup;
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
 static int cmp_fastwaves, cmp_clear_minions;
-static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": the boss takes n heavy hits then */
+static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
 static int cmp_goto[16][2], cmp_goto_count;
@@ -3707,7 +3707,7 @@ int main(int argc, char *argv[]) {
                 for (h = 0; h < cmp_boss_hit_count; ++h) if (cmp_boss_hits[h][0] == frames)
                     for (k = 0; k < ENEMY_MAX; ++k) {
                         enemy_select(k);
-                        if (!enemy_active() || enemy_kind() < 100) continue;
+                        if (!enemy_active()) continue;
                         for (n = 0; n < cmp_boss_hits[h][1]; ++n) enemy_hit(HIT_HEAVY, player.x, player.z);
                     }
             }
