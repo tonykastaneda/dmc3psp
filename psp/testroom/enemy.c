@@ -69,6 +69,10 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 /* How much a Pride takes, in units of a light hit. An estimate: on the HD Collection a maxed Dante kills
  * one in about three to five hits on Easy. The game's health and damage values aren't read yet. */
 #define ENEMY_HEALTH 6
+/* Bosses' health from their classes' parameter blocks (+0x2c, the value FUN_002f0560 starts the health with). */
+#define NEVAN_MAX 7000
+#define BEOWULF_MAX 10000
+#define LADY_MAX 4000
 /* Dante as the attack spheres see him. Not read from the game. */
 #define DANTE_RADIUS 40.0f
 #define DANTE_LOW 20.0f
@@ -351,7 +355,7 @@ static int kind_health(int kind) {
     case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 500 / 250;   /* an estimate */
-    case ENEMY_NEVAN: return ENEMY_HEALTH * 2000 / 250;    /* an estimate */
+    case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1500 / 250;   /* an estimate (fallen.c) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * 3000 / 250;  /* an estimate */
@@ -743,7 +747,7 @@ int enemy_boss_health(float *health, float *maximum) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3000 / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_NEVAN && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 2000 / 250;return 1;
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * NEVAN_MAX / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GIGAPEDE) {
         *health=enemy_giga_health();*maximum=enemy_giga_max_health();return 1;
