@@ -493,6 +493,27 @@ route above, start to Mission Clear.
 - The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
 - No cutscenes; demo 48's item 35 isn't given.
 
+### Mission 19: "Forces collide"
+
+Decoded from EventTbl19 (GDATA 257; `tools/event_dump.py <iso> 19 --out <dir>`). Demo 51 leads to 406 at start 0.
+Rooms 4xx are GDATA 736 + 4 x (n - 400).
+
+| Room | What runs |
+| --- | --- |
+| 406 Room of Fallen Ones | Group 0: 5 Abyss (EST 24); gimmick 500 (the mirror on to 405) once they're down |
+| 405 Nirvana of Illusions | Group 0: Abyss, who only die as the green-tinted mirrors are struck (the walkthrough). Area 0, the golden statue: with the Samsara (item 57) the window (gimmick 500, door 1) opens to 408 |
+| 404 Infinity Nirvana | Group 0, then 1 and 2 as the hourglass runs out (block 4); the Samsara (item 57) by the hourglass; taken, its large mirror |
+| 403 Lost Soul Nirvana | The boss rerun doors (to 412-420) all disabled |
+| 408 End of the Line | Its door is retargeted to demo 52, then 421 |
+| 421 Forbidden Nirvana | Counter 0: group 0, Arkham (EST 53). Cleared: demo 53 (Vergil), counter 1, group 1: Arkham again. Cleared: demo 328, Mission Clear |
+
+**In the port** (`tools/gen_rooms.py` Mission 19, `psp/testroom/mission19.c`, `docs/ARKHAM_SPEC.md`): 406 -> 405 ->
+404 (take the Samsara) -> 405 (set it at the statue, area 0) -> 408 -> 421, Arkham, to Mission Clear.
+- With the Samsara, 404's door goes straight back to 405's start 0 (the walk back through 403 and 406 is skipped).
+- The Abyss aren't ported: Prides stand in, and die to the sword (405's mirrors aren't in). 404's hourglass isn't in.
+- 421 runs one Arkham through both rounds (`arkham_boss.c`); Vergil doesn't join.
+- No cutscenes.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
