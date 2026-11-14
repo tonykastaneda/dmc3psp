@@ -66,8 +66,8 @@ static int barrier_on;
 /* ---- 125's spike trap (CStageSetNeedle, set 100). Its code isn't decoded: a stand-in from the walkthrough. Rows
  * of spikes come at Dante down the corridor (toward +x, the way back) in batches: from the left wall (step right),
  * the right wall (step left), the floor (jump) or the ceiling (stay on the ground). Area 0 (x 9035-9235) starts
- * them, area 1 (x 1310-1610) stops them. Speed, spacing and the 700 damage (the Seven Hells' light fallback) are
- * estimates. */
+ * them, area 1 (x 1310-1610) stops them. Speed and spacing are estimates. A spike hurts as attack record 0 of table
+ * 0x5bbb80 (1000, reaction 0: light), which the needles' caps take (FUN_003e0600, reached from the set's 003df400). */
 #define NEEDLE_MAX 8
 #define NEEDLE_MID 2500.0f       /* the corridor's middle (its door, start and Essence) */
 #define NEEDLE_HALF 450.0f       /* its half width (area 0's) */
