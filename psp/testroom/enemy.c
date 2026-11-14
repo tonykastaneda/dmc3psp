@@ -351,6 +351,7 @@ static int kind_health(int kind) {
     case ENEMY_GLUTTONY: return ENEMY_HEALTH * 700 / 250;
     case ENEMY_LUST: return ENEMY_HEALTH * 750 / 250;    /* 0x5ac100 +0x2c (class 2, FUN_002c5d90) */
     case ENEMY_GREED: return ENEMY_HEALTH * 1000 / 250;  /* 0x5b0080 +0x2c (class 5, FUN_00356538) */
+    case ENEMY_WRATH: return ENEMY_HEALTH * 500 / 250;   /* 0x5b10f0 +0x2c (class 4, FUN_00354560) */
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
     case ENEMY_ENVY: return ENEMY_HEALTH * 400 / 250;
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
