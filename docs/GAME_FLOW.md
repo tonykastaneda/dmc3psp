@@ -241,6 +241,17 @@ class 10; group 4 the skip copy). 206 Subterranean Lake gives item 31. 208: grou
 (item 47). 209 Limestone Cavern: 6 Prides and 5 Gluttonies. 210 Sunken Opera House: Nevan (group 0, EST 49,
 class 31), with demos 22 and 23 around the fight; the script's AFTER_DEMO 24 clears the mission. 210 also gives item 26.
 
+In the port (rooms 201-210 are GDATA 516-552): the route plays from 201 to Mission Clear in PPSSPP. 202's ambush,
+208's fight as the Ambrosia (47) is taken, 209's relief taking it to open door 1, and Nevan in 210 come from the
+script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run their group 0, a guess from the walkthrough
+(the script has no section for them). Stand-ins and estimates:
+
+- **203's light beam** (CRYSTAL 102) isn't decoded: lighting the reset panel (crest switch 100, damage as Mission 3's)
+  takes down seal 101 on the door to 204 instead of smashing the right crystals.
+- **205's and 207's bladed pillars** hurt on touch from their COLLISION cylinders (`atk`, `platk`; `parse_hazards`),
+  once a second; the 700 damage is an estimate and the blades don't turn.
+- Mission Clear comes as Nevan falls (`CLEAR_ROOMS`), not by 210's door 1 and demo 24. 206's item 31 isn't in.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.

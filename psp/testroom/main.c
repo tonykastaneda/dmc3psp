@@ -2737,6 +2737,27 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     
 }
 
+/* Parts of the room that hurt on touch (room_hazards: 205's and 207's bladed pillars). Touching one hurts once
+ * per its interval (60 frames), as an enemy's hit, from its middle. The 700 is the Seven Hells' light fallback,
+ * an estimate: the sets' damage isn't read. */
+static float hazard_wait;
+static void hazards_update(float dt, Player *player) {
+    int i;
+    if (hazard_wait > 0.0f) { hazard_wait -= dt * 60.0f; return; }
+    for (i = 0; i < ROOM_HAZARD_COUNT; ++i) {
+        const RoomHazard *h = &room_hazards[i];
+        float dx = player->x - h->x, dz = player->z - h->z, r = h->radius + PLAYER_RADIUS;
+        if (h->room != mission_room || dx * dx + dz * dz > r * r) continue;
+        if (player->y + 170.0f < h->y || player->y > h->y + h->height) continue;
+        {
+            float chest[3] = {player->x, player->y + 110.0f, player->z};
+            if (combat_player_hit_damage(&combat, player, h->x, h->z, 0, 700.0f)) fx_hit_spark(chest);
+        }
+        hazard_wait = h->interval;
+        return;
+    }
+}
+
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
@@ -2757,17 +2778,21 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
+    hazards_update(dt, player);
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
         if (prompt) door_prompt_time = 1.0f;
-        static int m6_tick;
-        if (focus_cmp && (m6_tick++ % 30) == 0) {
-            char path[320], line[256];
+    }
+    {
+        /* Tests: where he is, every 30 frames (and Mission 6's own state). */
+        static int m_tick;
+        if (focus_cmp && (m_tick++ % 30) == 0) {
+            char path[320], line[256] = "";
             FILE *f;
             path_in_game_dir(path, sizeof(path), "M6_LOG.TXT");
-            m6_status(line, sizeof(line));
-            if ((f = fopen(path, "a"))) { fprintf(f, "%d pos=%.0f,%.0f,%.0f alive=%d %s\n", m6_tick, player->x, player->y, player->z, enemy_alive_count(), line); fclose(f); }
+            if (m6) m6_status(line, sizeof(line));
+            if ((f = fopen(path, "a"))) { fprintf(f, "%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d %s\n", m_tick, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], line); fclose(f); }
         }
     }
     if (focus_cmp && lift && (testroom_frame % 30) == 0) vergil_boss_note("lift", player->x, player->y, player->z, lift_y);
