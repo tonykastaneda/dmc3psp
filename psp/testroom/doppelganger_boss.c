@@ -172,7 +172,8 @@ static void set_state(int state) {
     trace("state");
 }
 
-/* ---- Hits on Dante (the scripts' attack records 0-4, 7, 0xb; their damage isn't read) -------------------- */
+/* ---- Hits on Dante: the scripts' attack records (0x40 each from 0x5c26b0, PTR_DAT_00619a08: damage at +4, the
+ * reaction at +0x1c; 500 or more is a heavy hit, as Vergil's) ----------------------------------------------- */
 static void swing(float reach, float damage, int heavy) {
     float hx = db.pos[0] + sinf(db.yaw) * 80.0f - db.dante[0], hz = db.pos[2] + cosf(db.yaw) * 80.0f - db.dante[2];
     if (db.landed || db.hit_done) return;
@@ -258,20 +259,20 @@ static void ai_step(float f) {
         if (db.step == 0) { play(3); db.step = 1; }
         if (db.step == 1) {
             if (db.frame < 10.0f) turn_toward(angle_to(db.dante), 0.15f * f);
-            if (db.frame >= 13.0f) swing(170.0f, 300.0f, 0);
+            if (db.frame >= 13.0f) swing(170.0f, 800.0f, 0);   /* record 0 (table 0x5c26b0): 800, reaction 400 */
             if (db.frame >= 30.0f) { db.hit_done = 0; if (d < 300.0f) { play(4); db.step = 2; } else if (motion_done()) set_state(S_THINK); }
         } else if (db.step == 2) {
-            if (db.frame >= 37.0f) swing(170.0f, 300.0f, 0);
+            if (db.frame >= 37.0f) swing(170.0f, 600.0f, 0);   /* record 1: 600 */
             if (db.frame >= 45.0f) { db.hit_done = 0; if (d < 300.0f) { play(5); db.step = 3; } else if (motion_done()) set_state(S_THINK); }
         } else if (db.step == 3) {
-            if (db.frame >= 63.0f) swing(190.0f, 600.0f, 1);
+            if (db.frame >= 63.0f) swing(190.0f, 400.0f, 0);   /* record 2: 400 */
             if (motion_done()) set_state(S_THINK);
         }
         break;
     case S_STINGER:
         /* 0x1b: script 0x23 (motion 23), record 4 at 30, the lunge (effect 0x293) */
         if (db.step == 0) { play(23); db.step = 1; turn_toward(angle_to(db.dante), PI); }
-        if (db.frame >= 18.0f && db.frame < 40.0f) { move_forward(28.0f, f); if (db.frame >= 30.0f) swing(160.0f, 500.0f, 1); }
+        if (db.frame >= 18.0f && db.frame < 40.0f) { move_forward(28.0f, f); if (db.frame >= 30.0f) swing(160.0f, 800.0f, 1); }   /* record 4: 800, reaction 500 */
         if (motion_done()) set_state(S_THINK);
         break;
     case S_SINK:
