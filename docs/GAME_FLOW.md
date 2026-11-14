@@ -243,10 +243,11 @@ BREAK meshes and must be struck before their nearby exit works. Their default du
 
 Acid uses the authored HITS triangles whose material byte is 13. PCSX2 Normal observation at
 (469,-131,3061) confirmed 25 HP losses about every seven frames, while the flesh sample caused none.
-The port applies that amount while grounded on those triangles. Rooms 303/307's Nausika chase actors,
-liquid UV animation, and the real-time story cameras are not implemented. Complete route and boss-clear
-validation is still in progress; room loading, native Envy waves, Ignis pickup and the acid floor have
-been captured in PPSSPP.
+The port applies that amount while grounded on those triangles. Rooms 303/307 now have the native
+Nausika model/motions following its authored chase path, bite attacks, and melee damage/stagger.
+Path steering and attack attachment interpolation remain approximate; liquid UV animation and
+real-time story cameras are not implemented. PPSSPP checks cover the full Ignis route and a
+full-health Heart defeat through normal shotgun damage, reaching Mission Clear.
 
 
 ### Mission 9: "Faded memories"
@@ -255,6 +256,24 @@ Starts in 201 (The Rotating Bridge) after demo 324. 202 Provisions Storeroom: gr
 class 10; group 4 the skip copy). 206 Subterranean Lake gives item 31. 208: groups 0, 1, 5 Arachnes each
 (item 47). 209 Limestone Cavern: 6 Prides and 5 Gluttonies. 210 Sunken Opera House: Nevan (group 0, EST 49,
 class 31), with demos 22 and 23 around the fight; the script's AFTER_DEMO 24 clears the mission. 210 also gives item 26.
+
+In the port (rooms 201-210 are GDATA 516-552): the route plays from 201 to Mission Clear in PPSSPP. 202's ambush,
+208's fight as the Ambrosia (47) is taken, 209's relief taking it to open door 1, and Nevan in 210 come from the
+script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run their group 0, a guess from the walkthrough
+(the script has no section for them). Stand-ins and estimates:
+
+- **203's light beam** (CRYSTAL 102) isn't decoded: lighting the reset panel (crest switch 100, damage as Mission 3's)
+  takes down seal 101 on the door to 204 instead of smashing the right crystals.
+- **205's and 207's bladed pillars** hurt on touch from their COLLISION cylinders (`atk`, `platk`; `parse_hazards`),
+  once a second; the 700 damage is an estimate and the blades don't turn.
+- Mission Clear comes as Nevan falls (`CLEAR_ROOMS`), not by 210's door 1 and demo 24. 206's item 31 isn't in.
+- **Arachnes** (em010, GDATA 121, pack 5 in the table at 0x58e740) have their own model and motions (`arachne.c`):
+  they run at Dante, lunge and leap. Which motion is which is read from their root paths; their class's decision
+  tables, the web shot and the spiderlings aren't in. Health is an estimate.
+- **Nevan** (em028, GDATA 133, pack 19) has her own model and motions (`nevan_boss.c`), reclining in the air as her
+  body is modelled: she hovers, glides at Dante, sweeps her blade, sends batches of bats (glows, not models) and
+  vanishes to his far side. Her lightning and kiss aren't in; health, speeds and timings are estimates.
+- 210's STAY 150 (a white sheet over the stage) is hidden in Mission 9 on, as the script's gimmick_cmd10 [150, 0] does.
 
 ## What the missions do now, and what's a stand-in
 

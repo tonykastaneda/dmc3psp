@@ -7,6 +7,7 @@
 #include "combat_data.h"
 #include "motion.h"
 #include "enemy.h"
+#include "leviathan_boss.h"
 #include "stage.h"
 
 #define FADE_SECONDS 0.10f
@@ -648,6 +649,15 @@ static void deal_hit(Combat *c, const Player *player) {
         float e[3], dx, dz, dist, facing, dy;
         enemy_select(i);
         if (!enemy_active()) continue;
+        if(enemy_kind()==ENEMY_LEVIATHAN) {
+            float a[3]={player->x,player->y+150,player->z};
+            float b[3]={a[0]+sinf(player->yaw)*d->reach,a[1],a[2]+cosf(player->yaw)*d->reach};
+            if(leviathan_boss_segment_hit(a,b)>=0) {
+                enemy_hit((HitKind)d->hit_kind,player->x,player->z);
+                ++c->hits_dealt;
+            }
+            continue;
+        }
         enemy_position(e);
         dx = e[0] - player->x; dz = e[2] - player->z;
         dist = sqrtf(dx * dx + dz * dz);
