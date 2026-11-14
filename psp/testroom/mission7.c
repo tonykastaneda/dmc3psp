@@ -5,6 +5,7 @@
 #include <pspgum.h>
 #include "mission7.h"
 #include "fx.h"
+#include "enemy.h"
 
 /* Room 105, from EventTbl07: gimmick_bind_flag 100 (the crest switch) -> 35; with flag 35 set and 38 clear, flag
  * 36 (the ball, HANG 200, starts) and 38; flag 37 (its shell broken) -> flag 4, the key item's stay (400/401) and
@@ -22,6 +23,8 @@
 typedef struct { unsigned int color; float x, y, z; } M7Vertex;
 #define M7_VTYPE (GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D)
 
+static int ambush_step, ambush_done;
+static float ambush_clock, ambush_y;
 static int room_now, switch_hits, switch_lit, ball_hits, ball_broken;
 static float ball_idle, ball_rise, spin;
 static const float sw_at[3] = {2500.0f, 168.0f, 1501.0f}, ball_at[3] = {2495.0f, BALL_Y, 2750.0f};
@@ -29,9 +32,17 @@ static const float sw_at[3] = {2500.0f, 168.0f, 1501.0f}, ball_at[3] = {2495.0f,
 void m7_reset(void) {
     room_now = -1;
     switch_hits = switch_lit = ball_hits = ball_broken = 0;
+    ambush_step = ambush_done = 0;
     ball_idle = ball_rise = spin = 0.0f;
 }
-void m7_enter(int room) { room_now = room; }
+/* 136's return (EventTbl07 block 2: flag 2 clear, item 45 got): door_lock, spawn_group 2. Its ops: wait 60, a Greed
+ * at (2330, 0, 2520); wait 60, a Greed at (2417, -12, 1951); once they're dead and 60 more, a Hell Vanguard (EST 26)
+ * at (2586, 0, 2558). Cleared, the doors open and flag 2 is set. */
+void m7_enter(int room, int has_skull, float floor_y) {
+    room_now = room;
+    if (room == 136 && has_skull && !ambush_done) { ambush_step = 1; ambush_clock = 0.0f; ambush_y = floor_y; }
+    else ambush_step = 0;
+}
 /* 127's door into 114 lands on its balcony at 9000 (start 1), where the game has Dante drop over the railing to
  * the ground floor; the port's collision there keeps him on the balcony, so the door takes him to the ground
  * floor's start 0 instead [approximation]. He climbs back past the balcony on the jump pads. */
@@ -39,6 +50,7 @@ int m7_door_route(int room, int door, int *next_room, int *start) {
     if (room == 127 && door == 1) { *next_room = 114; *start = 0; return 1; }
     return 0;
 }
+int m7_fight_on(void) { return ambush_step != 0; }
 int m7_item_shown(int item) { return item != 45 || ball_broken; }
 void m7_status(char *out, int size) {
     snprintf(out, size, "m7 room=%d switch=%d/%d ball=%d/%d broken=%d rise=%.0f", room_now, switch_hits, switch_lit,
@@ -84,6 +96,14 @@ void m7_push_out(float *x, float *z, float y, float r) {
 void m7_update(float dt) {
     float f = dt * 60.0f;
     spin += f;
+    if (room_now == 136 && ambush_step) {
+        ambush_clock += f;
+        enemy_spawn_height(ambush_y);
+        if (ambush_step == 1 && ambush_clock > 60.0f) { enemy_add_kind(ENEMY_GREED, 2330.0f, 2520.0f); ambush_step = 2; ambush_clock = 0.0f; }
+        else if (ambush_step == 2 && ambush_clock > 60.0f) { enemy_add_kind(ENEMY_GREED, 2417.0f, 1951.0f); ambush_step = 3; ambush_clock = 0.0f; }
+        else if (ambush_step == 3) { if (enemy_alive_count() > 0) ambush_clock = 0.0f; else if (ambush_clock > 60.0f) { enemy_add_kind(ENEMY_VANGUARD, 2586.0f, 2558.0f); ambush_step = 4; ambush_clock = 0.0f; } }
+        else if (ambush_step == 4 && ambush_clock > 30.0f && enemy_alive_count() == 0) { ambush_step = 0; ambush_done = 1; }
+    }
     if (room_now != 105 || !switch_lit || ball_broken) return;
     if (ball_rise > 0.0f) {
         ball_rise -= f;

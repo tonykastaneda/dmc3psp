@@ -5,7 +5,9 @@
  * breaking the ball's shell shows the Crystal Skull (item 45). Rooms are given by their numbers. */
 
 void m7_reset(void);
-void m7_enter(int room);
+/* has_skull: the Crystal Skull (item 45) is got; floor_y: where he came in. */
+void m7_enter(int room, int has_skull, float floor_y);
+int m7_fight_on(void);   /* the script's own fight (136's return) is running */
 void m7_update(float dt);
 /* Leaving a room by one of its doors: returns 1 if Mission 7 sends it elsewhere. */
 int m7_door_route(int room, int door, int *next_room, int *start);
