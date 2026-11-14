@@ -42,6 +42,7 @@ int testroom_frame;
 #include "vergil_boss.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
+#include "nausika.h"
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
@@ -564,7 +565,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -1785,6 +1786,8 @@ typedef struct {
 static BenchStep bench_steps[ENEMY_MAX + 1];
 static int bench_step_frames, bench_count, bench_fire, bench_quicksilver, bench_devil, bench_attack = 1, bench_anim = 1, bench_start = 1, bench_max = ENEMY_MAX;
 static int cmp_fire_from;
+static int cmp_swing,cmp_swing_from,cmp_swing_to;
+static int cmp_lv_auto_from=-1,cmp_lv_auto_target=-1;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
 static struct { int frame, part; float amount; } cmp_lv_charge[8];
@@ -1859,6 +1862,8 @@ static void cmp_load(void) {
         else if (strncmp(line, "anim ", 5) == 0) bench_anim = atoi(line + 5);
         else if (strncmp(line, "fire ", 5) == 0) bench_fire = atoi(line + 5);
         else if (strncmp(line,"firefrom ",9)==0)cmp_fire_from=atoi(line+9);
+        else if (strncmp(line,"onleviathan ",12)==0)cmp_lv_auto_from=atoi(line+12);
+        else if (strncmp(line,"swing ",6)==0)sscanf(line+6,"%d %d %d",&cmp_swing,&cmp_swing_from,&cmp_swing_to);
         else if (strncmp(line, "qs ", 3) == 0) bench_quicksilver = atoi(line + 3);
         else if (strncmp(line, "nostage ", 8) == 0) bench_no_stage = atoi(line + 8);
         else if (strncmp(line, "psp_shot ", 9) == 0) { if (cmp_shot_count < 256) cmp_game_shots[cmp_shot_count++] = atoi(line + 9); }
@@ -1928,6 +1933,7 @@ static void cmp_load(void) {
 }
 static void cmp_pad(int frame, PlayerInput *input) {
     int i;
+    if(cmp_swing>0 && frame>=cmp_swing_from && frame<=cmp_swing_to && frame%cmp_swing==0) {input->melee=1;input->melee_held=1;}
     if (bench_fire && frame>=cmp_fire_from && frame % bench_fire == 0) { input->gun = 1; input->gun_held = 1; }
     for (i = 0; i < cmp_walk_count; ++i) {
         float wx = cmp_walks[i].x - cmp_px, wz = cmp_walks[i].z - cmp_pz, l = sqrtf(wx * wx + wz * wz);
@@ -2373,6 +2379,10 @@ static int door_gated(const RoomDoor *d) {
         int number=atoi(rooms[mission_room].file+5);
         if(number==300 && !mission8_stomach_open())return 1;
         if(number==305 && item_is(46,0))return 1;
+        if(number==302 && item_is(46,2) && !leviathan_boss_dying())return 1;
+        /* EventTbl08 closes these rear passages on entry. */
+        if((number==303 && d->number==302) || (number==304 && d->number==303) ||
+           (number==307 && d->number==306))return 1;
         if(m8_goo_door(d))return 1;
     }
     {
@@ -2455,7 +2465,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;
     float fx = sinf(player->yaw), fz = cosf(player->yaw);
     if (!mission_mode || mission_room == ROOM_NONE) return;
-    if(mission_choice.mission==8)mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);
+    if(mission_choice.mission==8){mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);nausika_hit(player->x,player->y,player->z,player->yaw,reach,kind);}
     switch_hit(player, reach, kind);
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
@@ -2581,7 +2591,7 @@ static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
     if (!mission_mode || mission_room == ROOM_NONE) return;
-    if(mission_choice.mission==8) {mission8_draw();leviathan_boss_draw_preview();}
+    if(mission_choice.mission==8) {mission8_draw();nausika_draw();leviathan_boss_draw_preview();}
     sceGuDisable(GU_TEXTURE_2D);
     sceGuDisable(GU_LIGHTING);
     sceGumMatrixMode(GU_MODEL);
@@ -2686,7 +2696,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     mission_room = room;
     if(mission_choice.mission==8) {
         int number=atoi(rooms[room].file+5);
-        mission8_enter(number);
+        mission8_enter(number);nausika_enter(number);
         leviathan_boss_kill();
         if(number==302 && !m8_boss_started)leviathan_boss_preview();
     }
@@ -2742,6 +2752,27 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     
 }
 
+/* Parts of the room that hurt on touch (room_hazards: 205's and 207's bladed pillars). Touching one hurts once
+ * per its interval (60 frames), as an enemy's hit, from its middle. The 700 is the Seven Hells' light fallback,
+ * an estimate: the sets' damage isn't read. */
+static float hazard_wait;
+static void hazards_update(float dt, Player *player) {
+    int i;
+    if (hazard_wait > 0.0f) { hazard_wait -= dt * 60.0f; return; }
+    for (i = 0; i < ROOM_HAZARD_COUNT; ++i) {
+        const RoomHazard *h = &room_hazards[i];
+        float dx = player->x - h->x, dz = player->z - h->z, r = h->radius + PLAYER_RADIUS;
+        if (h->room != mission_room || dx * dx + dz * dz > r * r) continue;
+        if (player->y + 170.0f < h->y || player->y > h->y + h->height) continue;
+        {
+            float chest[3] = {player->x, player->y + 110.0f, player->z};
+            if (combat_player_hit_damage(&combat, player, h->x, h->z, 0, 700.0f)) fx_hit_spark(chest);
+        }
+        hazard_wait = h->interval;
+        return;
+    }
+}
+
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
@@ -2762,17 +2793,21 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
+    hazards_update(dt, player);
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
         if (prompt) door_prompt_time = 1.0f;
-        static int m6_tick;
-        if (focus_cmp && (m6_tick++ % 30) == 0) {
-            char path[320], line[256];
+    }
+    {
+        /* Tests: where he is, every 30 frames (and Mission 6's own state). */
+        static int m_tick;
+        if (focus_cmp && (m_tick++ % 30) == 0) {
+            char path[320], line[256] = "";
             FILE *f;
             path_in_game_dir(path, sizeof(path), "M6_LOG.TXT");
-            m6_status(line, sizeof(line));
-            if ((f = fopen(path, "a"))) { fprintf(f, "%d pos=%.0f,%.0f,%.0f alive=%d %s\n", m6_tick, player->x, player->y, player->z, enemy_alive_count(), line); fclose(f); }
+            if (m6) m6_status(line, sizeof(line));
+            if ((f = fopen(path, "a"))) { fprintf(f, "%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d %s\n", m_tick, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], line); fclose(f); }
         }
     }
     if (focus_cmp && lift && (testroom_frame % 30) == 0) vergil_boss_note("lift", player->x, player->y, player->z, lift_y);
@@ -3424,6 +3459,16 @@ int main(int argc, char *argv[]) {
                         if (focus_cmp) vanguard_note("onboss", (float)frames);
                     }
                 }
+                /* Position-only automation: all damage still passes through gun
+                 * traces or normal melee windows and native shield states. */
+                if(cmp_lv_auto_from>=0 && frames>=cmp_lv_auto_from && leviathan_boss_active()) {
+                    int core=leviathan_boss_open();
+                    if(core!=cmp_lv_auto_target || (cmp_swing>0 && frames%120==0)) {
+                        player.x=core?4978:5700;player.y=core?-70:75;player.z=core?3100:3400;
+                        player.yaw=3.14159265f;player.vy=0;player.on_ground=1;
+                        cmp_lv_auto_target=core;combat_reset(&combat);start_camera(&player,&camera);
+                    }
+                }
                 for (g = 0; g < cmp_goto_count; ++g) {
                     if (cmp_goto[g][0] != frames) continue;
                     script_at = missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][mission_room].count;
@@ -3451,7 +3496,14 @@ int main(int argc, char *argv[]) {
             }
             if (shop_closed) { shop_closed = 0; last_time = sceKernelGetSystemTimeLow(); }
             if (mission_update(dt, debug_pressed, &player, &camera)) {
-                if(mission_choice.mission==8)++m8_clears_seen;
+                if(mission_choice.mission==8) {
+                    ++m8_clears_seen;
+                    if(focus_cmp) {
+                        char path[320];FILE *report;
+                        path_in_game_dir(path,sizeof(path),"M8_CLEAR.TXT");report=fopen(path,"w");
+                        if(report){fprintf(report,"mission=8 clears=%d ignis=%d eyes=%u\n%s",m8_clears_seen,item_state[46],mission8_eye_bits(),leviathan_boss_log());fclose(report);}
+                    }
+                }
                 if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
@@ -3547,6 +3599,10 @@ int main(int argc, char *argv[]) {
                 }
                 player.x = cx; player.z = cz;
             }
+        }
+        if(mission_mode && mission_choice.mission==8) {
+            float damage=nausika_update(dt*60,player.x,player.y,player.z);
+            if(damage>0)combat_player_hit_damage(&combat,&player,player.x,player.z-100,1,damage);
         }
         if (dummy_ready) {
             float from_x, from_z;
@@ -4112,3 +4168,4 @@ int main(int argc, char *argv[]) {
     sceKernelExitGame();
     return 0;
 }
+

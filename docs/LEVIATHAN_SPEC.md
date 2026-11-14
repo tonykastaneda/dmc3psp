@@ -111,3 +111,37 @@ animated UVs and wall deformation remain unimplemented. Live eye seals now
 block player movement, preventing sword root motion from passing through them.
 `pM_m8_eyes_solid` completed all five seals and entered st301 through its real
 door (report: eyes=31, room=301).
+
+Route verification: `pM_m8_route_wait` traversed 300→301→302→303→304→305
+→306→307→308→309→302, breaking the goo seals and collecting/using Ignis.
+The report confirms eyes=31, ignis=2, boss_started=1. This scene uses scripted
+placements and clears minions to isolate event progression; it does not prove
+a natural traversal of every room. Melee now tests against the organ hurt
+spheres as well, verified by `pM_m8_melee` damaging the right lung. The boss
+chamber and native one-way rear passages are sealed during the encounter.
+
+Nausika chase: separate native st303 EFM (4,415 vertices, 16 bones), textures,
+and five MOT clips. Its 44 authored route points drive rooms 303/307. Ghidra
+492bc0 supplies the 13 + sine*12 cm/frame movement, 493a30 the 750 cm attack
+decision, 493b60 the 69/40-frame windup, 493180 the 750-damage stagger, and
+492490 the 3,000 HP. Attack record 5d7370 gives 1,000 damage. Native motion 1
+has non-increasing keys rejected by the current MOT parser; motion 5 supplies
+the bite animation instead. Path interpolation, entrance trigger, 90-frame
+stagger duration and world-space attack volume are approximations. The native
+intro camera, poison breath particles and death reward are not implemented.
+`run_nausika_logic.py` checks trigger, damage, stagger, death and finite poses;
+PPSSPP `pM_m8_chase_50.png` shows the native model attacking Dante.
+
+Full-health boss verification: `pM_m8_clear_guns` reached the Mission Clear
+screen through ordinary shotgun traces and native shield cycles. Positions
+were automated and Envies cleared to isolate the boss, with no injected boss
+damage or reduced HP. Capture: `analysis/testroom/pM_m8_clear_guns_menu.png`.
+
+Combined start-to-clear regression: `pM_m8_start_to_clear` starts in 300,
+breaks all five eyes, traverses the native goo-door route, waits for the
+Ignis wave, collects/uses Ignis, and kills the full-health Heart by shotgun.
+`M8_CLEAR.TXT`: mission=8, clears=1, ignis=2, eyes=31; Heart state=5, hp=0.
+The scene scripts positions and clears Envies; boss HP and bullet damage
+are unchanged. This verifies event connectivity and combat/clear integration,
+not a manual movement/combat playthrough. Screenshots are checked into
+`docs/screenshots/mission8_clear.png` and `mission8_chase.png`.

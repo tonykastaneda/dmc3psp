@@ -1,4 +1,4 @@
-frames 1400
+frames 17800
 fps 30
 turbo 0
 realdt 0
@@ -6,15 +6,13 @@ item 46 2
 gun 6
 fire 1
 clearminions 60
-r1 1 1399
-place 30 5700 75 3400 180
-place 300 4978 0 3100 180
-place 650 5700 75 3400 180
-place 950 4978 0 3100 180
+r1 1 17799
+onleviathan 30
 mkey cross 60
-psp_shot 80
-psp_shot 220
-psp_shot 400
+mkey cross 120
+mkey cross 180
+mkey cross 240
 psp_shot 1000
-psp_shot 1300
-
+psp_shot 4000
+psp_shot 10000
+psp_shot 17000

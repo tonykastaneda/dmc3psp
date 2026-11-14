@@ -1,0 +1,76 @@
+frames 12000
+fps 30
+turbo 0
+realdt 0
+place 20 1078 1120 4306 0
+triangle 25 26
+triangle 55 56
+triangle 85 86
+triangle 115 116
+place 160 3180 1070 1112 180
+triangle 165 166
+triangle 195 196
+triangle 225 226
+triangle 255 256
+place 300 3097 70 2465 0
+triangle 305 306
+triangle 335 336
+triangle 365 366
+triangle 395 396
+place 440 -399 -7 2532 0
+triangle 445 446
+triangle 475 476
+triangle 505 506
+triangle 535 536
+place 580 4133 2480 3366 0
+triangle 585 586
+triangle 615 616
+triangle 645 646
+triangle 675 676
+place 740 3509 320 3185 0 1
+circle 742 743
+clearminions 60
+gun 6
+fire 1
+firefrom 2600
+r1 2600 11999
+place 820 7900 109 681 90
+triangle 830 831
+triangle 860 861
+gotoroom 920 302
+gotoroom 1000 303
+place 1080 9615 121 762 90
+triangle 1090 1091
+triangle 1120 1121
+gotoroom 1180 304
+place 1260 8362 741 5633 90
+triangle 1270 1271
+triangle 1300 1301
+gotoroom 1360 305
+place 2000 2760 147 2262 0 1
+circle 2002 2003
+gotoroom 2100 306
+place 2180 7695 684 -485 90
+triangle 2190 2191
+triangle 2220 2221
+gotoroom 2280 307
+place 2360 9615 121 762 90
+triangle 2370 2371
+triangle 2400 2401
+gotoroom 2460 308
+gotoroom 2540 309
+place 2620 7900 109 681 90
+triangle 2630 2631
+triangle 2660 2661
+gotoroom 2720 302
+place 2800 4950 10 4150 0 1
+circle 2802 2803
+psp_shot 820
+psp_shot 2040
+psp_shot 2850
+onleviathan 3000
+mkey cross 120
+mkey cross 180
+mkey cross 240
+psp_shot 6000
+psp_shot 10000
