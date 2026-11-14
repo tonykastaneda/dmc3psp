@@ -76,7 +76,8 @@ FIRST_START = {5: 2}
 CLEAR_ROOMS = {5: "121"}
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
-# is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this).
+# is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
+# a statue area (type 5, as 120's Azure Garden) are added from it (parse_shop_area).
 SHOPS = {"005": (5211.4, 780.7, 1539.8)}
 # Lifts that work: 103's carries Dante up to the door into 110 in Mission 4. Others aren't on a route yet.
 LIFT_ROOMS = {"103", "113"}
@@ -129,6 +130,21 @@ def parse_starts(data):
     chunk = next(c for c in data if c and c[:4] == b"POS\0")
     count = struct.unpack_from("<H", chunk, 6)[0]
     return [struct.unpack_from("<4f", chunk, 0x14 + i * 0x30) for i in range(count)]
+
+
+def parse_shop_area(data):
+    """A Divinity Statue's own area: an EVE area of type 5 opens the shop when Dante examines inside it
+    (FUN_00209c00: records of 0x80 from +0x10, type byte at +4, the 4 corners as xyzw at +0x20). Room 120 has
+    one. Returns its corners' average, or None."""
+    chunk = next((c for c in data if c and c[:4] == b"EVE\0"), None)
+    if chunk is None:
+        return None
+    for i in range(struct.unpack_from("<H", chunk, 6)[0]):
+        at = 0x10 + i * 0x80
+        if at + 0x80 <= len(chunk) and chunk[at + 4] == 5:
+            corners = [struct.unpack_from("<3f", chunk, at + 0x20 + k * 16) for k in range(4)]
+            return tuple(round(sum(c[j] for c in corners) / 4, 1) for j in range(3))
+    return None
 
 
 def parse_lifts(text):
@@ -223,6 +239,9 @@ def main():
                                story=gimmicks.story_tags(game), sets={g["number"]: g for g in gimmicks.parse_game(game)})
             tags = {s["index"]: n for n, s, *_ in rooms[name]["breakables"]}
             rooms[name]["boxes"] = gimmicks.collision_boxes(game, tags)
+            shop = parse_shop_area(data)
+            if shop and name not in SHOPS:
+                SHOPS[name] = shop
     for name, slot in SLOTS.items():
         out = args.output / f"ROOM_{name}.BIN"
         if not out.exists():

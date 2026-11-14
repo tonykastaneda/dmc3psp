@@ -139,7 +139,7 @@ From its event script (EventTbl05, GDATA 243; `build/hdref/evt_m5.txt` locally).
 | 422 | The Jester (EST 62 = class 44, `CEm044`, SE only), on his own model (em037, GDATA 140) with a simplified fight (`docs/ENEMY_SPECS.md` E). Arena st422, GDATA 824 |
 | 102 | Group 3: Enigmas and Gluttonies (the Soul of Steel) |
 | 113 | Surge of Fortunas: strike the switch (or O by it) and ride the lift. Each of groups 0-3 (Prides, set at 2000-5000 high) drops onto it as it comes within 1200 of their height, and it holds still while they're alive; any that fall 1500 below it are gone. It rises at 250 cm a second (an estimate) to the door to 120 |
-| 120 | Azure Garden, the Divinity Statue |
+| 120 | Azure Garden. The Divinity Statue (in its stage): O by it opens the shop. Its place is the room's EVE area of type 5, which opens the shop on examine (FUN_00209c00) |
 | 121 | Agni & Rudra (EST 45, class 27), on their own model (em026, GDATA 131) with a simplified fight (`docs/ENEMY_SPECS.md` F). Both down clears the mission |
 
 Load, against what's been measured on the PSP: 111's seven Blood-goyles skin about 3,900 vertices (Mission 2's
@@ -149,7 +149,7 @@ been run on hardware yet: PPSSPP only.
 
 Gates: 111's doors to 112 and 110 wait for 422; 112's door to 113 waits for 102, and then a bridge
 spans 112's pit (from its floor at 3000 to the one at 3500), standing in for the Soul of Steel's platform. It's drawn as 20 plain stone steps (the game's platform gimmick isn't converted).
-120's Divinity Statue isn't in: neither its stage nor the Mission 5 script places one. The Astronomical Board,
+The Astronomical Board,
 Vajura and Soul of Steel aren't items: the gates stand in for them.
 
 ## What the missions do now, and what's a stand-in
