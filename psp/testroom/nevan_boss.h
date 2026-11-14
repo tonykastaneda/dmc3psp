@@ -18,6 +18,7 @@ typedef struct {
     int action, step, health, hidden;
     int want, restart;           /* out: the motion to play, and whether from the top */
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
+    float land_damage;           /* out: its attack record's damage, or -1 for the estimate */
     int remove;                  /* out: she's gone */
     NevanBat bats[NEVAN_BATS];
 } NevanBrain;
