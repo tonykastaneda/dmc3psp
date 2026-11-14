@@ -76,6 +76,58 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 | ![Mission 4 card](docs/screenshots/mission4_card.png) | ![Mission Clear](docs/screenshots/mission_clear.png) |
 | Mission 4: The uninvited one | Mission Clear |
 
+## Missions
+
+All 20 missions play from Mission Select to Mission Clear, with each room's enemies, doors and gimmicks from the game's
+own data and event scripts. Each mission's boss room or route was re-run to Mission Clear in PPSSPP on 2026-11-14 (the
+[regression sweep](docs/GAME_FLOW.md#regression-sweep-2026-11-14-master-98e84b6-with-missions-1-20)). The table says what each
+mission adds, what's still estimated, and where the details are. Things missing everywhere: real-time cutscenes, music and
+sound effects, saves, and Dante dying.
+
+| Mission | Plays | Approximated | Details |
+| --- | --- | --- | --- |
+| 1 | Prides, then the later waves, from the event script | Easy and Normal columns only; no real-time cutscenes | [game flow](docs/GAME_FLOW.md#game-flow-menus-cutscenes-and-missions-1-and-2) |
+| 2 | The street's groups, then the Hell Vanguard (class decoded) | Parts of his fight are estimates (see the spec); Mission 2's intro event isn't run | [Vanguard spec](docs/VANGUARD_SPEC.md) |
+| 3 | The tower's rooms, Bullseye's crest switch and blue seal, Cerberus | Some of Cerberus's timings and damage | [Cerberus spec](docs/CERBERUS_SPEC.md), [Bullseye spec](docs/BAR_CRANK_SPEC.md) |
+| 4 | Lifts, seals, the Gigapede, the Astronomical Board | Seal models are tinted boards | [game flow](docs/GAME_FLOW.md#mission-4-find-the-key-to-the-stars) |
+| 5 | Blood-goyles, the Jester, the Soul of Steel, the Surge of Fortunas lift, Agni & Rudra | The Jester's and Agni & Rudra's fights are simplified; the pit bridge is plain steps | [game flow](docs/GAME_FLOW.md#mission-5-of-devils-and-swords) |
+| 6 | The three trials, the Trial of Skill's spikes, the barrier mist | The spikes are a stand-in | [game flow](docs/GAME_FLOW.md#mission-6-family-ties) |
+| 7 | Jump pads, Pawns, Greeds and coffins, Vergil (CEm035 decoded) | Some of Vergil's damage and timing | [Vergil spec](docs/VERGIL_SPEC.md) |
+| 8 | Leviathan's rooms and organs, Hell Envy, Nausika, Ignis Fatuus | Organ attacks partly estimated | [Leviathan spec](docs/LEVIATHAN_SPEC.md) |
+| 9 | Arachnes, the light-beam room, Nevan | Nevan's fight is a stand-in (her bats and dress aren't drawn); 203's beam is reset by its panel | [game flow](docs/GAME_FLOW.md#mission-9-faded-memories) |
+| 10 | Stone Mask, the lake bridge, Neo-Generator, Dullahans | Bridge animation and collision; Dullahan AI simplified | [Mission 10 notes](docs/MISSION10_SPEC.md) |
+| 11 | Beowulf in the Torture Chamber, the Rotating Bridge route | Beowulf's fight is a stand-in from the walkthrough | [game flow](docs/GAME_FLOW.md#mission-11-revenge) |
+| 12 | The Temperance Wagon, Geryon on the bridge and the ground | Some of Geryon's timings | [Geryon spec](docs/GERYON_SPEC.md) |
+| 13 | The crystal-light grid, Damned Bishops, Vergil with Beowulf | Bishop and boss estimates | [Mission 13 notes](docs/MISSION13_SPEC.md) |
+| 14 | Lair of Judgement to 13th Avenue: the combat adjudicator, Hell's Highway's chessmen | The adjudicator takes 20 hits of any weapon; the maze panels stay put; the other chessmen spawn as Pawns | [game flow](docs/GAME_FLOW.md#mission-14-drive) |
+| 15 | The Fallen (decoded picks), flame portals, the Devilsprout Lift | Fallen damage and timings | [Fallen spec](docs/FALLEN_SPEC.md) |
+| 16 | Lady in the Divine Library | Her fight is a stand-in: her class isn't decoded | [game flow](docs/GAME_FLOW.md#mission-16-win-or-lose) |
+| 17 | The trials, the Doppelganger (decoded state choices) | Crest light and some timings | [Doppelganger spec](docs/DOPPELGANGER_SPEC.md) |
+| 18 | The boss rush through 403's nine doors, the bingo board | The board's own rule is read as a 3 x 3 line | [game flow](docs/GAME_FLOW.md#mission-18-invading-hell) |
+| 19 | The Nirvanas, Arkham and his Legions, both rounds | Some of Arkham's attacks | [Arkham spec](docs/ARKHAM_SPEC.md) |
+| 20 | Vergil's final fight with Devil Trigger, the ending street | The ending's cinematic and Lady ally | [Mission 20 notes](docs/MISSION20_SPEC.md) |
+
+### Secret Missions
+
+Eleven of the twelve play to their clear. All 12 are entered at the red structures in the main missions' rooms and played in their own rooms (st600-st611),
+then put Dante back where he came in. Most rules come from the game's data. The clear checks are the port's, because
+their code isn't decoded. Each of the eleven was played to its clear in PPSSPP. Details: [the Secret Missions table](docs/GAME_FLOW.md#secret-missions).
+
+| # | Rule | Notes |
+| --- | --- | --- |
+| 1 | Beat every enemy | The rule is inferred from the room |
+| 2 | Beat 4 Enigmas without being hurt | |
+| 3 | Stay in the air for 20 seconds | |
+| 4 | Ride the elevator to the top | |
+| 5 | Break every prop within 40 seconds | |
+| 6 | Collect every red orb | Reached with Air Raid, Nevan's Devil Trigger flight (from player states 0x25-0x28); no time limit yet |
+| 7 | Reach the Blue Orb within 30 seconds | Devil Trigger's run, measured on the PS2, clears it in about 28.6 s |
+| 8 | Beat every enemy | Arachnes and Hell Vanguards |
+| 9 | Let no enemy escape the wagons | **Not in yet:** the wagons (608's TRUCK set) aren't ported |
+| 10 | Solve the crystal puzzle | CStageSetCrystal decoded, its layouts read from the executable |
+| 11 | Avoid the spikes and reach the Blue Orb | The spike trap isn't in |
+| 12 | Reach the Blue Orb Fragment | The moving blocks aren't in |
+
 ## Current verified state
 
 - The PS2 ISO is verified by size and SHA-256.
@@ -83,12 +135,12 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 - Random-access tools inventory all four AFS archives without extracting the whole ISO.
 - GDATA inventory covers **3,183 PACs**, **680 raw assets**, **14,969 top-level chunks**, and **533 nested PACs**, with no malformed packs.
 - All **87 standalone TIM2 assets** convert successfully to PNG/RGBA. The first MOD converts to 17 objects, 5,316 vertices, 5,282 triangles, and three correct character textures.
-- The PSP runtime executes adapted gameplay routines and renders Dante with original geometry, UVs, and textures. Its current benchmark is **37.4 FPS** using a 240×136 model buffer upscaled to 480×272 with native-resolution UI.
+- The PSP runtime plays all 20 missions and 11 of the 12 Secret Missions with the game's own stages, models, motions and textures, holding 30 FPS on a real PSP in the benchmark scenes (`tools/psp_bench.py`, results in `analysis/testroom/bench_*.txt`).
 - `MEMSIZE=1` targets PSP-2000/3000/Go/Street and Adrenaline on Vita at a 30 FPS budget. PSP-1000 isn't targeted: the current build needs more than its 32 MB.
 - A freestanding Allegrex `EBOOT.PBP` builds and runs in **PPSSPP 1.17.1**. The runtime test requires PSP code to write `DMC3PSP_BOOT_OK` to the emulated memory stick.
 - `TIME.txt` contains the timestamped work log. `analysis/autonomy-status.json` records the latest autonomous stage results.
 
-Full scene execution, animation/deformation, audio, and gameplay remain in progress. See [docs/PORT_MAP.md](docs/PORT_MAP.md) for the technical map and next targets.
+Real-time cutscenes, audio outside movies, saves and Game Over remain to do. See [docs/PORT_MAP.md](docs/PORT_MAP.md) for the technical map and [docs/GAME_FLOW.md](docs/GAME_FLOW.md#next-steps-in-order) for the next steps.
 
 ## What this repository contains
 
@@ -182,73 +234,3 @@ All downloaded tools are isolated under `.tools/` and excluded from Git. No glob
 - Eclipse Temurin JDK 25.0.5+8, release-hash verified.
 
 The runtime test deploys the current EBOOT to `E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3PSP\EBOOT.PBP`. It only closes or stops the PPSSPP process that it launched.
-
-
-## Mission 7
-
-From the Dark Corridor to Mission Clear: the Heavenrise Chamber's jump pads, Damned Pawns, Hell Greeds and their
-coffins, the Orihalcon Fragment and the lift down to the Chamber of Echoes, the Siren's Shriek, the Cursed Skull
-Chamber's ball, the Crystal Skull and the return ambush, and Vergil (CEm035, decoded) on the Peak of Darkness.
-What's decoded and what's estimated: [the Vergil spec](docs/VERGIL_SPEC.md) and
-[game flow](docs/GAME_FLOW.md#mission-7-a-chance-meeting).
-
-## Mission 8
-
-Leviathan's rooms, native Hell Envy, three animated boss organs, charged attacks, acid floors and the
-five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and used in room 302.
-Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
-full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
-[the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).
-
-## Mission 19
-
-From the Netherworld's Room of Fallen Ones to Mission Clear: the Nirvanas, the Samsara and the golden statue, the End
-of the Line, and Arkham (class 35: his body, outer shell and Legions from GDATA 137; his side timers and picks
-decoded) in Forbidden Nirvana, through both rounds. What's decoded and what's estimated:
-[the Arkham spec](docs/ARKHAM_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-19-forces-collide).
-
-## Mission 17
-
-From the Dark Corridor to the Dark-pact Chamber: the Trial of Wisdom's Dullahans, the Trial of Skill's red pod, the
-Skull Spire, and the Doppelganger (CEm034: its own model and Dante's moves, decoded state choices) in Apparition
-Incarnate, where only the light of the crests Dante opens lets a blade bite. What's decoded and what's estimated:
-[the Doppelganger spec](docs/DOPPELGANGER_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-17-inner-demons).
-
-## Mission 15
-
-From the Upper Subterran Garden to Mission Clear: the Fallen (CEm011, its own model, motions and decoded hover and
-attack picks), the flame portals and the coloured doors they turn, the three Orihalcon Fragments and the
-Devilsprout Lift up to the Sun & Moon Chamber. What's decoded and what's estimated: [the Fallen spec](docs/FALLEN_SPEC.md)
-and [game flow](docs/GAME_FLOW.md#mission-15-the-gatecrasher).
-
-## Mission 12
-
-From the Torture Chamber to Mission Clear: the Temperance Wagon's ride, the Blood-goyle rooms, the Marble
-Throughway and the Rotating Bridge, and Geryon (CEm029, his horse and carriage from em029) on the bridge and, once
-it falls, on the ground below. What's decoded and what's estimated: [the Geryon spec](docs/GERYON_SPEC.md) and
-[game flow](docs/GAME_FLOW.md#mission-12-hunting-the-hunter).
-
-## Mission 10
-
-M10 runs from the Limestone Cavern to Mission Clear: Stone Mask, lake bridge, Neo-Generator,
-return encounters, rotating bridge and the Marble Throughway clear trigger. Dullahans use their
-native shield model and motions with a simplified rear-weakness/charge AI. Bridge animation and
-collision are approximations; see [Mission 10 implementation notes](docs/MISSION10_SPEC.md).
-The scripted PPSSPP route uses placements and minion clears to isolate progression, and walks
-Dante across the powered bridge using normal movement.
-
-## Mission 13
-
-The underground route includes the native crystal-light grid, its reset switch, item 51 and sealed
-boss door, Damned Bishop encounters, and Vergil's second fight with Beowulf and Devil Trigger.
-The M13 variant extends the existing Vergil boss while preserving M7 behavior. Native data and
-remaining approximations are recorded in [Mission 13 notes](docs/MISSION13_SPEC.md) and
-[the Vergil spec](docs/VERGIL_SPEC.md).
-
-## Mission 20
-
-The final Vergil fight uses the native arena, 10000 HP, Force Edge model and motion scripts,
-with an additive M20 move scheduler and Devil Trigger phase. Defeating him leads automatically
-to the timed ending street, then Mission Clear. The ending's Lady ally, cinematic sequence and
-some boss effects remain approximations; see [Mission 20 notes](docs/MISSION20_SPEC.md) and
-[the Vergil spec](docs/VERGIL_SPEC.md).
