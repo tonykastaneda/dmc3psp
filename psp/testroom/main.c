@@ -60,6 +60,7 @@ int testroom_frame;
 #include "beowulf_runtime.h"
 #include "beowulf_groups.h"
 #include "devil_runtime.h"
+#include "mission6.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -1017,6 +1018,20 @@ static void door_prompt_draw(void) {
     draw_text(SCR_WIDTH / 2 - 28, SCR_HEIGHT - 40, "O  ENTER");
 }
 
+/* Mission 6's line of text (an item's name), in the middle of the screen. */
+static void caption_draw(void) {
+    float alpha;
+    const char *text = m6_caption(&alpha);
+    unsigned int a = (unsigned int)(alpha * 255.0f) << 24;
+    if (!text || !menu_loaded()) return;
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_LIGHTING);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuEnable(GU_TEXTURE_2D);
+    menu_font_draw(SCR_WIDTH / 2 - menu_font_width(20.0f, text) * 0.5f, SCR_HEIGHT / 2 - 60, 20.0f, text, a | 0x00ffffffu);
+    sceGuDisable(GU_BLEND);
+}
+
 static void draw_debug_menu(int viewer);
 /* The debug menu on its own frames, for the menus (menu.h's MenuDebug): until it's closed. */
 static void debug_modal(void) {
@@ -1291,6 +1306,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (debug_open) draw_debug_menu(anim.viewer);
     if (pause_active) pause_draw();
     if (door_prompt_time > 0.0f && !pause_active && !debug_open) door_prompt_draw();
+    if (mission_mode && !pause_active && !debug_open) caption_draw();
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -2169,6 +2185,7 @@ static int over_lift(const RoomLift *l, float x, float z) {
     float lx = dx * cosf(a) - dz * sinf(a), lz = dx * sinf(a) + dz * cosf(a);
     return fabsf(lx) < l->half_x && fabsf(lz) < l->half_z;
 }
+static int room_number(int r) { return r >= 0 ? atoi(rooms[r].file + 5) : -1; }   /* "ROOM_122.BIN" is 122 */
 static int room_named(const char *file) {
     int i;
     for (i = 0; i < (int)(sizeof(rooms) / sizeof(rooms[0])); ++i) if (!strcmp(rooms[i].file, file)) return i;
@@ -2357,6 +2374,7 @@ static int door_gated(const RoomDoor *d) {
         const RoomSwitchSeal *w = room_seal();
         if (w && !sw_lit && d->number == w->next_number) return 1;   /* the seal's door: flag 33 */
     }
+    if (mission_choice.mission == 6 && m6_door_shut(room_number(mission_room), (int)(d - rooms[mission_room].doors))) return 1;
     for (i = 0; i < DOOR_GATE_COUNT; ++i) {
         const DoorGate *g = &door_gates[i];
         if (g->mission != mission_choice.mission || g->room != mission_room || g->next_number != d->number) continue;
@@ -2434,6 +2452,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if (!mission_mode || mission_room == ROOM_NONE) return;
     if(mission_choice.mission==8)mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);
     switch_hit(player, reach, kind);
+    if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
         float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
@@ -2569,6 +2588,7 @@ static void mission_gimmicks_draw(void) {
     }
     seal_draw();
     fight_seals_draw();
+    if (mission_choice.mission == 6) m6_draw();
     if (bridge_up()) {
         /* 112's bridge (mission_floor's ramp, 3000 at z 2650 to 3500 at z 4350): drawn as 20 stone steps,
          * alternating shades, each a box down to the step below. A stand-in: the game's own platform gimmick
@@ -2648,6 +2668,7 @@ static int script_run(float dt, float floor_y) {
 /* Into another room: its stage, Dante at the start the door names, and the room's script from the top. */
 static void enter_room(int room, int start, Player *player, FollowCamera *camera) {
     char path[320];
+    
     const float *s = rooms[room].starts[start];
     menu_show_loading();
     enemy_set_count(0, player->x, player->z);
@@ -2698,6 +2719,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     }
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
     script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
+    if (mission_mode && mission_choice.mission == 6 && m6_enter(room_number(room))) script_at = 0;   /* mission6.c */
     script_wait = 0.0f;
     script_waiting_alive = -1;
     player_spawn[0] = s[0];
@@ -2712,6 +2734,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     player->on_ground = 1;
     coat_reset();
     start_camera(player, camera);
+    
 }
 
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
@@ -2727,12 +2750,26 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
         if(m8_boss_started && leviathan_boss_dying())enemy_clear_minions();
     }
-    int held = room_held(), done = held || script_run(dt, player->y), i, in_a_box = 0;
+    int m6 = mission_choice.mission == 6, held = room_held() || (m6 && m6_script_held(room_number(mission_room)));
+    int done = held || script_run(dt, player->y), i, in_a_box = 0;
     fight_seal_on = !done || enemy_alive_count() > 0;
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
+    if (m6) {
+        int prompt = 0;
+        if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
+        if (prompt) door_prompt_time = 1.0f;
+        static int m6_tick;
+        if (focus_cmp && (m6_tick++ % 30) == 0) {
+            char path[320], line[256];
+            FILE *f;
+            path_in_game_dir(path, sizeof(path), "M6_LOG.TXT");
+            m6_status(line, sizeof(line));
+            if ((f = fopen(path, "a"))) { fprintf(f, "%d pos=%.0f,%.0f,%.0f alive=%d %s\n", m6_tick, player->x, player->y, player->z, enemy_alive_count(), line); fclose(f); }
+        }
+    }
     if (focus_cmp && lift && (testroom_frame % 30) == 0) vergil_boss_note("lift", player->x, player->y, player->z, lift_y);
     if (lift && lift->mission) {
         /* Mission 7's elevators (137 and 100): powered (its item used), standing on it carries Dante to its
@@ -2819,6 +2856,16 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         float sx = player->x - s->x, sz = player->z - s->z;
         if (s->room != mission_room || !done || enemy_alive_count() > 0) continue;
         if (sx * sx + sz * sz > 260.0f * 260.0f || fabsf(player->y - s->y) > 300.0f) continue;
+        {
+            /* A door's box takes the press first: 123's statue stands 245 cm from its door to 122. */
+            int k, at_door = 0;
+            for (k = 0; k < rooms[mission_room].door_count; ++k) {
+                const RoomDoor *d = &rooms[mission_room].doors[k];
+                if (fabsf(player->x - d->box[0]) < d->box[3] * 0.5f + DOOR_MARGIN && fabsf(player->z - d->box[2]) < d->box[5] * 0.5f + DOOR_MARGIN
+                    && player->y > d->box[1] - DOOR_BELOW && player->y < d->box[1] + d->box[4]) at_door = 1;
+            }
+            if (at_door) continue;
+        }
         door_prompt_time = 1.0f;
         if (pressed & PSP_CTRL_CIRCLE) {
             shop_run(&shop_state, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL, 100000);
@@ -2878,7 +2925,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
-    if (info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE && info->clear_room == ROOM_NONE) {
+    if (!m6 && info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE && info->clear_room == ROOM_NONE) {
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
@@ -2900,6 +2947,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (!(pressed & PSP_CTRL_CIRCLE)) continue;
         }
         if (d->number == info->end_room) return 1;   /* the way out of the mission */
+        if (m6) {
+            int next = 0, start = 0;
+            if (m6_door_route(room_number(mission_room), i, &next, &start)) {
+                char want[16];
+                snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
+                if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
+            }
+        }
         if (d->next == ROOM_NONE) continue;           /* a room that isn't built */
         enter_room(d->next, d->start, player, camera);
         return 0;
@@ -2946,6 +3001,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
     enemy_set_anim_auto(dummy_anim_auto);
     coat_reset();
     start_camera(player, camera);
+    
 }
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
@@ -2979,6 +3035,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
+    if (choice->mission == 6) m6_reset(choice->difficulty);
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
@@ -3487,6 +3544,10 @@ int main(int argc, char *argv[]) {
                 enemy_giga_ride(&player.x, &player.y, &player.z, player.on_ground);
                 orbs_update(dt, player.x, player.y, player.z);
                 bench_ai_us = sceKernelGetSystemTimeLow() - ai_start;
+            }
+            if (mission_mode && mission_choice.mission == 6 && m6_hazard(&from_x, &from_z)) {
+                float chest[3] = {player.x, player.y + 110.0f, player.z};
+                if (combat_player_hit_damage(&combat, &player, from_x, from_z, 0, 700.0f)) fx_hit_spark(chest);   /* 125's spikes */
             }
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
