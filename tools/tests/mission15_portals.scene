@@ -1,0 +1,16 @@
+killevery 60
+place 30 1990 230 3060 0
+swing 20 60 900
+place 370 2505 790 250 180
+walkto 2505 50 380 480
+circle 390 480
+place 510 3760 -9 4550 0
+walkto 3760 4800 520 600
+circle 530 600
+place 620 3420 0 2800 35
+place 910 2500 0 3550 0
+walkto 2500 3800 920 1010
+circle 930 1010
+psp_shot 200
+psp_shot 700
+psp_shot 1100

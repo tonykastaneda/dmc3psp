@@ -218,6 +218,9 @@ static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
 static void dullahan_spawn_glue(void);
+static void fallen_spawn_glue(void);
+static void fallen_update_glue(float f, float px, float py, float pz);
+static void fallen_hit_glue(HitKind kind, float from_x, float from_z);
 static void dullahan_update_glue(float f,float px,float py,float pz);
 static void dullahan_hit_glue(HitKind kind,float from_x,float from_z);
 static void arachne_spawn_glue(void);
@@ -339,6 +342,7 @@ static int kind_health(int kind) {
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 500 / 250;   /* an estimate */
     case ENEMY_NEVAN: return ENEMY_HEALTH * 2000 / 250;    /* an estimate */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
+    case ENEMY_FALLEN: return ENEMY_HEALTH * 1500 / 250;   /* an estimate (fallen.c) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * 3000 / 250;  /* an estimate */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
@@ -422,6 +426,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
     if (kind == ENEMY_DULLAHAN) { dullahan_spawn_glue(); return; }
+    if (kind == ENEMY_FALLEN) { fallen_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
@@ -570,6 +575,7 @@ int enemy_kind_for_class(int spawn_class) {
      * 16 Wrath, 20 Greed), and 31 is the Enigma. Anything not ported yet stands in as a Pride. */
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
     if (spawn_class == 30) return ENEMY_DULLAHAN;
+    if (spawn_class == 29) return ENEMY_FALLEN;
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
@@ -1284,6 +1290,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
     if (e->kind == ENEMY_DULLAHAN) { ++hits; dullahan_hit_glue(kind,from_x,from_z); return; }
+    if (e->kind == ENEMY_FALLEN) { ++hits; fallen_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
@@ -1565,6 +1572,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_DULLAHAN) { dullahan_update_glue(f,px,py,pz); return; }
+    if (e->kind == ENEMY_FALLEN) { fallen_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
@@ -3793,5 +3801,91 @@ static void beowulf_hit_glue(HitKind kind) {
     }
     e->health = (signed char)b->health;
     beowulf_play(b->want, b->restart);
+    b->restart = 0;
+}
+
+/* ---- The Fallen (fallen.c decides; here his body, his spear and the shared attack turn). */
+#include "fallen.h"
+extern int testroom_frame;
+static FallenBrain fallen_brain[ENEMY_MAX];
+static int fallen_motion_id[FALLEN_M_COUNT] = {-2};
+static float fallen_rest;   /* FUN_003442c0: the enemy manager lets one attack, then rests 3 s */
+static void fallen_play(int m, int restart) {
+    int id;
+    if (fallen_motion_id[0] == -2) { int k; for (k = 0; k < FALLEN_M_COUNT; ++k) fallen_motion_id[k] = motion_find(fallen_motion_names[k]); }
+    id = fallen_motion_id[m];
+    if (id < 0) return;
+    if (id != e->motion || restart) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 8.0f;
+        e->motion = id; e->frame = 0.0f; e->done = 0;
+    }
+}
+static void fallen_spawn_glue(void) {
+    FallenBrain *b = &fallen_brain[e - enemies];
+    e->motion = -1;
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1] + 100.0f; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->floor_y = e->floor_y;
+    fallen_spawn(b, e->health);
+    fallen_play(b->want, 1);
+    b->restart = 0;
+    e->fade = 0.0f;
+}
+static void fallen_update_glue(float f, float px, float py, float pz) {
+    FallenBrain *b = &fallen_brain[e - enemies];
+    const Motion *m;
+    float g;
+    int token = fallen_rest <= 0.0f, had = token;
+    {
+        int k;   /* the clock runs once a frame: on the first Fallen's turn */
+        for (k = 0; k < ENEMY_MAX && !(enemies[k].active && enemies[k].kind == ENEMY_FALLEN); ++k) {}
+        if (&enemies[k] == e && fallen_rest > 0.0f) fallen_rest -= f;
+    }
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->motion >= 0) {
+        m = motion_get(e->motion);
+        e->frame += f;
+        if (e->frame >= m->end_frame) {
+            e->done = 1;
+            e->frame = fallen_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+        }
+    }
+    if (floor_under(b->pos[0], b->pos[1] + 100.0f, b->pos[2], &g)) b->floor_y = g;
+    b->frame = e->frame; b->done = e->done;
+    fallen_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, &token);
+    if (had && !token) fallen_rest = 180.0f;   /* this one attacked */
+    {
+        static int last_state[ENEMY_MAX];   /* tests: each change of state, in VERGIL_LOG.TXT */
+        int k = (int)(e - enemies);
+        if (last_state[k] != b->state || b->land || b->spear || (testroom_frame % 60) == 0) {
+            char line[128];
+            snprintf(line, sizeof(line), "fallen %d state %#x mode %d land %d spear %d hp %d gauge %.0f rest %.0f atk %d", k, b->state, b->mode, b->land, b->spear, b->health, b->gauge, fallen_rest, attacks_on);
+            vergil_boss_note(line, b->pos[0], b->pos[1], b->pos[2], py);
+            last_state[k] = b->state;
+        }
+    }
+    e->pos[0] = b->pos[0]; e->pos[1] = b->pos[1]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
+    e->floor_y = b->floor_y;
+    e->air = fallen_flying(b);
+    if (b->restart || fallen_motion_id[b->want] != e->motion) { fallen_play(b->want, b->restart); b->restart = 0; }
+    if (b->land) land_attack(b->land == 2);
+    if (b->spear) {
+        /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
+        float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
+        float to[3] = {px, py + 100.0f, pz};
+        goyle_bullet(from, to);
+    }
+    if (b->remove) e->active = 0;
+}
+static void fallen_hit_glue(HitKind kind, float from_x, float from_z) {
+    FallenBrain *b = &fallen_brain[e - enemies];
+    float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
+    fx_hit_spark(at);
+    if (e->plan == P_DEATH) return;
+    if (fallen_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
+        e->plan = P_DEATH;
+        died();
+    }
+    fallen_play(b->want, b->restart);
     b->restart = 0;
 }
