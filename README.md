@@ -168,9 +168,10 @@ All downloaded tools are isolated under `.tools/` and excluded from Git. No glob
 The runtime test deploys the current EBOOT to `E:\SYSTEMS\PPSSPP\memstick\PSP\GAME\DMC3PSP\EBOOT.PBP`. It only closes or stops the PPSSPP process that it launched.
 
 
-## Mission 8 (in progress)
+## Mission 8
 
 Leviathan's rooms, native Hell Envy, three animated boss organs, charged attacks, acid floors and the
 five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and used in room 302.
-Full route and Mission Clear validation is ongoing; limitations are recorded in
+Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
+full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
 [the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).

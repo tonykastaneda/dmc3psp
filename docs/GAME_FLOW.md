@@ -228,10 +228,11 @@ BREAK meshes and must be struck before their nearby exit works. Their default du
 
 Acid uses the authored HITS triangles whose material byte is 13. PCSX2 Normal observation at
 (469,-131,3061) confirmed 25 HP losses about every seven frames, while the flesh sample caused none.
-The port applies that amount while grounded on those triangles. Rooms 303/307's Nausika chase actors,
-liquid UV animation, and the real-time story cameras are not implemented. Complete route and boss-clear
-validation is still in progress; room loading, native Envy waves, Ignis pickup and the acid floor have
-been captured in PPSSPP.
+The port applies that amount while grounded on those triangles. Rooms 303/307 now have the native
+Nausika model/motions following its authored chase path, bite attacks, and melee damage/stagger.
+Path steering and attack attachment interpolation remain approximate; liquid UV animation and
+real-time story cameras are not implemented. PPSSPP checks cover the full Ignis route and a
+full-health Heart defeat through normal shotgun damage, reaching Mission Clear.
 
 
 ### Mission 9: "Faded memories"
