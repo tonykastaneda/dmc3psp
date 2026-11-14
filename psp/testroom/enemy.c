@@ -215,7 +215,7 @@ static void goyle_spawn(void);
 static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
-static void goyle_bullet(const float from[3], const float to[3]);
+static int goyle_bullet(const float from[3], const float to[3]);
 static int enemy_giga_part(int k, float out[3]);
 static void enemy_giga_struck(const float at[3], float damage);
 #define GIGA_PARTS_PUBLIC 8
@@ -1946,7 +1946,7 @@ void enemy_draw(void) {
 #define ARROW_TOP_SPEED 65.0f
 #define ARROW_RADIUS 30.0f
 /* type 0 an Enigma's arrow; 1 the Gigapede's homing sphere; 2 its orb that drops, then rolls. */
-typedef struct { int active, homing, type; float pos[3], vel[3], life, lift, goal[2]; } Arrow;
+typedef struct { int active, homing, type; float pos[3], vel[3], life, lift, goal[2], damage; } Arrow;   /* damage 0: the fallback */
 static Arrow arrows[ARROW_MAX];
 static int enigma_motion_idle, enigma_motion_flinch, enigma_motion_heavy, enigma_motion_death;
 static int enigma_motion_aim, enigma_motion_release, enigma_motion_fan;
@@ -2007,6 +2007,7 @@ static void fire_arrow(float px, float py, float pz, float offset) {
     dx = px - hand[0]; dy = py + 100.0f - hand[1]; dz = pz - hand[2];
     d = sqrtf(dx * dx + dz * dz);
     arrows[i].active = 1;
+    arrows[i].damage = 0.0f;
     arrows[i].type = 0;
     arrows[i].life = ARROW_LIFE;
     memcpy(arrows[i].pos, hand, sizeof(hand));
@@ -2101,6 +2102,7 @@ static void arrows_update(float f, float px, float py, float pz) {
             landed_x = a->pos[0] - a->vel[0];
             landed_z = a->pos[2] - a->vel[2];
             landed_heavy = 0;
+            landed_damage = a->damage > 0.0f ? a->damage : -1.0f;   /* not the last hit's */
             a->active = 0;
             continue;
         }
@@ -2535,15 +2537,16 @@ void enemy_gun_aimed(float x, float z) {
     e = was;
 }
 
-static void goyle_bullet(const float from[3], const float to[3]) {
+static int goyle_bullet(const float from[3], const float to[3]) {
     int i;
     float dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], l = sqrtf(dx * dx + dy * dy + dz * dz) + 0.01f;
     for (i = 0; i < ARROW_MAX && arrows[i].active; ++i) {}
-    if (i >= ARROW_MAX) return;
+    if (i >= ARROW_MAX) return -1;
     memset(&arrows[i], 0, sizeof(arrows[i]));
     arrows[i].active = 1; arrows[i].type = 4; arrows[i].life = 120.0f;
     memcpy(arrows[i].pos, from, sizeof(arrows[i].pos));
     arrows[i].vel[0] = dx / l * 25.0f; arrows[i].vel[1] = dy / l * 25.0f; arrows[i].vel[2] = dz / l * 25.0f;
+    return i;
 }
 
 static void goyle_split_off(void) {
@@ -4072,7 +4075,7 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
         /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
         float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
         float to[3] = {px, py + 100.0f, pz};
-        goyle_bullet(from, to);
+        { int k = goyle_bullet(from, to); if (k >= 0) arrows[k].damage = 900.0f; }   /* record 0 (0x5c2dd0): 900 */
     }
     if (b->remove) e->active = 0;
 }
