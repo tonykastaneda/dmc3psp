@@ -774,8 +774,8 @@ flank, `003ad5d0`). Ported from the decoding below: the attack timer, the zones,
 and the lone brother's moves; the survivor takes up both swords. Guards: a new melee move of Dante's within 350 in front of one idling or moving makes Agni hop back (21), Rudra
 or the survivor guard (23, 25); a blow in the guard's first phase is turned (22, 24, 26: a hit), after which he
 counters at once from the second attack table [Dante's move classes aren't mapped: any melee move counts]. Not
-yet: the pair's openings and team moves (63, 64), the hops (16-21) beyond their scripts, 52-54 (47 / 49 stand in), the stagger gauge (heavy
-hits flinch them out of idling and moving, state 0), the swords' fire and wind shells, and the script events.
+yet: the pair's openings and team moves (63, 64), the hops (16-21) beyond their scripts, the stagger gauge (heavy
+hits flinch them out of idling and moving, state 0), the game's own effects (the slam's fire and wind bursts 0x311 / 0x312 and the charged blades' 0x24c / 0x24d are stand-ins: the port's burst, hurting within 300 cm as attack record 12 [estimate], and motes), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
 Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.
 They start as statues (ar71/ar72) and wake within 900 cm, when struck, or after 600 frames (the game plays a
 cutscene). One boss bar for both.

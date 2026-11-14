@@ -2483,7 +2483,9 @@ static int ar_statue_motion[2];
 static ArBrain ar_brains[2];
 static float ar_formation_time;            /* the pair's controller: frames left on this formation */
 static int ar_formation = 5;
-static unsigned short ar_dante_moves;   /* counts Dante's melee moves (enemy_dante_attack) */
+static unsigned short ar_dante_moves;
+static int ar_force = -1;   /* tests: the next state either brother takes from idle */
+void enemy_ar_force(int state) { ar_force = state; }   /* counts Dante's melee moves (enemy_dante_attack) */
 void enemy_dante_attack(int action, int gun) { (void)action; if (!gun) ++ar_dante_moves; }
 
 static int ar_init(void) {
@@ -2634,6 +2636,27 @@ static void ar_update(float f, float px, float py, float pz) {
     }
     keep_apart(px, py, pz, f);
     if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
+    {
+        float hx = e->hand_pos[0], hz = e->hand_pos[2], sn = sinf(e->yaw), cs = cosf(e->yaw);
+        float hand[3] = {e->pos[0] + hx * cs + hz * sn, e->pos[1] + e->hand_pos[1], e->pos[2] + hz * cs - hx * sn};
+        if (e->action >= 52 && e->action <= 54 && e->step == 3 && e->frame >= 165.0f && e->vel[1] == 0.0f) {
+            /* The slam's burst where the blade meets the floor (FUN_003a8200 phase 0x1f). The game's effects 0x311 /
+             * 0x312 aren't converted: a stand-in burst, hurting within 300 cm as attack record 12 [estimate]. */
+            float at[3] = {e->pos[0] + sn * 150.0f, e->floor_y + 40.0f, e->pos[2] + cs * 150.0f};
+            float ddx = px - at[0], ddz = pz - at[2];
+            e->vel[1] = 1.0f;
+            fx_explosion(at); fx_dust(at);
+            if (attacks_on && ddx * ddx + ddz * ddz < 300.0f * 300.0f && fabsf(py - e->floor_y) < 200.0f) {
+                land_attack(1);
+                landed_damage = ar_attacks[12].damage;
+            }
+        }
+        if (b->charged > 0.0f && ((int)e->timer & 7) == 0) {
+            /* The charged blade (effects 0x24c / 0x24d, not converted): motes of its element. */
+            float v[3] = {0.0f, 40.0f, 0.0f};
+            fx_mote(hand, v, 60.0f, 10.0f, 0.4f, b->set == 1 ? 0xffffd080u : 0xff2080ffu);
+        }
+    }
     /* A script that loops (a fall, a hold) gives way after 150 frames: what it waits on isn't followed. */
     if (e->done || (e->loop && !in->brain && e->wake > 150.0f)) {
         ++e->step;
@@ -2646,6 +2669,7 @@ static void ar_update(float f, float px, float py, float pz) {
             return;
         }
     }
+    if (in->brain && ar_force >= 0) { int st = ar_force; ar_force = -1; ar_go(st); return; }
     if (in->brain) {
         int next = ar_brain_decide(b, &s, e->action);
         if (next >= 0) ar_go(next);
@@ -2739,7 +2763,7 @@ static struct {
     unsigned char fired[4];
     struct { float life, hit_wait; int part; } beam[GIGA_BEAMS];
 } giga;
-static char giga_log_text[3072];
+static char giga_log_text[12288];
 static int giga_log_len, giga_ticks;
 static void giga_note(const char *what, int a, float b) {
     if (giga_log_len < (int)sizeof(giga_log_text) - 80)

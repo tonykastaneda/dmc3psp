@@ -41,7 +41,9 @@ static const ArStateInfo states[AR_STATE_COUNT] = {
     {S(55), 0x300, 2, 0, -1}, {S(56), 0x300, 2, 0, -1}, {S(57), 0x300, 2, 0, -1}, {S(58), 0x300, 2, 0, -1},
     /* 46-49 the long attacks */ {S(87), 0x300, 2, 0, -1}, {S(88), 0x300, 2, 0, -1}, {S(89), 0x300, 2, 0, -1}, {S(90), 0x300, 2, 0, -1},
     /* 50, 51 charge the sword */ {S(59), 0, 2, 0, -1}, {S(60), 0, 2, 0, -1},
-    /* 52-54 (FUN_003a8200's table; not decoded) */ {S(-1), 0x800, 2, 0, -1}, {S(-1), 0x800, 2, 0, -1}, {S(-1), 0x800, 2, 0, -1},
+    /* 52-54 the leaping slam (FUN_003a8200; its scripts by swords, gp tables 0x6195a0-0x6195b8): the blade meets
+     * the floor at frame 165 and bursts there, fire (effect 0x311) or wind (0x312) */
+    {S(61, 62, 63, 64), 0x800, 2, 0, -1}, {S(61, 62, 63, 64), 0x800, 2, 0, -1}, {S(65, 66, 67, 68), 0x800, 2, 0, -1},
     /* 55 at Dante above them */ {S(69, 70, 71, 72, 73), 0x800, 2, 0, -1},
     /* 56 */ {S(77, 76, 74, 75), 0x800, 2, 0, -1},
     /* 57, 58 */ {S(84, 85, 86, 85), 0, 2, 0, -1}, {S(84, 85, 86, 85), 0x300, 2, 0, -1},
@@ -205,8 +207,6 @@ int ar_brain_decide(ArBrain *b, const ArSense *s, int state) {
     int next;
     if (b->may_attack) {
         next = pick_attack(b, s);
-        /* 52-54 aren't decoded: the nearest of the others stands in. */
-        if (next >= 52 && next <= 54) next = b->set == 1 ? 49 : 47;
         if (next >= 0) {
             b->may_attack = 0;
             b->attack_timer = AR_ATTACK_WAIT;
