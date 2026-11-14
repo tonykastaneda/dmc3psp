@@ -17,4 +17,8 @@ void bullets_update(float dt);
 int bullets_shots(void);
 int bullets_hits(void);
 
+/* Shots pass the stage's walls: set by Secret Mission 9 (secret_missions.c), whose cart is caged by player-only
+ * walls the port can't tell apart. */
+extern int bullets_through_walls;
+
 #endif
