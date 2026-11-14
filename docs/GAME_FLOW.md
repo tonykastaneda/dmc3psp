@@ -259,6 +259,22 @@ script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run t
   vanishes to his far side. Her lightning and kiss aren't in; health, speeds and timings are estimates.
 - 210's STAY 150 (a white sheet over the stage) is hidden in Mission 9 on, as the script's gimmick_cmd10 [150, 0] does.
 
+### Mission 11: "Revenge"
+
+From EventTbl11 (GDATA 249; `orchestration/evt/evt_m11.txt` locally). After demo 27 it starts in 212 at start 1.
+Rooms 212-217 are GDATA 560-580, 239 and 240 are 668 and 672. Classes: EST 31 Enigma, EST 34 class 16 (em016,
+pack 11: the Soul Eater, from the walkthrough), EST 26 Hell Vanguard, EST 51 class 33 (em030, pack 21: Beowulf).
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 212 | Gears of Madness | Group 0: 2 Enigmas. Door 1 (to 211) disabled; door 0 leads on |
+| 213 | Altar of Evil Pathway | Area 0 (x 3200-3300) locks both doors and starts group 1: 5 Soul Eaters |
+| 214 | Altar of Evil | Two SLIDE blocks (300, 301) bound to flags 32 and 33: pushed by melee into their holes, each counts (counter 5). With both, gimmick 200 opens the hidden passage, door 1 (to 239) is enabled and sealed, and group 2 runs: a Hell Vanguard and Soul Eaters (Easy 3, Normal 2). Cleared, the doors open |
+| 239 | Temperance Wagon | No section. Area 0 boards the wagon (door 1, an event door, to 216) |
+| 216 | (the wagon ride) | A TRUCK set on rails, a 36000-frame clock; as it runs, object waves and groups 0 (5 Prides) and 1 (3 Prides, a Wrath), then on to 240 start 3 (or 239 start 3, riding back) |
+| 240 | (the far platform) | Arriving from 216, a camera; area 0 rides back. Door 1 (up the stairs) to 217 |
+| 217 | Torture Chamber | Area 0 plays demo 28, then group 0: Beowulf. Beaten, demo 29; area 0 again plays demo 30, which clears the mission |
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
