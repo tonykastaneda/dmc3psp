@@ -481,6 +481,13 @@ def main() -> None:
     # Chamber's balconies over its shaft (the walkthrough: "drop down to the ground level").
     edge_walls = [] if args.slot in NO_EDGE_WALL_SLOTS else open_edge_walls(hit_floors, hit_walls, floor, door_boxes)
     hit_walls += edge_walls
+    if not floor:
+        # A room with no floor of its own (216, the Temperance Wagon's ride: the wagon is a gimmick over a backdrop):
+        # the wagon's deck where the room's start is, 8 m x 4 m [approximation: the ride doesn't move].
+        x0, x1, z0, z1, y = sx - 400.0, sx + 400.0, sz - 200.0, sz + 200.0, sy
+        floor = [(x0, y, z0, x1, y, z0, x1, y, z1), (x0, y, z0, x1, y, z1, x0, y, z1)]
+        hit_floors = [f + (0.0, 1.0, 0.0, -y) for f in floor]
+        print(f"{name}: no floor; the wagon's deck at ({sx:.0f}, {sy:.0f}, {sz:.0f})")
     xs = [v for t in floor for v in t[0::3]]
     zs = [v for t in floor for v in t[2::3]]
     gx0, gz0 = math.floor(min(xs) / GRID_CELL) * GRID_CELL, math.floor(min(zs) / GRID_CELL) * GRID_CELL

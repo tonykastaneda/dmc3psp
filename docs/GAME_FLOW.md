@@ -357,6 +357,140 @@ the seal-opening event. Item 51 is at 233's native ITM position (3885.3,189.6,13
 In room 233, crest switch 100 is bound to flag 32 and timer 120; CRYSTAL set 102 supplies completion flag 34.
 Its start/end/relay/cover/no values are 1/2/0/3/1, at (1700,164,299). Flag 34 opens door piece 101 and
 sets persistent puzzle flag 1. This light puzzle and the additive Vergil variant are being implemented.
+### Mission 12: "Hunting the Hunter"
+
+Decoded from EventTbl12 (GDATA 250; `tools/event_dump.py <iso> 12 --out <dir>` writes the listing locally).
+Demo 31 leads to 217 Torture Chamber at start 1 (item 50 is given here; the soul timer it runs isn't ported).
+217 door 0 -> 240 -> the Temperance Wagon ride, 216 (groups 2, 3, 4: 18 Seven Hells; then goto_room 239, start 3)
+-> 239 door 0 -> 214 (group 1: Prides and Lusts) -> 213 (group 0: 7 Blood-goyles) -> 212 (group 2: 6
+Blood-goyles) -> 211 (group 0: a Hell Vanguard (EST 26) and Prides) -> 201 The Rotating Bridge (start 2; item 50
+turns it) -> door 3 -> 218 -> door 1 -> 228. In 228, demo 32 and Geryon on the bridge (group 0, EST 50, class 32);
+at 80% he leaves, the bridge falls (demo 33) and the fight goes on at start 2 below; after him demo 34, the
+Quicksilver (item 34), door 1 and demo 35, Mission Clear.
+
+**In the port** (`tools/gen_rooms.py` Mission 12, `psp/testroom/mission12.c`, `docs/GERYON_SPEC.md`): the route
+above, start to Mission Clear.
+- 216 has no floor of its own (the wagon is a gimmick over a backdrop): `prepare_stage.py` gives it an 8 x 4 m deck
+  at its start, and the ride doesn't move. Its waves cleared, Dante goes on to 239 at **start 1** (starts 2 and 3
+  are on the wagon, which has no collision in 239) [approximation].
+- 240's wagon is a box door into 216 (EXTRA_DOORS).
+- 201's bridge isn't turned by item 50; door 3 is walked to as it stands [approximation].
+- 228: Geryon both phases; at 80% Dante is put at start 2. No cutscenes; Quicksilver isn't given.
+
+### Mission 14: "Drive!"
+
+From EventTbl14 (GDATA 252; `orchestration/evt/evt_m14.txt` locally). After demos 327 and 39 it starts in 237 at
+start 1. The script has sections only for 237, 214, 236 and 008; the route between them is the walkthrough's,
+matched by door links (doors open from Mission 14 on). No boss. Chessmen: EST 35 the Damned Pawn, 36 and 37 the
+other pieces (not identified by name; the walkthrough's "new chess-type demon" that charges).
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 237 | Lair of Judgement Ruins | Item 27 (Beowulf) at area 0. Door 0 (to 235) is enabled by flag 32, bound to COMBO set 200, a combat adjudicator (weapon "fight", rank C); COLLISION 201 walls the door |
+| 235, 225, 231, 233 | Underwater Elevator, Subterranean Lake, Top Obsidian Path, Vestibule | No section |
+| 214 | Altar of Evil | Doors 2 and 3 locked, group 0 (5 of EST 30, class 12) until cleared |
+| 239, 240 | Temperance Wagon | No section (the wagon, as in Mission 11) |
+| 236 | Hell's Highway | 21 areas raise and lower the panels 101-118 as Dante walks the maze; areas 16-20 start groups 2-6 (chessmen: 7 Pawns; 3 of EST 36; 3 + 3; 2 + 1 of EST 37; 4 + 2), each opening more panels when beaten. Flag 1 at the end |
+| 221, 204, 007 | Subterranean Garden, Subground Water Vein (its blue light, door 0, takes him to 007), Love Planet | No section |
+| 008 | 13th Avenue: Aftermath | Door 0 disabled; area 0 plays demo 326, which clears the mission |
+
+In the port (`psp/testroom/mission14.c`): the route plays from 237 to Mission Clear in PPSSPP. Stand-ins: the
+adjudicator takes 20 melee hits of any weapon (no style rank, no Hyper Fist), drawn as a stone block, and takes
+COLLISION 201 with it (`STORY_WALLS`); 236 runs groups 2-6 one after another from the start, its panels stay as the
+stage has them; EST 36 and 37 spawn as Pawns; the wagon is Mission 11's door from 239 to 240.
+
+### Mission 15: "The gatecrasher"
+
+Decoded from EventTbl15 (GDATA 253; `tools/event_dump.py <iso> 15 --out <dir>` writes the listing locally). Demo 41
+leads to 222 Upper Subterran Garden at start 1. Rooms: 222 (Fallen, EST 29), 202 Provisions Storeroom (Arachnes),
+219 Devilsprout Lift, 200 Forbidden Land: Front, 212 Gears of Madness (Blood-goyles), 213 Altar of Evil Pathway
+(Dullahans), 227, 208, 226 and 224 (Soul Eaters), 211, then 106 Sun & Moon Chamber, where demo 42 clears it.
+
+| Room | What runs |
+| --- | --- |
+| 222 | Area 0 (by the door) seals it and starts group 0: 2 Fallen (after 521 and 1273 more frames). Cleared, flag 0 |
+| 202 | From 222, group 2: 3 Arachnes. From 226 (flag 1 clear), group 3: 6 Arachnes, doors 2 and 3 locked till they're down. Switch 200 (the flame portal) is bound to flag 32 once 200's portal has set flag 2 (else STAY 300 stands there) |
+| 219 | Area 0, the control: examined, each Orihalcon Fragment held (52, 53, 54) is set in; with three, the lift (gimmick 100, area 1) runs up to door 4, into 106 |
+| 200 | Its portal (switch 100, flag 32) sets flag 2 |
+| 212 | Group 3: 3 Blood-goyles. Its portal (switch 200) turns the counter |
+| 213 | Group 2: 4 Dullahans. The Orihalcon Fragment 52 lies at its far end (ITM) |
+| 224 | Group 0: 2 Soul Eaters (EST 34). Fragment 54 (ITM) |
+| 208 | (no section) Fragment 53 on its altar (ITM) |
+| 106 | Area 0 plays demo 42: Mission Clear |
+
+**The coloured doors.** Counter 4 (0, 1, 2) picks where each coloured door (a STAY 600 frame) leads; 202's and 212's
+script sections `door_retarget` theirs, and the same frames stand by doors in 211, 226 and 227 (no script section;
+their portals, switch 100 + STAY 650, are the rooms' own). Read together, each value pairs the six rooms:
+0: 222-202, 212-211, 226-227; 1: 222-227, 202-212, 211-226; 2: 222-211, 202-226, 212-227. Striking a portal moves
+the counter on one.
+
+**In the port** (`tools/gen_rooms.py` Mission 15, `psp/testroom/mission15.c`, `fallen.c`, `docs/FALLEN_SPEC.md`):
+the route 222 -> 202 -> 219 -> 200 (portal) -> 219 -> 202 (portal: 1) -> 212 -> 213 (52) -> 212 (portal: 2) -> 227
+-> 208 (53) -> 227 (portal: 0) -> 226 -> 224 (54) -> 226 (portal: 1) -> 211 -> 219 -> the lift -> 106, Mission Clear.
+- The Fallen are their own port (`fallen.c`); Soul Eaters (class 16) aren't ported and spawn as Prides.
+- One examine at 219's control sets every fragment held (the port's item use now does that for any spot).
+- 219's lift isn't drawn or ridden: its platform (area 1) is a door into 106's start 3 once the three are set.
+  106 clears as Dante arrives (demo 42 isn't played).
+- 212's portal hangs under its 850 walkway, over a floor the port's collision doesn't have: it can be struck from
+  the walkway [approximation].
+- 222's group starts at once, not when Dante reaches the door; 202's return ambush (group 3) isn't run.
+- No cutscenes or camera events; the portals flash, the doors don't change colour.
+### Mission 16: "Win or lose"
+
+From EventTbl16 (GDATA 254; `orchestration/evt/evt_m16.txt` locally). After demo 43 it starts in 106 at start 0.
+The script has sections for 106, 105, 109, 102, 146, 116, 115 and 119; the route between them is by door links.
+Classes: EST 29 class 11 (The Fallen, `fallen.c`), EST 36 and 38 (chessmen, pack 12; the walkthrough's Damned Rooks),
+EST 31 Enigma, EST 32 Blood-goyle, EST 55 class 37 (em034, pack 25: Lady).
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 106 | Sun & Moon Chamber | Area 1, examined holding them, takes the Golden Sun (56) and the Onyx Moonshard (55) one at a time (counter 5); with both, gimmicks 200/210/211 open and door 0 (to 107) is enabled. A lift (set 100) by area 2 |
+| 108 | Entranceway | No section |
+| 109 | Waking Sun Chamber | Crest switches 100 and 101 (flags 32, 33) and the hanging sphere 150 (flags 36-38) open gimmick 300; the Golden Sun lies there (set_d4 56). Taking it locks door 0 and starts group 1: 2 Fallen |
+| 105 | Cursed Skull Chamber | Group 1 (Prides, Greeds, a Sloth on Easy, Lusts on Normal), door 1 locked until it's cleared |
+| 102 | Living Statue Room | Doors 2 and 3 locked, group 2: 2 Enigmas, 4 Blood-goyles |
+| 146 | Chamber of Sins | Switch 100 (flag 32) and the swinging sphere 150 (flags 33, 35) open 300/301; the Onyx Moonshard (set_d4 55). Taking it starts group 0: 4 of EST 38, 1 of EST 36 |
+| 107, 118, 117, 111, 116 | Ice Guardian's Chamber up to Incandescent Space | No section (116 resets counter 0) |
+| 115 | The Divine Library | Area 1 plays demo 44; group 0: Lady. Beaten, demo 45 sends Dante to 119 start 0 |
+| 119 | High-fly Zone | Item 33 (Kalina Ann) given; area 1, at the top (y 8961), examined, clears the mission |
+
+In the port: the route plays from 106 to Mission Clear in PPSSPP. Stand-ins and estimates:
+
+- The Golden Sun and the Onyx Moonshard (items 56, 55) use the generic key-item tables (`KEY_ITEMS`, `ITEM_HOLDS`, `ITEM_USES`,
+  `ITEM_GATES` in `gen_rooms.py`); the puzzles that free them (109's crest switches and hanging sphere, 146's
+  swinging spheres) aren't in, so the items lie open.
+- **Lady** (em034, GDATA 138, pack 25) has her own model and motions (`lady_boss.c`): she keeps her distance, strafes
+  and shoots, lobs grenades that beep and burst, fires Kalina Ann's rocket, and escapes backwards with her repel
+  gun when Dante's close. Motions are read from their root paths; timings, damage and health are estimates; her
+  guns and shots aren't models.
+- Mission Clear comes as Lady is beaten (`CLEAR_ROOMS`), not by climbing 119. The chessmen of EST 36 and 38 spawn as Pawns; The Fallen
+  are Mission 15's (`fallen.c`).
+
+### Mission 17: "Inner-demons"
+
+Decoded from EventTbl17 (GDATA 255; `tools/event_dump.py <iso> 17 --out <dir>`). Demo 46 leads to 133 at start 1.
+The route (the walkthrough's names): 133 -> 128 God-cube Chamber (its cubes up to door 2) -> 129 Tri-sealed
+Antechamber -> 132 Trial of Wisdom -> 131 Trial of Skill (spikes; its red pod, a CATAPULT, to door 1) -> 140
+Pitch-Black Void -> 141 Skull Spire -> 138 Moonlight Mile -> 143 Dark-pact Chamber -> 139 Apparition Incarnate -> 143.
+
+| Room | What runs |
+| --- | --- |
+| 132 | Doors 0 and 1 locked, group 0: 3 Dullahans; cleared, flag 0 |
+| 131 | Areas 0-2 drive the spikes (gimmick 100) |
+| 141 | Doors locked, group 0: 4 Abyss (EST 24, class 6, em006); cleared, flag 3 |
+| 143 | Counter 0 is 0: area 0 plays demo 47 -> 139 start 0. Counter 0 is 1: area 1 -> Mission Clear |
+| 139 | Counter 0: group 0, the Doppelganger (EST 52); beaten, demo 48 -> 139 start 1, counter 0 to 1, item 35 (the Doppelganger style) unless Vergil; door 0 (the middle) back to 143 start 2 |
+| 130 | (side) Trial of the Warrior: group 0, Gluttonies, a Sloth and a Hell Vanguard, its seals' times by difficulty |
+| 121 | (side) Firestorm Chamber: group 1, 4 Enigmas and a Hell Vanguard |
+| 449 | (side) group 2, then flag 5 shuts 129's door 2 |
+
+**In the port** (`tools/gen_rooms.py` Mission 17, `psp/testroom/mission17.c`, `docs/DOPPELGANGER_SPEC.md`): the
+route above, start to Mission Clear.
+- 128's God-cubes (STAY sets) aren't moved: the door from 133 brings Dante in at start 2, by door 2 [approximation].
+- 131's red pod throws Dante to its door (the Mission 7 catapults' code).
+- 143's area 0 takes Dante to 139; area 1 is the goal (walk up the slope to it and press O) once 139 is cleared.
+- The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
+- No cutscenes; demo 48's item 35 isn't given.
 
 ## What the missions do now, and what's a stand-in
 

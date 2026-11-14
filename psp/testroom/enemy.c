@@ -18,6 +18,8 @@
 #include "vanguard.h"
 #include "cerberus_boss.h"
 #include "vergil_boss.h"
+#include "geryon_boss.h"
+#include "doppelganger_boss.h"
 #include "leviathan_boss.h"
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
@@ -220,11 +222,17 @@ static void bishop_spawn_glue(void);
 static void bishop_update_glue(float f,float px,float py,float pz);
 static void bishop_hit_glue(HitKind kind,float from_x,float from_z);
 static void dullahan_spawn_glue(void);
+static void fallen_spawn_glue(void);
+static void fallen_update_glue(float f, float px, float py, float pz);
+static void fallen_hit_glue(HitKind kind, float from_x, float from_z);
 static void dullahan_update_glue(float f,float px,float py,float pz);
 static void dullahan_hit_glue(HitKind kind,float from_x,float from_z);
 static void arachne_spawn_glue(void);
 static void nevan_spawn_glue(void);
 static void beowulf_spawn_glue(void);
+static void lady_spawn_glue(void);
+static void lady_update_glue(float f, float px, float py, float pz);
+static void lady_hit_glue(HitKind kind);
 static void beowulf_update_glue(float f, float px, float py, float pz);
 static void beowulf_hit_glue(HitKind kind);
 static void nevan_update_glue(float f, float px, float py, float pz);
@@ -284,6 +292,8 @@ int enemy_init(void) {
     if (!vanguard_init()) return 0;
     if (!cerberus_boss_init()) return 0;
     if (!vergil_boss_init()) return 0;
+    if (!geryon_boss_init()) return 0;
+    if (!doppelganger_boss_init()) return 0;
     for (k = 0; k < ENEMY_KIND_COUNT; ++k) {
         const EnemyModel *m = &enemy_models[k];
         indices[k] = memalign(16, sizeof(unsigned short) * m->index_count);
@@ -340,7 +350,9 @@ static int kind_health(int kind) {
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 500 / 250;   /* an estimate */
     case ENEMY_NEVAN: return ENEMY_HEALTH * 2000 / 250;    /* an estimate */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
+    case ENEMY_FALLEN: return ENEMY_HEALTH * 1500 / 250;   /* an estimate (fallen.c) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * 3000 / 250;  /* an estimate */
+    case ENEMY_LADY: return ENEMY_HEALTH * 3500 / 250;     /* an estimate */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
@@ -364,6 +376,23 @@ static void spawn_one(int kind, float x, float z) {
         e->pos[0] = 2500.0f; e->pos[1] = e->floor_y = 0.0f; e->pos[2] = 3250.0f;
         e->yaw = PI;
         cerberus_boss_spawn();
+        return;
+    }
+    if (kind == ENEMY_DOPPELGANGER) {
+        float y = 0.0f;
+        if (!floor_under(x, spawn_search_y, z, &y)) y = 0.0f;
+        e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
+        e->pos[0] = x; e->pos[1] = e->floor_y = y; e->pos[2] = z;
+        doppelganger_boss_set_floor(vergil_floor);
+        doppelganger_boss_spawn(x, y, z);
+        return;
+    }
+    if (kind == ENEMY_GERYON) {
+        e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
+        geryon_boss_set_floor(vergil_floor);
+        geryon_boss_spawn(x, 0.0f, z);
+        geryon_boss_position(e->pos);
+        e->floor_y = e->pos[1];
         return;
     }
     if (kind == ENEMY_VERGIL) {
@@ -416,10 +445,12 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
     if (kind == ENEMY_BISHOP) {bishop_spawn_glue();return;}
     if (kind == ENEMY_DULLAHAN) { dullahan_spawn_glue(); return; }
+    if (kind == ENEMY_FALLEN) { fallen_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_BEOWULF) { beowulf_spawn_glue(); return; }
+    if (kind == ENEMY_LADY) { lady_spawn_glue(); return; }
     if (kind == ENEMY_AGNI) { ar_spawn(); return; }
     if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
     script_play(0);
@@ -484,6 +515,8 @@ void enemy_kill_all(void) {
             if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
             if (enemies[i].kind == ENEMY_CERBERUS) cerberus_boss_kill();
             if (enemies[i].kind == ENEMY_VERGIL) vergil_boss_kill();
+            if (enemies[i].kind == ENEMY_GERYON) geryon_boss_kill();
+            if (enemies[i].kind == ENEMY_DOPPELGANGER) doppelganger_boss_kill();
             if (enemies[i].kind == ENEMY_LEVIATHAN) leviathan_boss_kill();
             Enemy *was = e;
             e = &enemies[i];
@@ -544,7 +577,9 @@ void enemy_select_nearest(float x, float z) {
         if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && vanguard_hidden()) &&
             !(o->kind == ENEMY_GIGAPEDE && giga_part_out(o->step)) &&
             !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) &&
-            !(o->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) && d < best) { best = d; e = &enemies[i]; }
+            !(o->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) &&
+            !(o->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) &&
+            !(o->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())) && d < best) { best = d; e = &enemies[i]; }
     }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_select_target(x, z);
     if (e->kind == ENEMY_LEVIATHAN) {
@@ -554,7 +589,7 @@ void enemy_select_nearest(float x, float z) {
 }
 
 void enemy_set_attacks(int attacks) { attacks_on = attacks; }
-void enemy_set_dummy_kind(int kind) { dummy_kind = kind == ENEMY_VANGUARD || kind == ENEMY_VERGIL || kind == ENEMY_LEVIATHAN || (kind >= 0 && kind < ENEMY_KIND_COUNT) ? kind : ENEMY_PRIDE; }
+void enemy_set_dummy_kind(int kind) { dummy_kind = kind == ENEMY_VANGUARD || kind == ENEMY_VERGIL || kind == ENEMY_GERYON || kind == ENEMY_DOPPELGANGER || kind == ENEMY_LEVIATHAN || (kind >= 0 && kind < ENEMY_KIND_COUNT) ? kind : ENEMY_PRIDE; }
 int enemy_kind(void) { return e->kind; }
 
 int enemy_kind_for_class(int spawn_class) {
@@ -563,19 +598,24 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
     if (spawn_class == 37)return ENEMY_BISHOP;
     if (spawn_class == 30) return ENEMY_DULLAHAN;
+    if (spawn_class == 29) return ENEMY_FALLEN;
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
-    if (spawn_class == 35) return ENEMY_PAWN;   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
+    if (spawn_class == 35) return ENEMY_PAWN;
+    if (spawn_class >= 36 && spawn_class <= 38) return ENEMY_PAWN;   /* the other chessmen (Missions 14, 16): the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
     if (spawn_class == 58) return ENEMY_VERGIL;
+    if (spawn_class == 50) return ENEMY_GERYON;
+    if (spawn_class == 52) return ENEMY_DOPPELGANGER;
     if (spawn_class == 26) return ENEMY_VANGUARD;
     if (spawn_class == 25) return ENEMY_ENVY;
     if (spawn_class == 28) return ENEMY_ARACHNE;
     if (spawn_class == 49) return ENEMY_NEVAN;
     if (spawn_class == 51) return ENEMY_BEOWULF;
+    if (spawn_class == 55) return ENEMY_LADY;
     return ENEMY_PRIDE;
 }
 void enemy_set_anim_auto(int on) { anim_auto = on; }
@@ -611,11 +651,13 @@ void enemy_clamp_player(float *z) {
     }
 }
 
-int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && !(e->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())); }
+int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && !(e->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) && !(e->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) && !(e->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())); }
 void enemy_position(float out[3]) {
     if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_target_position(out); return; }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_target_position(out);
     else if (e->kind == ENEMY_VERGIL) vergil_boss_position(out);
+    else if (e->kind == ENEMY_GERYON) geryon_boss_target_position(out);
+    else if (e->kind == ENEMY_DOPPELGANGER) doppelganger_boss_target_position(out);
     else memcpy(out, e->pos, sizeof(e->pos));
 }
 float enemy_height(void) { return e->pos[1] - e->floor_y; }
@@ -629,6 +671,10 @@ const char *enemy_boss_name(void) {
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_VERGIL) return "VERGIL";
     for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_GERYON) return "GERYON";
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_DOPPELGANGER) return "DOPPELGANGER";
+    for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_GIGAPEDE) return "GIGAPEDE";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_JESTER) return "JESTER";
@@ -636,6 +682,8 @@ const char *enemy_boss_name(void) {
         if (enemies[i].active && enemies[i].kind == ENEMY_NEVAN) return "NEVAN";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_BEOWULF) return "BEOWULF";
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_LADY) return "LADY";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && (enemies[i].kind == ENEMY_AGNI || enemies[i].kind == ENEMY_RUDRA)) return "AGNI & RUDRA";
     return "HELL VANGUARD";
@@ -655,11 +703,20 @@ int enemy_boss_health(float *health, float *maximum) {
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VERGIL) {
         *health=vergil_boss_health();*maximum=vergil_boss_max_health();return 1;
     }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GERYON) {
+        *health=geryon_boss_health();*maximum=geryon_boss_max_health();return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_DOPPELGANGER) {
+        *health=doppelganger_boss_health();*maximum=doppelganger_boss_max_health();return 1;
+    }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && (enemies[i].kind==ENEMY_AGNI || enemies[i].kind==ENEMY_RUDRA) && enemies[i].plan!=P_DEATH) {
         *health=ar_health_total(maximum);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_LADY && enemies[i].plan!=P_DEATH) {
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3500 / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_BEOWULF && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3000 / 250;return 1;
@@ -1260,15 +1317,27 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         if (vergil_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
         return;
     }
+    if (e->kind == ENEMY_GERYON) {
+        ++hits;
+        if (geryon_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
+        return;
+    }
+    if (e->kind == ENEMY_DOPPELGANGER) {
+        ++hits;
+        if (doppelganger_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
+        return;
+    }
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
     if (e->kind == ENEMY_BISHOP) {++hits;bishop_hit_glue(kind,from_x,from_z);return;}
     if (e->kind == ENEMY_DULLAHAN) { ++hits; dullahan_hit_glue(kind,from_x,from_z); return; }
+    if (e->kind == ENEMY_FALLEN) { ++hits; fallen_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind); return; }
+    if (e->kind == ENEMY_LADY) { ++hits; lady_hit_glue(kind); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
@@ -1340,6 +1409,14 @@ void enemy_push_out(float *x, float *z, float y, float r) {
         }
         if (enemies[i].kind == ENEMY_VERGIL) {
             if (enemies[i].active) vergil_boss_push_out(x, z, y, r);
+            continue;
+        }
+        if (enemies[i].kind == ENEMY_GERYON) {
+            if (enemies[i].active) geryon_boss_push_out(x, z, y, r);
+            continue;
+        }
+        if (enemies[i].kind == ENEMY_DOPPELGANGER) {
+            if (enemies[i].active) doppelganger_boss_push_out(x, z, y, r);
             continue;
         }
         const Enemy *o = &enemies[i];
@@ -1501,6 +1578,34 @@ static void update_one(float dt, float px, float py, float pz) {
         }
         return;
     }
+    if (e->kind == ENEMY_DOPPELGANGER) {
+        float hit_x, hit_z, damage;
+        int heavy;
+        e->plan = doppelganger_boss_dying() ? P_DEATH : P_WATCH;
+        doppelganger_boss_update(f, px, py, pz, attacks_on);
+        doppelganger_boss_position(e->pos);
+        e->floor_y = e->pos[1];
+        e->hidden = doppelganger_boss_hidden();
+        if (doppelganger_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
+            land_attack(heavy);
+            landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+        }
+        return;
+    }
+    if (e->kind == ENEMY_GERYON) {
+        float hit_x, hit_z, damage;
+        int heavy;
+        e->plan = geryon_boss_dying() ? P_DEATH : P_WATCH;
+        geryon_boss_update(f, px, py, pz, attacks_on);
+        geryon_boss_position(e->pos);
+        e->floor_y = e->pos[1];
+        e->hidden = geryon_boss_hidden();
+        if (geryon_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
+            land_attack(heavy);
+            landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+        }
+        return;
+    }
     if (e->kind == ENEMY_VERGIL) {
         float hit_x, hit_z, damage;
         int heavy;
@@ -1529,10 +1634,12 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
     if(e->kind==ENEMY_BISHOP){bishop_update_glue(f,px,py,pz);return;}
     if (e->kind == ENEMY_DULLAHAN) { dullahan_update_glue(f,px,py,pz); return; }
+    if (e->kind == ENEMY_FALLEN) { fallen_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_BEOWULF) { beowulf_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_LADY) { lady_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
@@ -1758,6 +1865,8 @@ void enemy_draw(void) {
         if (e->kind == ENEMY_GIGAPEDE) { if (e->step == 0) giga_draw(); continue; }
         if (e->kind == ENEMY_CERBERUS) { cerberus_boss_draw(); continue; }
         if (e->kind == ENEMY_VERGIL) { vergil_boss_draw(); continue; }
+        if (e->kind == ENEMY_GERYON) { geryon_boss_draw(); continue; }
+        if (e->kind == ENEMY_DOPPELGANGER) { doppelganger_boss_draw(); continue; }
         if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_draw(); continue; }
         if (e->kind == ENEMY_VANGUARD) {vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
@@ -3549,6 +3658,7 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
         }
     }
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->floor_y = e->floor_y;
     b->frame = e->frame; b->done = e->done;
     arachne_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
@@ -3818,5 +3928,155 @@ static void beowulf_hit_glue(HitKind kind) {
     }
     e->health = (signed char)b->health;
     beowulf_play(b->want, b->restart);
+    b->restart = 0;
+}
+
+/* ---- The Fallen (fallen.c decides; here his body, his spear and the shared attack turn). */
+#include "fallen.h"
+extern int testroom_frame;
+static FallenBrain fallen_brain[ENEMY_MAX];
+static int fallen_motion_id[FALLEN_M_COUNT] = {-2};
+static float fallen_rest;   /* FUN_003442c0: the enemy manager lets one attack, then rests 3 s */
+static void fallen_play(int m, int restart) {
+    int id;
+    if (fallen_motion_id[0] == -2) { int k; for (k = 0; k < FALLEN_M_COUNT; ++k) fallen_motion_id[k] = motion_find(fallen_motion_names[k]); }
+    id = fallen_motion_id[m];
+    if (id < 0) return;
+    if (id != e->motion || restart) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 8.0f;
+        e->motion = id; e->frame = 0.0f; e->done = 0;
+    }
+}
+static void fallen_spawn_glue(void) {
+    FallenBrain *b = &fallen_brain[e - enemies];
+    e->motion = -1;
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1] + 100.0f; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->floor_y = e->floor_y;
+    fallen_spawn(b, e->health);
+    fallen_play(b->want, 1);
+    b->restart = 0;
+    e->fade = 0.0f;
+}
+static void fallen_update_glue(float f, float px, float py, float pz) {
+    FallenBrain *b = &fallen_brain[e - enemies];
+    const Motion *m;
+    float g;
+    int token = fallen_rest <= 0.0f, had = token;
+    {
+        int k;   /* the clock runs once a frame: on the first Fallen's turn */
+        for (k = 0; k < ENEMY_MAX && !(enemies[k].active && enemies[k].kind == ENEMY_FALLEN); ++k) {}
+        if (&enemies[k] == e && fallen_rest > 0.0f) fallen_rest -= f;
+    }
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->motion >= 0) {
+        m = motion_get(e->motion);
+        e->frame += f;
+        if (e->frame >= m->end_frame) {
+            e->done = 1;
+            e->frame = fallen_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+        }
+    }
+    if (floor_under(b->pos[0], b->pos[1] + 100.0f, b->pos[2], &g)) b->floor_y = g;
+    b->frame = e->frame; b->done = e->done;
+    fallen_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, &token);
+    if (had && !token) fallen_rest = 180.0f;   /* this one attacked */
+    {
+        static int last_state[ENEMY_MAX];   /* tests: each change of state, in VERGIL_LOG.TXT */
+        int k = (int)(e - enemies);
+        if (last_state[k] != b->state || b->land || b->spear || (testroom_frame % 60) == 0) {
+            char line[128];
+            snprintf(line, sizeof(line), "fallen %d state %#x mode %d land %d spear %d hp %d gauge %.0f rest %.0f atk %d", k, b->state, b->mode, b->land, b->spear, b->health, b->gauge, fallen_rest, attacks_on);
+            vergil_boss_note(line, b->pos[0], b->pos[1], b->pos[2], py);
+            last_state[k] = b->state;
+        }
+    }
+    e->pos[0] = b->pos[0]; e->pos[1] = b->pos[1]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
+    e->floor_y = b->floor_y;
+    e->air = fallen_flying(b);
+    if (b->restart || fallen_motion_id[b->want] != e->motion) { fallen_play(b->want, b->restart); b->restart = 0; }
+    if (b->land) land_attack(b->land == 2);
+    if (b->spear) {
+        /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
+        float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
+        float to[3] = {px, py + 100.0f, pz};
+        goyle_bullet(from, to);
+    }
+    if (b->remove) e->active = 0;
+}
+static void fallen_hit_glue(HitKind kind, float from_x, float from_z) {
+    FallenBrain *b = &fallen_brain[e - enemies];
+    float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
+    fx_hit_spark(at);
+    if (e->plan == P_DEATH) return;
+    if (fallen_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
+        e->plan = P_DEATH;
+        died();
+    }
+    fallen_play(b->want, b->restart);
+    b->restart = 0;
+}
+
+/* ---- Lady (lady_boss.c decides; here her body). Her health is the Enemy's own, for the boss bar. */
+#include "lady_boss.h"
+static LadyBrain lady_brain;
+static int lady_motion_id[LADY_M_COUNT] = {-2};
+static void lady_play(int m, int restart) {
+    int id;
+    if (lady_motion_id[0] == -2) { int k; for (k = 0; k < LADY_M_COUNT; ++k) lady_motion_id[k] = motion_find(lady_motion_names[k]); }
+    id = lady_motion_id[m];
+    if (id < 0) return;
+    if (id != e->motion || restart) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 10.0f;
+        e->motion = id; e->frame = 0.0f; e->done = 0;
+    }
+}
+static void lady_spawn_glue(void) {
+    LadyBrain *b = &lady_brain;
+    float g;
+    e->motion = -1;
+    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    lady_spawn(b, e->health);
+    lady_play(b->want, 1);
+    b->restart = 0;
+    e->fade = 0.0f;
+}
+static void lady_update_glue(float f, float px, float py, float pz) {
+    LadyBrain *b = &lady_brain;
+    const Motion *m;
+    float g;
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->motion >= 0) {
+        m = motion_get(e->motion);
+        e->frame += f;
+        if (e->frame >= m->end_frame) {
+            e->done = 1;
+            e->frame = lady_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+        }
+    }
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->frame = e->frame; b->done = e->done;
+    lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
+    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    if (b->restart || lady_motion_id[b->want] != e->motion) { lady_play(b->want, b->restart); b->restart = 0; }
+    if (b->land) land_attack(b->land == 2);
+    lady_draw_fx(b);
+    if (e->plan == P_DEATH) { e->timer += f; if (e->timer > 300.0f) e->active = 0; }
+}
+static void lady_hit_glue(HitKind kind) {
+    LadyBrain *b = &lady_brain;
+    float at[3] = {e->pos[0], e->pos[1] + 110.0f, e->pos[2]};
+    if (e->plan == P_DEATH) return;
+    fx_hit_spark(at);
+    if (lady_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), mortal)) {
+        e->plan = P_DEATH;
+        e->timer = 0.0f;
+        died();
+    }
+    e->health = (signed char)b->health;
+    lady_play(b->want, b->restart);
     b->restart = 0;
 }

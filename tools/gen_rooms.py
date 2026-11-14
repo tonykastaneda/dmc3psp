@@ -45,7 +45,7 @@ STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
 STORY["210"] = [(9, 20, ())]
 # COLLISION sets that belong to a story piece of the same number: 122's rubble (STAY 100) and its three walls
 # in front of the door to 127, which the Mute Goddess blasts away in Mission 6 (psp/testroom/mission6.c).
-STORY_WALLS = {"122": (100,)}
+STORY_WALLS = {"122": (100,), "237": (201,)}   # 237: the wall behind its combat adjudicator
 SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292, "006": 296, "009": 308,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428, "127": 432,
@@ -62,6 +62,11 @@ SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in range(201, 212)})
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (212, 213, 214, 217, 239, 240)})
 # Mission 13 route, including the optional rear/side rooms from EventTbl13.
 SLOTS.update({str(n):512+4*(n-200) for n in (228,229,230,232,233,234,236,241)})
+# Mission 14 (Forbidden Land 3F down to the Residential Area): 0xx is GDATA 272 + 4 x n.
+SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (221, 225, 231, 233, 235, 236, 237)})
+SLOTS.update({"007": 300, "008": 304})
+# Mission 16 (Central Temen-ni-gru 1 and 2): room 1xx is GDATA 324 + 4 x (n - 100).
+SLOTS.update({f"{n}": 324 + 4 * (n - 100) for n in (106, 107, 108, 109, 116, 117, 118, 119, 146)})
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -112,9 +117,22 @@ MISSIONS = {
     # 240 -> 217 Torture Chamber: Beowulf (group 0, EST 51).
     11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0]}),
     13: ("229", None, {"229": [0], "241": [0], "234": [0]}),
+    # Mission 14, from EventTbl14 (GDATA 252): 237 Lair of Judgement Ruins (its combat adjudicator opens door 0) -> 235
+    # Underwater Elevator -> 225 Subterranean Lake -> 231 Top Obsidian Path -> 233 Vestibule -> 214 Altar of Evil (group
+    # 0 on entry) -> 239 -> (the wagon) -> 240 -> 236 Hell's Highway (the chessmen, groups 2-6) -> 221 Subterranean
+    # Garden -> 204 Subground Water Vein (its blue light, door 0, to 007) -> 007 Love Planet -> 008 13th Avenue, whose
+    # area 0 plays demo 326 and clears it (psp/testroom/mission14.c). The route between the script's rooms is the
+    # walkthrough's, matched by door links.
+    14: ("237", None, {"214": [0], "236": [2, 3, 4, 5, 6]}),
+    # Mission 16, from EventTbl16 (GDATA 254): 106 Sun & Moon Chamber -> 108 -> 109 Waking Sun Chamber (the Golden Sun,
+    # item 56; group 1 as it's taken: 2 Damned Rooks, EST 29) -> 105 Cursed Skull Chamber (group 1) -> 102 Living Statue
+    # Room (group 2: 2 Enigmas, 4 Blood-goyles) -> 146 Chamber of Sins (the Onyx Moonshard, item 55; group 0: 4 of EST
+    # 38, 1 of EST 36) -> back to 106, both set at area 1, door 0 opens -> 107 -> 118 -> 117 -> 111 -> 116 -> 115 The
+    # Divine Library: Lady (group 0, EST 55). The route between the script's rooms is by door links.
+    16: ("106", None, {"105": [1], "109": [1], "102": [2], "146": [0], "115": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
-FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1}
+FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1, 14: 1}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
 CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211", 11: "217", 13: "234"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
@@ -179,6 +197,13 @@ KEY_ITEMS += [(9, 47, "208", -1)]
 ITEM_HOLDS += [(9, "208", 47)]
 ITEM_USES += [(9, 47, "209", 0)]
 ITEM_GATES += [(9, "209", "210", 47)]
+# Mission 16: the Golden Sun (56) in 109 and the Onyx Moonshard (55) in 146, each starting its room's fight as it's
+# taken; both set at 106's area 1 enable its door 0 (to 107). The puzzles that free them (109's crest switches and
+# hanging sphere, 146's swinging spheres) aren't in: the items simply lie there.
+KEY_ITEMS += [(16, 56, "109", -1), (16, 55, "146", -1)]
+ITEM_HOLDS += [(16, "109", 56), (16, "146", 55)]
+ITEM_USES += [(16, 56, "106", 1), (16, 55, "106", 1)]
+ITEM_GATES += [(16, "106", "107", 56), (16, "106", "107", 55)]
 # Mission 10: Stone Mask at 209, Neo-Generator beyond the lake bridge.
 KEY_ITEMS += [(10, 48, "209", -1), (10, 49, "206", 48)]
 ITEM_USES += [(10, 48, "206", 0), (10, 49, "201", 1)]
@@ -194,7 +219,53 @@ ITEM_OPENS += [(13,"232",51,[100])]
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}
 # Mission 11: 239's area 0 boards the wagon (its door 1, to 216, is an event door). The ride itself (216's TRUCK set,
 # its clock and its ambushes) isn't in: the wagon arrives at once, at 240's start 3, as the ride's end does.
-EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3)]
+EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3, 11, 11),
+                      ((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3, 14, 14)]   # Missions 11 and 14
+
+# ---- Mission 12, "Hunter and hunted", from EventTbl12 (GDATA 250; docs/GAME_FLOW.md). After demo 31 it starts in 217
+# (Torture Chamber) at start 1 -> 240 -> the Temperance Wagon ride (216: the wagon's waves 2-4) -> 239 -> 214 (group 1)
+# -> 213 Altar of Evil (group 0) -> 212 (group 2) -> 211 Gears of Madness (group 0) -> 201 The Rotating Bridge -> 218
+# -> 228 Underground Arena: Geryon (group 0, EST 50 = CEm029; psp/testroom/geryon_boss.c), whose fall clears it.
+SLOTS.update({"211": 556, "212": 560, "213": 564, "214": 568, "216": 576, "217": 580, "218": 584, "228": 624,
+              "239": 668, "240": 672})
+MISSIONS[12] = ("217", None, {"214": [1], "213": [0], "212": [2], "211": [0], "216": [2, 3, 4], "228": [0]})
+FIRST_START[12] = 1
+CLEAR_ROOMS[12] = "228"
+CLEAR_ROOMS[16] = "115"   # Lady; the game then plays demo 45 and Dante climbs 119, the High-fly Zone, to its exit
+GATES += [(12, "218", "448", "999")]   # 218's door to the Jester (448) is disabled in Mission 12
+# 240's door into the ride (216) is a box the wagon carries Dante into: here, a box on the wagon at start 0.
+EXTRA_DOORS["240"] = [((6400.0, 1500.0, 7001.0, 500.0, 400.0, 500.0), "216", 1, 12, 12)]   # Mission 12's wagon only
+
+# ---- Mission 15, "The gatecrasher", from EventTbl15 (GDATA 253; docs/GAME_FLOW.md). After demo 41 it starts in 222
+# Upper Subterran Garden at start 1 (group 0: 2 Fallen, EST 29) -> 202 (group 2: 3 Arachnes) -> 219 Devilsprout Lift
+# -> 200 (its flame portal enables 202's) -> 219 -> 202, whose portal turns the coloured doors -> 212 (group 3:
+# 3 Blood-goyles) -> 213 (group 2: 4 Dullahans; Orihalcon Fragment 52) -> 212 -> 227 -> 208 (fragment 53) -> 227
+# -> 226 -> 224 (group 0: 2 Soul Eaters; fragment 54) -> 226 -> 211 -> 219: the three fragments at its control (area
+# 0) raise the lift (area 1) to 106, where demo 42 clears the mission. The coloured doors: psp/testroom/mission15.c.
+SLOTS.update({"200": 512, "219": 588, "222": 600, "224": 608, "226": 616, "227": 620, "106": 348})
+MISSIONS[15] = ("222", None, {"222": [0], "202": [2], "212": [3], "213": [2], "224": [0]})
+FIRST_START[15] = 1
+CLEAR_ROOMS[15] = "106"   # demo 42 plays in 106's area 0, a few steps from where the lift arrives
+KEY_ITEMS += [(15, 52, "213", -1), (15, 53, "208", -1), (15, 54, "224", -1)]
+ITEM_USES += [(15, 52, "219", 0), (15, 53, "219", 0), (15, 54, "219", 0)]
+ITEM_GATES += [(15, "219", "106", 52), (15, "219", "106", 53), (15, "219", "106", 54)]
+# 219's lift (gimmick 100, its platform area 1, not in the collision) carries Dante up to door 4 (into 106, start 3):
+# here a box over the platform at floor level [approximation: the ride up isn't shown].
+EXTRA_DOORS["219"] = [((2497.0, 1.0, 2107.0, 390.0, 400.0, 213.0), "106", 3, 15, 15)]
+
+# ---- Mission 17, "Inner-demons", from EventTbl17 (GDATA 255; docs/GAME_FLOW.md). After demo 46 it starts in 133 at
+# start 1 -> 128 God-cube Chamber (its cubes up to door 2) -> 129 Tri-sealed Antechamber -> 132 Trial of Wisdom (group 0:
+# 3 Dullahans) -> 131 Trial of Skill (its red pod, a CATAPULT, up to door 1) -> 140 Pitch-Black Void -> 141 Skull Spire
+# (group 0: 4 Abyss, EST 24) -> 138 Moonlight Mile -> 143 Dark-pact Chamber: area 0 plays demo 47 -> 139 Apparition
+# Incarnate: the Doppelganger (group 0, EST 52 = CEm034; psp/testroom/doppelganger_boss.c) -> demo 48, 139's middle ->
+# 143 start 2: area 1 clears the mission. 130 (Trial of the Warrior, group 0), 121 (group 1) and 449 are side trips.
+SLOTS.update({"128": 436, "129": 440, "130": 444, "131": 448, "132": 452, "133": 456, "139": 480, "140": 484,
+              "141": 488, "143": 496})
+MISSIONS[17] = ("133", None, {"132": [0], "141": [0], "139": [0], "130": [0]})
+FIRST_START[17] = 1
+CATAPULT_ROOMS.add("131")
+# 143's area 1 (block 3: counter 0 is 1 after the Doppelganger, sw_in_area 1 -> mission_clear): walk into it.
+GOALS[17] = ("143", (5028.1, 4185.0, 3539.2), "139")   # area 1's floor is the slope at 4185
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
@@ -382,8 +453,9 @@ def main():
             stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
             game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
             doors = parse_doors(data[0].decode("latin1").replace("\r", ""))
-            doors += [dict(box=list(box), next=nxt, start=start, press=False, low=0, high=99)
-                      for box, nxt, start in EXTRA_DOORS.get(name, [])]
+            # An extra door may name the missions it's for: (box, next, start[, first mission, last mission]).
+            doors += [dict(box=list(e[0]), next=e[1], start=e[2], press=False, low=e[3] if len(e) > 3 else 0,
+                           high=e[4] if len(e) > 4 else 99) for e in EXTRA_DOORS.get(name, [])]
             rooms[name] = dict(doors=doors, starts=parse_starts(data),
                                groups=parse_groups(data), lifts=parse_lifts(game),
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
