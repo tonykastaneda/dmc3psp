@@ -328,6 +328,7 @@ def indexed_texture(texture):
 # [0] its textures, [1] body, [2] bow.
 ARACHNE_SLOT = 121
 NEVAN_SLOT = 133
+BEOWULF_SLOT = 135
 ENEMY_KINDS = (
     ("pride", 117, 1, 26),
     ("gluttony", 117, 5, 28),
@@ -357,7 +358,9 @@ ENEMY_KINDS = (
     # motion in [3]. The other chessmen are [7], [12] and [17].
     ("pawn", 127, 2, None),
     ("dullahan", 123, 1, None),
-
+    # Beowulf (class 33, EST 51), em030.pac: GDATA 135, pack 21 in the table at 0x58e740. [0] textures, [1] his body
+    # (36 bones), motions in the PAC [2] (0x70-byte MOT headers).
+    ("beowulf", BEOWULF_SLOT, 1, None),
 )
 AR_SLOT = 131
 JESTER_SLOT = 140
@@ -371,6 +374,11 @@ ARACHNE_MOTIONS = ((7, 10), (7, 1), (10, 11), (10, 8), (8, 1), (8, 0), (8, 15))
 # Nevan's, "nvCNN", read the same way [inferred]: 2-00 still (hover), 2-01 forward 128 (glide), 2-14 163 frames in
 # place (blade), 2-40 236 in place (bats), 2-13 the shortest (flinch), 2-45 back 260 (knocked back), 2-49 (death).
 NEVAN_MOTIONS = ((2, 0), (2, 1), (2, 14), (2, 40), (2, 13), (2, 45), (2, 49))
+# Beowulf's, "bwNN" (PAC [2] slot NN), read the same way [inferred]: 00 still (idle), 01 forward 1257 in 149 frames
+# (walk), 07 forward 1673 (charge on all fours), 30/31/32 forward 290/341/206 (the three punches), 39 197 frames in
+# place (stomp and pillar), 36 forward 1354 rising 286 (leaping rush), 37 276 in place (the feather laser's charge),
+# 38 127 in place (flinch), 35 back 209 (knocked back), 16 back 277 over 310 (death).
+BEOWULF_MOTIONS = (0, 1, 7, 30, 31, 32, 39, 36, 37, 38, 35, 16)
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 
@@ -467,7 +475,7 @@ def write_enemy(output: Path, packs: dict) -> None:
         body = packs[slot][body_index]
         if body[:4] == b"EFM ":
             body = b"MOD " + body[4:]
-        skel, mesh = enemy_mesh(body, GOYLE_RATIO if slot == GOYLE_SLOT else 0.45 if slot in (JESTER_SLOT, AR_SLOT) else None)
+        skel, mesh = enemy_mesh(body, GOYLE_RATIO if slot == GOYLE_SLOT else 0.45 if slot in (JESTER_SLOT, AR_SLOT, BEOWULF_SLOT) else None)
         if weapon_index is None:
             # No weapon: one degenerate triangle keeps the tables the same shape.
             wmesh = {"positions": [(0.0, 0.0, 0.0)], "normals": [(0.0, 1.0, 0.0)], "uvs": [(0.0, 0.0)],
@@ -560,6 +568,7 @@ def main() -> None:
         nevan_pack = pac_list(read_slot(NEVAN_SLOT))
         dullahan_pack = pac_list(read_slot(123))
         dullahan_pack[0], dullahan_pack[1] = dullahan_pack[1], dullahan_pack[0]
+        beowulf_pack = pac_list(read_slot(BEOWULF_SLOT))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
@@ -690,8 +699,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack})
-
+    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack})
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack)
     write_devils(args.output, devil_packs)
 
@@ -758,6 +766,10 @@ def main() -> None:
         raw = pac_list(nevan_pack[chunk])[slot]
         parsed = parse_mot(raw)
         motions.append({"name": f"nv{chunk}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    for slot in BEOWULF_MOTIONS:
+        raw = pac_list(beowulf_pack[2])[slot]
+        parsed = parse_mot(raw)
+        motions.append({"name": f"bw{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     # The Blood-goyle's: "gbNN" from [8], one a state (motion N plays in state N).
     for slot, raw in enumerate(pac_list(goyle_pack[8])):
         if not raw:
