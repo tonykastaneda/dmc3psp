@@ -138,6 +138,14 @@ static void trace(const char *event) {
             vb.hp, vb.gauge, dante_distance(), vb.pos[0], vb.pos[1], vb.pos[2]);
     fclose(f);
 }
+void vergil_boss_note(const char *event, float a, float b, float c, float d) {
+    FILE *f;
+    if (!trace_on) return;
+    f = fopen(trace_path, "a");
+    if (!f) return;
+    fprintf(f, "f=%d %s %.1f %.1f %.1f %.1f\n", testroom_frame, event, a, b, c, d);
+    fclose(f);
+}
 void vergil_boss_trace(const char *path) {
     trace_on = path && *path;
     if (trace_on) snprintf(trace_path, sizeof(trace_path), "%s", path);

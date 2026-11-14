@@ -89,6 +89,12 @@ OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 SHOPS = {"005": (5211.4, 780.7, 1539.8)}
 # Lifts that work: 103's carries Dante up to the door into 110 in Mission 4. Others aren't on a route yet.
 LIFT_ROOMS = {"103", "113"}
+# Elevators that run both ways in one mission: (mission, low, high, the item that must be used first or -1).
+# Mission 7's: 137's goes down to its door into 100 (at -700) once the Orihalcon powers it; 100's runs from the
+# floor to start 5 (5750), under its door back to 137. The heights are the doors' and starts' [inferred].
+ELEVATORS = {"137": (7, -650.0, -200.0, 43), "100": (7, 0.0, 5750.0, -1)}
+# Rooms whose CATAPULT sets (super jump pads) work: 114 Heavenrise Chamber's six, 3000 apart.
+CATAPULT_ROOMS = {"114"}
 # A mission that ends on an item instead of a door: room, the item's place (the room's ITM chunk), and the
 # room whose fight must be over first.
 GOALS = {4: ("110", (1517.4, 838.0, 417.3), "111")}
@@ -112,17 +118,29 @@ START_ITEMS = {5: [36]}   # Mission 5 begins with Mission 4's Astronomical Board
 # set in 100 and the Soul of Steel once the Vajura's set in 102: the script reveals them with gimmicks (100's
 # 200/201/400, 102's 100-104) that aren't converted, so they simply appear [inferred from the script's order].
 KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37)]
+# Mission 7 (EventTbl07, the walkthrough): 43 the Orihalcon Fragment (115, under a Damned Pawn), 44 the Siren's
+# Shriek (136, dropped by its statue), 45 the Crystal Skull (105). The port lays them out from the start.
+KEY_ITEMS += [(7, 43, "115", -1), (7, 44, "136", -1), (7, 45, "105", -1)]
 # (mission, item, room, EVE area index).
 ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1)]
+# Mission 7: the Orihalcon at 137's lift panel (area 0), the Siren's Shriek at 100's crimson flame (area 2), the
+# Crystal Skull at 135's skull pillar (area 0).
+ITEM_USES += [(7, 43, "137", 0), (7, 44, "100", 2), (7, 45, "135", 0)]
 # A room whose fight waits for an item to be picked up: 102's group 3 starts as the Soul of Steel's taken
 # (block 1: sw_item_got 39 == 1, door_lock, spawn_group 3).
-ITEM_HOLDS = [(5, "102", 39)]
+ITEM_HOLDS = [(5, "102", 39), (7, "105", 45)]   # 105: its fight starts as the Crystal Skull is taken
 # Sets an item's use takes away: the Vajura opens 102's cage round the Soul of Steel (STAY 100-103 slide aside,
 # gimmick_cmd2c, and COLLISION 104 goes, gimmick_cmd10). The port hides them instead of moving them. 100's STAY
 # 400 (the Vajura on its stand) is above the story tags' range, so it stays after the Vajura's taken.
 ITEM_OPENS = [(5, "102", 37, [100, 101, 102, 103, 104])]
 # Doors that stay shut until an item's used: 112's door 2 (to 113) is enabled by the Soul of Steel.
 ITEM_GATES = [(5, "112", "113", 39)]
+# Mission 7: 137's lift down needs the Orihalcon; 100's doors to 101 the Siren's Shriek (door 4, door_enable);
+# 135's door 2 (to 138) the Crystal Skull (door_disable 2 until it's set).
+ITEM_GATES += [(7, "137", "100", 43), (7, "100", "101", 44), (7, "135", "138", 45)]
+# Doors that aren't in a room's door list: 142's area 0 plays demo 17, whose AFTER_DEMO is goto_room 144, 0.
+# (room, box centre and full sizes as BoxIn, next room, its start)
+EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
@@ -283,7 +301,10 @@ def main():
             data = pac_entries(iso.read_file("GDATA.AFS", entry["offset"], entry["size"]))
             stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
             game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
-            rooms[name] = dict(doors=parse_doors(data[0].decode("latin1").replace("\r", "")), starts=parse_starts(data),
+            doors = parse_doors(data[0].decode("latin1").replace("\r", ""))
+            doors += [dict(box=list(box), next=nxt, start=start, press=False, low=0, high=99)
+                      for box, nxt, start in EXTRA_DOORS.get(name, [])]
+            rooms[name] = dict(doors=doors, starts=parse_starts(data),
                                groups=parse_groups(data), lifts=parse_lifts(game),
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
                                story=gimmicks.story_tags(game), sets={g["number"]: g for g in gimmicks.parse_game(game)})
@@ -293,6 +314,8 @@ def main():
                          if s["kind"] == "COLLISION" and s["number"] in opened})
             rooms[name]["boxes"] = gimmicks.collision_boxes(game, tags)
             rooms[name]["items"] = parse_items(data)
+            rooms[name]["catapults"] = sorted((s for s in gimmicks.parse_game(game) if s["kind"] == "CATAPULT"),
+                                              key=lambda s: s["pos"][1])
             rooms[name]["areas"] = {a: parse_area(data, a) for m, _, r, a in ITEM_USES if r == name}
             shop = parse_shop_area(data)
             if shop and name not in SHOPS:
@@ -313,7 +336,8 @@ def main():
              "short goal_room, goal_after; float goal[3]; short first_start, clear_room; } MissionInfo;  /* scripts[Easy, Normal][room] */" % len(names),
              "typedef struct { short mission, room, next_number, needs_room; } DoorGate;",
              "/* A lift: centre, turn (degrees), half sizes, its top's low and high heights, and the switch. */",
-             "typedef struct { short room; float x, z, yaw, half_x, half_z, low, high, switch_pos[3]; } RoomLift;",
+             "typedef struct { short room; float x, z, yaw, half_x, half_z, low, high, switch_pos[3]; short mission, need_item; } RoomLift;",
+             "typedef struct { short room; float x, y, z, half; } RoomCatapult;",
              "#define ROOM_NONE (-1)",
              "enum { ROOM_OP_SPAWN, ROOM_OP_WAIT, ROOM_OP_WAIT_ALIVE };",
              f"#define MISSION_COUNT {max(MISSIONS)}"]
@@ -379,6 +403,13 @@ def main():
     lines.append("static const short start_items[][2] = {" + (",".join(cells) or "{0}") + "};")
     lifts = []
     for name in names:
+        if name in ELEVATORS:
+            mission, low, high, need = ELEVATORS[name]
+            for lift in rooms[name]["lifts"]:
+                (x, y, z), box = lift["pos"], lift["box"]
+                lifts.append(f"{{{index[name]},{x:.1f}f,{z:.1f}f,{lift['yaw']:.1f}f,{box[3]:.1f}f,{box[5]:.1f}f,{low:.1f}f,"
+                             f"{high:.1f}f,{{{x:.1f}f,{y + box[1] + box[4]:.1f}f,{z:.1f}f}},{mission},{need}}}")
+                print(f"room {name}: elevator at {x:.0f},{z:.0f} from {low:.0f} to {high:.0f} (mission {mission})")
         if name not in LIFT_ROOMS:
             continue
         for lift in rooms[name]["lifts"]:
@@ -389,7 +420,7 @@ def main():
                        and abs(d["box"][2] - z) < box[5] + 50] + [y])
             sw = lift["switch"] or [x, y, z]
             lifts.append(f"{{{index[name]},{x:.1f}f,{z:.1f}f,{lift['yaw']:.1f}f,{box[3]:.1f}f,{box[5]:.1f}f,{y + box[1] + box[4]:.1f}f,"
-                         f"{top:.1f}f,{{{sw[0]:.1f}f,{sw[1]:.1f}f,{sw[2]:.1f}f}}}}")
+                         f"{top:.1f}f,{{{sw[0]:.1f}f,{sw[1]:.1f}f,{sw[2]:.1f}f}},0,-1}}")
             print(f"room {name}: lift at {x:.0f},{z:.0f} from {y + box[1] + box[4]:.0f} to {top:.0f}, switch {sw}")
     shops = [f"{{{index[r]},{x:.1f}f,{y:.1f}f,{z:.1f}f}}" for r, (x, y, z) in SHOPS.items() if r in index]
     lines.append("typedef struct { short room; float x, y, z; } RoomShop;")
@@ -460,6 +491,13 @@ def main():
     lines.append("#define SWITCH_PER_FLAME 70.0f")
     lines.append("#define SWITCH_WINDOW 120.0f      /* frames after a hit before it runs down, */")
     lines.append("#define SWITCH_DRAIN 2.0f         /* by this a frame */")
+    pads = []
+    for name in names:
+        if name in CATAPULT_ROOMS:
+            pads += [f"{{{index[name]},{s['pos'][0]:.1f}f,{s['pos'][1]:.1f}f,{s['pos'][2]:.1f}f,75.0f}}"
+                     for s in rooms[name]["catapults"]]
+    lines.append(f"#define ROOM_CATAPULT_COUNT {len(pads)}")
+    lines.append("static const RoomCatapult room_catapults[] = {" + (",".join(pads) or "{0}") + "};")
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")

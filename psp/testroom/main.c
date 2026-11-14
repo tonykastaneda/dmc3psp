@@ -2139,6 +2139,10 @@ static void play_movie(const char *name) {
 /* ---- A room's gimmicks in a mission: its lift, the mission's goal item, doors held shut by the event
  * script's flags. See tools/gen_rooms.py. */
 static int lift_index = -1, lift_on;   /* this room's lift, and whether its switch has been struck */
+static int lift_dir, lift_rearm;       /* an elevator: which way it goes next, and stepped off since */
+/* A catapult's flight: from one super jump pad to the next (or the top level), horizontal speed per second. */
+static int pad_flight;
+static float pad_vx, pad_vz;
 static float lift_y;
 /* Where a start point has no floor under it (110's, at the top of 103's lift shaft, stands on a gimmick
  * that isn't in the stage's collision): a pad there, at the start's height. */
@@ -2209,6 +2213,8 @@ static int bridge_up(void) {
 }
 /* On it: the pit's edge walls (prepare_stage.py puts walls on open floor edges) don't stop him there. */
 static int on_bridge(float x, float z, float y) {
+    /* Riding one of Mission 7's elevators down its shaft: the floors' edge walls round the shaft don't push him off. */
+    if (lift_index >= 0 && room_lifts[lift_index].mission && lift_on && over_lift(&room_lifts[lift_index], x, z)) return 1;
     return bridge_up() && x > 2150.0f && x < 2850.0f && z > 2450.0f && z < 4450.0f && y > 2950.0f;
 }
 /* The stage's floor, or the lift's top when that's higher and under the feet. */
@@ -2629,8 +2635,22 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
         int i;
         lift_index = -1;
         lift_on = 0;
-        for (i = 0; i < ROOM_LIFT_COUNT; ++i) if (room_lifts[i].room == room && room_lifts[i].high > room_lifts[i].low) lift_index = i;
+        for (i = 0; i < ROOM_LIFT_COUNT; ++i) if (room_lifts[i].room == room && room_lifts[i].high > room_lifts[i].low &&
+            (!room_lifts[i].mission || room_lifts[i].mission == mission_choice.mission)) lift_index = i;
         if (lift_index >= 0) lift_y = room_lifts[lift_index].low;
+        pad_flight = 0;
+        if (lift_index >= 0 && room_lifts[lift_index].mission) {
+            /* An elevator: it waits at the top unless Dante arrives standing on it, when it carries him on. */
+            const RoomLift *l = &room_lifts[lift_index];
+            lift_y = l->high;
+            lift_dir = -1;
+            lift_rearm = 0;
+            if (over_lift(l, s[0], s[2]) && s[1] > l->low - 300.0f && s[1] < l->high + 300.0f) {
+                lift_y = fmaxf(l->low, fminf(l->high, s[1]));
+                lift_dir = l->high - lift_y > lift_y - l->low ? 1 : -1;
+                lift_on = 1;
+            }
+        }
     }
     {
         float g;
@@ -2638,6 +2658,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
         if (!stage_floor(s[0], s[1] + 50.0f, s[2], 0.0f, &g) || g < s[1] - 100.0f) {
             pad_on = 1; pad[0] = s[0]; pad[1] = s[1]; pad[2] = s[2];
         }
+        if (lift_index >= 0 && room_lifts[lift_index].mission && lift_on) pad_on = 0;   /* he arrived on the elevator */
     }
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
     script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
@@ -2666,7 +2687,27 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
     seal_update(dt * 60.0f);
-    if (lift) {
+    if (focus_cmp && lift && (testroom_frame % 30) == 0) vergil_boss_note("lift", player->x, player->y, player->z, lift_y);
+    if (lift && lift->mission) {
+        /* Mission 7's elevators (137 and 100): powered (its item used), standing on it carries Dante to its
+         * other end, where a door takes him on; stepping off and on again turns it round. */
+        int on = over_lift(lift, player->x, player->z) && fabsf(player->y - lift_y) < 40.0f;
+        int powered = lift->need_item < 0 || item_is(lift->need_item, 2);
+        if (!on) lift_rearm = 1;
+        if (on && powered && lift_rearm && (lift_y <= lift->low || lift_y >= lift->high)) {
+            lift_dir = lift_y >= lift->high ? -1 : 1;
+            lift_on = 1;
+            lift_rearm = 0;
+        }
+        if (lift_on && on) {
+            lift_y += lift_dir * 750.0f * dt;   /* [estimate] about 8 s for 100's shaft, as the script's sounds run */
+            if (lift_y <= lift->low) { lift_y = lift->low; lift_on = 0; }
+            if (lift_y >= lift->high) { lift_y = lift->high; lift_on = 0; }
+            player->y = lift_y;
+            player->vy = 0.0f;
+        }
+        stage_set_lift(lift_y - lift->switch_pos[1]);   /* its model rests where its top is in the stage */
+    } else if (lift) {
         /* The switch: strike it or press O by it. Then the lift carries him up while he stands on it, and
          * comes back down when he's off it. */
         float sx = player->x - lift->switch_pos[0], sz = player->z - lift->switch_pos[2];
@@ -2687,6 +2728,44 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (lift_y < lift->low) lift_y = lift->low;
         }
         stage_set_lift(lift_y - lift->low);
+    }
+    for (i = 0; i < ROOM_CATAPULT_COUNT; ++i) {
+        /* A super jump pad (CStageSetCatapult): landing on it throws Dante up to the next pad, 3000 above, or from
+         * the last one to the top level's door [approximation: the game throws him straight up beside the side
+         * passages; the arc and its height aren't decoded]. */
+        const RoomCatapult *c = &room_catapults[i];
+        float tx, ty, tz, rise, up, fall, t, dx = player->x - c->x, dz = player->z - c->z;
+        int k;
+        if (c->room != mission_room || !player->on_ground || fabsf(player->y - c->y) > 40.0f) continue;
+        if (fabsf(dx) > c->half || fabsf(dz) > c->half) continue;
+        tx = c->x; ty = c->y + 3000.0f; tz = c->z;
+        for (k = 0; k < ROOM_CATAPULT_COUNT; ++k)
+            if (room_catapults[k].room == c->room && room_catapults[k].y > c->y + 1000.0f && room_catapults[k].y < c->y + 4000.0f) {
+                tx = room_catapults[k].x; ty = room_catapults[k].y; tz = room_catapults[k].z;
+            }
+        if (ty == c->y + 3000.0f) {
+            /* The last pad: to the top level, where the room's highest door is. */
+            const Room *r = &rooms[mission_room];
+            for (k = 0; k < r->door_count; ++k) if (r->doors[k].box[1] > c->y + 1000.0f) {
+                tx = r->doors[k].box[0] + 150.0f; ty = r->doors[k].box[1] + 10.0f; tz = r->doors[k].box[2] + 150.0f;
+            }
+        }
+        rise = ty - player->y;
+        up = sqrtf(2.0f * PLAYER_GRAVITY * (rise + 300.0f));
+        fall = sqrtf(2.0f * PLAYER_GRAVITY * 300.0f);
+        t = (up + fall) / PLAYER_GRAVITY;
+        pad_vx = (tx - player->x) / t;
+        pad_vz = (tz - player->z) / t;
+        player->vy = up;
+        player->on_ground = 0;
+        player->jump_motion = -1;
+        player->y += 1.0f;
+        pad_flight = 1;
+        break;
+    }
+    if (pad_flight) {
+        if (player->on_ground) pad_flight = 0;
+        else { player->x += pad_vx * dt; player->z += pad_vz * dt; }
     }
     for (i = 0; i < ROOM_SHOP_COUNT; ++i) {
         /* A Divinity Statue: O by it opens the shop, when there's no fight on. */

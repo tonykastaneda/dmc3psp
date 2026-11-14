@@ -24,6 +24,8 @@ void vergil_boss_push_out(float *x, float *z, float y, float r);
 /* One damage event, cleared by reading it. Damage is the original record's value. */
 int vergil_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *damage);
 void vergil_boss_trace(const char *path);
+/* Tests: a line in the same log (Mission 7's route checks). */
+void vergil_boss_note(const char *event, float a, float b, float c, float d);
 /* The floor under (x, z) near height y; set by enemy.c so he walks the room's floor. */
 void vergil_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out));
 
