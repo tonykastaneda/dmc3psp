@@ -50,6 +50,8 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 | Mission 7: Vergil on the Peak of Darkness, Yamato drawn | Mission 7: Damned Pawns closing in, in the Divine Library |
 | ![Mission 7, Hell Greeds](docs/screenshots/mission7_greeds.png) | |
 | Mission 7: Hell Greeds and the Prides their coffins summoned | |
+| ![Mission 19, Arkham's Legions](docs/screenshots/mission19_legions.png) | ![Mission 19, the Room of Fallen Ones](docs/screenshots/mission19_fallen_ones.png) |
+| Mission 19: a Legion closing on Dante in Forbidden Nirvana | Mission 19: the Netherworld's Room of Fallen Ones |
 | ![Mission 17, the Doppelganger](docs/screenshots/mission17_doppelganger.png) | ![Mission 17, Apparition Incarnate](docs/screenshots/mission17_arena.png) |
 | Mission 17: the Doppelganger, Dante's shadow, reeling in a crest's light | Mission 17: up out of Dante's own shadow, behind him |
 | ![Mission 15, the Fallen](docs/screenshots/mission15_fallen.png) | ![Mission 15, the Provisions Storeroom](docs/screenshots/mission15_storeroom.png) |
@@ -197,6 +199,13 @@ five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and us
 Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
 full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
 [the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).
+
+## Mission 19
+
+From the Netherworld's Room of Fallen Ones to Mission Clear: the Nirvanas, the Samsara and the golden statue, the End
+of the Line, and Arkham (class 35: his body, outer shell and Legions from GDATA 137; his side timers and picks
+decoded) in Forbidden Nirvana, through both rounds. What's decoded and what's estimated:
+[the Arkham spec](docs/ARKHAM_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-19-forces-collide).
 
 ## Mission 17
 

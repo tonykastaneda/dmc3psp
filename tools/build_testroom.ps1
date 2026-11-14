@@ -115,6 +115,13 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $VergilHeader) -or
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_vergil.py"), $Iso.FullName, "--output", $Generated)
 }
 
+$ArkhamHeader = Join-Path $Generated "boss_arkham_runtime.h"
+if ($Regenerate -or -not (Test-Path -LiteralPath $ArkhamHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_arkham.py")).LastWriteTime -gt (Get-Item -LiteralPath $ArkhamHeader).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_arkham.py"), $Iso.FullName, "--output", $Generated)
+}
+
 $DoppelHeader = Join-Path $Generated "boss_doppel_runtime.h"
 if ($Regenerate -or -not (Test-Path -LiteralPath $DoppelHeader) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_doppelganger.py")).LastWriteTime -gt (Get-Item -LiteralPath $DoppelHeader).LastWriteTime) {
@@ -201,7 +208,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "arachne", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "beowulf_boss", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "arachne", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "beowulf_boss", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

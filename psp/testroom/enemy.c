@@ -20,6 +20,7 @@
 #include "vergil_boss.h"
 #include "geryon_boss.h"
 #include "doppelganger_boss.h"
+#include "arkham_boss.h"
 #include "leviathan_boss.h"
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
@@ -294,6 +295,7 @@ int enemy_init(void) {
     if (!vergil_boss_init()) return 0;
     if (!geryon_boss_init()) return 0;
     if (!doppelganger_boss_init()) return 0;
+    if (!arkham_boss_init()) return 0;
     for (k = 0; k < ENEMY_KIND_COUNT; ++k) {
         const EnemyModel *m = &enemy_models[k];
         indices[k] = memalign(16, sizeof(unsigned short) * m->index_count);
@@ -385,6 +387,15 @@ static void spawn_one(int kind, float x, float z) {
         e->pos[0] = x; e->pos[1] = e->floor_y = y; e->pos[2] = z;
         doppelganger_boss_set_floor(vergil_floor);
         doppelganger_boss_spawn(x, y, z);
+        return;
+    }
+    if (kind == ENEMY_ARKHAM) {
+        float y = 0.0f;
+        if (!floor_under(x, spawn_search_y, z, &y)) y = 0.0f;
+        e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
+        e->pos[0] = x; e->pos[1] = e->floor_y = y; e->pos[2] = z;
+        arkham_boss_set_floor(vergil_floor);
+        arkham_boss_spawn(x, y, z);
         return;
     }
     if (kind == ENEMY_GERYON) {
@@ -517,6 +528,7 @@ void enemy_kill_all(void) {
             if (enemies[i].kind == ENEMY_VERGIL) vergil_boss_kill();
             if (enemies[i].kind == ENEMY_GERYON) geryon_boss_kill();
             if (enemies[i].kind == ENEMY_DOPPELGANGER) doppelganger_boss_kill();
+            if (enemies[i].kind == ENEMY_ARKHAM) arkham_boss_kill();
             if (enemies[i].kind == ENEMY_LEVIATHAN) leviathan_boss_kill();
             Enemy *was = e;
             e = &enemies[i];
@@ -579,7 +591,8 @@ void enemy_select_nearest(float x, float z) {
             !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) &&
             !(o->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) &&
             !(o->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) &&
-            !(o->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())) && d < best) { best = d; e = &enemies[i]; }
+            !(o->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())) &&
+            !(o->kind == ENEMY_ARKHAM && arkham_boss_dying()) && d < best) { best = d; e = &enemies[i]; }
     }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_select_target(x, z);
     if (e->kind == ENEMY_LEVIATHAN) {
@@ -589,7 +602,7 @@ void enemy_select_nearest(float x, float z) {
 }
 
 void enemy_set_attacks(int attacks) { attacks_on = attacks; }
-void enemy_set_dummy_kind(int kind) { dummy_kind = kind == ENEMY_VANGUARD || kind == ENEMY_VERGIL || kind == ENEMY_GERYON || kind == ENEMY_DOPPELGANGER || kind == ENEMY_LEVIATHAN || (kind >= 0 && kind < ENEMY_KIND_COUNT) ? kind : ENEMY_PRIDE; }
+void enemy_set_dummy_kind(int kind) { dummy_kind = kind == ENEMY_VANGUARD || kind == ENEMY_VERGIL || kind == ENEMY_GERYON || kind == ENEMY_DOPPELGANGER || kind == ENEMY_ARKHAM || kind == ENEMY_LEVIATHAN || (kind >= 0 && kind < ENEMY_KIND_COUNT) ? kind : ENEMY_PRIDE; }
 int enemy_kind(void) { return e->kind; }
 
 int enemy_kind_for_class(int spawn_class) {
@@ -610,6 +623,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 58) return ENEMY_VERGIL;
     if (spawn_class == 50) return ENEMY_GERYON;
     if (spawn_class == 52) return ENEMY_DOPPELGANGER;
+    if (spawn_class == 53) return ENEMY_ARKHAM;
     if (spawn_class == 26) return ENEMY_VANGUARD;
     if (spawn_class == 25) return ENEMY_ENVY;
     if (spawn_class == 28) return ENEMY_ARACHNE;
@@ -651,13 +665,14 @@ void enemy_clamp_player(float *z) {
     }
 }
 
-int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && !(e->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) && !(e->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) && !(e->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())); }
+int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && !(e->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) && !(e->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) && !(e->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())) && !(e->kind == ENEMY_ARKHAM && arkham_boss_dying()); }
 void enemy_position(float out[3]) {
     if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_target_position(out); return; }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_target_position(out);
     else if (e->kind == ENEMY_VERGIL) vergil_boss_position(out);
     else if (e->kind == ENEMY_GERYON) geryon_boss_target_position(out);
     else if (e->kind == ENEMY_DOPPELGANGER) doppelganger_boss_target_position(out);
+    else if (e->kind == ENEMY_ARKHAM) arkham_boss_target_position(out);
     else memcpy(out, e->pos, sizeof(e->pos));
 }
 float enemy_height(void) { return e->pos[1] - e->floor_y; }
@@ -674,6 +689,8 @@ const char *enemy_boss_name(void) {
         if (enemies[i].active && enemies[i].kind == ENEMY_GERYON) return "GERYON";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_DOPPELGANGER) return "DOPPELGANGER";
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_ARKHAM) return "ARKHAM";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_GIGAPEDE) return "GIGAPEDE";
     for (i = 0; i < ENEMY_MAX; ++i)
@@ -708,6 +725,9 @@ int enemy_boss_health(float *health, float *maximum) {
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_DOPPELGANGER) {
         *health=doppelganger_boss_health();*maximum=doppelganger_boss_max_health();return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_ARKHAM) {
+        *health=arkham_boss_health();*maximum=arkham_boss_max_health();return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && (enemies[i].kind==ENEMY_AGNI || enemies[i].kind==ENEMY_RUDRA) && enemies[i].plan!=P_DEATH) {
         *health=ar_health_total(maximum);return 1;
@@ -1327,6 +1347,11 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         if (doppelganger_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
         return;
     }
+    if (e->kind == ENEMY_ARKHAM) {
+        ++hits;
+        if (arkham_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
+        return;
+    }
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
@@ -1417,6 +1442,10 @@ void enemy_push_out(float *x, float *z, float y, float r) {
         }
         if (enemies[i].kind == ENEMY_DOPPELGANGER) {
             if (enemies[i].active) doppelganger_boss_push_out(x, z, y, r);
+            continue;
+        }
+        if (enemies[i].kind == ENEMY_ARKHAM) {
+            if (enemies[i].active) arkham_boss_push_out(x, z, y, r);
             continue;
         }
         const Enemy *o = &enemies[i];
@@ -1587,6 +1616,20 @@ static void update_one(float dt, float px, float py, float pz) {
         e->floor_y = e->pos[1];
         e->hidden = doppelganger_boss_hidden();
         if (doppelganger_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
+            land_attack(heavy);
+            landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+        }
+        return;
+    }
+    if (e->kind == ENEMY_ARKHAM) {
+        float hit_x, hit_z, damage;
+        int heavy;
+        e->plan = arkham_boss_dying() ? P_DEATH : P_WATCH;
+        arkham_boss_update(f, px, py, pz, attacks_on);
+        arkham_boss_position(e->pos);
+        e->floor_y = e->pos[1];
+        e->hidden = arkham_boss_hidden();
+        if (arkham_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
             land_attack(heavy);
             landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
         }
@@ -1867,6 +1910,7 @@ void enemy_draw(void) {
         if (e->kind == ENEMY_VERGIL) { vergil_boss_draw(); continue; }
         if (e->kind == ENEMY_GERYON) { geryon_boss_draw(); continue; }
         if (e->kind == ENEMY_DOPPELGANGER) { doppelganger_boss_draw(); continue; }
+        if (e->kind == ENEMY_ARKHAM) { arkham_boss_draw(); continue; }
         if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_draw(); continue; }
         if (e->kind == ENEMY_VANGUARD) {vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
