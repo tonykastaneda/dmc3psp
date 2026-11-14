@@ -71,6 +71,7 @@ int testroom_frame;
 #include "mission6.h"
 #include "mission11.h"
 #include "mission14.h"
+#include "mission18.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -2412,6 +2413,7 @@ static int door_gated(const RoomDoor *d) {
         if (w && !sw_lit && d->number == w->next_number) return 1;   /* the seal's door: flag 33 */
     }
     if (mission_choice.mission == 6 && m6_door_shut(room_number(mission_room), (int)(d - rooms[mission_room].doors))) return 1;
+    if (mission_choice.mission == 18 && m18_door_shut(room_number(mission_room), (int)(d - rooms[mission_room].doors))) return 1;
     if (mission_choice.mission == 14 && m14_door_shut(room_number(mission_room), (int)(d - rooms[mission_room].doors))) return 1;
     if (mission_choice.mission == 11 && m11_door_shut(room_number(mission_room), (int)(d - rooms[mission_room].doors))) return 1;
     for (i = 0; i < DOOR_GATE_COUNT; ++i) {
@@ -2636,6 +2638,7 @@ static void mission_gimmicks_draw(void) {
     if (mission_choice.mission == 7) m7_draw();
     if (mission_choice.mission == 11) m11_draw();
     if (mission_choice.mission == 14) m14_draw();
+    if (mission_choice.mission == 18) m18_draw();
     if (bridge_up()) {
         /* 112's bridge (mission_floor's ramp, 3000 at z 2650 to 3500 at z 4350): drawn as 20 stone steps,
          * alternating shades, each a box down to the step below. A stand-in: the game's own platform gimmick
@@ -2772,6 +2775,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     if (mission_mode && mission_choice.mission == 15) m15_enter(room_number(room));   /* mission15.c */
     if (mission_mode && mission_choice.mission == 11) m11_enter(room_number(room));
     if (mission_mode && mission_choice.mission == 14) m14_enter(room_number(room));
+    if (mission_mode && mission_choice.mission == 18) m18_enter(room_number(room));
     script_wait = 0.0f;
     script_waiting_alive = -1;
     player_spawn[0] = s[0];
@@ -2887,7 +2891,8 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             start_camera(player, camera);
         }
     }
-    if (mission_choice.mission == 14 && m14_update(dt, player->x, player->y, player->z)) return 1;   /* 008's area 0: demo 326 */
+    if (mission_choice.mission == 14 && m14_update(dt, player->x, player->y, player->z)) return 1;
+    if (mission_choice.mission == 18 && m18_update(player->x, player->y, player->z)) return 1;   /* 403's mirror: demo 50 */   /* 008's area 0: demo 326 */
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
@@ -2903,6 +2908,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (m6) m6_status(line, sizeof(line));
             if (mission_choice.mission == 11) m11_status(line, sizeof(line));
             if (mission_choice.mission == 14) m14_status(line, sizeof(line));
+            if (mission_choice.mission == 18) m18_status(line, sizeof(line));
             float ep[3] = {0, 0, 0};
             if (enemy_active()) enemy_position(ep);
             if ((f = fopen(path, "a"))) { fprintf(f, "%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d e=%.0f,%.0f,%.0f %s\n", m_tick, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], ep[0], ep[1], ep[2], line); fclose(f); }
@@ -3077,6 +3083,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         return 0;
     }
     if (!held) room_set_cleared(mission_room);
+    if (!held && mission_choice.mission == 18) m18_cleared(room_number(mission_room));
     if (mission_choice.mission == 12) {
         int next = 0, start = 0;
         if (m12_room_done(room_number(mission_room), &next, &start)) {   /* mission12.c: the ride's end */
@@ -3090,7 +3097,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
-    if (!m6 && mission_choice.mission != 14 && info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE && info->clear_room == ROOM_NONE) {
+    if (!m6 && mission_choice.mission != 14 && mission_choice.mission != 18 && info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE && info->clear_room == ROOM_NONE) {
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
@@ -3238,6 +3245,8 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     memset(elevator_left, 0, sizeof(elevator_left));
     if (choice->mission == 11) m11_reset();
     if (choice->mission == 14) m14_reset();
+    geryon_boss_start_on_ground(0);   /* Mission 18 turns it on in 417 only */
+    if (choice->mission == 18) m18_reset();
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
