@@ -5,6 +5,9 @@
  * and each one collected adds its value to the count orbs_set_counter points at. */
 
 void orbs_set_counter(int *red_orbs);
+/* An active encounter may attract the pieces to a stage actor instead of
+ * Dante. Position returns 0 when the ordinary player collection applies. */
+void orbs_set_sink(int (*position)(float out[3]), void (*collect)(int value));
 /* A burst worth this many red orbs in all, from here (cm, the game's world). */
 void orbs_burst(float x, float y, float z, int total);
 void orbs_clear(void);

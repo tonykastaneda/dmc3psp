@@ -9,7 +9,7 @@ import struct
 SCRIPT_CHUNK, CAP_CHUNK, SHAPE_CHUNK = 38, 39, 40
 AI_TABLE = 0x5A8300
 # Per class, from their set-ups (build/hdref/enemy_specs.md): the Pride, the Gluttony (CEm001), the Sloth (CEm003).
-CLASS_TABLES = (("pride", 0x5A8300), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60))
+CLASS_TABLES = (("pride", 0x5A8300), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60), ("envy", 0x5CF5B0))
 HIT_SCRIPTS = 0x5A7A80   # the list states name their hit reactions through
 HIT_SCRIPT_COUNT = 28
 SCRIPT_COUNT = 100
@@ -166,7 +166,7 @@ def floats(elf, address, count):
     return [elf.real(address + i * 4) for i in range(count)]
 
 
-def write_header(path, pack, executable):
+def write_header(path, pack, executable, envy_pack=None):
     elf = Elf(executable)
     caps = read_caps(pack)
     ops, starts = compile_scripts(pack[SCRIPT_CHUNK], caps)
@@ -237,4 +237,15 @@ def write_header(path, pack, executable):
         f"{{{len(b) + 1},{len(zs)},ai_{n}_bands,ai_{n}_times,ai_{n}_thresholds,ai_{n}_zones,ai_{n}_rows}}"
         for n, b, l, tm, th, zs in classes) + "};")
     lines.append("enum { " + ", ".join(f"AI_CLASS_{n.upper()}" for n, *_ in classes) + " };")
+    if envy_pack is not None:
+        envy_caps = read_caps(envy_pack)
+        envy_ops, envy_starts = compile_scripts(envy_pack[SCRIPT_CHUNK], envy_caps)
+        lines += ["static const EnemyAiOp envy_ai_ops[] = {" +
+                  ",".join("{%d,%d,%d,%d}" % op for op in envy_ops) + "};",
+                  "static const short envy_ai_scripts[] = {" + ",".join(map(str, envy_starts)) + "};",
+                  "static const EnemyAiCap envy_ai_caps[] = {" + ",".join(
+                      "{%d,%d,%s,%s,%s,%s}" % (k, b, real(x), real(y), real(z), real(r))
+                      for k, b, x, y, z, r in envy_caps) + "};"]
+        lines += ["static const unsigned char envy_ai_hit_scripts[] = {" +
+                  ",".join(str(elf.byte(0x5CED30 + i * 2 + 1)) for i in range(HIT_SCRIPT_COUNT)) + "};"]
     path.write_text("\n".join(lines) + "\n")

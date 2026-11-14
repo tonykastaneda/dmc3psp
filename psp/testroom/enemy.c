@@ -17,6 +17,8 @@
 #include "stage.h"
 #include "vanguard.h"
 #include "cerberus_boss.h"
+#include "vergil_boss.h"
+#include "leviathan_boss.h"
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "swizzle.h"
@@ -135,7 +137,7 @@ static Vertex *weapon_vertices[ENEMY_KIND_COUNT];
 static unsigned short *indices[ENEMY_KIND_COUNT], *weapon_indices[ENEMY_KIND_COUNT];
 static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
 /* Which bone holds the weapon, by kind. */
-static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5, 7, 11};
+static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5, 7, 11, HAND_BONE};
 static Enemy enemies[ENEMY_MAX];
 static Enemy *e = &enemies[0];
 static int hits, attacks_on;
@@ -156,6 +158,7 @@ static const EnemyAiClass *ai_class(void) {
     switch (e->kind) {
     case ENEMY_GLUTTONY: return &enemy_ai_classes[AI_CLASS_GLUTTONY];
     case ENEMY_SLOTH: return &enemy_ai_classes[AI_CLASS_SLOTH];
+    case ENEMY_ENVY: return &enemy_ai_classes[AI_CLASS_ENVY];
     default: return &enemy_ai_classes[AI_CLASS_PRIDE];
     }
 }
@@ -256,6 +259,7 @@ int enemy_init(void) {
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
     if (!cerberus_boss_init()) return 0;
+    if (!vergil_boss_init()) return 0;
     for (k = 0; k < ENEMY_KIND_COUNT; ++k) {
         const EnemyModel *m = &enemy_models[k];
         indices[k] = memalign(16, sizeof(unsigned short) * m->index_count);
@@ -292,6 +296,7 @@ static int floor_under(float x, float y, float z, float *out) {
 }
 
 static float spawn_search_y = 2000.0f;
+static int vergil_floor(float x, float y, float z, float *out) { return floor_under(x, y - 200.0f, z, out); }
 void enemy_spawn_height(float y) { spawn_search_y = y + 100.0f; }
 
 static void script_play(int n);
@@ -304,6 +309,7 @@ static int kind_health(int kind) {
     switch (kind) {
     case ENEMY_GLUTTONY: return ENEMY_HEALTH * 700 / 250;
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
+    case ENEMY_ENVY: return ENEMY_HEALTH * 400 / 250;
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
     case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
@@ -317,11 +323,28 @@ static void spawn_one(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
     if (kind == ENEMY_GIGAPEDE) { giga_spawn(); return; }
+    if (kind == ENEMY_LEVIATHAN) {
+        if (!leviathan_boss_init()) return;
+        e->kind=kind; e->active=1; e->plan=P_WATCH; e->hidden=0;
+        leviathan_boss_spawn();
+        leviathan_boss_target_position(e->pos);
+        e->floor_y=0;
+        return;
+    }
     if (kind == ENEMY_CERBERUS) {
         e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
         e->pos[0] = 2500.0f; e->pos[1] = e->floor_y = 0.0f; e->pos[2] = 3250.0f;
         e->yaw = PI;
         cerberus_boss_spawn();
+        return;
+    }
+    if (kind == ENEMY_VERGIL) {
+        float y = 0.0f;
+        if (!floor_under(x, spawn_search_y, z, &y)) y = 0.0f;
+        e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
+        e->pos[0] = x; e->pos[1] = e->floor_y = y; e->pos[2] = z;
+        vergil_boss_set_floor(vergil_floor);
+        vergil_boss_spawn(x, y, z);
         return;
     }
     if (kind == ENEMY_VANGUARD) {
@@ -418,6 +441,8 @@ void enemy_kill_all(void) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
             if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
             if (enemies[i].kind == ENEMY_CERBERUS) cerberus_boss_kill();
+            if (enemies[i].kind == ENEMY_VERGIL) vergil_boss_kill();
+            if (enemies[i].kind == ENEMY_LEVIATHAN) leviathan_boss_kill();
             Enemy *was = e;
             e = &enemies[i];
             if (e->kind != ENEMY_GIGAPEDE) died();   /* their orbs, as if Dante had done it */
@@ -455,6 +480,7 @@ void enemy_set_count(int count, float x, float z) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
+            if(e->active && e->kind==ENEMY_LEVIATHAN)leviathan_boss_kill();
             e->active = 0;
         } else if (!e->active) {
             float a = 0.785f * (float)i + 0.6f, r = spawn_ring + 60.0f * (float)(i / 8);
@@ -474,13 +500,18 @@ void enemy_select_nearest(float x, float z) {
         float dx = o->pos[0] - x, dz = o->pos[2] - z, d = dx * dx + dz * dz;
         if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && vanguard_hidden()) &&
             !(o->kind == ENEMY_GIGAPEDE && giga_part_out(o->step)) &&
-            !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && d < best) { best = d; e = &enemies[i]; }
+            !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) &&
+            !(o->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) && d < best) { best = d; e = &enemies[i]; }
     }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_select_target(x, z);
+    if (e->kind == ENEMY_LEVIATHAN) {
+        leviathan_boss_select_target(x,z);
+        leviathan_boss_target_position(e->pos);
+    }
 }
 
 void enemy_set_attacks(int attacks) { attacks_on = attacks; }
-void enemy_set_dummy_kind(int kind) { dummy_kind = kind == ENEMY_VANGUARD || (kind >= 0 && kind < ENEMY_KIND_COUNT) ? kind : ENEMY_PRIDE; }
+void enemy_set_dummy_kind(int kind) { dummy_kind = kind == ENEMY_VANGUARD || kind == ENEMY_VERGIL || kind == ENEMY_LEVIATHAN || (kind >= 0 && kind < ENEMY_KIND_COUNT) ? kind : ENEMY_PRIDE; }
 int enemy_kind(void) { return e->kind; }
 
 int enemy_kind_for_class(int spawn_class) {
@@ -493,7 +524,9 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
+    if (spawn_class == 58) return ENEMY_VERGIL;
     if (spawn_class == 26) return ENEMY_VANGUARD;
+    if (spawn_class == 25) return ENEMY_ENVY;
     return ENEMY_PRIDE;
 }
 void enemy_set_anim_auto(int on) { anim_auto = on; }
@@ -529,17 +562,23 @@ void enemy_clamp_player(float *z) {
     }
 }
 
-int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()); }
+int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && !(e->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())); }
 void enemy_position(float out[3]) {
+    if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_target_position(out); return; }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_target_position(out);
+    else if (e->kind == ENEMY_VERGIL) vergil_boss_position(out);
     else memcpy(out, e->pos, sizeof(e->pos));
 }
 float enemy_height(void) { return e->pos[1] - e->floor_y; }
 int enemy_hits_taken(void) { return hits; }
 const char *enemy_boss_name(void) {
     int i;
+    for (i=0;i<ENEMY_MAX;++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_LEVIATHAN) return "HEART OF LEVIATHAN";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_CERBERUS) return "CERBERUS";
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_VERGIL) return "VERGIL";
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].kind == ENEMY_GIGAPEDE) return "GIGAPEDE";
     for (i = 0; i < ENEMY_MAX; ++i)
@@ -549,12 +588,19 @@ const char *enemy_boss_name(void) {
     return "HELL VANGUARD";
 }
 int enemy_boss_health(float *health, float *maximum) {
+    int lv;
+    for(lv=0;lv<ENEMY_MAX;++lv) if(enemies[lv].active && enemies[lv].kind==ENEMY_LEVIATHAN) {
+        *health=leviathan_boss_health();*maximum=leviathan_boss_max_health();return 1;
+    }
     int i;
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VANGUARD) {
         *health=vanguard_health();*maximum=vanguard_max_health();return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_CERBERUS) {
         *health=cerberus_boss_health();*maximum=cerberus_boss_max_health();return 1;
+    }
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VERGIL) {
+        *health=vergil_boss_health();*maximum=vergil_boss_max_health();return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && (enemies[i].kind==ENEMY_AGNI || enemies[i].kind==ENEMY_RUDRA) && enemies[i].plan!=P_DEATH) {
         *health=ar_health_total(maximum);return 1;
@@ -597,7 +643,7 @@ static float ai_unit(void) { return (float)ai_random() * 2.3283064e-10f; }
 /* ---- Scripts: which motion, from where, until when. ---- */
 
 static int is_ar(void) { return e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA; }
-static const EnemyAiOp *script_ops(void) { return !is_ar() ? enemy_ai_ops : e->kind == ENEMY_AGNI ? ar_ops_0 : ar_ops_1; }
+static const EnemyAiOp *script_ops(void) { return is_ar() ? (e->kind == ENEMY_AGNI ? ar_ops_0 : ar_ops_1) : e->kind == ENEMY_ENVY ? envy_ai_ops : enemy_ai_ops; }
 
 static void script_play_op(const EnemyAiOp *op) {
     int m, blend = op->c & 0xff;
@@ -645,7 +691,7 @@ static void script_play(int n) {
     e->hit_left[0] = e->hit_left[1] = 0.0f;
     e->done = 0;
     {
-        int start = is_ar() ? (n >= 0 && n < AR_SCRIPTS ? (e->kind == ENEMY_AGNI ? ar_starts_0 : ar_starts_1)[n] : -1) : enemy_ai_scripts[n];
+        int start = is_ar() ? (n >= 0 && n < AR_SCRIPTS ? (e->kind == ENEMY_AGNI ? ar_starts_0 : ar_starts_1)[n] : -1) : (e->kind == ENEMY_ENVY ? envy_ai_scripts : enemy_ai_scripts)[n];
         if (start < 0) { e->done = 1; return; }
         e->script_at = start;
     }
@@ -653,7 +699,7 @@ static void script_play(int n) {
 }
 
 /* The second list a state can name motions through; the game's PTR_DAT_00618c38. */
-static void script_play_hit(int n) { script_play(enemy_ai_hit_scripts[n]); }
+static void script_play_hit(int n) { script_play((e->kind==ENEMY_ENVY?envy_ai_hit_scripts:enemy_ai_hit_scripts)[n]); }
 
 /* Move the script on by f frames. root gets how far the motion's root travelled. */
 static void script_tick(float f, float root[3]) {
@@ -1138,9 +1184,21 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     float toward;
     int behind;
     if (!e->active) return;
+    if (e->kind == ENEMY_LEVIATHAN) {
+        float damage=kind==HIT_PISTOL ? 8.0f : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
+        if (leviathan_boss_dying()) return;
+        ++hits;
+        if(leviathan_boss_hit(leviathan_boss_target(),damage,mortal)) {e->plan=P_DEATH;died();}
+        return;
+    }
     if (e->kind == ENEMY_CERBERUS) {
         ++hits;
         if (cerberus_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
+        return;
+    }
+    if (e->kind == ENEMY_VERGIL) {
+        ++hits;
+        if (vergil_boss_hit(kind, from_x, from_z, mortal)) { e->plan = P_DEATH; died(); }
         return;
     }
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
@@ -1208,10 +1266,15 @@ void enemy_push_out(float *x, float *z, float y, float r) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].kind == ENEMY_GIGAPEDE) continue;
+        if (enemies[i].kind == ENEMY_LEVIATHAN) continue;
         if (enemies[i].kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) continue;
         if (enemies[i].kind == ENEMY_CERBERUS) {
             /* Its body is five posed push capsules (pack chunks 31/32), not one circle at its hips. */
             if (enemies[i].active) cerberus_boss_push_out(x, z, y, r);
+            continue;
+        }
+        if (enemies[i].kind == ENEMY_VERGIL) {
+            if (enemies[i].active) vergil_boss_push_out(x, z, y, r);
             continue;
         }
         const Enemy *o = &enemies[i];
@@ -1308,7 +1371,7 @@ static void test_attack(float px, float py, float pz) {
         const EnemyAiCap *cap;
         float l[3], x, y, z, near_y;
         if (e->hit_left[k] <= 0.0f) continue;
-        cap = is_ar() ? &ar_caps[e->hit_cap[k] < AR_CAPS ? e->hit_cap[k] : 0] : &enemy_ai_caps[e->hit_cap[k]];
+        cap = is_ar() ? &ar_caps[e->hit_cap[k] < AR_CAPS ? e->hit_cap[k] : 0] : &(e->kind == ENEMY_ENVY ? envy_ai_caps : enemy_ai_caps)[e->hit_cap[k]];
         if (cap->bone) {
             if (!posed) { evaluate_pose(); posed = 1; }
             {
@@ -1349,6 +1412,16 @@ static void update_one(float dt, float px, float py, float pz) {
     if (!e->active) return;
     dante_y = py;
     if (e->kind == ENEMY_GIGAPEDE) { giga_part_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_LEVIATHAN) {
+        float x,z,damage;
+        leviathan_boss_update(f,px,py,pz,attacks_on);
+        if(leviathan_boss_attack_landed(&x,&z,&damage)) {
+            land_attack(1);landed_x=x;landed_z=z;landed_damage=damage;
+        }
+        leviathan_boss_target_position(e->pos);
+        e->plan=leviathan_boss_dying()?P_DEATH:P_WATCH;
+        return;
+    }
     if (e->kind == ENEMY_CERBERUS) {
         float hit_x, hit_z, damage;
         int heavy;
@@ -1358,6 +1431,20 @@ static void update_one(float dt, float px, float py, float pz) {
         cerberus_boss_update(f, px, py, pz, attacks_on);
         cerberus_boss_root_position(e->pos);
         if (cerberus_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
+            land_attack(heavy);
+            landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+        }
+        return;
+    }
+    if (e->kind == ENEMY_VERGIL) {
+        float hit_x, hit_z, damage;
+        int heavy;
+        e->plan = vergil_boss_dying() ? P_DEATH : P_WATCH;
+        vergil_boss_update(f, px, py, pz, attacks_on);
+        vergil_boss_position(e->pos);
+        e->floor_y = e->pos[1];
+        e->hidden = vergil_boss_hidden();
+        if (vergil_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
             land_attack(heavy);
             landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
         }
@@ -1597,6 +1684,8 @@ void enemy_draw(void) {
         if (!e->active) continue;
         if (e->kind == ENEMY_GIGAPEDE) { if (e->step == 0) giga_draw(); continue; }
         if (e->kind == ENEMY_CERBERUS) { cerberus_boss_draw(); continue; }
+        if (e->kind == ENEMY_VERGIL) { vergil_boss_draw(); continue; }
+        if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_draw(); continue; }
         if (e->kind == ENEMY_VANGUARD) {vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
