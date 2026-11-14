@@ -1,0 +1,10 @@
+item 52 1
+item 53 1
+item 54 1
+place 30 2495 290 2515 180
+circle 60 120
+place 200 2497 1 1850 0
+walkto 2497 2150 210 400
+circle 220 400
+psp_shot 100
+psp_shot 250

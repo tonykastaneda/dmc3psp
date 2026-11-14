@@ -42,6 +42,7 @@ int testroom_frame;
 #include "vergil_boss.h"
 #include "geryon_boss.h"
 #include "mission12.h"
+#include "mission15.h"
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
@@ -572,7 +573,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "LADY"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "FALLEN", "LADY"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -2491,6 +2492,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if (mission_choice.mission == 11) m11_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 7) m7_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
+    if (mission_choice.mission == 15) m15_hit(player->x, player->y, player->z, player->yaw, reach);   /* mission15.c: the portals */
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
         float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
@@ -2763,6 +2765,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
     if (mission_mode && mission_choice.mission == 6 && m6_enter(room_number(room))) script_at = 0;   /* mission6.c */
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
+    if (mission_mode && mission_choice.mission == 15) m15_enter(room_number(room));   /* mission15.c */
     if (mission_mode && mission_choice.mission == 11) m11_enter(room_number(room));
     if (mission_mode && mission_choice.mission == 14) m14_enter(room_number(room));
     script_wait = 0.0f;
@@ -2850,6 +2853,16 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
     }
     if (mission_choice.mission == 11) m11_update(dt);
+    if (mission_choice.mission == 15) {
+        static int m15_tick;
+        m15_update(dt);
+        if (focus_cmp && (m15_tick++ % 30) == 0) {
+            char line[160];
+            m15_status(line, sizeof(line));
+            snprintf(line + strlen(line), sizeof(line) - strlen(line), " items=%d%d%d", item_state[52], item_state[53], item_state[54]);
+            vergil_boss_note(line, player->x, player->y, player->z, (float)enemy_alive_count());
+        }
+    }
     if (mission_choice.mission == 12) {
         float to[4];
         if (m12_warp(room_number(mission_room), to)) {   /* mission12.c: the bridge falls */
@@ -3008,13 +3021,17 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         door_prompt_time = 1.0f;
         if (pressed & PSP_CTRL_CIRCLE) { float at[3] = {k->x, k->y, k->z}; item_state[k->item] = 1; fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE; }
     }
-    for (i = 0; done && enemy_alive_count() == 0 && i < ROOM_ITEM_USE_COUNT; ++i) {
-        /* Where one's used: examine inside its area while holding it. */
-        const RoomItemUse *u = &room_item_uses[i];
-        if (u->mission != mission_choice.mission || u->room != mission_room || !item_is(u->item, 1)) continue;
-        if (!item_area_inside(u, player->x, player->y, player->z)) continue;
-        door_prompt_time = 1.0f;
-        if (pressed & PSP_CTRL_CIRCLE) { float at[3] = {player->x, player->y + 100.0f, player->z}; item_state[u->item] = 2; item_opens_apply(); fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE; }
+    {
+        /* Where one's used: examine inside its area while holding it. One examine uses every item held for that
+         * spot, as EventTbl15's does with 219's three Orihalcon Fragments. */
+        unsigned int examine = pressed & PSP_CTRL_CIRCLE;
+        for (i = 0; done && enemy_alive_count() == 0 && i < ROOM_ITEM_USE_COUNT; ++i) {
+            const RoomItemUse *u = &room_item_uses[i];
+            if (u->mission != mission_choice.mission || u->room != mission_room || !item_is(u->item, 1)) continue;
+            if (!item_area_inside(u, player->x, player->y, player->z)) continue;
+            door_prompt_time = 1.0f;
+            if (examine) { float at[3] = {player->x, player->y + 100.0f, player->z}; item_state[u->item] = 2; item_opens_apply(); fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE; }
+        }
     }
     if (info->goal_room == mission_room && room_is_cleared(info->goal_after) && done && enemy_alive_count() == 0) {
         /* The mission's item: walk up to it and press O. */
@@ -3085,6 +3102,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         if (m6) {
             int next = 0, start = 0;
             if (m6_door_route(room_number(mission_room), i, &next, &start)) {
+                char want[16];
+                snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
+                if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
+            }
+        }
+        if (mission_choice.mission == 15) {
+            int next = 0, start = 0;
+            if (m15_door_route(room_number(mission_room), i, &next, &start)) {   /* the coloured doors */
                 char want[16];
                 snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
                 if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
@@ -3186,6 +3211,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     breakables_reset();
     if (choice->mission == 6) m6_reset(choice->difficulty);
     if (choice->mission == 7) m7_reset();
+    if (choice->mission == 15) m15_reset();
     memset(elevator_left, 0, sizeof(elevator_left));
     if (choice->mission == 11) m11_reset();
     if (choice->mission == 14) m14_reset();
