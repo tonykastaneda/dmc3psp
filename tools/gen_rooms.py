@@ -60,6 +60,8 @@ SLOTS.update({"114": 380, "115": 384, "127": 432, "134": 460, "135": 464, "136":
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in range(201, 212)})
 # Mission 11 (Forbidden Land 1F to the Torture Chamber).
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (212, 213, 214, 217, 239, 240)})
+# Mission 13 route, including the optional rear/side rooms from EventTbl13.
+SLOTS.update({str(n):512+4*(n-200) for n in (228,229,230,232,233,234,236,241)})
 # Mission 14 (Forbidden Land 3F down to the Residential Area): 0xx is GDATA 272 + 4 x n.
 SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in (221, 225, 231, 233, 235, 236, 237)})
 SLOTS.update({"007": 300, "008": 304})
@@ -114,6 +116,7 @@ MISSIONS = {
     # psp/testroom/mission11.c) -> 239 the Temperance Wagon -> (216, the wagon ride: a stand-in, see EXTRA_DOORS) ->
     # 240 -> 217 Torture Chamber: Beowulf (group 0, EST 51).
     11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0]}),
+    13: ("229", None, {"229": [0], "241": [0], "234": [0]}),
     # Mission 14, from EventTbl14 (GDATA 252): 237 Lair of Judgement Ruins (its combat adjudicator opens door 0) -> 235
     # Underwater Elevator -> 225 Subterranean Lake -> 231 Top Obsidian Path -> 233 Vestibule -> 214 Altar of Evil (group
     # 0 on entry) -> 239 -> (the wagon) -> 240 -> 236 Hell's Highway (the chessmen, groups 2-6) -> 221 Subterranean
@@ -131,7 +134,7 @@ MISSIONS = {
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1, 14: 1}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211", 11: "217"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
+CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211", 11: "217", 13: "234"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -206,6 +209,11 @@ KEY_ITEMS += [(10, 48, "209", -1), (10, 49, "206", 48)]
 ITEM_USES += [(10, 48, "206", 0), (10, 49, "201", 1)]
 ITEM_OPENS += [(10, "206", 48, [101])]
 ITEM_GATES += [(10, "201", "211", 49)]
+# Mission 13: item 51 from the crystal puzzle, used at 232's seal.
+KEY_ITEMS += [(13,51,"233",-1)]
+ITEM_USES += [(13,51,"232",0)]
+ITEM_GATES += [(13,"232","234",51)]
+ITEM_OPENS += [(13,"232",51,[100])]
 # Doors that aren't in a room's door list: 142's area 0 plays demo 17, whose AFTER_DEMO is goto_room 144, 0.
 # (room, box centre and full sizes as BoxIn, next room, its start)
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}

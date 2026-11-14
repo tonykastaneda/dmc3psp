@@ -1,0 +1,40 @@
+frames 18000
+fps 30
+realdt 0
+turbo 0
+clearminions 60
+gotoroom 300 230
+gotoroom 400 241
+gotoroom 800 233
+place 820 2100 150 2899 180
+triangle 830 831
+place 1000 2500 150 2499 180
+triangle 1010 1011
+place 1200 2900 150 2499 180
+triangle 1210 1211
+place 1400 3300 150 1699 180
+triangle 1410 1411
+place 1600 3885 190 132 0 1
+circle 1602 1603
+gotoroom 1750 241
+gotoroom 2600 232
+place 2650 4800 0 2800 0 1
+circle 2652 2653
+gotoroom 2750 234
+gun 6
+fire 1
+firefrom 2800
+onvergil 2800
+r1 2800 17999
+stoponclear 1
+mkey cross 60
+mkey cross 120
+mkey cross 180
+mkey cross 240
+psp_shot 1500
+psp_shot 1630
+psp_shot 2300
+psp_shot 2700
+psp_shot 4000
+psp_shot 6000
+psp_shot 10000

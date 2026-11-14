@@ -22,11 +22,11 @@ from prepare_stage import pac_entries
 SLOT = 139
 OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK = range(6)
 END_FRAME = 0x7FFF
-PARTS = (("body", 1), ("coat", 3), ("yamato", 25), ("scabbard", 28))
+PARTS = (("body", 1), ("coat", 3), ("yamato", 25), ("scabbard", 28), ("beowulf", 55), ("dt_body", 51))
 MOTION_CHUNKS = (7, 8, 9, 10)          # motion files 0-3 (the set-up's list at +0xb570)
 SCRIPT_CHUNK, CAP_CHUNK, SHAPE_CHUNK = 11, 12, 13
 ATTACKS = 0x5DC4D0                      # attack records, 0x40 each (FUN_002942e0's table)
-ATTACK_COUNT = 20
+ATTACK_COUNT = 21
 
 
 def read_caps(pack):
@@ -132,11 +132,16 @@ def write_models(pack, output):
              " int vertices, indices_count, objects_count, bone_count;",
              "} VergilMesh;"]
     table, manifest = [], []
+    texture_banks = {0: decode_textures(pack[0]), 54: decode_textures(pack[54]), 50: decode_textures(pack[50])}
+    offsets={};textures=[]
+    for bank,values in texture_banks.items():offsets[bank]=len(textures);textures.extend(values)
     triple = lambda values: "{" + ",".join(map(str, values)) + "}"
     for name, chunk in PARTS:
         raw = pack[chunk]
         skeleton = parse_skeleton(raw)
         mesh = build_mesh(raw, skeleton["count"])
+        texture_offset=offsets[54 if chunk==55 else 50 if chunk==51 else 0]
+        for obj in mesh["objects"]:obj["texture"]+=texture_offset
         prefix = "vv_" + name
         arrays = (("Dmc3Vec3", "positions", mesh["positions"], vec),
                   ("Dmc3Vec3", "normals", mesh["normals"], vec),
@@ -162,7 +167,6 @@ def write_models(pack, output):
               f"{len(mesh['objects'])} objects, {skeleton['count']} bones")
     lines += [f"#define VERGIL_PART_COUNT {len(PARTS)}",
               "static const VergilMesh vergil_parts[] = {" + ",".join(table) + "};"]
-    textures = decode_textures(pack[0])
     for i, texture in enumerate(textures):
         pixels, palette = indexed_texture(texture)
         lines += [f"static const unsigned char vv_texture_{i}[] = {{", array_lines(pixels, str, 24), "};",
@@ -173,6 +177,9 @@ def write_models(pack, output):
                   f"{{{t['width']},{t['height']},vv_texture_{i}}}" for i, t in enumerate(textures)) + "};",
               "static const unsigned int *const vergil_palettes[] = {" + ",".join(
                   f"vv_palette_{i}" for i in range(len(textures))) + "};"]
+    body=parse_skeleton(pack[1])["world"];beowulf=parse_skeleton(pack[55])["world"]
+    mapping=[min(range(len(body)),key=lambda i:sum((p[k]-body[i][k])**2 for k in range(3))) for p in beowulf]
+    lines += ['static const unsigned char vergil_beowulf_bodymap[] = {'+','.join(map(str,mapping))+'};']
     caps = read_caps(pack)
     lines += ["typedef struct { unsigned char kind, bone; float x, y, z, radius; } VergilCap;",
               f"#define VERGIL_CAP_COUNT {len(caps)}",
@@ -214,7 +221,7 @@ def write_scripts(pack, caps, executable, output):
              "static const VergilOp vergil_ops[] = {" + ",".join("{%d,%d,%d,%d}" % op for op in ops) + "};",
              f"static const short vergil_script_starts[4][{width}] = {{" + ",".join(
                  "{" + ",".join(map(str, row + [-1] * (width - len(row)))) + "}" for row in starts[:4]) + "};",
-             "typedef struct { float damage, reaction; int kind; } VergilAttack;"]
+             "typedef struct { float damage, reaction; int kind; } VergilAttack;", f"#define VERGIL_ATTACK_COUNT {ATTACK_COUNT}"]
     attacks = []
     for record in range(ATTACK_COUNT):
         at = ATTACKS + record * 0x40
