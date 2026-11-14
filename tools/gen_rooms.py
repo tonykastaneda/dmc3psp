@@ -257,7 +257,20 @@ MISSIONS[17] = ("133", None, {"132": [0], "141": [0], "139": [0], "130": [0]})
 FIRST_START[17] = 1
 CATAPULT_ROOMS.add("131")
 # 143's area 1 (block 3: counter 0 is 1 after the Doppelganger, sw_in_area 1 -> mission_clear): walk into it.
-GOALS[17] = ("143", (5028.1, 4185.0, 3539.2), "139")   # area 1's floor is the slope at 4185
+GOALS[17] = ("143", (5028.1, 4185.0, 3539.2), "139")
+
+# ---- Mission 19, "Forces collide", from EventTbl19 (GDATA 257; docs/GAME_FLOW.md). After demo 51 it starts in 406 Room
+# of Fallen Ones (group 0: 5 Abyss) -> 405 Nirvana of Illusions (group 0: Abyss; the green mirrors) -> 404 Infinity
+# Nirvana (group 0, the hourglass; the Samsara, item 57) -> (403 Lost Soul Nirvana, 406, back) -> 405: the Samsara at
+# the golden statue (area 0) opens the window (door 1) -> 408 End of the Line -> demo 52 -> 421 Forbidden Nirvana:
+# Arkham (group 0, EST 53; group 1 after demo 53 is his second round, with Vergil; psp/testroom/arkham_boss.c), whose
+# defeat (demo 328) clears the mission.
+SLOTS.update({f"{n}": 736 + 4 * (n - 400) for n in (403, 404, 405, 406, 408, 421)})
+MISSIONS[19] = ("406", None, {"406": [0], "405": [0], "404": [0], "421": [0]})
+CLEAR_ROOMS[19] = "421"
+KEY_ITEMS += [(19, 57, "404", -1)]
+ITEM_USES += [(19, 57, "405", 0)]
+ITEM_GATES += [(19, "405", "408", 57)]   # area 1's floor is the slope at 4185
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)

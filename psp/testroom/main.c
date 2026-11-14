@@ -45,6 +45,8 @@ int testroom_frame;
 #include "mission15.h"
 #include "mission17.h"
 #include "doppelganger_boss.h"
+#include "arkham_boss.h"
+#include "mission19.h"
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
@@ -563,6 +565,7 @@ static int kind_max_health(int kind) {
     case ENEMY_CERBERUS: return 7200;
     case ENEMY_GERYON: return 9000;
     case ENEMY_DOPPELGANGER: return 10000;
+    case ENEMY_ARKHAM: return 18000;
     case ENEMY_ENVY: return 400;
     case ENEMY_LEVIATHAN: return 6500;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
@@ -1939,7 +1942,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "cleared ", 8) == 0) { if (cmp_cleared_count < 8) cmp_cleared[cmp_cleared_count++] = atoi(line + 8); }
         else if (strncmp(line, "item ", 5) == 0) { if (cmp_item_count < 8 && sscanf(line + 5, "%d %d", &cmp_item[cmp_item_count][0], &cmp_item[cmp_item_count][1]) == 2) ++cmp_item_count; }
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
-        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_VERGIL||kind==ENEMY_GERYON||kind==ENEMY_DOPPELGANGER||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
+        else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_VERGIL||kind==ENEMY_GERYON||kind==ENEMY_DOPPELGANGER||kind==ENEMY_ARKHAM||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
         else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
     }
@@ -2497,6 +2500,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if (mission_choice.mission == 7) m7_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 15) m15_hit(player->x, player->y, player->z, player->yaw, reach);   /* mission15.c: the portals */
     if (mission_choice.mission == 17) doppelganger_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* 139's crests */
+    if (mission_choice.mission == 19) arkham_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* his Legions */
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
         float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
@@ -3120,6 +3124,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
                 if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
             }
         }
+        if (mission_choice.mission == 19) {
+            int next = 0, start = 0;
+            if (m19_door_route(room_number(mission_room), i, item_state[57] != 0, &next, &start)) {   /* mission19.c */
+                char want[16];
+                snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
+                if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
+            }
+        }
         if (mission_choice.mission == 17) {
             int next = 0, start = 0;
             if (m17_door_route(room_number(mission_room), i, &next, &start)) {   /* mission17.c */
@@ -3199,6 +3211,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     vergil_boss_set_difficulty(choice->difficulty);
     geryon_boss_set_difficulty(choice->difficulty);
     doppelganger_boss_set_difficulty(choice->difficulty);
+    arkham_boss_set_difficulty(choice->difficulty);
     leviathan_boss_set_difficulty(choice->difficulty);
     leviathan_boss_kill();m8_boss_started=0;
     if(choice->mission==8)mission8_reset();
@@ -3356,6 +3369,9 @@ int main(int argc, char *argv[]) {
             path_in_game_dir(path,sizeof(path),"DOPPEL_LOG.TXT");
             remove(path);
             doppelganger_boss_trace(path);
+            path_in_game_dir(path,sizeof(path),"ARKHAM_LOG.TXT");
+            remove(path);
+            arkham_boss_trace(path);
             vanguard_render_test(bench_no_texture,bench_no_lighting);
         }
     }
