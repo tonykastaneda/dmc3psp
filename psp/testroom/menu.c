@@ -24,7 +24,7 @@
 #define DIM 0xff707070
 #define BRIGHT 0xffffffff
 #define LOCKED 0x60ffffff
-#define MENU_MISSIONS 18
+#define MENU_MISSIONS 19
 static unsigned int mission_mask = 0xffffffffu;
 void menu_set_mission_mask(unsigned int mask) { mission_mask = mask | 1u; }
 static int next_mission(int current, int step) {
