@@ -17,4 +17,27 @@ void jester_reappear(int row, float px, float pz, float *x, float *z, float (*un
 #define JESTER_ATTACK_WAIT 500.0f
 int jester_pick(int *last, float (*unit)(void));
 
+#define JESTER_SHOTS 12
+/* One owner per Jester. Frames are native 60 Hz; coordinates are centimetres. */
+typedef struct {
+    int active, kind, phase, hit;
+    float pos[3], velocity[3], age, yaw, animation;
+} JesterShot;
+typedef struct {
+    int emitting, kind, phase, rank, held, contact;
+    float timer, age, life, cross[3], angle, angular_speed;
+    JesterShot shots[JESTER_SHOTS];
+    int landed, heavy, spawned[3], released, armed;
+    float from_x, from_z, damage;
+} JesterProjectiles;
+void jester_projectiles_reset(JesterProjectiles *world);
+void jester_projectiles_begin(JesterProjectiles *world, int kind, int rank, float x, float y, float z, float px, float pz);
+/* Stop the emitter; launched balls/traps finish their own lifetimes. A death/reset clears all. */
+void jester_projectiles_stop(JesterProjectiles *world);
+float jester_projectiles_minimum(const JesterProjectiles *world);
+void jester_projectiles_update(JesterProjectiles *world, float frames, float x, float y, float z, float yaw,
+                              float px, float py, float pz, int attacks, float (*unit)(void));
+int jester_projectiles_landed(JesterProjectiles *world, float *x, float *z, float *damage, int *heavy);
+int jester_projectiles_init(void);
+void jester_projectiles_draw(const JesterProjectiles *world);
 #endif
