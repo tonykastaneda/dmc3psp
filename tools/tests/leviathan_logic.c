@@ -86,6 +86,11 @@ int main(void) {
         assert(wallet==20); /* ordinary collection restored after encounter */
     }
     leviathan_boss_spawn();
+    {
+        const float a[3]={5700,200,3400},b[3]={5994,274,2853};
+        assert(leviathan_boss_segment_hit(a,b)>=0);
+        assert(leviathan_boss_target()==LEVIATHAN_RIGHT_LUNG);
+    }
     pose_actor(0);pose_actor(1);pose_actor(2);
     for(d=0;d<3;++d) {
         int v;

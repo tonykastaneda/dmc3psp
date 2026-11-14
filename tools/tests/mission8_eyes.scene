@@ -1,0 +1,36 @@
+frames 1000
+fps 30
+turbo 0
+realdt 0
+place 20 1078 1120 4306 0
+triangle 25 26
+triangle 55 56
+triangle 85 86
+triangle 115 116
+place 160 3180 1070 1112 180
+triangle 165 166
+triangle 195 196
+triangle 225 226
+triangle 255 256
+place 300 3097 70 2465 0
+triangle 305 306
+triangle 335 336
+triangle 365 366
+triangle 395 396
+place 440 -399 -7 2532 0
+triangle 445 446
+triangle 475 476
+triangle 505 506
+triangle 535 536
+place 580 4133 2480 3366 0
+triangle 585 586
+triangle 615 616
+triangle 645 646
+triangle 675 676
+place 740 3509 320 3185 0 1
+circle 742 743
+psp_shot 80
+psp_shot 220
+psp_shot 700
+psp_shot 820
+

@@ -1784,6 +1784,7 @@ typedef struct {
 } BenchStep;
 static BenchStep bench_steps[ENEMY_MAX + 1];
 static int bench_step_frames, bench_count, bench_fire, bench_quicksilver, bench_devil, bench_attack = 1, bench_anim = 1, bench_start = 1, bench_max = ENEMY_MAX;
+static int cmp_fire_from;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
 static struct { int frame, part; float amount; } cmp_lv_charge[8];
@@ -1815,7 +1816,8 @@ static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   
 static int game_key_count;
 static int cmp_goto[16][2], cmp_goto_count;
 static int cmp_onboss_from = -1, cmp_onboss_part = 3, cmp_orb_at[8], cmp_orb_count;   /* "onboss frame part": from that frame, Dante onto that Gigapede segment once it's low and upright */
-static int cmp_place_frame[8], cmp_place_count; static float cmp_place[8][5];   /* "place frame x y z yaw [press]": Dante there (and O pressed if press is 1) */   /* "gotoroom frame number": Dante to that door, its room cleared */
+#define CMP_MAX_PLACES 32
+static int cmp_place_frame[CMP_MAX_PLACES], cmp_place_count; static float cmp_place[CMP_MAX_PLACES][5];
 static unsigned int menu_button(const char *name) {
     static const struct { const char *name; unsigned int button; } names[] = {
         {"cross", PSP_CTRL_CROSS}, {"circle", PSP_CTRL_CIRCLE}, {"square", PSP_CTRL_SQUARE}, {"up", PSP_CTRL_UP},
@@ -1856,6 +1858,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "attack ", 7) == 0) bench_attack = atoi(line + 7);
         else if (strncmp(line, "anim ", 5) == 0) bench_anim = atoi(line + 5);
         else if (strncmp(line, "fire ", 5) == 0) bench_fire = atoi(line + 5);
+        else if (strncmp(line,"firefrom ",9)==0)cmp_fire_from=atoi(line+9);
         else if (strncmp(line, "qs ", 3) == 0) bench_quicksilver = atoi(line + 3);
         else if (strncmp(line, "nostage ", 8) == 0) bench_no_stage = atoi(line + 8);
         else if (strncmp(line, "psp_shot ", 9) == 0) { if (cmp_shot_count < 256) cmp_game_shots[cmp_shot_count++] = atoi(line + 9); }
@@ -1876,7 +1879,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "gigaorb ", 8) == 0) { if (cmp_orb_count < 8) cmp_orb_at[cmp_orb_count++] = atoi(line + 8); }
         else if (strncmp(line, "onboss ", 7) == 0) sscanf(line + 7, "%d %d", &cmp_onboss_from, &cmp_onboss_part);
         else if (strncmp(line, "place ", 6) == 0) {
-            if (cmp_place_count < 8 && sscanf(line + 6, "%d %f %f %f %f %f", &cmp_place_frame[cmp_place_count], &cmp_place[cmp_place_count][0], &cmp_place[cmp_place_count][1],
+            if (cmp_place_count < CMP_MAX_PLACES && sscanf(line + 6, "%d %f %f %f %f %f", &cmp_place_frame[cmp_place_count], &cmp_place[cmp_place_count][0], &cmp_place[cmp_place_count][1],
                                                &cmp_place[cmp_place_count][2], &cmp_place[cmp_place_count][3], &cmp_place[cmp_place_count][4]) >= 5) ++cmp_place_count;
         }
         else if (strncmp(line, "gotoroom ", 9) == 0) {
@@ -1924,7 +1927,7 @@ static void cmp_load(void) {
 }
 static void cmp_pad(int frame, PlayerInput *input) {
     int i;
-    if (bench_fire && frame % bench_fire == 0) { input->gun = 1; input->gun_held = 1; }
+    if (bench_fire && frame>=cmp_fire_from && frame % bench_fire == 0) { input->gun = 1; input->gun_held = 1; }
     for (i = 0; i < cmp_walk_count; ++i) {
         float wx = cmp_walks[i].x - cmp_px, wz = cmp_walks[i].z - cmp_pz, l = sqrtf(wx * wx + wz * wz);
         float s = sinf(cmp_cam_yaw), c = cosf(cmp_cam_yaw);
@@ -2118,6 +2121,7 @@ static void start_camera(const Player *player, FollowCamera *camera) {
  * enemies and bosses (Cerberus, Gigapede, Vanguard, ...) are listed in docs/GAME_FLOW.md. */
 static int mission_room = ROOM_NONE, script_at;
 static int m8_boss_started;
+static int m8_clears_seen;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
 #define ROOMS_MAX 256
@@ -3018,6 +3022,10 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     combat_reset(&combat);
     player_reset(player, camera);
     dummy_attacks = 1;
+    if(focus_cmp) {
+        if(cmp_melee>=0)player->melee_weapon=cmp_melee;
+        if(cmp_gun>=0)player->gun_weapon=cmp_gun;
+    }
     enemy_set_attacks(1);
     enemy_set_anim_auto(dummy_anim_auto);
     enemy_set_mortal(1);
@@ -3441,6 +3449,7 @@ int main(int argc, char *argv[]) {
             }
             if (shop_closed) { shop_closed = 0; last_time = sceKernelGetSystemTimeLow(); }
             if (mission_update(dt, debug_pressed, &player, &camera)) {
+                if(mission_choice.mission==8)++m8_clears_seen;
                 if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
@@ -3564,6 +3573,7 @@ int main(int argc, char *argv[]) {
                  * walking him into a corner, or Cerberus's paws, must not carry him into the scenery. */
                 float was_x = player.x, was_z = player.z;
                 enemy_push_out(&player.x, &player.z, player.y, PLAYER_RADIUS);
+                if(mission_mode && mission_choice.mission==8)mission8_push_out(&player.x,&player.z,player.y,PLAYER_RADIUS);
                 if (stage_loaded() && (player.x != was_x || player.z != was_z)) {
                     float mx = player.x - was_x, mz = player.z - was_z, cx = was_x, cz = was_z;
                     int steps = (int)(sqrtf(mx * mx + mz * mz) / 15.0f) + 1, s;
@@ -3824,7 +3834,11 @@ int main(int argc, char *argv[]) {
                 }
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
-                if (report) { fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log()); fclose(report); }
+                if (report) {
+                    fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log());
+                    if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
+                    fclose(report);
+                }
                 running = 0;
             }
         } else
