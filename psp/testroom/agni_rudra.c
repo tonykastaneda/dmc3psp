@@ -90,9 +90,33 @@ void ar_brain_tick(ArBrain *b, const ArSense *s, float f) {
     if (b->attack_timer <= 0.0f) { b->attack_timer = 0.0f; b->may_attack = 1; }
 }
 
+void ar_brain_counter(ArBrain *b) { b->may_attack = 2; }
+
+/* FUN_003ade30's second table, after a guard (permission 2 or 4). */
+static int pick_counter(ArBrain *b, const ArSense *s) {
+    int z = zone(s->distance), charged = b->charged > 0.0f;
+    if (b->high >= 88.0f) return 55;
+    if (b->set == 2) {
+        if (z < 2) return (ar_bits() & 15) == 15 ? 54 : (ar_bits() & 2) ? 43 : 45;
+        if (z < 3) return (ar_bits() & 7) == 7 ? 54 : (ar_bits() & 2) ? 47 : 49;
+        return (ar_bits() & 3) == 3 ? 54 : 11;
+    }
+    if (b->set == 1) {
+        if (z < 2) return !charged ? 44 : (ar_bits() & 7) == 7 ? 53 : 45;
+        if (z < 3) return !charged ? 48 : (ar_bits() & 7) == 7 ? 53 : 49;
+        if (z < 4) return 56;
+        return -1;
+    }
+    if (z < 2) return !charged ? 42 : 43;
+    if (z < 3) return !charged ? 46 : (ar_bits() & 7) == 7 ? 52 : 47;
+    if (z < 4) return !charged ? 56 : 52;
+    return -1;
+}
+
 /* FUN_003ade30 with permission 1: by swords, zone, and whether they're charged. */
 static int pick_attack(ArBrain *b, const ArSense *s) {
     int z = zone(s->distance), charged = b->charged > 0.0f;
+    if (b->may_attack != 1) return pick_counter(b, s);
     if (b->high >= 88.0f) return 55;
     if (b->set == 2) {
         if (z < 2) return (ar_bits() & 7) == 7 ? 54 : (ar_bits() & 2) ? 43 : 45;

@@ -768,8 +768,10 @@ Each runs the game's states, playing their motion scripts (em026 [12] Agni's, [1
 `tools/prepare_agni_rudra.py` with the caps [14]/[15] and the attack records at `0x5cf6f0`) through the Seven Hells'
 script runner, so motions, hit windows, caps and damage are the game's. Health 7000 each; Dante's hits take 42 /
 84 as against the Vanguard's 3000. Ported from the decoding below: the attack timer, the zones, the attack choice
-and the lone brother's moves; the survivor takes up both swords. Not yet: the reactions to Dante's attacks (guards
-and counters, 21-35), the paired picker's roles and flank (both use the lone one, role 1), the pair's openings and
+and the lone brother's moves; the survivor takes up both swords. Guards: a new melee move of Dante's within 350 in front of one idling or moving makes Agni hop back (21), Rudra
+or the survivor guard (23, 25); a blow in the guard's first phase is turned (22, 24, 26: a hit), after which he
+counters at once from the second attack table [Dante's move classes aren't mapped: any melee move counts]. Not
+yet: the paired picker's roles and flank (both use the lone one, role 1), the pair's openings and
 team moves (63, 64), the hops (16-21) beyond their scripts, 52-54 (47 / 49 stand in), the stagger gauge (heavy
 hits flinch them out of idling and moving, state 0), the swords' fire and wind shells, and the script events.
 Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.

@@ -127,6 +127,7 @@ typedef struct {
     float goyle_stone, goyle_shots, goyle_split, goyle_lift, goyle_lift_wait, goyle_aim;
     signed char goyle_splits;
     float ar_health;                /* Agni & Rudra: 7000 each */
+    unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
 } Enemy;
 
 static int hl_motion[HL_MOTIONS];
@@ -2480,6 +2481,8 @@ static void jester_hit(HitKind kind) {
 #define AR_STATUE_STATE 100
 static int ar_statue_motion[2];
 static ArBrain ar_brains[2];
+static unsigned short ar_dante_moves;   /* counts Dante's melee moves (enemy_dante_attack) */
+void enemy_dante_attack(int action, int gun) { (void)action; if (!gun) ++ar_dante_moves; }
 
 static int ar_init(void) {
     int i;
@@ -2587,6 +2590,17 @@ static void ar_update(float f, float px, float py, float pz) {
     s.brother_attacking = bro && bro->action >= 42 && bro->action <= 60;
     ar_brain_tick(b, &s, f);
     in = ar_state_info(e->action);
+    if (e->ar_seen != ar_dante_moves) {
+        /* FUN_003aeec0: a new move of Dante's within 350 in front of him, while he idles or moves: Agni hops
+         * back (21), Rudra guards (23), the survivor guards (25). Dante's move classes aren't mapped; any melee
+         * move counts, under the default rule (within 350). */
+        float a = wrap_angle(atan2f(dx, dz) - e->yaw);
+        e->ar_seen = ar_dante_moves;
+        if (in->brain && d <= 350.0f && fabsf(a) < PI * 0.5f) {
+            ar_go(b->set == 0 ? 21 : b->set == 1 ? 23 : 25);
+            return;
+        }
+    }
     if (in->turn) goyle_turn_to(px, pz, (float)in->turn * (2.0f * PI / 65536.0f), f);
     if (in->dash >= 0) {
         /* FUN_003b0450's dash: up to its top speed, held, then slowing. */
@@ -2609,6 +2623,7 @@ static void ar_update(float f, float px, float py, float pz) {
         if (e->step < 6 && in->scripts[e->step] >= 0) ar_phase_start(in);
         else {
             if (e->action == 50 || e->action == 51) ar_brain_charged(b);
+            if (e->action >= 22 && e->action <= 26 && e->action != 23 && e->action != 25) ar_brain_counter(b);
             if (e->action == AR_DEATH) return;
             ar_go(in->next >= 0 ? in->next : AR_IDLE);
             return;
@@ -2626,6 +2641,11 @@ static void ar_hit(HitKind kind) {
     ++hits;
     fx_hit_spark(at);
     if (e->action == AR_STATUE_STATE) { e->step = 1; return; }   /* struck awake */
+    if ((e->action == 21 || e->action == 23 || e->action == 25) && e->step == 0 && kind != HIT_PISTOL) {
+        /* Guarding (+0x1e4 = 2): the blow is turned, and he holds on to counter (22, 24, 26). */
+        ar_go(e->action + 1);
+        return;
+    }
     if (mortal) {
         /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]. Agni's fire is weak to
          * Cerberus's ice (the guide): twice the damage is an estimate. */

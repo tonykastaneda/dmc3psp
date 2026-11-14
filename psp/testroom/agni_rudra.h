@@ -41,6 +41,8 @@ void ar_brain_tick(ArBrain *b, const ArSense *s, float f);
 int ar_brain_decide(ArBrain *b, const ArSense *s, int state);
 /* A state that charges the sword (50 Agni's, 51 Rudra's) finished: charged for 1800 frames (003ac280). */
 void ar_brain_charged(ArBrain *b);
+/* A guard turned a blow (22, 24, 26 set +0x2de6 = 2): he may counter at once, from the second table. */
+void ar_brain_counter(ArBrain *b);
 /* A dash record: speeds by phase (0x5b7600; start, top, held frames, slowing a frame). */
 void ar_dash(int dash, float *start, float *top, float *hold, float *slow, int *sideways);
 
