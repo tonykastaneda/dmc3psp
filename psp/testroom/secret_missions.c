@@ -13,6 +13,7 @@
  *   4  603  ride the elevator to the top; it holds while a wave is on it (113's riding lift)
  *   5  604  break every prop in the room within 40 seconds
  *   7  606  reach the far end (the room's area 1, where the Blue Orb Fragment lies) within 30 seconds
+ *           [on foot it takes about 43 s in the port: Devil Trigger's speed and riding enemies aren't in]
  *   8  607  beat every enemy (5 Arachnes, 2 Hell Vanguards)
  *  11  610  reach the far end (area 2) [the spike trap, CStageSetNeedle, isn't in]
  *  12  611  reach area 0 [its moving blocks aren't in: the room's own floor]

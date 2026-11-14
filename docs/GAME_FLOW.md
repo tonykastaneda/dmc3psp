@@ -567,6 +567,37 @@ Rooms 4xx are GDATA 736 + 4 x (n - 400).
 - 421 runs one Arkham through both rounds (`arkham_boss.c`); Vergil doesn't join.
 - No cutscenes.
 
+### Secret Missions
+
+No event script runs them (EventTbl21, GDATA 259, is Bloody Palace's: rooms 422-449). What the game's data gives:
+
+- **Where each is entered:** the main missions' rooms carry an EVE area of kind 7 whose id is the Secret Mission's
+  number: 005 (1), 113 (2), 127 (3), 300 (4), 209 (5), 206 (6), 212 (7), 230 (8), 233 (9), 146 (10), 140 (11), 402 (12).
+- **Where each is played:** st600-st611 (GDATA 932 + 2 x (n - 600), stage then data): Secret Mission n is room 599 + n,
+  matched by what each holds (603 a lift, 604 55 props, 605 orbs, 608 the wagon's TRUCK, 609 a CRYSTAL, 610 a
+  NEEDLE). st612 is a twelfth room no entry leads to.
+- **What each asks** isn't in any table found: the rules are the game's own (as its mission screen states them),
+  checked by the port.
+
+In the port (`psp/testroom/secret_missions.c`): a red glow marks each entry; O there takes Dante in, a clear or
+a failure shows its line and puts him back where he entered (at the room's start if that spot has no floor in the
+port). The award, a Blue Orb Fragment, is only named.
+
+| # | Room | Rule | In the port |
+| --- | --- | --- | --- |
+| 1 | 600 | Not known (it isn't in the guide used) | Beat every enemy (group 0: Prides, Lusts, Sloths) [inferred] |
+| 2 | 601 | Beat every enemy without being hurt | 4 Enigmas; any hit fails it |
+| 3 | 602 | Stay in the air for 20 seconds | His time off the ground, added up |
+| 4 | 603 | Ride the elevator to the top | 113's riding lift (`LIFT_TOPS`: to 4225); its four waves hold it |
+| 5 | 604 | Break every prop within 40 seconds | The room's breakables |
+| 6 | 605 | Collect every red orb in time | Not in: the orbs float where only Air Raid reaches |
+| 7 | 606 | Reach the Blue Orb Fragment within 30 seconds | Its area 1. Not cleared yet: running there takes about 43 s in the port, and the ways the game expects (Devil Trigger's speed, riding an enemy) aren't in; the time-out fails it as it should |
+| 8 | 607 | Beat every enemy | 5 Arachnes, 2 Hell Vanguards |
+| 9 | 608 | Let no enemy escape the wagons | Not in: the wagons (TRUCK) |
+| 10 | 609 | Solve the crystal puzzle | Not in: CRYSTAL isn't decoded |
+| 11 | 610 | Avoid the spikes and reach the Blue Orb | Its area 2; the spikes (NEEDLE) aren't in |
+| 12 | 611 | Reach the Blue Orb Fragment | Its area 0; the moving blocks aren't in |
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
