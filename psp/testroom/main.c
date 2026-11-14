@@ -3648,8 +3648,11 @@ int main(int argc, char *argv[]) {
                 /* Position-only automation: all damage still passes through gun
                  * traces or normal melee windows and native shield states. */
                 if(cmp_vr_auto_from>=0 && frames>=cmp_vr_auto_from && frames%45==0 && !vergil_boss_dying() && mission_mode && (mission_choice.mission==7 || mission_choice.mission==13)) {
-                    float p[3];vergil_boss_position(p);player.x=p[0];player.y=p[1];player.z=p[2]+350;
-                    player.yaw=3.14159265f;player.vy=0;player.on_ground=1;start_camera(&player,&camera);
+                    float p[3],cx=mission_choice.mission==13?2500:3500,cz=cx,dx,dz,d,h;
+                    vergil_boss_position(p);dx=cx-p[0];dz=cz-p[2];d=sqrtf(dx*dx+dz*dz);
+                    if(d<1){dx=0;dz=1;d=1;}player.x=p[0]+dx/d*350;player.z=p[2]+dz/d*350;player.y=p[1];
+                    if(player_floor_fn && player_floor_fn(player.x,p[1]+150,player.z,0,&h))player.y=h;
+                    player.yaw=atan2f(p[0]-player.x,p[2]-player.z);player.vy=0;player.on_ground=1;start_camera(&player,&camera);
                 }
                 if(cmp_lv_auto_from>=0 && frames>=cmp_lv_auto_from && leviathan_boss_active()) {
                     int core=leviathan_boss_open();

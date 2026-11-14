@@ -20,7 +20,10 @@ int main(void){int i,seen=0;
  assert(seen && vb.dt_unlocked);
  vb.dt=0;vb.dt_cooldown=10000;set_state(S_BEOWULF);seen=0;
  for(i=0;i<900;++i){vergil_boss_update(1,0,0,300,1);if(vb.action==0x2b)seen|=1;if(vb.action==0x2c)seen|=2;if(vb.action==0x2d)seen|=4;}
- assert(seen==7);evaluate_poses();
+ assert(seen==7);
+ vb.pos[0]=8000;vb.pos[2]=8000;vergil_boss_update(1,2500,100,2500,0);
+ assert(hypotf(vb.pos[0]-2500,vb.pos[2]-2500)<=1101);
+ evaluate_poses();
  for(i=0;i<VERGIL_PART_COUNT;++i){int j;skin_part(i);for(j=0;j<vergil_parts[i].vertices;++j)assert(isfinite(vertices[i][j].x));}
  assert(vergil_boss_hit(HIT_HEAVY,0,100,1)==0);
  puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain and finite poses passed");return 0;

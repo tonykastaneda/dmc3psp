@@ -1,4 +1,4 @@
-"""Exercise Leviathan C logic with exported PS2 MOTs; rendering is stubbed."""
+"""Exercise additive Vergil variants with exported PS2 MOTs; rendering is stubbed."""
 from pathlib import Path
 import re
 import shutil

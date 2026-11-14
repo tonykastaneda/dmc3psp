@@ -1,4 +1,4 @@
-"""Exercise Mission 8 C logic with exported PS2 MOTs; rendering is stubbed."""
+"""Exercise the Mission 13 crystal grid and return encounter; rendering is stubbed."""
 from pathlib import Path
 import re
 import shutil

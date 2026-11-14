@@ -330,11 +330,14 @@ static void hide(int on) {
 }
 /* FUN_004e5ff0: move toward a point at TRAVEL_SPEED a frame; 1 once there. */
 static int travel(const float target[3], float frames) {
-    float d[3] = {target[0] - vb.pos[0], 0.0f, target[2] - vb.pos[2]}, len, step = TRAVEL_SPEED * frames;
+    float point[3]={target[0],target[1],target[2]},d[3],len,step=TRAVEL_SPEED*frames;
+    if(vb.variant==1){float x=point[0]-vb.centre[0],z=point[2]-vb.centre[2],r=sqrtf(x*x+z*z);
+        if(r>1100){point[0]=vb.centre[0]+x/r*1100;point[2]=vb.centre[2]+z/r*1100;}}
+    d[0]=point[0]-vb.pos[0];d[1]=0;d[2]=point[2]-vb.pos[2];
     len = sqrtf(d[0] * d[0] + d[2] * d[2]);
     if (len <= step) {
-        vb.pos[0] = target[0];
-        vb.pos[2] = target[2];
+        vb.pos[0] = point[0];
+        vb.pos[2] = point[2];
         return 1;
     }
     vb.pos[0] += d[0] / len * step;
@@ -815,6 +818,10 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     c = cosf(vb.yaw); s = sinf(vb.yaw);
     vb.pos[0] += c * dx + s * dz;
     vb.pos[2] += -s * dx + c * dz;
+    /* M13's room floor is bounded about (2500,2500); keep root-driven charges
+     * and escape teleports on its combat deck. Conservative port boundary. */
+    if(vb.variant==1){float x=vb.pos[0]-vb.centre[0],z=vb.pos[2]-vb.centre[2],r=sqrtf(x*x+z*z);
+        if(r>1100){vb.pos[0]=vb.centre[0]+x/r*1100;vb.pos[2]=vb.centre[2]+z/r*1100;}}
     if (vb.body.window0 == 1) vb.yamato_drawn = 1;
     else if (vb.body.window0 == 2) vb.yamato_drawn = 0;
     vb.body.window0 = 0;
@@ -836,6 +843,7 @@ void vergil_boss_spawn(float x, float y, float z) {
     /* 0x5df970: Mission 7's arena centre, where 0x3e goes when there's no room ahead of Dante. */
     if (fabsf(x - 2700.0f) < 1.0f && fabsf(z - 3500.0f) < 1.0f) { vb.centre[0] = 3500.0f; vb.centre[2] = 3500.0f; }
     else { vb.centre[0] = x; vb.centre[2] = z; }
+    if(vb.variant==1){vb.centre[0]=2500;vb.centre[2]=2500;}
     vb.centre[1] = y;
     vb.yaw = PI;
     vb.hp = MAX_HEALTH;

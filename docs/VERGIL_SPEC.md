@@ -154,3 +154,8 @@ M13 reaction follow-up: a contact crossing the DT health threshold requests the 
 a flinch, so sustained shotgun fire cannot suppress the phase. Three interrupting heavy/light
 contacts cause the Beowulf warp escape; the native escape counter is not decoded, so this count is a
 port approximation. Both branches require variant 1 and leave M7 reactions unchanged.
+
+M13 arena safety: native centre `5df970[1]` is (2500,100,2500); the authored near-level combat floor
+bounds are x=1246..3751, z=1229..3750. Escape destinations and root-driven movement use a conservative
+1100-cm radial limit about that centre. This approximates native room collision and prevents repeated
+escapes from leaving the deck. The M7 branch retains its existing movement handling.
