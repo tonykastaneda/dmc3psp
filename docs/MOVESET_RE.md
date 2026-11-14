@@ -136,6 +136,15 @@ bones 1 and 2 of one model with records at +0 and +0x30 of the entry, like Ebony
 
 ## Devil Trigger
 
+**Air Raid** (Nevan's Devil Trigger flight) is player states 0x25-0x28: `FUN_0022a840` take-off, `FUN_0022a890`
+hovering (motions 6:53 still, 6:57 moving), `FUN_0022adf0` lock-on flight (6:54-56 by direction), `FUN_0022af70` the
+end (6:59, then the fall), entered from `FUN_0021d280` with 6:52 when `+0x28ae` and `+0x28a9` are both 1. No
+gravity and no climb: the height he took off at, kept at least 5 cm above the floor below (`+0x2924`, from
+`FUN_00242410`), rising 1 cm a frame where it comes up under him. The stick moves him from the movement table, as on
+the ground (`FUN_0022aae0`). Command rows 82 / 83 (condition 9, "flying") give its attacks, actions 95 and 96
+(`FUN_00277d70`, `FUN_00278100`). What sets `+0x28a9` wasn't found; the port starts it with a jump in the air
+(Nevan, in Devil Trigger) and ends it with another jump or Devil Trigger ending. Its attacks aren't ported.
+
 pl005-009 are bodies on Dante's 24-bone skeleton, one per melee weapon (order inferred from
 the names, and not compared with the real game: it isn't unlocked in Mission 2).
 `player+0x28A0` is the flag. Their extra MODs (wings) aren't used yet.

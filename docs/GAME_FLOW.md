@@ -590,7 +590,7 @@ port). The award, a Blue Orb Fragment, is only named.
 | 3 | 602 | Stay in the air for 20 seconds | His time off the ground, added up |
 | 4 | 603 | Ride the elevator to the top | 113's riding lift (`LIFT_TOPS`: to 4225); its four waves hold it |
 | 5 | 604 | Break every prop within 40 seconds | The room's breakables |
-| 6 | 605 | Collect every red orb in time | Not in: the orbs float where only Air Raid reaches |
+| 6 | 605 | Collect every red orb in time | The room's 45 item records (`tools/gen_rooms.py` `write_secret_orbs`), taken within 2.5 m of his chest [estimate: orbs fly to him]. Reached with Air Raid (`psp/testroom/player.c`): fly the upper ring from the start, drop to the ledge on the left wall, take off again from it and fly the lower line to the ship. The time limit isn't decoded: none is applied |
 | 7 | 606 | Reach the Blue Orb Fragment within 30 seconds | Its area 1. Not cleared yet: the shortest route on the port's floor is about 160 m, about 29 s even at Devil Trigger's 1.1x run (already in), and tests stall at the room's neck at about 21 s; riding an enemy isn't in. The time-out fails it as it should |
 | 8 | 607 | Beat every enemy | 5 Arachnes, 2 Hell Vanguards |
 | 9 | 608 | Let no enemy escape the wagons | Not in: the wagons (TRUCK) |

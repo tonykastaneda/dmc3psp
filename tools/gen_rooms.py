@@ -316,6 +316,21 @@ SEAL_BOX = ((0.0, 0.0, -50.0), (200.0, 180.0, 50.0))   # local centre, half size
 SEAL_BOARD = (154.8, -218.1, 203.7)                     # model 17: half width, bottom, top
 
 
+def write_secret_orbs(iso_path, out):
+    """Secret Mission 6's red orbs: every record in 605's ITM chunk (20 bytes: id, x, y, z, a word)."""
+    with Iso9660(iso_path) as iso:
+        afs = AfsArchive(iso, "GDATA.AFS")
+        entry = afs.entries[SLOTS["605"] + 1]
+        data = pac_entries(iso.read_file("GDATA.AFS", entry["offset"], entry["size"]))
+    chunk = next(c for c in data if c and c[:4] == b"ITM\0")
+    recs = [struct.unpack_from("<I3f", chunk, 0x10 + i * 20) for i in range(struct.unpack_from("<H", chunk, 6)[0])
+            if 0x10 + i * 20 + 20 <= len(chunk)]
+    out.write_text("/* Generated from the player's disc by tools/gen_rooms.py (write_secret_orbs): room 605's items. */\n"
+                   f"#define SECRET_ORB_COUNT {len(recs)}\n"
+                   "static const float secret_orbs[SECRET_ORB_COUNT][3] = {"
+                   + ",".join(f"{{{x:.1f}f,{y:.1f}f,{z:.1f}f}}" for _, x, y, z in recs) + "};\n")
+
+
 def write_crystals(iso_path, out):
     """CStageSetCrystal's eight layouts (the light-beam puzzles: Mission 9's 203, Secret Mission 10's 609), read from
     the player's SLUS_213.61: the pointers at 0x5bef40, each to up to 24 records {type, dir, x, y} (shorts; type 0
@@ -752,6 +767,7 @@ def main():
     lines.append("};")
     args.header.write_text("\n".join(lines) + "\n")
     write_crystals(args.iso, args.header.parent / "crystal_runtime.h")
+    write_secret_orbs(args.iso, args.header.parent / "secret_orbs_runtime.h")
 
 
 if __name__ == "__main__":

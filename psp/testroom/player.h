@@ -69,7 +69,7 @@ typedef enum {
 /* Ground movement states: FUN_002217a0 idle, FUN_00221ba0 start, FUN_00221d20 move. */
 typedef enum { LOCO_IDLE, LOCO_START, LOCO_MOVE } LocoState;
 
-enum { AIR_NONE, AIR_JUMP, AIR_HIKE, AIR_STEP };
+enum { AIR_NONE, AIR_JUMP, AIR_HIKE, AIR_STEP, AIR_RAID };
 
 /* Dante's health on the maxed save the reference runs use. */
 #define PLAYER_HEALTH_MAX 20000.0f

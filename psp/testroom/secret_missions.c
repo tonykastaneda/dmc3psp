@@ -12,6 +12,7 @@
  *   3  602  stay in the air for 20 seconds (in all: the port adds up his time off the ground)
  *   4  603  ride the elevator to the top; it holds while a wave is on it (113's riding lift)
  *   5  604  break every prop in the room within 40 seconds
+ *   6  605  collect every red orb (the room's 45 item records): most float over the drops, reached with Air Raid
  *   7  606  reach the far end (the room's area 1, where the Blue Orb Fragment lies) within 30 seconds
  *           [the route on the port's floor is about 160 m: about 29 s even at Devil Trigger's 1.1x run, so it
  *           doesn't clear yet; riding an enemy, the quicker way, isn't in]
@@ -19,7 +20,7 @@
  *  10  609  light the end crystal: the beam puzzle below, from the game's own code and layouts
  *  11  610  reach the far end (area 2) [the spike trap, CStageSetNeedle, isn't in]
  *  12  611  reach area 0 [its moving blocks aren't in: the room's own floor]
- * Not in yet: 6 (the red orbs: 605's ITM records, where only Air Raid reaches) and 9 (the wagons, 608's TRUCK).
+ * Not in yet: 9 (the wagons, 608's TRUCK).
  * The award, a Blue Orb Fragment, is only named: the port has no Devil Trigger gauge to lengthen yet. */
 #include <math.h>
 #include <stdio.h>
@@ -28,8 +29,9 @@
 #include "fx.h"
 #include <stdlib.h>
 #include "crystal_runtime.h"
+#include "secret_orbs_runtime.h"
 
-enum { R_KILL, R_KILL_CLEAN, R_AIR, R_LIFT, R_BREAK, R_REACH, R_CRYSTAL, R_NONE };
+enum { R_KILL, R_KILL_CLEAN, R_AIR, R_LIFT, R_BREAK, R_REACH, R_CRYSTAL, R_ORBS, R_NONE };
 typedef struct {
     short host;                  /* the main mission's room it's entered from */
     float at[3];                 /* the kind-7 area's centre there */
@@ -43,7 +45,7 @@ static const SecretMission secrets[12] = {
     {127, {3021.0f, 645.0f, 1220.0f}, R_AIR, 0.0f, {0}},
     {300, {5272.0f, 21.0f, -141.0f}, R_LIFT, 0.0f, {0}},
     {209, {1993.0f, 2141.0f, 2776.0f}, R_BREAK, 40.0f, {0}},
-    {206, {10221.0f, 3000.0f, 7087.0f}, R_NONE, 0.0f, {0}},
+    {206, {10221.0f, 3000.0f, 7087.0f}, R_ORBS, 0.0f, {0}},
     {212, {2428.0f, 811.0f, 3133.0f}, R_REACH, 30.0f, {11221.0f, 11570.0f, 7001.0f, 7350.0f}},
     {230, {3645.0f, 580.0f, 3529.0f}, R_KILL, 0.0f, {0}},
     {233, {2911.0f, 401.0f, 1220.0f}, R_NONE, 0.0f, {0}},
@@ -118,6 +120,28 @@ static void crystal_start(void) {
     crystal_reset_all();
 }
 
+/* ---- Secret Mission 6's red orbs: every item record in 605 (tools/gen_rooms.py write_secret_orbs), most of them in
+ * the air over the drop, where only Air Raid reaches (player.c). Orbs fly to him once he's close: here, any within
+ * 2.5 m of his chest are his [an estimate]. The time limit isn't decoded: none is applied. */
+static unsigned char orb_taken[SECRET_ORB_COUNT];
+static int orbs_left;
+static void orbs_start(void) { int k; for (k = 0; k < SECRET_ORB_COUNT; ++k) orb_taken[k] = 0; orbs_left = SECRET_ORB_COUNT; }
+static void orbs_update(const SmView *v) {
+    int k;
+    for (k = 0; k < SECRET_ORB_COUNT; ++k) {
+        float dx = secret_orbs[k][0] - v->x, dz = secret_orbs[k][2] - v->z, dy = secret_orbs[k][1] - (v->y + 100.0f);
+        if (orb_taken[k] || dx * dx + dy * dy + dz * dz > 250.0f * 250.0f) continue;
+        orb_taken[k] = 1;
+        --orbs_left;
+    }
+}
+static void orbs_draw(void) {
+    int k;
+    float still[3] = {0.0f, 0.0f, 0.0f};
+    for (k = 0; k < SECRET_ORB_COUNT; ++k)
+        if (!orb_taken[k]) fx_mote(secret_orbs[k], still, 40.0f + 6.0f * sinf(k + 0.0f), 30.0f, 0.04f, 0xff2020ffu);
+}
+
 #define AIR_NEEDED 20.0f
 #define ENTRY_RANGE 200.0f
 #define END_WAIT 2.5f
@@ -143,6 +167,7 @@ static int rule_met(const SecretMission *s, const SmView *v) {
     case R_BREAK: return v->breakables_left == 0;
     case R_REACH: return v->x > s->goal[0] && v->x < s->goal[1] && v->z > s->goal[2] && v->z < s->goal[3];
     case R_CRYSTAL: return solved;
+    case R_ORBS: return orbs_left == 0;
     }
     return 0;
 }
@@ -167,6 +192,7 @@ int sm_update(float dt, const SmView *v, int *prompt, int *go_room, int *go_star
                 say(caption_buf, 2.5f);
                 *go_room = 600 + n; *go_start = 0;
                 if (s->rule == R_CRYSTAL) crystal_start();
+                if (s->rule == R_ORBS) orbs_start();
                 return 1;
             }
         }
@@ -186,6 +212,7 @@ int sm_update(float dt, const SmView *v, int *prompt, int *go_room, int *go_star
         }
         clock_ += dt;
         if (!v->on_ground) air += dt;
+        if (s->rule == R_ORBS) orbs_update(v);
         if (s->rule == R_KILL_CLEAN && v->health < start_health - 0.5f) {
             ending = 2; end_wait = END_WAIT; say("MISSION FAILED", END_WAIT);
             return 0;
@@ -236,6 +263,7 @@ static void crystal_draw(void) {
 
 void sm_draw(void) {
     if (current >= 0 && secrets[current].rule == R_CRYSTAL && crystal_seen == 600 + current && layout >= 0) crystal_draw();
+    if (current >= 0 && secrets[current].rule == R_ORBS && crystal_seen == 600 + current && !ending) orbs_draw();
     /* The red structure: a red glow where one can be entered. */
     int n;
     for (n = 0; current < 0 && n < 12; ++n) {
@@ -283,5 +311,5 @@ static unsigned int gone_mask(void) {
 }
 
 void sm_status(char *out, int size) {
-    snprintf(out, size, "sm=%d end=%d clock=%.1f air=%.1f cleared=%03x layout=%d solved=%d beam=%d gone=%06x end=%d,%d", current + 1, ending, clock_, air, cleared, layout, solved, beam_count, gone_mask(), beam_count ? beam[beam_count - 1][0] : -1, beam_count ? beam[beam_count - 1][1] : -1);
+    snprintf(out, size, "sm=%d end=%d clock=%.1f air=%.1f cleared=%03x layout=%d solved=%d beam=%d gone=%06x orbs=%d end=%d,%d", current + 1, ending, clock_, air, cleared, layout, solved, beam_count, gone_mask(), orbs_left, beam_count ? beam[beam_count - 1][0] : -1, beam_count ? beam[beam_count - 1][1] : -1);
 }
