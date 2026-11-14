@@ -437,7 +437,7 @@ route above, start to Mission Clear.
 - 128's God-cubes (STAY sets) aren't moved: the door from 133 brings Dante in at start 2, by door 2 [approximation].
 - 131's red pod throws Dante to its door (the Mission 7 catapults' code).
 - 143's area 0 takes Dante to 139; area 1 is the goal (walk up the slope to it and press O) once 139 is cleared.
-- The Abyss aren't ported: Prides stand in. 131's spikes are Mission 6's stand-in, or nothing.
+- The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
 - No cutscenes; demo 48's item 35 isn't given.
 
 ## What the missions do now, and what's a stand-in
