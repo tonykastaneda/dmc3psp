@@ -225,6 +225,73 @@ static void turn_toward(Player *player, float yaw, float max_turn) {
     player->yaw = wrap_angle(player->yaw + clampf(wrap_angle(yaw - player->yaw), -max_turn, max_turn));
 }
 
+/* Air Raid: Nevan's Devil Trigger flight. The player states 0x25-0x28 (FUN_0022a840 take-off, FUN_0022a890
+ * hovering, FUN_0022adf0 lock-on flight, FUN_0022af70 the end), entered from FUN_0021d280 with motion 6:52.
+ * There's no gravity and no climb: he stays at the height he took off at, kept at least 5 cm over the floor below,
+ * rising 1 cm a frame where it comes up under him (FUN_0022aae0). The stick moves him as on the ground, from the
+ * same movement table (the walk, then the run once the stick has been held full), facing turning toward it;
+ * motions 6:53 hovering, 6:57 flying. The flag that keeps him flying (+0x28a9) is set by code not decoded: in the
+ * port a jump in the air with Nevan in Devil Trigger starts it (the walkthrough's "Devil Trigger + Jump"), and a
+ * second jump, or Devil Trigger ending, stops it with 6:59 and he falls. Its attacks (actions 95 and 96) aren't
+ * in: an attack in flight is the ordinary air one. */
+static void raid_motion(Player *player, const char *name) {
+    int m = motion_find(name);
+    if (m >= 0 && m != player->jump_motion) { player->jump_motion = m; player->jump_frame = 0.0f; }
+}
+
+static void raid_start(Player *player) {
+    player->air_kind = AIR_RAID;
+    player->air_timer = LOCO_RUN_HOLD_FRAMES;
+    player->running = 0;
+    player->speed = 0.0f;
+    player->vy = 0.0f;
+    player->on_ground = 0;
+    raid_motion(player, "s26-52");
+}
+
+static void raid_end(Player *player) {
+    player->air_kind = AIR_NONE;
+    player->jump_motion = -1;
+    player->vy = 0.0f;
+    player->speed = 0.0f;
+    player->running = 0;
+}
+
+static void raid_step(Player *player, const float stick[2], float magnitude, float dt) {
+    float frames = dt * MOTION_FPS, ground, limit = player_room_limit;
+    const Motion *m;
+    if (magnitude > 0.0f) {
+        float yaw = atan2f(stick[0], stick[1]);
+        int full = magnitude * STICK_TILT_SCALE >= STICK_TILT_RUN;
+        turn_toward(player, yaw, PLAYER_TURN_RATE * dt);
+        if (!player->running) {
+            if (!full) player->air_timer = LOCO_RUN_HOLD_FRAMES;
+            else if ((player->air_timer -= frames) <= 0.0f) player->running = 1;
+        } else if (!full) {
+            player->running = 0;
+            player->air_timer = LOCO_RUN_HOLD_FRAMES;
+        }
+        player->speed = player->running ? PLAYER_DT_RUN_SPEED : PLAYER_WALK_SPEED;   /* always in Devil Trigger: row 1 */
+        player->x = clampf(player->x + sinf(yaw) * player->speed * dt, -limit, limit);
+        player->z = clampf(player->z + cosf(yaw) * player->speed * dt, -limit, limit);
+        if (player->jump_motion != motion_find("s26-52") || player->jump_frame > 20.0f) raid_motion(player, "s26-57");
+    } else {
+        player->running = 0;
+        player->speed = 0.0f;
+        player->air_timer = LOCO_RUN_HOLD_FRAMES;
+        if (player->jump_motion != motion_find("s26-52") || player->jump_frame > 20.0f) raid_motion(player, "s26-53");
+    }
+    if (floor_at(player->x, player->y + 60.0f, player->z, &ground)) {
+        if (player->y - 5.0f < ground) player->y += frames;
+        if (player->y < ground) player->y = ground;
+    }
+    player->vy = 0.0f;
+    player->on_ground = 0;
+    player->jump_frame += frames;
+    m = player->jump_motion >= 0 ? motion_get(player->jump_motion) : 0;
+    if (m && player->jump_frame >= m->end_frame) player->jump_frame -= m->end_frame;
+}
+
 /* One frame of ground movement with the stick out of neutral. Turns Dante, sets
  * player->speed and returns the direction he travels. Lock-on plays no part:
  * none of the three state handlers reads R1 or the target. */
@@ -266,7 +333,7 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
             if (player->loco_timer <= 0.0f) {
                 /* All at once: the walk, then the run, on the HD Collection's traces. */
                 player->running = 1;
-                player->speed = PLAYER_RUN_SPEED;
+                player->speed = player->devil ? PLAYER_DT_RUN_SPEED : PLAYER_RUN_SPEED;
                 player->accel = 0.0f;
             }
         } else {
@@ -280,7 +347,8 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
     }
     if (player->running) {
         player->speed += player->accel * frames;
-        if (player->speed >= PLAYER_RUN_SPEED) { player->speed = PLAYER_RUN_SPEED; player->accel = 0.0f; }
+        float run = player->devil ? PLAYER_DT_RUN_SPEED : PLAYER_RUN_SPEED;
+        if (player->speed >= run) { player->speed = run; player->accel = 0.0f; }
     }
     return stick_yaw;
 }
@@ -336,6 +404,11 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     if (magnitude > 0.0f) {
         stick_world[0] = sinf(player->camera_yaw) * input->stick_y - cosf(player->camera_yaw) * input->stick_x;
         stick_world[1] = cosf(player->camera_yaw) * input->stick_y + sinf(player->camera_yaw) * input->stick_x;
+    }
+    if (player->air_kind == AIR_RAID) {
+        if (!player->devil || input->jump) raid_end(player);
+        else if (!player->attacking) raid_step(player, stick_world, magnitude, dt);
+        goto camera;
     }
     if (!player->on_ground && player->jump_motion >= 0) magnitude = 0.0f;  /* the arc moves him: below */
     if (player->attacking || player->gun_stance) magnitude = 0.0f;  /* combat moves Dante instead */
@@ -396,6 +469,9 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             player->step_cooldown = ENEMY_STEP_COOLDOWN;
             player->air_hikes = 1;
             player->air_stars = 1;
+        } else if (player->devil && player->melee_weapon == 3) {
+            raid_start(player);   /* Air Raid, above */
+            goto camera;
         } else if (player->air_hikes > 0 && player->melee_weapon % 2 == 0) {
             /* Rebellion, Agni & Rudra and Beowulf have it; Cerberus and Nevan don't (FUN_00222700,
              * and Nevan checked on the HD Collection). */
@@ -480,6 +556,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         }
     }
 
+camera:
     {
         /* The real camera: see CAMERA_* in player.h. */
         float frames = dt * MOTION_FPS, dx, dz, h, goal_x, goal_z, rate;

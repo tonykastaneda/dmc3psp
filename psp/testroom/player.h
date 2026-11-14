@@ -23,6 +23,10 @@
  * turn, 6 frame run acceleration, full tilt held 4 frames before running. */
 #define PLAYER_WALK_SPEED 210.0f
 #define PLAYER_RUN_SPEED 510.0f
+/* The movement table's second row (0x5a85c0 + 0x18, picked by player+0x28a7, which Devil Trigger sets): the same
+ * but for the run, 11.0755 cm a frame. Measured on the PS2 (PCSX2): 12.18 cm a frame in Devil Trigger, this times
+ * its 1.1. */
+#define PLAYER_DT_RUN_SPEED 664.53f
 #define PLAYER_TURN_RATE 11.781f /* radians per second */
 #define LOCO_START_FRAMES 8.0f
 #define LOCO_ACCEL_FRAMES 6.0f
@@ -69,7 +73,7 @@ typedef enum {
 /* Ground movement states: FUN_002217a0 idle, FUN_00221ba0 start, FUN_00221d20 move. */
 typedef enum { LOCO_IDLE, LOCO_START, LOCO_MOVE } LocoState;
 
-enum { AIR_NONE, AIR_JUMP, AIR_HIKE, AIR_STEP };
+enum { AIR_NONE, AIR_JUMP, AIR_HIKE, AIR_STEP, AIR_RAID };
 
 /* Dante's health on the maxed save the reference runs use. */
 #define PLAYER_HEALTH_MAX 20000.0f

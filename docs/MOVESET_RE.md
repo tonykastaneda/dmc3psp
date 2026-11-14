@@ -18,8 +18,10 @@ Implemented in `psp/testroom/player.c` (`locomotion_step`).
   wasn't confirmed from the pad code.
 - **Table** (`player+0x2830`, Dante at `0x5a85c0`, per 60 fps frame): walk 3.5,
   run 8.5, turn 0x800 angle units, start turn 8 frames, run acceleration 6
-  frames, full tilt held 4 frames before running. The second row (`player+0x28a7`,
-  set from `FUN_0021f500`) raises run to 11.0755. The test room uses row 0 only.
+  frames, full tilt held 4 frames before running. The second row (`player+0x28a7`)
+  raises run to 11.0755. Devil Trigger sets `+0x28a7` (read on the PS2 in PCSX2: 0 running normally and after a
+  swing, 1 in Devil Trigger, where he runs 12.18 cm a frame, 11.0755 x 1.1); the port runs row 1's speed in Devil
+  Trigger (`PLAYER_DT_RUN_SPEED`). `tools/ref_compare.py` scripts `run`, `swingrun`, `dtrun`.
 - **States**: `FUN_00221ba0` start (walk toward the direction held on entry,
   turning evenly over 8 frames, motion 2-01), `FUN_00221d20` move (motion 2-01,
   then 2-02 or 2-51 if `player+0x28a0`), `FUN_002217a0` idle (2-00, long idle 2-03).
@@ -135,6 +137,15 @@ usual. They run on Dante's timeline, hanging from his bone 0. Agni & Rudra's two
 bones 1 and 2 of one model with records at +0 and +0x30 of the entry, like Ebony & Ivory.
 
 ## Devil Trigger
+
+**Air Raid** (Nevan's Devil Trigger flight) is player states 0x25-0x28: `FUN_0022a840` take-off, `FUN_0022a890`
+hovering (motions 6:53 still, 6:57 moving), `FUN_0022adf0` lock-on flight (6:54-56 by direction), `FUN_0022af70` the
+end (6:59, then the fall), entered from `FUN_0021d280` with 6:52 when `+0x28ae` and `+0x28a9` are both 1. No
+gravity and no climb: the height he took off at, kept at least 5 cm above the floor below (`+0x2924`, from
+`FUN_00242410`), rising 1 cm a frame where it comes up under him. The stick moves him from the movement table, as on
+the ground (`FUN_0022aae0`). Command rows 82 / 83 (condition 9, "flying") give its attacks, actions 95 and 96
+(`FUN_00277d70`, `FUN_00278100`). What sets `+0x28a9` wasn't found; the port starts it with a jump in the air
+(Nevan, in Devil Trigger) and ends it with another jump or Devil Trigger ending. Its attacks aren't ported.
 
 pl005-009 are bodies on Dante's 24-bone skeleton, one per melee weapon (order inferred from
 the names, and not compared with the real game: it isn't unlocked in Mission 2).
