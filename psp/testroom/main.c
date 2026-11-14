@@ -2217,7 +2217,16 @@ static float lift_y;
 static int pad_on;
 static float pad[3];
 #define PAD_RADIUS 220.0f
-#define LIFT_SPEED 400.0f              /* cm a second: an estimate, the game's isn't read */
+/* CStageSetLift (update FUN_003e43c0, by the set's type): type 2 (103) rises and falls 5 cm a frame
+ * (FUN_003e45b0 states 3 and 4); types 4 and 5 (113, 603, the riding lifts; FUN_003e4e40 state 3) climb 2.5, 2.3,
+ * 2.1, 1.9, 1.5 or 1.0 cm a frame by how many enemies are on it (FUN_003e5d30; six or more stop it) and drop back
+ * 8 cm a frame once Dante has fallen off (state 4). */
+#define LIFT_SPEED (5.0f * 60.0f)
+#define RIDING_FALL_SPEED (8.0f * 60.0f)
+static float riding_lift_speed(int aboard) {
+    static const float per_frame[6] = {2.5f, 2.3f, 2.1f, 1.9f, 1.5f, 1.0f};
+    return aboard >= 6 ? 0.0f : per_frame[aboard] * 60.0f;
+}
 #define LIFT_STEP 60.0f
 static const RoomLift *room_lift(void) { return lift_index >= 0 ? &room_lifts[lift_index] : 0; }
 /* Is (x, z) over the lift's top? */
@@ -3018,15 +3027,15 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             door_prompt_time = 1.0f;
             if (pressed & (PSP_CTRL_CIRCLE | PSP_CTRL_SQUARE | PSP_CTRL_TRIANGLE)) lift_on = 1;
         }
-        /* A riding lift holds still while there's a wave on it. */
+        /* A riding lift slows with each enemy on it (the room's living ones stand in for FUN_003e5d30's count). */
         int riding = lift->high - lift->low > 3000.0f;
         if (riding && lift_on && lift_y > lift->low + 1500.0f) enemy_drop_below(lift_y - 1500.0f);   /* fell off the lift */
-        if (lift_on && on && lift_y < lift->high && !(riding && enemy_alive_count() > 0)) {
-            lift_y += (riding ? 250.0f : LIFT_SPEED) * dt;
+        if (lift_on && on && lift_y < lift->high && (!riding || riding_lift_speed(enemy_alive_count()) > 0.0f)) {
+            lift_y += (riding ? riding_lift_speed(enemy_alive_count()) : LIFT_SPEED) * dt;
             if (lift_y > lift->high) lift_y = lift->high;
             player->y = lift_y;
         } else if (lift_on && !on && lift_y > lift->low) {
-            lift_y -= LIFT_SPEED * dt;
+            lift_y -= (riding ? RIDING_FALL_SPEED : LIFT_SPEED) * dt;
             if (lift_y < lift->low) lift_y = lift->low;
         }
         stage_set_lift(lift_y - lift->low);
