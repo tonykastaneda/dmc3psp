@@ -762,10 +762,50 @@ bones, 3,148 vertices, 3 m tall), [2] and [3] their swords, [6] [7] `em026_03.cl
 [11] a PAC of 100 motion slots (54 used), [12] [13] a motion script each. Hands: bones 7 and 11. Classes 28-30
 also use pack 18 but are made by `FUN_0039ee10`, in the Blood-goyle's code. Slot 132 (em027) is a lighter copy.
 
-**In the port** (`psp/testroom/enemy.c`, "Agni & Rudra"): their code isn't ported. One spawn brings both: Agni
-(tinted red, sword in bone 7) and Rudra (blue, bone 11), each 956 triangles. They walk in and slash (a three-hit
-combo or an overhead), dash in and out, leap in, or charge their swords and drive them in (Agni sends a wave
-along the floor, Rudra a pair of orbs); sometimes both dash through Dante together. Heavy hits knock them back.
-The last one standing moves 25% faster and takes the attack token sooner. They start as statues (their one-frame poses ar71/ar72) and wake when Dante comes within 900 cm, strikes one, or after 600 frames (the game plays a cutscene). One boss bar for both. Motions by
-shape and root motion [inferred]: idle ar00, walk ar01, combo ar36-38, overhead ar39, dash ar03/ar04, leap
-ar07, charge ar42, team run ar02, flinch ar30, knock-back ar44, death ar83. Health 1200 each [estimate].
+**In the port** (`psp/testroom/agni_rudra.c`: the brain and the state table; `enemy.c`, "Agni & Rudra": the
+bodies). One spawn brings both: Agni (tinted red, sword in bone 7) and Rudra (blue, bone 11), each 956 triangles.
+Each runs the game's states, playing their motion scripts (em026 [12] Agni's, [13] Rudra's, exported by
+`tools/prepare_agni_rudra.py` with the caps [14]/[15] and the attack records at `0x5cf6f0`) through the Seven Hells'
+script runner, so motions, hit windows, caps and damage are the game's. Health 7000 each; Dante's hits take 42 /
+84 as against the Vanguard's 3000. Pairing (the class-27 controller, `004810f0` / `004811b0`): at rank 0 the formations alternate, 6 then 5, every
+1800 frames (lists `0x5cf6d0`, records `0x5cf600`); the healthier brother takes flags 0x12 / 0x22 (role 1, he
+attacks) and the other 0x213 / 0x223 (role 2, no attack permission: he works round Dante to the far side by the
+flank, `003ad5d0`). Ported from the decoding below: the attack timer, the zones, the attack choice
+and the lone brother's moves; the survivor takes up both swords. Guards: a new melee move of Dante's within 350 in front of one idling or moving makes Agni hop back (21), Rudra
+or the survivor guard (23, 25); a blow in the guard's first phase is turned (22, 24, 26: a hit), after which he
+counters at once from the second attack table [Dante's move classes aren't mapped: any melee move counts]. Not
+yet: the pair's openings and team moves (63, 64), the hops (16-21) beyond their scripts, the stagger gauge (heavy
+hits flinch them out of idling and moving, state 0), the game's own effects (the slam's fire and wind bursts 0x311 / 0x312 and the charged blades' 0x24c / 0x24d are stand-ins: the port's burst, hurting within 300 cm as attack record 12 [estimate], and motes), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
+Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.
+They start as statues (ar71/ar72) and wake within 900 cm, when struck, or after 600 frames (the game plays a
+cutscene). One boss bar for both.
+
+**Decoded** (the brothers' class: constructor `0039f790`, vtable `0x609960`, init `0039fd70`, per-frame `003a0d50`):
+- **One object per brother**; +0x2dd5 says which (1 Agni, 2 Rudra), +0x2f40 which swords he holds (0, 1, or 2 =
+  both: the survivor picks up his brother's). Parameter blocks (0x54 bytes, same layout as the Vanguard's):
+  `0x61a754` (base), `0x61a758` (Agni), `0x61a75c` (Rudra), `0x61a760` (the survivor with both swords). **Health
+  +0x2c = 7000** each (the Vanguard's is 3000).
+- **States** (+0xac0, 66 of them, dispatched by `003a0d50`); the next one is written to +0x2dda by the brain and
+  taken when the current one allows (`003af300`). Motion slot per state (the em026 PAC; `ar` + slot): 0 → 26 (wake),
+  2 idle → 0, 3 walk → 1, 4 → 94, 5-7 → 96, 8-10 → 95, 11 leap → 2, 3, 4, 5 (take-off, rise at 3 with 16 more, air,
+  land), 12-15 a move from table (`003b0450(n)`), 16-20 another (`003b09c0(n)`), 21/23/25 the reactions to Dante's
+  attacks by sword set (gp table `0x6195e0`: 21, 23, 25), 22-26 → 28-35, 27-29 → 36-38, 30/31 → 39-41,
+  32/35 → 45, 33/34 → 42-44, 37 → 50, 38 → 51, 39 death → 52, 40/41 → 53, 42-45 → 55-58, 46-49 → 87-90,
+  50 → 59, 51 → 60, 55 → 69, 56/65 → 77, 57/58 → 84-86, 59 → 80/78/82, 60 → 81/79/83.
+- **The brain** (`003acfb0` with his brother up, `003ace70` alone), in order: a flinch pending (+0x2df5 bit 0 →
+  state 0); a reaction to Dante's attack (`003aeec0`: by Dante's move class and the zone, fewer than 3 or 2 recent);
+  an attack when allowed (`003ade30`); else a move (`003ad5d0` paired, `003ad180` alone).
+- **Zones** (`003afc60`, +0x164 = distance to Dante): ≤210, ≤350, ≤650, ≤1000, beyond (0-4). **Role** +0x2ee2 =
+  `[2,0,1,2,3,4][flags & 15]` (gp table `0x6195d8`), 1 when alone. **Flank** +0x2ee3 (`003acae0`): the angle at
+  Dante between the brothers, under 0x1400 → 0, under 0x4800 → 1 / 3 (by side), else 2 / 4.
+- **Attack permission** (`003af5c0`): a timer from `0x5b7440[rank]` (300, 240, 180, 120, 60 frames; rank 0 for
+  Easy and Normal) runs down at (2 − health fraction) a frame, × 2.5 while his brother is in state 36, × 2 for
+  the survivor, × 0.75 within 650 and × 0.5 beyond. Paired, only one holds it at a time (flags 0x100).
+- **Attack choice** (`003ade30`, with permission 1), by sword set and zone (≤350 / ≤650 / ≤1000), and whether the
+  sword is charged (+0x2ee4, 1800 frames from the charge states 50 / 51, `003ac280`): Agni's 42 charged 43, then
+  50 (charge) or 47 / 1-in-4 52, then 50 or 52; Rudra's 44 or 45 / 1-in-4 53, then 51 or 49 / 1-in-4 53, then 51 or
+  56; both swords 45 / 43 with 1-in-8 54, then 49 / 47 with 1-in-4 54, then 56 / 54. Beyond 1000 none. Dante 300
+  above them for 88 frames (`003afbe0`) → 55. After a guard (permission 2 or 4) a second table, not ported.
+- **Moves** (`003ad180` alone): beyond 1000 leap (11) unless role ≥ 3, then on a 12-frame wait 12; 650-1000 → 12, or
+  3, or 14/15 at random; 350-650 → 12, 4, 14/15, or 13 when role ≥ 4; nearer → 4 or 13. Paired (`003ad5d0`) adds the
+  flank: 14 / 6-7 / 15 / 9-10 / 3-4 for flank 4 / 3 / 2 / 1 / 0.
