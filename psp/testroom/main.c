@@ -1785,6 +1785,8 @@ typedef struct {
 static BenchStep bench_steps[ENEMY_MAX + 1];
 static int bench_step_frames, bench_count, bench_fire, bench_quicksilver, bench_devil, bench_attack = 1, bench_anim = 1, bench_start = 1, bench_max = ENEMY_MAX;
 static int cmp_fire_from;
+static int cmp_swing,cmp_swing_from,cmp_swing_to;
+static int cmp_lv_auto_from=-1,cmp_lv_auto_target=-1;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
 static struct { int frame, part; float amount; } cmp_lv_charge[8];
@@ -1859,6 +1861,8 @@ static void cmp_load(void) {
         else if (strncmp(line, "anim ", 5) == 0) bench_anim = atoi(line + 5);
         else if (strncmp(line, "fire ", 5) == 0) bench_fire = atoi(line + 5);
         else if (strncmp(line,"firefrom ",9)==0)cmp_fire_from=atoi(line+9);
+        else if (strncmp(line,"onleviathan ",12)==0)cmp_lv_auto_from=atoi(line+12);
+        else if (strncmp(line,"swing ",6)==0)sscanf(line+6,"%d %d %d",&cmp_swing,&cmp_swing_from,&cmp_swing_to);
         else if (strncmp(line, "qs ", 3) == 0) bench_quicksilver = atoi(line + 3);
         else if (strncmp(line, "nostage ", 8) == 0) bench_no_stage = atoi(line + 8);
         else if (strncmp(line, "psp_shot ", 9) == 0) { if (cmp_shot_count < 256) cmp_game_shots[cmp_shot_count++] = atoi(line + 9); }
@@ -1927,6 +1931,7 @@ static void cmp_load(void) {
 }
 static void cmp_pad(int frame, PlayerInput *input) {
     int i;
+    if(cmp_swing>0 && frame>=cmp_swing_from && frame<=cmp_swing_to && frame%cmp_swing==0) {input->melee=1;input->melee_held=1;}
     if (bench_fire && frame>=cmp_fire_from && frame % bench_fire == 0) { input->gun = 1; input->gun_held = 1; }
     for (i = 0; i < cmp_walk_count; ++i) {
         float wx = cmp_walks[i].x - cmp_px, wz = cmp_walks[i].z - cmp_pz, l = sqrtf(wx * wx + wz * wz);
@@ -2372,6 +2377,10 @@ static int door_gated(const RoomDoor *d) {
         int number=atoi(rooms[mission_room].file+5);
         if(number==300 && !mission8_stomach_open())return 1;
         if(number==305 && item_is(46,0))return 1;
+        if(number==302 && item_is(46,2) && !leviathan_boss_dying())return 1;
+        /* EventTbl08 closes these rear passages on entry. */
+        if((number==303 && d->number==302) || (number==304 && d->number==303) ||
+           (number==307 && d->number==306))return 1;
         if(m8_goo_door(d))return 1;
     }
     {
@@ -3422,6 +3431,16 @@ int main(int argc, char *argv[]) {
                         if (focus_cmp) vanguard_note("onboss", (float)frames);
                     }
                 }
+                /* Position-only automation: all damage still passes through gun
+                 * traces or normal melee windows and native shield states. */
+                if(cmp_lv_auto_from>=0 && frames>=cmp_lv_auto_from && leviathan_boss_active()) {
+                    int core=leviathan_boss_open();
+                    if(core!=cmp_lv_auto_target || (cmp_swing>0 && frames%120==0)) {
+                        player.x=core?4978:5700;player.y=core?-70:75;player.z=core?3100:3400;
+                        player.yaw=3.14159265f;player.vy=0;player.on_ground=1;
+                        cmp_lv_auto_target=core;combat_reset(&combat);start_camera(&player,&camera);
+                    }
+                }
                 for (g = 0; g < cmp_goto_count; ++g) {
                     if (cmp_goto[g][0] != frames) continue;
                     script_at = missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][mission_room].count;
@@ -4104,3 +4123,4 @@ int main(int argc, char *argv[]) {
     sceKernelExitGame();
     return 0;
 }
+

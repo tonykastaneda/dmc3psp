@@ -111,3 +111,11 @@ animated UVs and wall deformation remain unimplemented. Live eye seals now
 block player movement, preventing sword root motion from passing through them.
 `pM_m8_eyes_solid` completed all five seals and entered st301 through its real
 door (report: eyes=31, room=301).
+
+Route verification: `pM_m8_route_wait` traversed 300→301→302→303→304→305
+→306→307→308→309→302, breaking the goo seals and collecting/using Ignis.
+The report confirms eyes=31, ignis=2, boss_started=1. This scene uses scripted
+placements and clears minions to isolate event progression; it does not prove
+a natural traversal of every room. Melee now tests against the organ hurt
+spheres as well, verified by `pM_m8_melee` damaging the right lung. The boss
+chamber and native one-way rear passages are sealed during the encounter.
