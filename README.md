@@ -109,9 +109,10 @@ sound effects, saves, and Dante dying.
 
 ### Secret Missions
 
-Eleven of the twelve play to their clear. All 12 are entered at the red structures in the main missions' rooms and played in their own rooms (st600-st611),
-then put Dante back where he came in. Most rules come from the game's data. The clear checks are the port's, because
-their code isn't decoded. Each was played to its clear in PPSSPP. Details: [the Secret Missions table](docs/GAME_FLOW.md#secret-missions).
+All twelve play to their clear. Each is entered at its red structure in a main mission's room, played in its own
+room (st600-st611), and ends with Dante back where he came in. The rules are the game's own, as its mission screen
+states them; the clear checks are the port's, because their code isn't decoded. Each was played to its clear in
+PPSSPP. Details: [the Secret Missions table](docs/GAME_FLOW.md#secret-missions).
 
 | # | Rule | Notes |
 | --- | --- | --- |
