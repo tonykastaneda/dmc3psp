@@ -46,6 +46,9 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428,
          # SE: the Jester's arenas follow st400 at 736, four slots a room. 422 is Mission 5's.
          "422": 824}
+# Mission 7 (Upper Temen-ni-gru to the Peak of Darkness): room 1xx is GDATA 324 + 4 x (n - 100).
+SLOTS.update({"114": 380, "115": 384, "127": 432, "134": 460, "135": 464, "136": 468, "137": 472, "138": 476,
+              "142": 492, "144": 500})
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -69,11 +72,16 @@ MISSIONS = {
     # (groups 0-3, waves as it climbs) -> 120 Azure Garden (the Divinity Statue) -> 121 Firestorm Chamber: Agni
     # & Rudra (group 0, EST 45 = CEm027). Their fall clears the mission. 110 (groups 1, 0) is off the route.
     5: ("111", None, {"111": [1], "422": [0], "102": [3], "113": [0, 1, 2, 3], "110": [1], "121": [0]}),
+    # Mission 7, from EventTbl07 (docs/GAME_FLOW.md): 127 (start 2) -> 114 -> 115 Divine Library (group 1, Damned
+    # Pawns) -> 114 -> 134 -> 135 Skull Spire (group 0) -> 136 Tranquil Souls Room (group 0) -> 137 Lift Room ->
+    # 100 -> 101 (groups 1, 2) -> 105 Cursed Skull Chamber (group 0) -> back up -> 135 -> 138 -> 142 -> 144 Peak of
+    # Darkness: Vergil (group 0, EST 58). Demo 322 after him clears the mission.
+    7: ("127", None, {"115": [1], "135": [0], "136": [0], "101": [1, 2], "105": [0], "144": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
-FIRST_START = {5: 2}
+FIRST_START = {5: 2, 7: 2}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121"}
+CLEAR_ROOMS = {5: "121", 7: "144"}
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -308,7 +316,7 @@ def main():
              "typedef struct { short room; float x, z, yaw, half_x, half_z, low, high, switch_pos[3]; } RoomLift;",
              "#define ROOM_NONE (-1)",
              "enum { ROOM_OP_SPAWN, ROOM_OP_WAIT, ROOM_OP_WAIT_ALIVE };",
-             f"#define MISSION_COUNT {len(MISSIONS)}"]
+             f"#define MISSION_COUNT {max(MISSIONS)}"]
     for name in names:
         r = rooms[name]
         lines.append(f"static const float room_{name}_starts[][4] = {{" + ",".join("{%.1ff,%.1ff,%.1ff,%.1ff}" % tuple(s) for s in r["starts"]) + "};")
@@ -455,7 +463,9 @@ def main():
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")
-    for mission, (first, end, sets) in MISSIONS.items():
+    for mission in range(1, max(MISSIONS) + 1):
+        # A mission not in yet keeps its place in the array: Mission 1's first room, nothing running.
+        first, end, sets = MISSIONS.get(mission, (MISSIONS[1][0], None, {}))
         per = []
         for difficulty in (0, 1):
             cells = []
