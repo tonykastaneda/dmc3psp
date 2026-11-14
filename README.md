@@ -109,9 +109,10 @@ sound effects, saves, and Dante dying.
 
 ### Secret Missions
 
-Eleven of the twelve play to their clear. All 12 are entered at the red structures in the main missions' rooms and played in their own rooms (st600-st611),
-then put Dante back where he came in. Most rules come from the game's data. The clear checks are the port's, because
-their code isn't decoded. Each of the eleven was played to its clear in PPSSPP. Details: [the Secret Missions table](docs/GAME_FLOW.md#secret-missions).
+All twelve play to their clear. Each is entered at its red structure in a main mission's room, played in its own
+room (st600-st611), and ends with Dante back where he came in. The rules are the game's own, as its mission screen
+states them; the clear checks are the port's, because their code isn't decoded. Each was played to its clear in
+PPSSPP. Details: [the Secret Missions table](docs/GAME_FLOW.md#secret-missions).
 
 | # | Rule | Notes |
 | --- | --- | --- |
@@ -123,7 +124,7 @@ their code isn't decoded. Each of the eleven was played to its clear in PPSSPP. 
 | 6 | Collect every red orb | Reached with Air Raid, Nevan's Devil Trigger flight (from player states 0x25-0x28); no time limit yet |
 | 7 | Reach the Blue Orb within 30 seconds | Devil Trigger's run, measured on the PS2, clears it in about 28.6 s |
 | 8 | Beat every enemy | Arachnes and Hell Vanguards |
-| 9 | Let no enemy escape the wagons | **Not in yet:** the wagons (608's TRUCK set) aren't ported |
+| 9 | Let no enemy escape the wagons | The wagons' timetable is the walkthrough's; the cart and track are the room's own |
 | 10 | Solve the crystal puzzle | CStageSetCrystal decoded, its layouts read from the executable |
 | 11 | Avoid the spikes and reach the Blue Orb | The spike trap isn't in |
 | 12 | Reach the Blue Orb Fragment | The moving blocks aren't in |
@@ -135,7 +136,7 @@ their code isn't decoded. Each of the eleven was played to its clear in PPSSPP. 
 - Random-access tools inventory all four AFS archives without extracting the whole ISO.
 - GDATA inventory covers **3,183 PACs**, **680 raw assets**, **14,969 top-level chunks**, and **533 nested PACs**, with no malformed packs.
 - All **87 standalone TIM2 assets** convert successfully to PNG/RGBA. The first MOD converts to 17 objects, 5,316 vertices, 5,282 triangles, and three correct character textures.
-- The PSP runtime plays all 20 missions and 11 of the 12 Secret Missions with the game's own stages, models, motions and textures, holding 30 FPS on a real PSP in the benchmark scenes (`tools/psp_bench.py`, results in `analysis/testroom/bench_*.txt`).
+- The PSP runtime plays all 20 missions and the 12 Secret Missions with the game's own stages, models, motions and textures, holding 30 FPS on a real PSP in the benchmark scenes (`tools/psp_bench.py`, results in `analysis/testroom/bench_*.txt`).
 - `MEMSIZE=1` targets PSP-2000/3000/Go/Street and Adrenaline on Vita at a 30 FPS budget. PSP-1000 isn't targeted: the current build needs more than its 32 MB.
 - A freestanding Allegrex `EBOOT.PBP` builds and runs in **PPSSPP 1.17.1**. The runtime test requires PSP code to write `DMC3PSP_BOOT_OK` to the emulated memory stick.
 - `TIME.txt` contains the timestamped work log. `analysis/autonomy-status.json` records the latest autonomous stage results.

@@ -48,6 +48,7 @@ int enemy_kind_for_class(int spawn_class);
 int enemy_add_class(int spawn_class, float x, float z);
 int enemy_kind(void);                  /* the selected one's */
 void enemy_set_dummy_kind(int kind);   /* what the debug menu's dummies are */
+void enemy_ride(float x0, float x1, float z0, float z1, float dx, float deck_y);   /* Secret Mission 9's wagons */
 int enemy_alive_count(void);
 int enemy_alive_positions(float out[][3], int max);   /* feet of those not yet dead */
 void enemy_drop_below(float y);
