@@ -200,6 +200,23 @@ CLEAR_ROOMS[12] = "228"
 GATES += [(12, "218", "448", "999")]   # 218's door to the Jester (448) is disabled in Mission 12
 # 240's door into the ride (216) is a box the wagon carries Dante into: here, a box on the wagon at start 0.
 EXTRA_DOORS["240"] = [((6400.0, 1500.0, 7001.0, 500.0, 400.0, 500.0), "216", 1)]
+
+# ---- Mission 15, "The gatecrasher", from EventTbl15 (GDATA 253; docs/GAME_FLOW.md). After demo 41 it starts in 222
+# Upper Subterran Garden at start 1 (group 0: 2 Fallen, EST 29) -> 202 (group 2: 3 Arachnes) -> 219 Devilsprout Lift
+# -> 200 (its flame portal enables 202's) -> 219 -> 202, whose portal turns the coloured doors -> 212 (group 3:
+# 3 Blood-goyles) -> 213 (group 2: 4 Dullahans; Orihalcon Fragment 52) -> 212 -> 227 -> 208 (fragment 53) -> 227
+# -> 226 -> 224 (group 0: 2 Soul Eaters; fragment 54) -> 226 -> 211 -> 219: the three fragments at its control (area
+# 0) raise the lift (area 1) to 106, where demo 42 clears the mission. The coloured doors: psp/testroom/mission15.c.
+SLOTS.update({"200": 512, "219": 588, "222": 600, "224": 608, "226": 616, "227": 620, "106": 348})
+MISSIONS[15] = ("222", None, {"222": [0], "202": [2], "212": [3], "213": [2], "224": [0]})
+FIRST_START[15] = 1
+CLEAR_ROOMS[15] = "106"   # demo 42 plays in 106's area 0, a few steps from where the lift arrives
+KEY_ITEMS += [(15, 52, "213", -1), (15, 53, "208", -1), (15, 54, "224", -1)]
+ITEM_USES += [(15, 52, "219", 0), (15, 53, "219", 0), (15, 54, "219", 0)]
+ITEM_GATES += [(15, "219", "106", 52), (15, "219", "106", 53), (15, "219", "106", 54)]
+# 219's lift (gimmick 100, its platform area 1, not in the collision) carries Dante up to door 4 (into 106, start 3):
+# here a box over the platform at floor level [approximation: the ride up isn't shown].
+EXTRA_DOORS["219"] = [((2497.0, 1.0, 2107.0, 390.0, 400.0, 213.0), "106", 3)]
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
