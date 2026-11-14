@@ -359,7 +359,7 @@ static int kind_health(int kind) {
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1500 / 250;   /* an estimate (fallen.c) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * BEOWULF_MAX / 250;   /* 0x5b84e0 +0x2c (class 33, FUN_002d95a4) */
-    case ENEMY_LADY: return ENEMY_HEALTH * 3500 / 250;     /* an estimate */
+    case ENEMY_LADY: return ENEMY_HEALTH * LADY_MAX / 250;   /* 0x5cbe40 +0x2c (class 37, FUN_00444a8c) */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
@@ -741,7 +741,7 @@ int enemy_boss_health(float *health, float *maximum) {
         *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_LADY && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 3500 / 250;return 1;
+        *health=enemies[i].health;*maximum=ENEMY_HEALTH * LADY_MAX / 250;return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_BEOWULF && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * BEOWULF_MAX / 250;return 1;
