@@ -169,20 +169,59 @@ Rank-0 wander list `5df430` is approach 65, strafe 20, idle 15. Force Edge norma
 `5de080` (30:40,31:40,3a:20). DT lists `5de260/280/2a0` choose 24/3c near (65/35), and
 3c/31 beyond (35/65). Guard chance is 80% (`5df8f0[2]`).
 
-The port's Force Edge chain 23 follows native `4d8830` actions 18→19→65; the optional follow-up is
-assumed. Chain 24 follows 18→19→1b then a simplified teleport/dive; the original `4d8a20` has more
-movement phases. Judgment Cut state 30 uses native 2b→2c→2d (`4da300`), with one stationary 60-frame
-warning at Dante's sampled position and a 180-cm, 1000-damage burst. Summoned sword state 3a plays
-native action 69, then uses that warned burst in place of the native sword projectiles. DT storm 3c
-is one teleport/leap using the existing native leap cap path, rather than the original repeated
-54/55/6f/70/71 dive cycle. Those effect shapes, counts and timing are approximations.
+The port's Force Edge chain 23 follows native `4d8830` actions 18→19→65; the follow-up condition
+is variant 2 (`4e5590`), now established rather than assumed. Chain 24 follows 18→19→1b, a single
+native dive sequence, then the 66→67→68 retreat. Its intermediate turn/translation details remain
+simplified. State 30 Judgment Cut uses 2b→2c, rank-0 hold **8** (`5df9a0`), **three** releases
+(`61a948`), then 2d. The old single 60-frame burst is replaced. Spatial cut radii and 1000-damage
+bursts remain approximations to the native effect actor.
 
-M20 DT uses native 56→57 with a 60-frame entry hold (`4db950`, M13 uses 240). The port reuses M13's
-75%-health trigger, 600-frame active duration, healing and damage resistance; M20's original
-weapon-mode/cooldown activation rule (`4e6310`) is different and remains an approximation. Native
-rank-0 DT duration table `5df950` also contains 600. The conservative 1650-cm arena radius, first
-Force Edge weapon mode, fixed three-hit escape counter, DT body reuse and weapon attachment are
-port estimates. Normal Force Edge uses native model chunk 32 and textures 31, appended after the
-existing parts. Weapon-mode switching and the full DT coat/layers are not reproduced.
+State **3a is Round Trip**, not summoned swords. `4df700` releases the thrown Force Edge from action
+69 when motion-script event slot 1 byte 4 equals **3**. That previously discarded byte is now exported
+as an additional event opcode; its original byte-0 consumers remain unchanged. The sword uses its
+native model, 20 cm/frame outgoing/return speed (`61a9bc`, GP-derived `61a9bc`), 5461 turn units/frame
+spin (`4fa510`), 100-frame caught hold and 10-frame re-hit timer (`61a9c4`, `61a9c0`), attack record 10
+and a 100-cm return/catch distance (`4fa9e0`). The 2000-cm no-hit travel cap, chest launch point,
+simplified spherical collision and absent deflection/wall response remain approximations.
+
+States 3b/3c (`4dcdb0` / `4dd290`) now use native actions **54→55→6f→70→71**, rather than one 5f/60 leap.
+Single dive height is 600 cm; the four-dive storm starts at 1000 cm and reduces evenly to 350 cm
+(`61a914`, `61a930`, `61a938/93c`). Teleport travel is 50 cm/frame. Fall starts at 2, accelerates by
+0.5 to 40; motion event byte 4 == **2** switches to 40, accelerating by 4 to 100 (`61a8fc..90c`).
+The native collision solver is approximated by the arena floor height; camera shake/trails are omitted.
+
+The latched low-health human scheduler now uses `5dde40`, `5ddfc0`, `5de120`, including area-cut states
+3f/40. `4ddff0` actions 6a→6b→6c→6e and 15-frame intervals (`61a970`) drive three random-cut waves
+(rank-0 counters 7 and 3), or one ring followed by targeted cuts (counters 12 and 5). The decrement-
+before-spawn convention gives 6 cuts/wave or 11 ring + 4 targeted cuts. Target placement and instantaneous
+bursts approximate the native moving effect actors; the final 60-frame recovery is retained.
+
+M20 phase follow-up: `4e6d20` latches `+bb58` after a damaging contact takes health strictly below
+`5dfae8[2]` = **39%**. This replaces the reused 75% approximation; M13 retains its own 75% rule.
+`4e6310` requests DT from Think once that latch is set, human form is active and cooldown is zero.
+DT uses native actions 56→57 and a 60-frame entry hold (`4db950`), then a 600-frame active timer
+(`5df950[0]`). `4dee00` clears DT at the next state boundary after expiry, sets a **2700-frame**
+cooldown (`5df930[0]`), and `4e22a0` counts that cooldown down only in human form. M20 animation/root
+motion advances at **1.2x** in DT (`4e22a0`); AI/phase timers retain native-frame units. These replace
+the previous 1200-frame cooldown and unscaled DT animation. The DT parameter block `5dcbf4` has 50
+rather than 100 at +20/+24, supporting the existing half-damage resistance. Healing remains an estimate. The conservative 1650-cm arena radius, fixed three-hit escape
+counter, weapon attachment selection remain port estimates; the DT form update below replaces body reuse.
 
 `run_vergil_variants.py` adds M20 HP/DT/Force Edge/Judgment Cut checks to the M7/M13 regression checks.
+
+M20 DT form follow-up: the earlier chunk-51 stand-in was a Beowulf body. Variant 2's Yamato DT
+setup (`4d0d60`, `4d3130`, `4e5ea0`) uses body **15**, with attachments **16/17/18**, and texture
+bank **14**. These are now exported separately, appended after the existing parts and rendered
+only for M20 DT. The 24-bone body follows the native motion sample; the 15/4/31-bone attachments
+use authored rest poses, so their native cloth drivers remain an approximation. M7/M13 mesh choices
+are unchanged, and invisible new parts are not skinned for those fights. Force Edge now has its
+own pose, with native carry record `5dc160` (bone 14) and draw record `5dc130` (bone 13), replacing
+the shared Yamato pose. Draw-mode selection by action range is still an approximation. Active Round Trip replaces that carry pose
+with the independently moving/spinning sword pose.
+
+Area-cut form detail (`4ddff0`): entering 3f/40 from human form sets the form-toggle latch before
+6a, then toggles back before 6e. These attacks now temporarily display the native DT form and use
+its animation rate/resistance without granting a fresh maintained-DT duration. Human cooldown is
+paused during this temporary form and resumes on recovery. Entering from maintained DT leaves its
+existing duration intact. A host regression covers the temporary form's entry, recovery and paused
+cooldown. This replaces another form transition omitted by the first M20 port.

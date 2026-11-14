@@ -29,13 +29,33 @@ int main(void){int i,seen=0;
  vergil_boss_set_variant(2);vergil_boss_spawn(2500,-208,2400);
  assert(vergil_boss_variant()==2 && vergil_boss_health()==10000 && vergil_boss_max_health()==10000);
  assert(vb.centre[0]==2500 && vb.centre[2]==3750);
- vb.hp=7400;vergil_boss_update(1,2500,-208,2800,1);assert(vb.state==S_DT);
+ vb.hp=7400;vergil_boss_update(1,2500,-208,2800,1);assert(vb.state!=S_DT);
+ vb.hp=3902;vergil_boss_hit(HIT_PISTOL,2500,2800,1);assert(!vb.m20_low);
+ vergil_boss_hit(HIT_PISTOL,2500,2800,1);assert(vb.m20_low);
+ set_state(S_THINK);vergil_boss_update(1,2500,-208,2800,1);assert(vb.state==S_DT);
  seen=0;for(i=0;i<600;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.dt)seen=1;}
- assert(seen);vb.dt=0;vb.dt_unlocked=1;vb.dt_cooldown=10000;
+ assert(seen);
+ vb.dt=1;vb.dt_left=1;set_state(S_FORCE_A);vergil_boss_update(2,2500,-208,2800,0);assert(vb.dt);
+ set_state(S_THINK);assert(!vb.dt && vb.dt_cooldown==2700);
+ vergil_boss_update(2,2500,-208,2800,1);assert(vb.state!=S_DT);
+ vb.dt_cooldown=0;set_state(S_THINK);vergil_boss_update(1,2500,-208,2800,1);assert(vb.state==S_DT);
+ vb.dt=0;vb.dt_unlocked=1;vb.dt_cooldown=10000;
  set_state(S_FORCE_A);seen=0;
  for(i=0;i<600;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.action==0x65)seen=1;}
  assert(seen);set_state(S_JUDGMENT);vb.landed=0;
  for(i=0;i<400 && !vb.landed;++i)vergil_boss_update(1,2500,-208,2800,1);
  assert(vb.landed && vb.landed_damage==1000);
- puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut passed");return 0;
+ vb.dt=1;evaluate_poses();
+ for(i=PART_M20_DT_BODY;i<VERGIL_PART_COUNT;++i){int j;skin_part(i);for(j=0;j<vergil_parts[i].vertices;++j)assert(isfinite(vertices[i][j].x));}
+ vb.dt=1;vb.dt_left=100000;vb.dt_cooldown=100000;vb.m20_low=0;
+ set_state(S_STORM);seen=0;
+ {int last=0;for(i=0;i<2400;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.action==0x70 && last!=0x70)++seen;last=vb.action;if(vb.state==S_THINK)break;}}
+ assert(vb.state==S_THINK && seen==4 && fabsf(vb.pos[1]-vb.floor_y)<1 && !vb.hidden);
+ set_state(S_ROUND_TRIP);vb.sword=0;seen=0;
+ for(i=0;i<1200;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.sword)seen=1;if(seen && !vb.sword)break;}
+ assert(seen && !vb.sword);
+ vb.dt=0;vb.dt_cooldown=1000;set_state(S_CUT_RANDOM);vergil_boss_update(1,2500,-208,2800,1);assert(vb.dt && vb.m20_temp_dt);seen=0;
+ for(i=0;i<2400;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.m20_temp_dt)assert(vb.dt_cooldown==999);if(vb.action==0x6e)seen=1;if(vb.state==S_THINK)break;}
+ assert(seen && vb.state==S_THINK && !vb.dt && !vb.m20_temp_dt && vb.dt_cooldown>0 && vb.dt_cooldown<999);
+ puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut, four dives, Round Trip and area-cut recovery passed");return 0;
 }
