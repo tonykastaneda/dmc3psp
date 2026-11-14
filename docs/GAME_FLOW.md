@@ -377,6 +377,37 @@ adjudicator takes 20 melee hits of any weapon (no style rank, no Hyper Fist), dr
 COLLISION 201 with it (`STORY_WALLS`); 236 runs groups 2-6 one after another from the start, its panels stay as the
 stage has them; EST 36 and 37 spawn as Pawns; the wagon is Mission 11's door from 239 to 240.
 
+### Mission 16: "Win or lose"
+
+From EventTbl16 (GDATA 254; `orchestration/evt/evt_m16.txt` locally). After demo 43 it starts in 106 at start 0.
+The script has sections for 106, 105, 109, 102, 146, 116, 115 and 119; the route between them is by door links.
+Classes: EST 29 class 11 (the walkthrough's Damned Rook), EST 36 and 38 (the walkthrough's The Fallen in 146),
+EST 31 Enigma, EST 32 Blood-goyle, EST 55 class 37 (em034, pack 25: Lady).
+
+| Room | Area | What runs |
+| --- | --- | --- |
+| 106 | Sun & Moon Chamber | Area 1, examined holding them, takes the Golden Sun (56) and the Onyx Moonshard (55) one at a time (counter 5); with both, gimmicks 200/210/211 open and door 0 (to 107) is enabled. A lift (set 100) by area 2 |
+| 108 | Entranceway | No section |
+| 109 | Waking Sun Chamber | Crest switches 100 and 101 (flags 32, 33) and the hanging sphere 150 (flags 36-38) open gimmick 300; the Golden Sun lies there (set_d4 56). Taking it locks door 0 and starts group 1: 2 Damned Rooks |
+| 105 | Cursed Skull Chamber | Group 1 (Prides, Greeds, a Sloth on Easy, Lusts on Normal), door 1 locked until it's cleared |
+| 102 | Living Statue Room | Doors 2 and 3 locked, group 2: 2 Enigmas, 4 Blood-goyles |
+| 146 | Chamber of Sins | Switch 100 (flag 32) and the swinging sphere 150 (flags 33, 35) open 300/301; the Onyx Moonshard (set_d4 55). Taking it starts group 0: 4 of EST 38, 1 of EST 36 |
+| 107, 118, 117, 111, 116 | Ice Guardian's Chamber up to Incandescent Space | No section (116 resets counter 0) |
+| 115 | The Divine Library | Area 1 plays demo 44; group 0: Lady. Beaten, demo 45 sends Dante to 119 start 0 |
+| 119 | High-fly Zone | Item 33 (Kalina Ann) given; area 1, at the top (y 8961), examined, clears the mission |
+
+In the port: the route plays from 106 to Mission Clear in PPSSPP. Stand-ins and estimates:
+
+- The Golden Sun and the Onyx Moonshard (items 56, 55) use the generic key-item tables (`KEY_ITEMS`, `ITEM_HOLDS`, `ITEM_USES`,
+  `ITEM_GATES` in `gen_rooms.py`); the puzzles that free them (109's crest switches and hanging sphere, 146's
+  swinging spheres) aren't in, so the items lie open.
+- **Lady** (em034, GDATA 138, pack 25) has her own model and motions (`lady_boss.c`): she keeps her distance, strafes
+  and shoots, lobs grenades that beep and burst, fires Kalina Ann's rocket, and escapes backwards with her repel
+  gun when Dante's close. Motions are read from their root paths; timings, damage and health are estimates; her
+  guns and shots aren't models.
+- Mission Clear comes as Lady is beaten (`CLEAR_ROOMS`), not by climbing 119. The Rooks and The Fallen aren't
+  ported and spawn as Prides.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.
