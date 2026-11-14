@@ -189,3 +189,12 @@ five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and us
 Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
 full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
 [the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).
+
+## Mission 10
+
+M10 runs from the Limestone Cavern to Mission Clear: Stone Mask, lake bridge, Neo-Generator,
+return encounters, rotating bridge and the Marble Throughway clear trigger. Dullahans use their
+native shield model and motions with a simplified rear-weakness/charge AI. Bridge animation and
+collision are approximations; see [Mission 10 implementation notes](docs/MISSION10_SPEC.md).
+The scripted PPSSPP route uses placements and minion clears to isolate progression, and walks
+Dante across the powered bridge using normal movement.

@@ -57,7 +57,7 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
 SLOTS.update({"114": 380, "115": 384, "127": 432, "134": 460, "135": 464, "136": 468, "137": 472, "138": 476,
               "142": 492, "144": 500})
 # Mission 9 (Forbidden Land): room 2xx is GDATA 512 + 4 x (n - 200).
-SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in range(201, 211)})
+SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in range(201, 212)})
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -100,11 +100,13 @@ MISSIONS = {
     # 210 Sunken Opera House: Nevan (group 0, EST 49). 204, 205 and 207 have no script section: their group 0 is a
     # guess from the walkthrough (Enigmas in 204, demons by the blades in 205 and 207).
     9: ("201", None, {"202": [0], "204": [0], "205": [0], "207": [0], "208": [0], "209": [0], "210": [0]}),
+    # EventTbl10 (GDATA 248): return from Limestone Cavern with the Neo-Generator.
+    10: ("209", None, {"209": [2], "205": [0], "202": [1], "207": [1]}),
 }
 # Where a mission starts in its first room, when not at start 0.
-FIRST_START = {5: 2, 7: 2}
+FIRST_START = {5: 2, 7: 2, 10: 2}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
+CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -167,6 +169,11 @@ KEY_ITEMS += [(9, 47, "208", -1)]
 ITEM_HOLDS += [(9, "208", 47)]
 ITEM_USES += [(9, 47, "209", 0)]
 ITEM_GATES += [(9, "209", "210", 47)]
+# Mission 10: Stone Mask at 209, Neo-Generator beyond the lake bridge.
+KEY_ITEMS += [(10, 48, "209", -1), (10, 49, "206", 48)]
+ITEM_USES += [(10, 48, "206", 0), (10, 49, "201", 1)]
+ITEM_OPENS += [(10, "206", 48, [101])]
+ITEM_GATES += [(10, "201", "211", 49)]
 # Doors that aren't in a room's door list: 142's area 0 plays demo 17, whose AFTER_DEMO is goto_room 144, 0.
 # (room, box centre and full sizes as BoxIn, next room, its start)
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}

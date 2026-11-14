@@ -216,6 +216,9 @@ static int jester_init(void);
 static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
+static void dullahan_spawn_glue(void);
+static void dullahan_update_glue(float f,float px,float py,float pz);
+static void dullahan_hit_glue(HitKind kind,float from_x,float from_z);
 static void arachne_spawn_glue(void);
 static void nevan_spawn_glue(void);
 static void nevan_update_glue(float f, float px, float py, float pz);
@@ -404,6 +407,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
+    if (kind == ENEMY_DULLAHAN) { dullahan_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
@@ -548,6 +552,7 @@ int enemy_kind_for_class(int spawn_class) {
     /* EST spawn ids: a Seven Hell is 4 x its class number (0 Pride, 4 Gluttony, 8 Lust, 12 Sloth,
      * 16 Wrath, 20 Greed), and 31 is the Enigma. Anything not ported yet stands in as a Pride. */
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
+    if (spawn_class == 30) return ENEMY_DULLAHAN;
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
@@ -1242,6 +1247,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
+    if (e->kind == ENEMY_DULLAHAN) { ++hits; dullahan_hit_glue(kind,from_x,from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
@@ -1503,6 +1509,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_DULLAHAN) { dullahan_update_glue(f,px,py,pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
@@ -3608,3 +3615,63 @@ static void nevan_hit_glue(HitKind kind, float from_x, float from_z) {
     nevan_play(b->want, b->restart);
     b->restart = 0;
 }
+
+/* Dullahan state and shield logic live in dullahan.c. */
+#include "dullahan.h"
+static DullahanBrain dullahan_brain[ENEMY_MAX];
+static int dullahan_motion_id[DULLAHAN_M_COUNT] = {-2};
+static void dullahan_play(int m, int restart) {
+    int id;
+    if (dullahan_motion_id[0] == -2) { int k; for (k = 0; k < DULLAHAN_M_COUNT; ++k) dullahan_motion_id[k] = motion_find(dullahan_motion_names[k]); }
+    id = dullahan_motion_id[m];
+    if (id < 0) return;
+    if (id != e->motion || restart) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 8.0f;
+        e->motion = id; e->frame = 0.0f; e->done = 0;
+    }
+}
+static void dullahan_spawn_glue(void) {
+    DullahanBrain *b = &dullahan_brain[e - enemies];
+    e->motion = -1;
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    dullahan_spawn(b, e->health);
+    dullahan_play(b->want, 1);
+    b->restart = 0;
+    e->fade = 0.0f;
+}
+static void dullahan_update_glue(float f, float px, float py, float pz) {
+    DullahanBrain *b = &dullahan_brain[e - enemies];
+    const Motion *m;
+    float g;
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->motion >= 0) {
+        m = motion_get(e->motion);
+        e->frame += f;
+        if (e->frame >= m->end_frame) {
+            e->done = 1;
+            e->frame = dullahan_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+        }
+    }
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->frame = e->frame; b->done = e->done;
+    dullahan_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
+    if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    if (b->restart || dullahan_motion_id[b->want] != e->motion) { dullahan_play(b->want, b->restart); b->restart = 0; }
+    if (b->land) land_attack(b->land == 2);
+    if (b->remove) e->active = 0;
+}
+static void dullahan_hit_glue(HitKind kind, float from_x, float from_z) {
+    DullahanBrain *b = &dullahan_brain[e - enemies];
+    float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
+    fx_hit_spark(at);
+    if (e->plan == P_DEATH) return;
+    if (dullahan_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
+        e->plan = P_DEATH;
+        died();
+    }
+    dullahan_play(b->want, b->restart);
+    b->restart = 0;
+}
+

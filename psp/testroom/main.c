@@ -43,6 +43,7 @@ int testroom_frame;
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
+#include "mission10.h"
 #include "nausika.h"
 #include "bullets.h"
 #include "fx.h"
@@ -566,7 +567,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -2235,6 +2236,7 @@ static int key_item_shown(const RoomKeyItem *k) {
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
 static int room_held(void) {
     int i;
+    if(mission_choice.mission==10 && mission10_hold())return 1;
     if(mission_choice.mission==8 && mission_room>=0 && atoi(rooms[mission_room].file+5)==302 && !item_is(46,2))return 1;
     for (i = 0; i < ROOM_ITEM_HOLD_COUNT; ++i)
         if (room_item_holds[i].mission == mission_choice.mission && room_item_holds[i].room == mission_room
@@ -2258,12 +2260,16 @@ static int bridge_up(void) {
 static int on_bridge(float x, float z, float y) {
     /* Riding one of Mission 7's elevators down its shaft: the floors' edge walls round the shaft don't push him off. */
     if (lift_index >= 0 && room_lifts[lift_index].mission && lift_on && over_lift(&room_lifts[lift_index], x, z)) return 1;
+    if(mission_mode && mission_choice.mission==10 && mission10_bridge(x,y,z))return 1;
     return bridge_up() && x > 2150.0f && x < 2850.0f && z > 2450.0f && z < 4450.0f && y > 2950.0f;
 }
 /* The stage's floor, or the lift's top when that's higher and under the feet. */
 static int mission_floor(float x, float y, float z, float step, float *out) {
     const RoomLift *l = room_lift();
     int found = stage_floor(x, y, z, step, out);
+    if(mission_mode && mission_choice.mission==10) {
+        float h;if(mission10_floor(x,y,z,step,&h)&&(!found || h>*out)){*out=h;found=1;}
+    }
     if (l && over_lift(l, x, z) && lift_y <= y + step + LIFT_STEP && (!found || lift_y > *out)) { *out = lift_y; found = 1; }
     if (pad_on && (x - pad[0]) * (x - pad[0]) + (z - pad[2]) * (z - pad[2]) < PAD_RADIUS * PAD_RADIUS && pad[1] <= y + step + LIFT_STEP
         && (!found || pad[1] > *out)) { *out = pad[1]; found = 1; }
@@ -2687,6 +2693,7 @@ static int script_run(float dt, float floor_y) {
 
 /* Into another room: its stage, Dante at the start the door names, and the room's script from the top. */
 static void enter_room(int room, int start, Player *player, FollowCamera *camera) {
+    int m10_previous=mission_room>=0?room_number(mission_room):-1;
     char path[320];
     
     const float *s = rooms[room].starts[start];
@@ -2747,6 +2754,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     player_spawn[1] = s[1];
     player_spawn[2] = s[2];
     player_spawn[3] = s[3];
+    if(mission_choice.mission==10)mission10_enter(room_number(room),m10_previous);
     combat_reset(&combat);
     player->x = s[0];
     player->y = s[1];
@@ -2782,6 +2790,18 @@ static void hazards_update(float dt, Player *player) {
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
+    if(mission_choice.mission==10) {
+        mission10_update(dt*60,item_is(48,2),item_is(49,2));
+        if(pressed & PSP_CTRL_CIRCLE)mission10_control(player->x,player->y,player->z);
+        /* The Neo-Generator reacts automatically on crossing EVE area 1. */
+        if(room_number(mission_room)==201 && item_is(49,1)) {
+            int u;for(u=0;u<ROOM_ITEM_USE_COUNT;++u)if(room_item_uses[u].mission==10 && room_item_uses[u].item==49 && item_area_inside(&room_item_uses[u],player->x,player->y,player->z)) {
+                const float *start=rooms[mission_room].starts[0];item_state[49]=2;
+                player->x=start[0];player->y=start[1];player->z=start[2];player->yaw=start[3]*.0174532925f;player->on_ground=1;player->vy=0;
+                combat_reset(&combat);start_camera(player,camera);
+            }
+        }
+    }
     if(mission_choice.mission==8) {
         int number=atoi(rooms[mission_room].file+5);
         float acid=mission8_acid(dt*60,player->x,player->y,player->z,player->on_ground);
@@ -2992,7 +3012,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         return 0;
     }
     if (!held) room_set_cleared(mission_room);
-    if (info->clear_room == mission_room && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
+    if (info->clear_room == mission_room && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
@@ -3116,6 +3136,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
         }
     }
     items_reset(choice->mission);
+    mission10_reset();
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
@@ -3545,6 +3566,10 @@ int main(int argc, char *argv[]) {
                         path_in_game_dir(path,sizeof(path),"M8_CLEAR.TXT");report=fopen(path,"w");
                         if(report){fprintf(report,"mission=8 clears=%d ignis=%d eyes=%u\n%s",m8_clears_seen,item_state[46],mission8_eye_bits(),leviathan_boss_log());fclose(report);}
                     }
+                }
+                if(focus_cmp && mission_choice.mission==10) {
+                    char path[320];FILE *report;path_in_game_dir(path,sizeof(path),"M10_CLEAR.TXT");report=fopen(path,"w");
+                    if(report){fprintf(report,"mission=10 mask=%d generator=%d room=%d\n",item_state[48],item_state[49],room_number(mission_room));fclose(report);}
                 }
                 if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;
