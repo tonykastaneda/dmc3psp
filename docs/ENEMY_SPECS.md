@@ -792,6 +792,22 @@ flinch js05, stun js14, launched js04, death js16.
   actions aren't decoded). The stun gauge, flinch-and-vanish and arena clamp stay the stand-in's. The old cane
   swings and taunt are no longer chosen: the game's first encounter has no such attacks in its picker.
 
+**Projectile follow-up (pM).** The emitters' tables use **AI rank `+481c`**, not encounter `+481e`:
+ball wait/speed `5e2fd0` = (140,70), (80,70), (40,70), (20,70); trap interval `5e3000` =
+180/120/90/60; cross angular speed `5e3010` = 0/0/−0.13/−0.25 degrees per frame. Thus the first
+rank's four-arm cross is stationary. The native health-by-encounter table remains separate.
+`55c5a0`/`55c110` initialize their initial delay from the constructor's zero argument.
+
+The ball (`54e710`, `54edc0`, `54ebc0`) charges attached to the prop, then flies at 70 cm/frame,
+aimed on the prop's horizontal axis with a 15-degree cone. Its life is 600 frames, arena bound
+2500 cm from (3500,3500), direct radius 50, burst radius 200, burst life 20. Attack record 3 at
+`5e3f00` supplies 1200 damage. The trap (`54caa0`, `54ce50`, `54d230`) is placed at Dante's sampled
+XZ, y=500, random yaw; after 55 frames it arms a radius-75 sphere at y=650 for 10 frames, and
+expires at 180. Record 4 supplies 650 damage. The cross (`54d610/850`, `54db00`) has four 90-degree
+transforms, initially 45 degrees from Dante, with a 5-degree lean; each box spans 0..1200 along
+its arm, 0..2000 upward, half-width 70. Record 0 supplies 800 damage. Visuals and integration are
+recorded with the completed projectile port below.
+
 ---
 
 ## F. Agni & Rudra (class 27): Mission 5, room 121
