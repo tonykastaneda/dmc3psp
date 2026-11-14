@@ -9,6 +9,9 @@ clearminions 60
 r1 1 17799
 onleviathan 30
 mkey cross 60
+mkey cross 120
+mkey cross 180
+mkey cross 240
 psp_shot 1000
 psp_shot 4000
 psp_shot 10000

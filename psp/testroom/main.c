@@ -42,6 +42,7 @@ int testroom_frame;
 #include "vergil_boss.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
+#include "nausika.h"
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
@@ -2463,7 +2464,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     int i, k;
     float fx = sinf(player->yaw), fz = cosf(player->yaw);
     if (!mission_mode || mission_room == ROOM_NONE) return;
-    if(mission_choice.mission==8)mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);
+    if(mission_choice.mission==8){mission8_hit(player->x,player->y,player->z,player->yaw,reach,kind);nausika_hit(player->x,player->y,player->z,player->yaw,reach,kind);}
     switch_hit(player, reach, kind);
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
@@ -2589,7 +2590,7 @@ static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
     if (!mission_mode || mission_room == ROOM_NONE) return;
-    if(mission_choice.mission==8) {mission8_draw();leviathan_boss_draw_preview();}
+    if(mission_choice.mission==8) {mission8_draw();nausika_draw();leviathan_boss_draw_preview();}
     sceGuDisable(GU_TEXTURE_2D);
     sceGuDisable(GU_LIGHTING);
     sceGumMatrixMode(GU_MODEL);
@@ -2694,7 +2695,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     mission_room = room;
     if(mission_choice.mission==8) {
         int number=atoi(rooms[room].file+5);
-        mission8_enter(number);
+        mission8_enter(number);nausika_enter(number);
         leviathan_boss_kill();
         if(number==302 && !m8_boss_started)leviathan_boss_preview();
     }
@@ -3468,7 +3469,14 @@ int main(int argc, char *argv[]) {
             }
             if (shop_closed) { shop_closed = 0; last_time = sceKernelGetSystemTimeLow(); }
             if (mission_update(dt, debug_pressed, &player, &camera)) {
-                if(mission_choice.mission==8)++m8_clears_seen;
+                if(mission_choice.mission==8) {
+                    ++m8_clears_seen;
+                    if(focus_cmp) {
+                        char path[320];FILE *report;
+                        path_in_game_dir(path,sizeof(path),"M8_CLEAR.TXT");report=fopen(path,"w");
+                        if(report){fprintf(report,"mission=8 clears=%d ignis=%d eyes=%u\n%s",m8_clears_seen,item_state[46],mission8_eye_bits(),leviathan_boss_log());fclose(report);}
+                    }
+                }
                 if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
@@ -3558,6 +3566,10 @@ int main(int argc, char *argv[]) {
                 }
                 player.x = cx; player.z = cz;
             }
+        }
+        if(mission_mode && mission_choice.mission==8) {
+            float damage=nausika_update(dt*60,player.x,player.y,player.z);
+            if(damage>0)combat_player_hit_damage(&combat,&player,player.x,player.z-100,1,damage);
         }
         if (dummy_ready) {
             float from_x, from_z;

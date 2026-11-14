@@ -119,3 +119,20 @@ placements and clears minions to isolate event progression; it does not prove
 a natural traversal of every room. Melee now tests against the organ hurt
 spheres as well, verified by `pM_m8_melee` damaging the right lung. The boss
 chamber and native one-way rear passages are sealed during the encounter.
+
+Nausika chase: separate native st303 EFM (4,415 vertices, 16 bones), textures,
+and five MOT clips. Its 44 authored route points drive rooms 303/307. Ghidra
+492bc0 supplies the 13 + sine*12 cm/frame movement, 493a30 the 750 cm attack
+decision, 493b60 the 69/40-frame windup, 493180 the 750-damage stagger, and
+492490 the 3,000 HP. Attack record 5d7370 gives 1,000 damage. Native motion 1
+has non-increasing keys rejected by the current MOT parser; motion 5 supplies
+the bite animation instead. Path interpolation, entrance trigger, 90-frame
+stagger duration and world-space attack volume are approximations. The native
+intro camera, poison breath particles and death reward are not implemented.
+`run_nausika_logic.py` checks trigger, damage, stagger, death and finite poses;
+PPSSPP `pM_m8_chase_50.png` shows the native model attacking Dante.
+
+Full-health boss verification: `pM_m8_clear_guns` reached the Mission Clear
+screen through ordinary shotgun traces and native shield cycles. Positions
+were automated and Envies cleared to isolate the boss, with no injected boss
+damage or reduced HP. Capture: `analysis/testroom/pM_m8_clear_guns_menu.png`.

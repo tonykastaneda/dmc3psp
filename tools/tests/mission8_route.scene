@@ -1,4 +1,4 @@
-frames 3000
+frames 12000
 fps 30
 turbo 0
 realdt 0
@@ -68,3 +68,9 @@ circle 2802 2803
 psp_shot 820
 psp_shot 2040
 psp_shot 2850
+onleviathan 3000
+mkey cross 120
+mkey cross 180
+mkey cross 240
+psp_shot 6000
+psp_shot 10000
