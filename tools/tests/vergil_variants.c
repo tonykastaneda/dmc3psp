@@ -47,5 +47,15 @@ int main(void){int i,seen=0;
  assert(vb.landed && vb.landed_damage==1000);
  vb.dt=1;evaluate_poses();
  for(i=PART_M20_DT_BODY;i<VERGIL_PART_COUNT;++i){int j;skin_part(i);for(j=0;j<vergil_parts[i].vertices;++j)assert(isfinite(vertices[i][j].x));}
+ vb.dt=1;vb.dt_left=100000;vb.dt_cooldown=100000;vb.m20_low=0;
+ set_state(S_STORM);seen=0;
+ {int last=0;for(i=0;i<2400;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.action==0x70 && last!=0x70)++seen;last=vb.action;if(vb.state==S_THINK)break;}}
+ assert(vb.state==S_THINK && seen==4 && fabsf(vb.pos[1]-vb.floor_y)<1 && !vb.hidden);
+ set_state(S_ROUND_TRIP);vb.sword=0;seen=0;
+ for(i=0;i<1200;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.sword)seen=1;if(seen && !vb.sword)break;}
+ assert(seen && !vb.sword);
+ set_state(S_CUT_RANDOM);seen=0;
+ for(i=0;i<2400;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.action==0x6e)seen=1;if(vb.state==S_THINK)break;}
+ assert(seen && vb.state==S_THINK);
  puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut passed");return 0;
 }

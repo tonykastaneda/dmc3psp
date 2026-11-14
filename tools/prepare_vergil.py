@@ -21,6 +21,7 @@ from prepare_stage import pac_entries
 
 SLOT = 139
 OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK = range(6)
+OP_WINDOW4 = 6  # motion-script event slot 1, byte 4
 END_FRAME = 0x7FFF
 PARTS = (("body", 1), ("coat", 3), ("yamato", 25), ("scabbard", 28), ("beowulf", 55), ("dt_body", 51), ("force_edge", 32), ("m20_dt_body", 15), ("m20_dt_wings", 16), ("m20_dt_detail", 17), ("m20_dt_cloth", 18))
 MOTION_CHUNKS = (7, 8, 9, 10)          # motion files 0-3 (the set-up's list at +0xb570)
@@ -95,6 +96,7 @@ def compile_scripts(chunk, caps):
                     # Window 0 (op 3) byte 0: Yamato's place (1 drawn, 2 sheathed); window 1 (op 4) byte 0: the
                     # chain point FUN_00255af0(slot, 1, 0) the attack states wait for.
                     ops.append((OP_EVENT, op - 3, chunk[p + 1], chunk[p + 2] | chunk[p + 3] << 8))
+                    if op == 4: ops.append((OP_WINDOW4, chunk[p + 5], 0, 0))
                     p += 6
                 elif op in (5, 0x21, 0x23):
                     p += 2

@@ -34,13 +34,13 @@ extern unsigned int enemy_ai_random(void);
 extern int testroom_frame;
 
 enum { PART_BODY, PART_COAT, PART_YAMATO, PART_SCABBARD, PART_BEOWULF, PART_DT_BODY, PART_FORCE_EDGE, PART_M20_DT_BODY, PART_M20_DT_WINGS, PART_M20_DT_DETAIL, PART_M20_DT_CLOTH };
-enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK };
+enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK, OP_WINDOW4 };
 
 /* AI states (+0xb9d4), from the switch in FUN_004d6770. */
 enum {
     S_THINK = 0x17, S_DEATH = 0x18, S_STRAFE = 0x1d, S_IDLE = 0x1f, S_TAUNT = 0x20,
     S_COMBO_A = 0x21, S_COMBO_B = 0x22, S_COMBO_C = 0x25, S_UPPER = 0x29, S_DASH = 0x2d, S_BEHIND = 0x31,
-    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_FORCE_A=0x23, S_FORCE_B=0x24, S_JUDGMENT=0x30, S_SUMMON=0x3a, S_STORM=0x3c, S_DT=0x39
+    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_FORCE_A=0x23, S_FORCE_B=0x24, S_JUDGMENT=0x30, S_ROUND_TRIP=0x3a, S_DIVE=0x3b, S_RETREAT=0x2e, S_CUT_RANDOM=0x3f, S_CUT_RING=0x40, S_STORM=0x3c, S_DT=0x39
 };
 
 typedef struct { float m[3][3], p[3]; } Transform;
@@ -50,7 +50,7 @@ typedef struct {
     float frame, previous_frame, fade, fade_rate, root[3];
     float cap_left[CAPS];
     unsigned char cap_record[CAPS], cap_hit[CAPS];
-    unsigned char window0, window1;   /* byte 0 of each: Yamato's place, the chain point */
+    unsigned char window0, window1, window4;   /* byte 0 of each: Yamato's place, the chain point */
 } ScriptPlayer;
 
 static struct {
@@ -61,8 +61,9 @@ static struct {
     ScriptPlayer body;
     int landed, landed_heavy;
     float landed_x, landed_z, landed_damage;
-    int tick, variant, dt, dt_unlocked, m13_chain, m20_low;
-    float dt_left,dt_cooldown, cut[3];
+    int tick, variant, dt, dt_unlocked, m13_chain, m20_low, repeats, waves, cut_index, sword, sword_hit;
+    float dt_left,dt_cooldown, cut[3], dive_height, retreat_speed, retreat_distance;
+    float sword_pos[3], sword_dir[3], sword_age, sword_spin, sword_wait, sword_rehit;
 } vb;
 
 static int motion_ids[4][100];
@@ -100,7 +101,12 @@ static const Pick m13_mid[]={{S_COMBO_C,20},{S_BEOWULF_WARP,20},{S_DASH,30},{S_B
 static const Pick m20_wander[]={{S_APPROACH,65},{S_STRAFE,20},{S_IDLE,15}};
 static const Pick m20_near[]={{S_FORCE_A,40},{S_FORCE_B,40},{S_DASH,20}};
 static const Pick m20_mid[]={{S_COMBO_C,20},{S_DASH,30},{S_JUDGMENT,20},{S_BEHIND,30}};
-static const Pick m20_far[]={{S_JUDGMENT,40},{S_BEHIND,40},{S_SUMMON,20}};
+static const Pick m20_far[]={{S_JUDGMENT,40},{S_BEHIND,40},{S_ROUND_TRIP,20}};
+static const Pick m20_low_near[]={{S_FORCE_A,20},{S_FORCE_B,40},{S_BEOWULF_WARP,20},{S_DASH,20}};
+/* Late human phase uses the native human lists (5dde40 / 5ddfc0 / 5de120).
+ * Its zero-weight placeholders are omitted. */
+static const Pick m20_low_mid[]={{S_DASH,25},{S_JUDGMENT,25},{S_CUT_RANDOM,25},{S_CUT_RING,25}};
+static const Pick m20_low_far[]={{S_JUDGMENT,30},{S_ROUND_TRIP,25},{S_CUT_RANDOM,25},{S_CUT_RING,20}};
 static const Pick m20_dt_near[]={{S_FORCE_B,65},{S_STORM,35}};
 static const Pick m20_dt_far[]={{S_STORM,35},{S_BEHIND,65}};
 static const Pick counter_picks[] = {{S_COMBO_C, 50}, {S_DASH, 50}};
@@ -150,9 +156,9 @@ static void trace(const char *event) {
     if (!trace_on) return;
     f = fopen(trace_path, "a");
     if (!f) return;
-    fprintf(f, "t=%d f=%d %s state=%#x step=%d action=%#x script=%d:%d frame=%.1f hp=%.0f gauge=%.1f d=%.0f pos=%.0f,%.0f,%.0f\n",
+    fprintf(f, "t=%d f=%d %s state=%#x step=%d action=%#x script=%d:%d frame=%.1f hp=%.0f gauge=%.1f d=%.0f pos=%.0f,%.0f,%.0f variant=%d low=%d dt=%d left=%.0f cooldown=%.0f\n",
             vb.tick, testroom_frame, event, vb.state, vb.step, vb.action, vb.body.bank, vb.body.script, vb.body.frame,
-            vb.hp, vb.gauge, dante_distance(), vb.pos[0], vb.pos[1], vb.pos[2]);
+            vb.hp, vb.gauge, dante_distance(), vb.pos[0], vb.pos[1], vb.pos[2],vb.variant,vb.m20_low,vb.dt,vb.dt_left,vb.dt_cooldown);
     fclose(f);
 }
 void vergil_boss_note(const char *event, float a, float b, float c, float d) {
@@ -240,6 +246,7 @@ static void script_run_ops(ScriptPlayer *p) {
             }
         } else if (op->op == OP_GOTO) {
             p->pc = op->b;
+        } else if(op->op==OP_WINDOW4){p->window4=(unsigned char)op->a;
         } else if (op->op == OP_EVENT) {
             if (op->a == 0) { if (op->b) p->window0 = (unsigned char)op->b; }
             else p->window1 = (unsigned char)op->b;
@@ -253,7 +260,7 @@ static void script_play(ScriptPlayer *p, int bank, int script) {
     p->done = 0;
     p->stop = -1;
     p->finish = 0;
-    p->window1 = 0;
+    p->window1 = 0;p->window4=0;
     memset(p->cap_left, 0, sizeof(p->cap_left));
     memset(p->cap_hit, 0, sizeof(p->cap_hit));
     if (bank < 0 || bank > 3 || script < 0 || script >= VERGIL_BANK_WIDTH || vergil_script_starts[bank][script] < 0) {
@@ -376,6 +383,7 @@ static void start_attack(void) {
     vb.gauge = 0.0f;
     if(vb.variant==2){
         if(vb.dt)set_state(d<=350?pick(m20_dt_near,2,-1):pick(m20_dt_far,2,-1));
+        else if(vb.m20_low)set_state(d<=350?pick(m20_low_near,4,-1):d<=500?pick(m20_low_mid,4,-1):pick(m20_low_far,4,-1));
         else set_state(d<=350?pick(m20_near,3,-1):d<=500?pick(m20_mid,4,-1):pick(m20_far,3,-1));
         return;
     }
@@ -397,6 +405,30 @@ static int dante_lunges(void) {
 }
 /* FUN_004deca0: rank 0, variant 0 guards every time (0x5df8f0: 100%). */
 static void react(void) { set_state(vb.variant>=1 && unit_random()>=(vb.variant==2?.8f:.9f)?S_AWAY:S_GUARD); }
+
+static void m20_roundtrip(float f){
+    float x,y,z,d;
+    if(vb.action==0x69 && vb.body.window4==3 && !vb.sword){
+        vb.body.window4=0;vb.sword=1;vb.sword_age=0;vb.sword_spin=0;vb.sword_rehit=0;
+        vb.sword_pos[0]=vb.pos[0];vb.sword_pos[1]=vb.pos[1]+120;vb.sword_pos[2]=vb.pos[2];
+        vb.sword_dir[0]=sinf(vb.yaw);vb.sword_dir[1]=0;vb.sword_dir[2]=cosf(vb.yaw);trace("round_trip_release");
+    }
+    if(!vb.sword)return;
+    vb.sword_spin+=f*(5461.0f/65536.0f)*2*PI;vb.sword_age+=f;vb.sword_rehit-=f;
+    if(vb.sword==1){
+        vb.sword_pos[0]+=vb.sword_dir[0]*20*f;vb.sword_pos[2]+=vb.sword_dir[2]*20*f;
+        x=vb.sword_pos[0]-vb.dante[0];z=vb.sword_pos[2]-vb.dante[2];
+        if(x*x+z*z<130*130 && fabsf(vb.sword_pos[1]-vb.dante[1]-100)<180){vb.sword=2;vb.sword_wait=100;}
+        else if(vb.sword_age>=100)vb.sword=3; /* no-hit range cap: port approximation */
+    }else if(vb.sword==2){if((vb.sword_wait-=f)<0)vb.sword=3;}
+    else {
+        x=vb.pos[0]-vb.sword_pos[0];y=vb.pos[1]+120-vb.sword_pos[1];z=vb.pos[2]-vb.sword_pos[2];d=sqrtf(x*x+y*y+z*z);
+        if(d<100){vb.sword=0;trace("round_trip_return");return;}
+        vb.sword_pos[0]+=x/d*20*f;vb.sword_pos[1]+=y/d*20*f;vb.sword_pos[2]+=z/d*20*f;
+    }
+    x=vb.sword_pos[0]-vb.dante[0];y=vb.sword_pos[1]-vb.dante[1]-100;z=vb.sword_pos[2]-vb.dante[2];
+    if(x*x+y*y+z*z<130*130 && vb.sword_rehit<=0){vb.sword_rehit=10;vb.landed=1;vb.landed_x=vb.sword_pos[0];vb.landed_z=vb.sword_pos[2];vb.landed_damage=vergil_attacks[10].damage;vb.landed_heavy=1;}
+}
 
 /* ---- AI states (FUN_004d6770's handlers) --------------------------------------------------------------- */
 static void wander_checks(void) {
@@ -475,27 +507,74 @@ static void ai_step(float f) {
         const unsigned char *seq=vb.state==S_FORCE_A?a:b;
         if(vb.step==0){vb.step=1;set_action(seq[0]);}
         else if(vb.step<3 && (vb.body.window1==1 || act==ACT_DONE))set_action(seq[vb.step++]);
-        else if(vb.step==3 && act==ACT_DONE){if(vb.state==S_FORCE_B)set_state(S_STORM);else set_state(S_THINK);}
+        else if(vb.step==3 && act==ACT_DONE){if(vb.state==S_FORCE_B)set_state(S_DIVE);else set_state(S_THINK);}
         break;
     }
-    case S_JUDGMENT: /* Native 30 uses 2b -> 2c -> 2d plus spatial cut effects. */
-        if(vb.step==0){vb.step=1;vb.yaw=angle_to_dante();set_action(0x2b);vb.timer=60;}
+    case S_JUDGMENT: /* 4da300: rank-0 hold 8, three cut releases, final 2d. */
+        if(vb.step==0){vb.step=1;vb.yaw=angle_to_dante();set_action(0x2b);vb.timer=8;vb.repeats=3;}
         else if(vb.step==1 && act==ACT_DONE){vb.step=2;memcpy(vb.cut,vb.dante,sizeof(vb.cut));set_action(0x2c);}
         else if(vb.step==2){
             fx_guard_flash(vb.cut);
-            if((vb.timer-=f)<=0){float x=vb.dante[0]-vb.cut[0],z=vb.dante[2]-vb.cut[2];
-                fx_hit_spark(vb.cut);vb.step=3;set_action(0x2d);
+            if((vb.timer-=f)<0 && act==ACT_DONE){float x=vb.dante[0]-vb.cut[0],z=vb.dante[2]-vb.cut[2];
+                fx_hit_spark(vb.cut);
                 if(x*x+z*z<180*180 && fabsf(vb.dante[1]-vb.cut[1])<220){vb.landed=1;vb.landed_x=vb.cut[0];vb.landed_z=vb.cut[2];vb.landed_damage=1000;vb.landed_heavy=1;}
+                trace("judgment_cut");
+                if(--vb.repeats>0){vb.timer=0;memcpy(vb.cut,vb.dante,sizeof(vb.cut));set_action(0x2c);}
+                else {vb.step=3;set_action(0x2d);}
             }
         }else if(vb.step==3 && act==ACT_DONE)set_state(S_THINK);
         break;
-    case S_SUMMON: /* 4dcc80, action 69. Sword effects approximated by a warned cut. */
-        if(vb.step==0){vb.step=1;set_action(0x69);}
-        else if(act==ACT_DONE)set_state(S_JUDGMENT);
+    case S_CUT_RANDOM:
+    case S_CUT_RING: /* 4ddff0: 6a -> 6b, patterned cuts every 15 frames, 6c -> 6e. */
+        if(vb.step==0){vb.step=1;set_action(0x6a);}
+        else if(vb.step==1 && act==ACT_DONE){vb.step=2;set_action(0x6b);}
+        else if(vb.step==2 && act==ACT_DONE){vb.step=3;vb.timer=15;vb.cut_index=0;vb.waves=vb.state==S_CUT_RANDOM?3:1;vb.repeats=vb.state==S_CUT_RANDOM?6:15;}
+        else if(vb.step==3 && (vb.timer-=f)<0){
+            float x,z,angle=vb.cut_index*PI/6,radius;
+            memcpy(vb.cut,vb.dante,sizeof(vb.cut));
+            if(vb.state==S_CUT_RING && vb.cut_index<11){radius=250+(11-vb.cut_index)*40;vb.cut[0]+=sinf(angle)*radius;vb.cut[2]+=cosf(angle)*radius;}
+            else if(vb.state==S_CUT_RANDOM){radius=unit_random()*150;angle=unit_random()*2*PI;vb.cut[0]+=sinf(angle)*radius;vb.cut[2]+=cosf(angle)*radius;}
+            fx_hit_spark(vb.cut);trace("area_cut");x=vb.dante[0]-vb.cut[0];z=vb.dante[2]-vb.cut[2];
+            if(x*x+z*z<180*180){vb.landed=1;vb.landed_x=vb.cut[0];vb.landed_z=vb.cut[2];vb.landed_damage=1000;vb.landed_heavy=1;}
+            ++vb.cut_index;vb.timer=15;
+            if(--vb.repeats<=0){if(--vb.waves>0){vb.repeats=6;vb.timer=60;}else{vb.step=4;vb.timer=60;}}
+        }else if(vb.step==4 && (vb.timer-=f)<0){vb.step=5;set_action(0x6c);}
+        else if(vb.step==5 && act==ACT_DONE){vb.step=6;set_action(0x6e);}
+        else if(vb.step==6 && act==ACT_DONE)set_state(S_THINK);
         break;
-    case S_STORM: /* 4dd290: teleport/dive storm. Reuse the native leap collision path. */
-        if(vb.step==0){vb.step=1;set_action(0x54);}
-        else if(act==ACT_DONE){point_from_dante(-350,vb.travel);travel(vb.travel,100);hide(0);set_state(S_LEAP);}
+    case S_ROUND_TRIP: /* 4dcc80: action 69 is Round Trip, released by event byte 4 == 3. */
+        if(vb.step==0){if(vb.sword){set_state(S_THINK);break;}vb.step=1;set_action(0x69);}
+        else if(act==ACT_DONE)set_state(S_THINK);
+        break;
+    case S_DIVE:
+    case S_STORM: /* 4dcdb0 / 4dd290: one dive / four dives at descending heights. */
+        if(vb.step==0){vb.step=1;vb.repeats=vb.state==S_STORM?4:1;vb.dive_height=vb.state==S_STORM?1000:600;set_action(0x54);}
+        else if(vb.step==1 && act==ACT_DONE){
+            vb.step=2;hide(1);point_from_dante(100,vb.travel);vb.travel[1]=vb.floor_y+vb.dive_height;set_action(0x55);
+        }else if(vb.step==2){
+            float y=vb.travel[1]-vb.pos[1],dy=fminf(fabsf(y),50*f);int arrived=travel(vb.travel,f);
+            vb.pos[1]+=y<0?-dy:dy;
+            if(arrived && fabsf(y)<=50*f){vb.step=3;hide(0);vb.yaw=wrap_angle(vb.dante_yaw+PI);set_action(0x6f);vb.vel[1]=2;}
+        }else if(vb.step==3){
+            vb.pos[1]-=vb.vel[1]*f;vb.vel[1]=fminf(40,vb.vel[1]+.5f*f);
+            if(vb.body.window4==2){vb.body.window4=0;vb.step=4;vb.vel[1]=40;}
+        }else if(vb.step==4){
+            vb.pos[1]-=vb.vel[1]*f;vb.vel[1]=fminf(100,vb.vel[1]+4*f);
+            if(vb.pos[1]<=vb.floor_y){vb.pos[1]=vb.floor_y;vb.step=5;set_action(0x70);}
+        }else if(vb.step==5 && act==ACT_DONE){
+            trace("dive_landed");
+            if(--vb.repeats>0){vb.dive_height-=(1000.0f-350)/3;vb.step=1;set_action(0x54);}
+            else {vb.step=6;set_action(0x71);}
+        }else if(vb.step==6 && act==ACT_DONE)set_state(vb.previous_state==S_FORCE_B?S_RETREAT:S_THINK);
+        break;
+    case S_RETREAT: /* 4d9bb0: 66 -> 67, accelerate back, 68 recovery. */
+        if(vb.step==0){vb.step=1;set_action(0x66);}
+        else if(vb.step==1 && act==ACT_DONE){vb.step=2;set_action(0x67);vb.retreat_speed=35;vb.retreat_distance=0;}
+        else if(vb.step==2){
+            vb.retreat_speed=fminf(45,vb.retreat_speed+2*f);vb.retreat_distance+=vb.retreat_speed*f;
+            vb.pos[0]-=sinf(vb.yaw)*vb.retreat_speed*f;vb.pos[2]-=cosf(vb.yaw)*vb.retreat_speed*f;
+            if(dante_distance()<150 || vb.retreat_distance>=1000){vb.step=3;set_action(0x68);}
+        }else if(vb.step==3 && act==ACT_DONE)set_state(S_THINK);
         break;
     case S_COMBO_C:                                 /* FUN_004d9220: 0x1b 0x1c, then 0x47 */
         if (vb.step == 0) { vb.step = 1; set_action(0x1b); }
@@ -585,7 +664,9 @@ static void ai_step(float f) {
             set_action(0x54);
         } else if (act == ACT_DONE) set_state(vb.state==S_BEOWULF_WARP?S_BEOWULF:S_THINK);
         break;
-    case S_BEOWULF: /* 4d9ef0: 2b windup, 2c hold, 2d release. */
+    case S_BEOWULF:
+        if(vb.variant==2){set_state(S_JUDGMENT);vb.step=1;vb.repeats=1;vb.timer=8;set_action(0x2b);break;}
+        /* 4d9ef0: 2b windup, 2c hold, 2d release. */
         if(vb.step==0){vb.step=1;vb.yaw=angle_to_dante();set_action(0x2b);vb.timer=60;}
         else if(vb.step==1 && act==ACT_DONE){vb.step=2;set_action(0x2c);}
         else if(vb.step==2 && (vb.timer-=f)<0){vb.step=3;vb.yaw=angle_to_dante();set_action(0x2d);}
@@ -685,6 +766,9 @@ static void evaluate_poses(void) {
         /* 5dc160: carried on bone 14; 5dc130: drawn in the left hand (13). */
         if(vb.action>=0x61 && vb.action<=0x71)attach(13,9,0,-1,0,.52359879f,0,&at);
         else attach(14,15,10,20,-3.05432606f,-.87266463f,-1.57079625f,&at);
+        if(vb.sword){float x=vb.sword_pos[0]-vb.pos[0],z=vb.sword_pos[2]-vb.pos[2],c=cosf(vb.yaw),sn=sinf(vb.yaw);
+            euler(&at,0,0,vb.sword_spin);at.p[0]=c*x-sn*z;at.p[1]=vb.sword_pos[1]-vb.pos[1];at.p[2]=sn*x+c*z;
+        }
         build_skeleton(&vergil_parts[PART_FORCE_EDGE],&current,0,0,&at,force_edge_pose,0);
     }
 }
@@ -880,7 +964,7 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     if(vb.variant==1 && vb.dt_unlocked && !vb.dt && vb.hp>0 && vb.hp<max_health()*.75f && (vb.dt_cooldown-=frames)<=0 && vb.state==S_THINK){vb.dt_unlocked=0;}
 
     vb.dante[0] = px; vb.dante[1] = py; vb.dante[2] = pz;
-    if (attacks && !vb.dying) ai_step(frames);
+    if (attacks && !vb.dying){ai_step(frames);if(vb.variant==2)m20_roundtrip(frames);}
     vb.action_time += frames;
     script_tick(&vb.body, frames*(vb.variant==2 && vb.dt?1.2f:1.0f), &dx, &dz);
     /* FUN_004e4570: the root's motion, turned by his facing, moves him. */
@@ -894,11 +978,11 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     if (vb.body.window0 == 1) vb.yamato_drawn = 1;
     else if (vb.body.window0 == 2) vb.yamato_drawn = 0;
     vb.body.window0 = 0;
-    if (floor_fn && vb.state != S_LEAP) {
+    if (floor_fn && vb.state != S_LEAP && vb.state!=S_DIVE && vb.state!=S_STORM) {
         float y;
         if (floor_fn(vb.pos[0], vb.pos[1] + 100.0f, vb.pos[2], &y)) vb.floor_y = y;
         vb.pos[1] = vb.floor_y;
-    } else if (vb.state != S_LEAP) vb.pos[1] = vb.floor_y;
+    } else if (vb.state != S_LEAP && vb.state!=S_DIVE && vb.state!=S_STORM) vb.pos[1] = vb.floor_y;
     if (!vb.hidden && !vb.dying) {
         evaluate_poses();
         test_attack_caps(px, py, pz);
