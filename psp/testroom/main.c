@@ -2859,8 +2859,8 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
 }
 
 /* Parts of the room that hurt on touch (room_hazards: 205's and 207's bladed pillars). Touching one hurts once
- * per its interval (60 frames), as an enemy's hit, from its middle. The 700 is the Seven Hells' light fallback,
- * an estimate: the sets' damage isn't read. */
+ * per its interval (60 frames), as an enemy's hit, from its middle, for its kind's attack record's damage
+ * (CStageSetCollision, FUN_00399c70: the record at 0x5b63d0 + kind * 0x40; kind 0, both rooms' pillars, is 900). */
 static float hazard_wait;
 static void hazards_update(float dt, Player *player) {
     int i;
@@ -2872,7 +2872,7 @@ static void hazards_update(float dt, Player *player) {
         if (player->y + 170.0f < h->y || player->y > h->y + h->height) continue;
         {
             float chest[3] = {player->x, player->y + 110.0f, player->z};
-            if (combat_player_hit_damage(&combat, player, h->x, h->z, 0, 700.0f)) fx_hit_spark(chest);
+            if (combat_player_hit_damage(&combat, player, h->x, h->z, 0, h->damage)) fx_hit_spark(chest);
         }
         hazard_wait = h->interval;
         return;

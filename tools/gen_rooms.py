@@ -373,11 +373,13 @@ def parse_hazards(game_text):
         cyl = re.search(r"\bhit\s+cylinder\s+([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,?\s*([-\d.]+)\s*,\s*([-\d.]+)", body)
         pos = re.search(r"\bpos\s+([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)", body)
         interval = re.search(r"\binterval\s+([-\d.]+)", body)
+        kind = re.search(r"\bkind\s+(\d+)", body)
         if not cyl or not pos:
             continue
         c = [float(v) for v in cyl.groups()]
         p = [float(v) for v in pos.groups()]
-        out.append((p[0] + c[0], p[1] + c[1], p[2] + c[2], c[3], c[4], float(interval[1]) if interval else 60.0))
+        out.append((p[0] + c[0], p[1] + c[1], p[2] + c[2], c[3], c[4], float(interval[1]) if interval else 60.0,
+                    int(kind[1]) if kind else 0))
     return out
 
 
@@ -737,11 +739,13 @@ def main():
                      for s in rooms[name]["catapults"]]
     lines.append(f"#define ROOM_CATAPULT_COUNT {len(pads)}")
     lines.append("static const RoomCatapult room_catapults[] = {" + (",".join(pads) or "{0}") + "};")
-    cells = [f"{{{index[name]},{x:.1f}f,{y:.1f}f,{z:.1f}f,{h:.1f}f,{r:.1f}f,{iv:.1f}f}}"
-             for name in names for x, y, z, h, r, iv in rooms[name]["hazards"]]
+    # Damage: the set's kind picks an attack record at 0x5b63d0 + kind * 0x40 (FUN_00399c70); +4 is the damage.
+    kind_damage = {0: 900.0, 1: 600.0, 2: 25.0, 3: 300.0}
+    cells = [f"{{{index[name]},{x:.1f}f,{y:.1f}f,{z:.1f}f,{h:.1f}f,{r:.1f}f,{iv:.1f}f,{kind_damage.get(k, 900.0):.1f}f}}"
+             for name in names for x, y, z, h, r, iv, k in rooms[name]["hazards"]]
     lines.append("/* Parts of a room that hurt on touch (COLLISION sets with atk and platk): an upright cylinder, the frames")
     lines.append(" * between hurts. tools/gen_rooms.py parse_hazards. */")
-    lines.append("typedef struct { short room; float x, y, z, height, radius, interval; } RoomHazard;")
+    lines.append("typedef struct { short room; float x, y, z, height, radius, interval, damage; } RoomHazard;")
     lines.append(f"#define ROOM_HAZARD_COUNT {len(cells)}")
     lines.append("static const RoomHazard room_hazards[] = {" + (",".join(cells) or "{0}") + "};")
     print(f"{len(cells)} hazards")
