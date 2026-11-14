@@ -58,10 +58,15 @@ static void forward(BeowulfBrain *b, float speed, float f) {
     b->pos[2] += cosf(b->yaw) * speed * f;
 }
 
+/* His attack records (0x40 each from 0x5b7fa0, set up at 2d9274: damage +4, reaction +0x1c, heavy from 500) and
+ * which his scripts (em030 [8]) name for each motion: 7 (the charge) record 7, 30 / 31 / 32 (the punches) 0 / 5 / 6,
+ * 36 (the rush) 4, 39 (the stomp) 9. */
+typedef struct { float damage; int heavy; } BeowulfRecord;
+static const BeowulfRecord rec_charge = {1500.0f, 0}, rec_punch = {1000.0f, 0}, rec_rush = {1300.0f, 1}, rec_stomp = {1500.0f, 1};
 /* A blow landing reach in front of him, radius r. */
-static void strike(BeowulfBrain *b, float px, float py, float pz, float reach, float r, int heavy, int attacks) {
+static void strike(BeowulfBrain *b, float px, float py, float pz, float reach, float r, BeowulfRecord rec, int attacks) {
     float hx = b->pos[0] + sinf(b->yaw) * reach - px, hz = b->pos[2] + cosf(b->yaw) * reach - pz;
-    if (attacks && hx * hx + hz * hz < r * r && fabsf(py - b->pos[1]) < 300.0f) b->land = heavy ? 2 : 1;
+    if (attacks && hx * hx + hz * hz < r * r && fabsf(py - b->pos[1]) < 300.0f) { b->land = rec.heavy ? 2 : 1; b->land_damage = rec.damage; }
 }
 
 static void shoot(BeowulfBrain *b, int kind, float px, float py, float pz) {
@@ -96,7 +101,7 @@ static void shots_update(BeowulfBrain *b, float f, float px, float py, float pz,
         r = s->kind ? 70.0f : 140.0f;
         if (dx * dx + dz * dz < r * r && fabsf(dy) < (s->kind ? 120.0f : 200.0f)) {
             s->on = 0;
-            if (attacks) b->land = s->kind ? 1 : 2;
+            if (attacks) { b->land = s->kind ? 1 : 2; b->land_damage = -1.0f; }   /* his shells' records aren't read: the fallback */
             continue;
         }
         if (s->life <= 0.0f) s->on = 0;
@@ -129,7 +134,7 @@ void beowulf_think(BeowulfBrain *b, float f, float px, float py, float pz, float
         /* On all fours, straight through where Dante was. */
         if (b->timer < 20.0f) turn_to(b, px, pz, 0.08f, f);
         forward(b, CHARGE_SPEED, f);
-        if (!b->step && d < 260.0f) { b->step = 1; strike(b, px, py, pz, 0.0f, 300.0f, 1, attacks); }
+        if (!b->step && d < 260.0f) { b->step = 1; strike(b, px, py, pz, 0.0f, 300.0f, rec_charge, attacks); }
         if (b->timer > 110.0f) act(b, B_IDLE);
         break;
     case B_PUNCH1: case B_PUNCH2: case B_PUNCH3: {
@@ -139,7 +144,7 @@ void beowulf_think(BeowulfBrain *b, float f, float px, float py, float pz, float
         forward(b, travel / len, f);
         if (!b->step && b->frame > len * 0.45f) {
             b->step = 1;
-            strike(b, px, py, pz, 260.0f, 240.0f, b->action == B_PUNCH3, attacks);
+            strike(b, px, py, pz, 260.0f, 240.0f, rec_punch, attacks);
         }
         if (b->done) {
             if (b->action != B_PUNCH3 && d < PUNCH_RANGE * 1.3f && unit() < 0.7f) act(b, b->action + 1);
@@ -153,7 +158,7 @@ void beowulf_think(BeowulfBrain *b, float f, float px, float py, float pz, float
             float at[3] = {b->pos[0] + sinf(b->yaw) * 250.0f, b->pos[1], b->pos[2] + cosf(b->yaw) * 250.0f};
             b->step = 1;
             fx_dust(at);
-            strike(b, px, py, pz, 200.0f, 260.0f, 1, attacks);
+            strike(b, px, py, pz, 200.0f, 260.0f, rec_stomp, attacks);
             shoot(b, 0, px, py, pz);   /* the pillar, punched at him */
         }
         if (b->done) act(b, B_IDLE);
@@ -165,7 +170,7 @@ void beowulf_think(BeowulfBrain *b, float f, float px, float py, float pz, float
             float at[3] = {b->pos[0], b->pos[1], b->pos[2]};
             b->step = 1;
             fx_dust(at);
-            strike(b, px, py, pz, 100.0f, 380.0f, 1, attacks);
+            strike(b, px, py, pz, 100.0f, 380.0f, rec_rush, attacks);
         }
         if (b->done) act(b, B_IDLE);
         break;

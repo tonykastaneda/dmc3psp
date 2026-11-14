@@ -4007,7 +4007,7 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     if (b->restart || beowulf_motion_id[b->want] != e->motion) { beowulf_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* his attack record's damage */
     beowulf_draw_fx(b);
     if (e->plan == P_DEATH) { e->timer += f; if (e->timer > 330.0f) e->active = 0; }
 }
