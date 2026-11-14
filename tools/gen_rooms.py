@@ -41,6 +41,8 @@ CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 # (104) and the ice (109). After he's beaten (counter 2): the entrance ice (100), his broken ice (103), the fence.
 # Mission 4's script has no room 6, so the room stays as Mission 3 left it.
 STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
+# 210, the Sunken Opera House: EventTbl09 switches STAY 150 off on entry (gimmick_cmd10 [150, 0]).
+STORY["210"] = [(9, 20, ())]
 # COLLISION sets that belong to a story piece of the same number: 122's rubble (STAY 100) and its three walls
 # in front of the door to 127, which the Mute Goddess blasts away in Mission 6 (psp/testroom/mission6.c).
 STORY_WALLS = {"122": (100,)}
@@ -54,6 +56,8 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
 # Mission 7 (Upper Temen-ni-gru to the Peak of Darkness): room 1xx is GDATA 324 + 4 x (n - 100).
 SLOTS.update({"114": 380, "115": 384, "127": 432, "134": 460, "135": 464, "136": 468, "137": 472, "138": 476,
               "142": 492, "144": 500})
+# Mission 9 (Forbidden Land): room 2xx is GDATA 512 + 4 x (n - 200).
+SLOTS.update({f"{n}": 512 + 4 * (n - 200) for n in range(201, 211)})
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
     1: ("000", None, {"000": [0, 1]}),
@@ -89,11 +93,18 @@ MISSIONS = {
     7: ("127", None, {"115": [1], "135": [0], "136": [0], "101": [1, 2], "105": [0], "144": [0]}),
     # EventTbl08: Heart/lungs are stage actors, woken by item 46 at 302 area 0.
     8: ("300", None, {"302": [0], "304": [0], "305": [0], "308": [0], "312": [0]}),
+    # Mission 9, from EventTbl09 (GDATA 247): 201 Rotating Bridge -> 202 Provisions Storeroom (group 0, Arachnes, as
+    # area 0 is crossed) -> 203 Subterranean Garden (the light beam opens seal 101 on its door to 204) -> 204 Subground
+    # Water Vein -> 205 Rounded Pathway -> 206 Subterranean Lake -> 207 -> 208 (group 0 as item 47, the Ambrosia, is
+    # taken) -> back to 206 -> 209 Limestone Cavern (group 0; the Ambrosia at the relief, area 0, opens door 1) ->
+    # 210 Sunken Opera House: Nevan (group 0, EST 49). 204, 205 and 207 have no script section: their group 0 is a
+    # guess from the walkthrough (Enigmas in 204, demons by the blades in 205 and 207).
+    9: ("201", None, {"202": [0], "204": [0], "205": [0], "207": [0], "208": [0], "209": [0], "210": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2, 7: 2}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121", 7: "144", 8: "302"}
+CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -150,6 +161,12 @@ ITEM_GATES = [(5, "112", "113", 39)]
 # Mission 7: 137's lift down needs the Orihalcon; 100's doors to 101 the Siren's Shriek (door 4, door_enable);
 # 135's door 2 (to 138) the Crystal Skull (door_disable 2 until it's set).
 ITEM_GATES += [(7, "137", "100", 43), (7, "100", "101", 44), (7, "135", "138", 45)]
+# Mission 9: the Ambrosia (47) lies on 208's altar; taking it starts 208's fight (block 1); used at 209's relief
+# (area 0) it enables door 1, into 210.
+KEY_ITEMS += [(9, 47, "208", -1)]
+ITEM_HOLDS += [(9, "208", 47)]
+ITEM_USES += [(9, 47, "209", 0)]
+ITEM_GATES += [(9, "209", "210", 47)]
 # Doors that aren't in a room's door list: 142's area 0 plays demo 17, whose AFTER_DEMO is goto_room 144, 0.
 # (room, box centre and full sizes as BoxIn, next room, its start)
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}
@@ -157,9 +174,35 @@ EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
 SWITCH_SEALS = [(3, "003", 100, 200, "004", 1)]
+# Mission 9's 203: the light-beam puzzle (CRYSTAL 102, flag 34) isn't decoded. Its reset panel, crest switch 100,
+# stands in: lit, it takes down seal 101 on the door to 204 (door_attach_seal [101, 1, 1, 1]).
+SWITCH_SEALS += [(9, "203", 100, 101, "204", 1)]
 SWITCH_HIT = ((0.0, 0.0, -20.0), 60.0)                  # sphere: local centre, radius (CStageSetSwitch +0x7c0)
 SEAL_BOX = ((0.0, 0.0, -50.0), (200.0, 180.0, 50.0))   # local centre, half sizes (CStageSetSeal +0xfc0, layout inferred)
 SEAL_BOARD = (154.8, -218.1, 203.7)                     # model 17: half width, bottom, top
+
+
+def parse_hazards(game_text):
+    """COLLISION sets that hurt Dante on touch ("atk true", "platk true": 205's and 207's bladed pillars): their
+    cylinders, as (x, y, z, height, radius, interval frames). A cylinder is "cx, cy, cz h, r" around its pos (the
+    height first: 126's pedestal pole is 160 high, 32 across)."""
+    out = []
+    for block in re.split(r"\n(?=# SET)", game_text):
+        head = block.split("\n", 1)[0]
+        if not re.match(r"# SET\s+\d+\s+COLLISION", head):
+            continue
+        body = "\n".join(line.split(";")[0] for line in block.split("\n")[1:])
+        if not re.search(r"\batk\s+true", body) or not re.search(r"\bplatk\s+true", body):
+            continue
+        cyl = re.search(r"\bhit\s+cylinder\s+([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,?\s*([-\d.]+)\s*,\s*([-\d.]+)", body)
+        pos = re.search(r"\bpos\s+([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)", body)
+        interval = re.search(r"\binterval\s+([-\d.]+)", body)
+        if not cyl or not pos:
+            continue
+        c = [float(v) for v in cyl.groups()]
+        p = [float(v) for v in pos.groups()]
+        out.append((p[0] + c[0], p[1] + c[1], p[2] + c[2], c[3], c[4], float(interval[1]) if interval else 60.0))
+    return out
 
 
 def parse_doors(text):
@@ -319,7 +362,8 @@ def main():
             rooms[name] = dict(doors=doors, starts=parse_starts(data),
                                groups=parse_groups(data), lifts=parse_lifts(game),
                                breakables=gimmicks.breakables(game, stage[5]) if len(stage) > 5 else [],
-                               story=gimmicks.story_tags(game), sets={g["number"]: g for g in gimmicks.parse_game(game)})
+                               story=gimmicks.story_tags(game), sets={g["number"]: g for g in gimmicks.parse_game(game)},
+                               hazards=parse_hazards(game))
             tags = {s["index"]: n for n, s, *_ in rooms[name]["breakables"]}
             # Walls that go with a story piece: they share its tag, so hiding the piece takes them away too.
             for s in gimmicks.parse_game(game):
@@ -515,6 +559,14 @@ def main():
                      for s in rooms[name]["catapults"]]
     lines.append(f"#define ROOM_CATAPULT_COUNT {len(pads)}")
     lines.append("static const RoomCatapult room_catapults[] = {" + (",".join(pads) or "{0}") + "};")
+    cells = [f"{{{index[name]},{x:.1f}f,{y:.1f}f,{z:.1f}f,{h:.1f}f,{r:.1f}f,{iv:.1f}f}}"
+             for name in names for x, y, z, h, r, iv in rooms[name]["hazards"]]
+    lines.append("/* Parts of a room that hurt on touch (COLLISION sets with atk and platk): an upright cylinder, the frames")
+    lines.append(" * between hurts. tools/gen_rooms.py parse_hazards. */")
+    lines.append("typedef struct { short room; float x, y, z, height, radius, interval; } RoomHazard;")
+    lines.append(f"#define ROOM_HAZARD_COUNT {len(cells)}")
+    lines.append("static const RoomHazard room_hazards[] = {" + (",".join(cells) or "{0}") + "};")
+    print(f"{len(cells)} hazards")
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")

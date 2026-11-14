@@ -326,6 +326,8 @@ def indexed_texture(texture):
 # entries of em000.pac (GDATA 117), named by their cloth files (em00N_01.clt follows each body); their scythes
 # per the class set-ups: Pride [26], Gluttony [28], Sloth [27] (the Lust, Wrath and Greed aren't read yet: the Pride's). The Enigma is em013.pac (GDATA 124):
 # [0] its textures, [1] body, [2] bow.
+ARACHNE_SLOT = 121
+NEVAN_SLOT = 133
 ENEMY_KINDS = (
     ("pride", 117, 1, 26),
     ("gluttony", 117, 5, 28),
@@ -345,11 +347,24 @@ ENEMY_KINDS = (
     ("agni", 131, 1, 2),
     ("rudra", 131, 1, 3),
     ("envy", 119, 1, 26),
+    # The Arachne (class 10, EST 28), em010.pac: GDATA 121, pack 5 through the pack table at 0x58e740. [0] textures,
+    # [1] its body (24 bones; [2] is a second body of the same size), motions in PACs [7]-[15]. No weapon.
+    ("arachne", ARACHNE_SLOT, 1, None),
+    # Nevan (class 31, EST 49), em028.pac: GDATA 133, pack 19 in the table at 0x58e740. [0] textures, [1] her body
+    # (23 bones), motions in PACs [2] and [3]. Her other MODs ([4]-[6]) aren't drawn yet.
+    ("nevan", NEVAN_SLOT, 1, None),
 )
 AR_SLOT = 131
 JESTER_SLOT = 140
 JESTER_MOTION_CHUNKS = (3, 4, 5, 6, 19, 28, 29)
 GOYLE_SLOT = 125
+# The Arachne's motions the port plays, "anCNN" (chunk C, slot NN). Which is which is read from their root paths
+# [inferred]: 7-10 still (idle), 7-01 forward 1120 in 63 frames (run), 10-11 lunge 274, 10-08 leap 704 (pounce),
+# 8-01 short (flinch), 8-00 back 210 (knocked back), 8-15 330 frames (death).
+ARACHNE_MOTIONS = ((7, 10), (7, 1), (10, 11), (10, 8), (8, 1), (8, 0), (8, 15))
+# Nevan's, "nvCNN", read the same way [inferred]: 2-00 still (hover), 2-01 forward 128 (glide), 2-14 163 frames in
+# place (blade), 2-40 236 in place (bats), 2-13 the shortest (flinch), 2-45 back 260 (knocked back), 2-49 (death).
+NEVAN_MOTIONS = ((2, 0), (2, 1), (2, 14), (2, 40), (2, 13), (2, 45), (2, 49))
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 
@@ -534,6 +549,8 @@ def main() -> None:
         goyle_pack = pnst_entries(read_slot(GOYLE_SLOT))
         jester_pack = pac_list(read_slot(JESTER_SLOT))
         ar_pack = pnst_entries(read_slot(AR_SLOT))
+        arachne_pack = pac_list(read_slot(ARACHNE_SLOT))
+        nevan_pack = pac_list(read_slot(NEVAN_SLOT))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
@@ -664,7 +681,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack})
+    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack})
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack)
     write_devils(args.output, devil_packs)
 
@@ -715,6 +732,15 @@ def main() -> None:
         except ValueError:
             continue
         motions.append({"name": f"ar{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    # The Arachne's: "anCNN" (ARACHNE_MOTIONS).
+    for chunk, slot in ARACHNE_MOTIONS:
+        raw = pac_list(arachne_pack[chunk])[slot]
+        parsed = parse_mot(raw)
+        motions.append({"name": f"an{chunk}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    for chunk, slot in NEVAN_MOTIONS:
+        raw = pac_list(nevan_pack[chunk])[slot]
+        parsed = parse_mot(raw)
+        motions.append({"name": f"nv{chunk}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     # The Blood-goyle's: "gbNN" from [8], one a state (motion N plays in state N).
     for slot, raw in enumerate(pac_list(goyle_pack[8])):
         if not raw:
