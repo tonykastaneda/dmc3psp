@@ -170,6 +170,19 @@ ITEM_GATES += [(9, "209", "210", 47)]
 # Doors that aren't in a room's door list: 142's area 0 plays demo 17, whose AFTER_DEMO is goto_room 144, 0.
 # (room, box centre and full sizes as BoxIn, next room, its start)
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}
+
+# ---- Mission 12, "Hunter and hunted", from EventTbl12 (GDATA 250; docs/GAME_FLOW.md). After demo 31 it starts in 217
+# (Torture Chamber) at start 1 -> 240 -> the Temperance Wagon ride (216: the wagon's waves 2-4) -> 239 -> 214 (group 1)
+# -> 213 Altar of Evil (group 0) -> 212 (group 2) -> 211 Gears of Madness (group 0) -> 201 The Rotating Bridge -> 218
+# -> 228 Underground Arena: Geryon (group 0, EST 50 = CEm029; psp/testroom/geryon_boss.c), whose fall clears it.
+SLOTS.update({"211": 556, "212": 560, "213": 564, "214": 568, "216": 576, "217": 580, "218": 584, "228": 624,
+              "239": 668, "240": 672})
+MISSIONS[12] = ("217", None, {"214": [1], "213": [0], "212": [2], "211": [0], "216": [2, 3, 4], "228": [0]})
+FIRST_START[12] = 1
+CLEAR_ROOMS[12] = "228"
+GATES += [(12, "218", "448", "999")]   # 218's door to the Jester (448) is disabled in Mission 12
+# 240's door into the ride (216) is a box the wagon carries Dante into: here, a box on the wagon at start 0.
+EXTRA_DOORS["240"] = [((6400.0, 1500.0, 7001.0, 500.0, 400.0, 500.0), "216", 1)]
 # Seals a room's crest switch takes down (CStageSetSwitch / CStageSetSeal, docs/BAR_CRANK_SPEC.md): EventTbl03
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
