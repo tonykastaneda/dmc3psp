@@ -345,9 +345,13 @@ ENEMY_KINDS = (
     ("agni", 131, 1, 2),
     ("rudra", 131, 1, 3),
     ("envy", 119, 1, 26),
+    # The Damned Pawn (CEm017, EST 35), em017.pac (GDATA 127, pack 12): [0] textures, [2] the Pawn (8 bones), its one
+    # motion in [3]. The other chessmen are [7], [12] and [17].
+    ("pawn", 127, 2, None),
 )
 AR_SLOT = 131
 JESTER_SLOT = 140
+PAWN_SLOT = 127
 JESTER_MOTION_CHUNKS = (3, 4, 5, 6, 19, 28, 29)
 GOYLE_SLOT = 125
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
@@ -533,6 +537,7 @@ def main() -> None:
         enigma_pack = pac_list(read_slot(ENIGMA_SLOT))
         goyle_pack = pnst_entries(read_slot(GOYLE_SLOT))
         jester_pack = pac_list(read_slot(JESTER_SLOT))
+        pawn_pack = pac_list(read_slot(PAWN_SLOT))
         ar_pack = pnst_entries(read_slot(AR_SLOT))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
@@ -664,7 +669,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack})
+    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, PAWN_SLOT: pawn_pack})
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack)
     write_devils(args.output, devil_packs)
 
@@ -706,6 +711,11 @@ def main() -> None:
             motions.append({"name": f"js{count:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
             count += 1
     print(f"Jester: {count} motions")
+    # The Damned Pawn's: "dpNN" by their slot in [3].
+    for slot, raw in enumerate(pac_list(pawn_pack[3])):
+        if raw:
+            parsed = parse_mot(raw)
+            motions.append({"name": f"dp{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     # Agni & Rudra's: "arNN" by their slot in [11].
     for slot, raw in enumerate(pac_list(ar_pack[11])):
         if not raw:

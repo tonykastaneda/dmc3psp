@@ -211,6 +211,10 @@ static int jester_init(void);
 static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
+static int pawn_init(void);
+static void pawn_spawn(void);
+static void pawn_update(float f, float px, float py, float pz);
+static void pawn_hit(HitKind kind);
 static int ar_init(void);
 static void ar_rudra_spawn(void);
 static void ar_spawn(void);
@@ -250,6 +254,7 @@ int enemy_init(void) {
     if (!enigma_init()) return 0;
     if (!goyle_init()) return 0;
     if (!jester_init()) return 0;
+    if (!pawn_init()) return 0;
     if (!ar_init()) return 0;
     if (!giga_init()) return 0;
     if (!vanguard_init()) return 0;
@@ -308,6 +313,7 @@ static int kind_health(int kind) {
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
     case ENEMY_GOYLE: return ENEMY_HEALTH * 300 / 250;
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
+    case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
     }
@@ -381,6 +387,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
+    if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_AGNI) { ar_spawn(); return; }
     if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
     script_play(0);
@@ -516,6 +523,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 31) return ENEMY_ENIGMA;
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
+    if (spawn_class == 35) return ENEMY_PAWN;   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
@@ -1188,6 +1196,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
+    if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
@@ -1441,6 +1450,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
+    if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
     {
@@ -2538,6 +2548,8 @@ static void jester_hit(HitKind kind) {
         jester_state(J_FLINCH);
     }
 }
+
+#include "pawn.inc"
 
 /* ---- Agni & Rudra (class 27, EST 45; em026.pac, GDATA 131), Mission 5's boss in room 121 (docs/ENEMY_SPECS.md
  * section F). Class 27 (`FUN_00480bb0`, an object of 0x290 bytes) is a controller over the two brothers; their
