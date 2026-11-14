@@ -46,6 +46,8 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 | Mission 5: the Surge of Fortunas lift, the room's own model, with a wave dropped onto it | |
 | ![Mission 6, the Trial of the Warrior](docs/screenshots/mission6_warrior.png) | ![Mission 6, the Trial of Skill](docs/screenshots/mission6_skill.png) |
 | Mission 6: the Trial of the Warrior, its crest switch and the barrier's mist | Mission 6: the Trial of Skill's spikes (a stand-in) |
+| ![Mission 9, Arachnes](docs/screenshots/mission9_arachne.png) | ![Mission 9, Nevan](docs/screenshots/mission9_nevan.png) |
+| Mission 9: Arachnes in the Provisions Storeroom | Mission 9: Nevan in the Sunken Opera House (her bats and dress aren't drawn yet) |
 
 ### Menus
 
