@@ -27,6 +27,7 @@
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
+#include "jester.h"
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
  * Three layers, as on the disc:
@@ -128,7 +129,7 @@ typedef struct {
      * height it hovers over Dante and when that's re-rolled, and its dive's aim. */
     float goyle_stone, goyle_shots, goyle_split, goyle_lift, goyle_lift_wait, goyle_aim;
     signed char goyle_splits;
-    float ar_health;                /* Agni & Rudra: 7000 each */
+    float ar_health;                /* Agni & Rudra: 7000 each; the Jester: 5000 */
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
 } Enemy;
 
@@ -640,7 +641,7 @@ int enemy_boss_health(float *health, float *maximum) {
         *health=ar_health_total(maximum);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
-        *health=enemies[i].health;*maximum=ENEMY_HEALTH * 1500 / 250;return 1;
+        *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_NEVAN && enemies[i].plan!=P_DEATH) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * 2000 / 250;return 1;
@@ -2428,9 +2429,11 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
 #define JESTER_HEALTH (ENEMY_HEALTH * 1500 / 250)
 #define JESTER_STUN_HITS 12.0f
 #define JESTER_ARENA 1400.0f   /* how far from the arena's centre he may go (its floor runs to 1550) */
-enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH };
+enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH,
+       J_ATK_TP, J_ATK0, J_ATK1, J_ATK2 };
+static int jester_last_attack = -1, jester_last_throw = -1;
 /* jsNN, in tools/prepare_skinned_model.py's order: [3] 0-2, [4] 3-20, [5] 21-29, [6] 30-33, [19] 34-40. */
-static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 26, 26, 31, 5, 14, 4, 16};
+static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 26, 26, 31, 5, 14, 4, 16, 32, 33, 30, 31};
 static int jester_motion[sizeof(jester_motion_index)];
 
 static int jester_init(void) {
@@ -2469,16 +2472,16 @@ static void jester_spawn(void) {
     e->plan = P_WATCH;
     e->motion = -1;
     e->goyle_stone = 0.0f;   /* his stun gauge */
+    e->health = 1;
+    e->ar_health = jester_max_health(0);   /* room 422 is his first encounter */
+    e->wake = 0.0f;
     jester_state(J_TAUNT);
     e->fade = 0.0f;
 }
 
+/* Between attacks: the stand-in's idling (his own idle actions, 0x64 and the walks, aren't decoded). */
 static void jester_decide(float d) {
-    float r = ai_unit();
-    if (d > 260.0f && r < 0.45f) { jester_state(J_WALK); return; }
-    if (d <= 260.0f && r < 0.55f) { jester_state(J_CANE); return; }
-    r = ai_unit();
-    jester_state(r < 0.4f ? J_BOMB : r < 0.75f ? J_VANISH : J_TAUNT);
+    jester_state(d > 400.0f && ai_unit() < 0.5f ? J_WALK : J_IDLE);
 }
 
 static void jester_update(float f, float px, float py, float pz) {
@@ -2499,7 +2502,45 @@ static void jester_update(float f, float px, float py, float pz) {
         return;
     }
     s = sinf(e->yaw); c = cosf(e->yaw);
+    if (e->action == J_IDLE || e->action == J_WALK || e->action == J_TAUNT || e->action == J_FLINCH) {
+        /* FUN_00534490: his idle time reaches the wait, and he picks an attack (FUN_0053e960). */
+        e->wake += f;
+        if (e->wake >= JESTER_ATTACK_WAIT) {
+            e->wake = 0.0f;
+            e->shoot_set = (signed char)jester_pick(&jester_last_attack, ai_unit);
+            giga_note("jester attack", e->shoot_set, e->ar_health);
+            jester_state(J_ATK_TP);
+            jester_puff();
+        }
+    }
     switch (e->action) {
+    case J_ATK_TP:
+        /* Each attack (0x75 / 0x76 / 0x77) begins by vanishing to a spot 100-1000 cm from Dante (FUN_00536230 row 4,
+         * motion js32), facing him. */
+        if (e->timer > 20.0f && !e->step) {
+            e->step = 1;
+            jester_reappear(4, px, pz, &e->pos[0], &e->pos[2], ai_unit);
+            if (floor_under(e->pos[0], py + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+            e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
+            jester_puff();
+        }
+        if (e->done || e->timer > 60.0f) jester_state(J_ATK0 + (e->shoot_set > 0 ? e->shoot_set : 0));
+        break;
+    case J_ATK0: case J_ATK1: case J_ATK2:
+        /* The throw: js33, js30 or js31 by attack. What he throws (FUN_0053e720: one of three shell classes,
+         * 0055c380 / 0055bf40 / 0054d3a0) isn't decoded: the stand-in's three rolling bombs. */
+        if (e->frame < 25.0f) goyle_turn_to(px, pz, 0.12f, f);
+        if (!e->step && e->frame > 30.0f) {
+            int k;
+            e->step = 1;
+            jester_pick(&jester_last_throw, ai_unit);
+            for (k = -1; k <= 1; ++k) {
+                float at[3] = {e->pos[0] + s * 120.0f + c * 80.0f * (float)k, e->pos[1] + 170.0f, e->pos[2] + c * 120.0f - s * 80.0f * (float)k};
+                giga_orb(at, 1, px + c * 150.0f * (float)k, py, pz - s * 150.0f * (float)k);
+            }
+        }
+        if (e->done) jester_state(J_IDLE);
+        break;
     case J_IDLE:
         goyle_turn_to(px, pz, 0.08f, f);
         if (e->timer > 50.0f) jester_decide(d);
@@ -2536,9 +2577,9 @@ static void jester_update(float f, float px, float py, float pz) {
     case J_VANISH:
         if (e->timer < 2.0f && !e->step) { e->step = 1; jester_puff(); }
         if (e->timer > 20.0f) {
-            /* Back behind Dante, in the arena. */
-            float a = atan2f(dx, dz);
-            e->pos[0] = px + sinf(a) * 320.0f; e->pos[2] = pz + cosf(a) * 320.0f;
+            /* Back near Dante, in the arena: FUN_00536230 row 1 (50-550 cm about him, kept within 1000 of the
+             * centre). */
+            jester_reappear(1, px, pz, &e->pos[0], &e->pos[2], ai_unit);
             if (floor_under(e->pos[0], py + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
             else { e->pos[0] = 3500.0f; e->pos[1] = 492.0f; e->pos[2] = 3500.0f; }
             e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
@@ -2584,10 +2625,12 @@ static void jester_hit(HitKind kind) {
     ++hits;
     fx_hit_spark(at);
     if (mortal) {
-        int dmg = kind == HIT_PISTOL ? (ai_unit() < 0.2f) : (kind == HIT_LIGHT || kind == HIT_AIR) ? 1 : 2;
-        if (stunned) dmg *= 2;
-        e->health = (signed char)(e->health - dmg);
-        if (e->health <= 0) {
+        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]; stunned, double [stand-in]. */
+        float dmg = kind == HIT_PISTOL ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        if (stunned) dmg *= 2.0f;
+        e->ar_health -= dmg;
+        if (e->ar_health <= 0.0f) {
+            e->ar_health = 0.0f;
             e->plan = P_DEATH;
             jester_state(J_DEATH);
             e->plan = P_DEATH;
