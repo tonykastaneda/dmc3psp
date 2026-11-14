@@ -69,6 +69,8 @@ SLOTS.update({"007": 300, "008": 304})
 SLOTS.update({f"{n}": 324 + 4 * (n - 100) for n in (106, 107, 108, 109, 116, 117, 118, 119, 146)})
 # Mission 18 (the Netherworld): room 4xx is GDATA 736 + 4 x (n - 400).
 SLOTS.update({f"{n}": 736 + 4 * (n - 400) for n in (400, 401, 402, 403, 406, 412, 413, 414, 415, 416, 417, 418, 419, 420)})
+# The Secret Missions' rooms: st600-st611 (Secret Mission n is room 599 + n), two GDATA slots a room from 932.
+SLOTS.update({f"{n}": 932 + 2 * (n - 600) for n in range(600, 612)})
 SLOTS.update({"411":780, "012":320})  # Mission 20 arena and ending street.
 # mission: first room, the door out of which ends it (None: clearing the script ends it), {room: groups}
 MISSIONS = {
@@ -142,6 +144,11 @@ MISSIONS = {
     18: ("400", None, {"401": [0], "402": [0], "412": [0], "413": [0], "414": [0], "415": [0], "416": [0], "417": [0],
                        "418": [0], "419": [0], "420": [0]}),
 }
+# The Secret Missions' fights (group 0 of each room's EST; 603's four waves ride its lift). They're entered from
+# any mission's host room (psp/testroom/secret_missions.c), so every mission carries them.
+SECRET_GROUPS = {"600": [0], "601": [0], "602": [0], "603": [0, 1, 2, 3], "607": [0]}
+for _first, _end, _sets in MISSIONS.values():
+    _sets.update(SECRET_GROUPS)
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1, 14: 1}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
@@ -152,7 +159,9 @@ OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # a statue area (type 5, as 120's Azure Garden) are added from it (parse_shop_area).
 SHOPS = {"005": (5211.4, 780.7, 1539.8)}
 # Lifts that work: 103's carries Dante up to the door into 110 in Mission 4. Others aren't on a route yet.
-LIFT_ROOMS = {"103", "113"}
+LIFT_ROOMS = {"103", "113", "603"}   # 603: Secret Mission 4's elevator
+# Where a lift rises to when the room has no door above it: 603, Secret Mission 4, to its EVE area 3 (y 4225).
+LIFT_TOPS = {"603": 4225.0}
 # Elevators that run both ways in one mission: (mission, low, high, the item that must be used first or -1).
 # Mission 7's: 137's goes down to its door into 100 (at -700) once the Orihalcon powers it; 100's runs from the
 # floor to start 5 (5750), under its door back to 137. The heights are the doors' and starts' [inferred].
@@ -605,6 +614,7 @@ def main():
             # the lift's floor. Where it rises to: the highest door in the room above its floor.
             top = max([d["box"][1] for d in rooms[name]["doors"] if abs(d["box"][0] - x) < box[3] + 50
                        and abs(d["box"][2] - z) < box[5] + 50] + [y])
+            top = LIFT_TOPS.get(name, top)
             sw = lift["switch"] or [x, y, z]
             lifts.append(f"{{{index[name]},{x:.1f}f,{z:.1f}f,{lift['yaw']:.1f}f,{box[3]:.1f}f,{box[5]:.1f}f,{y + box[1] + box[4]:.1f}f,"
                          f"{top:.1f}f,{{{sw[0]:.1f}f,{sw[1]:.1f}f,{sw[2]:.1f}f}},0,-1}}")
