@@ -1,0 +1,8 @@
+frames 1000
+fps 30
+realdt 0
+turbo 0
+place 20 2500 100 3300 180
+psp_shot 120
+psp_shot 400
+psp_shot 800

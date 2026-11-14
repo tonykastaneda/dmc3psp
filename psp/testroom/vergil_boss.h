@@ -5,6 +5,10 @@
  * Yamato and its scabbard. See docs/VERGIL_SPEC.md. */
 int vergil_boss_init(void);
 void vergil_boss_set_difficulty(int difficulty);
+/* 0 retains M7; 1 selects M13 Beowulf / Devil Trigger. Set before spawn. */
+void vergil_boss_set_variant(int variant);
+int vergil_boss_variant(void);
+int vergil_boss_devil(void);
 /* (x, y, z): his EST place, feet on the floor. */
 void vergil_boss_spawn(float x, float y, float z);
 void vergil_boss_kill(void);

@@ -127,3 +127,35 @@ Variant 0, rank 0 on Normal. What it showed, and what changed in the port:
   combo's chained actions run 0.1-0.2 s short in the port [not resolved].
 - **The sheathed scabbard rises behind his shoulder** (attach applied untransposed; fixed).
 - After his finishers the PS2's Dante is thrown about 5 m; the port's Dante less (Dante's reactions, not Vergil's).
+
+## Mission 13 additive variant
+
+`vergil_boss_set_variant(1)` selects M13 before spawn; 0 retains the M7 scheduler and renderer. Native
+variant-1 HP is 8000 (`5dca50 + 54 + 2c`); the room's EST [0,1] and EventTbl13 select this variant.
+Rank-0 wander weights (`5df400`) are approach/strafe/stand/taunt = 20/40/20/20. Close attacks (`5dcd00`)
+are states 21/22/2b = 35/35/30; middle attacks (`5dcd70`) 25/2b/2d/31 = 20/20/30/30. Guard chance is
+90% (`5df8f0` variant 1). State 2b shares the away teleport, then enters 2f (`4ddbf0`); 2f (`4d9ef0`)
+plays native actions 2b → 2c → 2d. All underlying motion scripts were already in em035 chunk 11.
+Attack record 20 is now exported too. Beowulf model 55 and its texture bank 54 are appended to the
+existing four parts; its 11 weapon bones follow their nearest matching body rest bones. The M13 DT
+body (51, textures 50) is also appended and uses the body skeleton. This attachment mapping and the
+missing DT coat/secondary layers are rendering approximations.
+
+`4e6310` requests the first DT transition below 75% health. `4db950` uses actions 56 → 57 and a
+240-frame transition hold for variant 1. The port follows that entry. Subsequent 600-frame active DT,
+1200-frame cooldown, 0.5 HP/frame healing and half incoming damage are explicit approximations; the
+original's gauge/drain and cancel rules are not yet fully decoded. DT body rendering makes this state
+visible. Normal M7 calls do not enter these branches.
+
+`run_vergil_variants.py` checks M7 isolation, native M13 HP/threshold, Beowulf action progression and
+finite vertices for every part. PPSSPP `pM_m13_vergil_close` shows the second arena and native boss.
+
+M13 reaction follow-up: a contact crossing the DT health threshold requests the transition even from
+a flinch, so sustained shotgun fire cannot suppress the phase. Three interrupting heavy/light
+contacts cause the Beowulf warp escape; the native escape counter is not decoded, so this count is a
+port approximation. Both branches require variant 1 and leave M7 reactions unchanged.
+
+M13 arena safety: native centre `5df970[1]` is (2500,100,2500); the authored near-level combat floor
+bounds are x=1246..3751, z=1229..3750. Escape destinations and root-driven movement use a conservative
+1100-cm radial limit about that centre. This approximates native room collision and prevents repeated
+escapes from leaving the deck. The M7 branch retains its existing movement handling.
