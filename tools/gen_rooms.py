@@ -308,7 +308,8 @@ def main():
              "typedef struct { short room; float x, z, yaw, half_x, half_z, low, high, switch_pos[3]; } RoomLift;",
              "#define ROOM_NONE (-1)",
              "enum { ROOM_OP_SPAWN, ROOM_OP_WAIT, ROOM_OP_WAIT_ALIVE };",
-             f"#define MISSION_COUNT {len(MISSIONS)}"]
+             f"#define MISSION_COUNT {max(MISSIONS)}",
+             f"#define MISSION_PRESENT_MASK 0x{sum(1 << (m - 1) for m in MISSIONS):x}u"]
     for name in names:
         r = rooms[name]
         lines.append(f"static const float room_{name}_starts[][4] = {{" + ",".join("{%.1ff,%.1ff,%.1ff,%.1ff}" % tuple(s) for s in r["starts"]) + "};")
@@ -471,7 +472,7 @@ def main():
         tail = (f',{index[goal[0]]},{index[goal[2]]},{{{goal[1][0]:.1f}f,{goal[1][1]:.1f}f,{goal[1][2]:.1f}f}}' if goal
                 else ',ROOM_NONE,ROOM_NONE,{0,0,0}')
         tail += f',{FIRST_START.get(mission, 0)},{index[CLEAR_ROOMS[mission]] if mission in CLEAR_ROOMS else "ROOM_NONE"}'
-        lines.append(f'    {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
+        lines.append(f'    [{mission - 1}] = {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
     lines.append("};")
     args.header.write_text("\n".join(lines) + "\n")
 

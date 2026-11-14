@@ -3063,6 +3063,7 @@ int main(int argc, char *argv[]) {
         enemy_died_fn = enemy_died;
         combat_hit_fn = breakable_hit;
         menu_shop = &shop_state;
+        menu_set_mission_mask(MISSION_PRESENT_MASK);
         if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;
             mission_stage = 2;   /* what's loaded */
@@ -3077,7 +3078,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(boot, sizeof(boot), "BOOT_MISSION.TXT");
                 bf = fopen(boot, "r");
                 if (bf) { if (fscanf(bf, "%d %d", &boot_mission, &boot_difficulty) < 1) boot_mission = 0; fclose(bf); }
-                if ((boot_mission >= 1 && boot_mission <= MISSION_COUNT) || boot_mission == MENU_DEBUG_ROOM) {   /* 99: the Debug Room */
+                if ((boot_mission >= 1 && boot_mission <= MISSION_COUNT && (MISSION_PRESENT_MASK & (1u << (boot_mission-1)))) || boot_mission == MENU_DEBUG_ROOM) {
                     mission_choice.mission = boot_mission;
                     mission_choice.difficulty = boot_difficulty & 1;
                 } else {
