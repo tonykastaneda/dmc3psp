@@ -22,11 +22,16 @@ typedef struct { int active, value, size, fx; float pos[3], vel[3], age; } Orb;
 
 static Orb orbs[ORB_MAX];
 static int *counter;
+static int (*sink_position)(float out[3]);
+static void (*sink_collect)(int value);
 static float since_collected = 1.0e9f;
 static const int orb_effect[5] = {45, 186, 187, 188, 189};
 static const int orb_value[5] = {1, 5, 20, 100, 1000};
 
 void orbs_set_counter(int *red_orbs) { counter = red_orbs; }
+void orbs_set_sink(int (*position)(float out[3]), void (*collect)(int value)) {
+    sink_position=position;sink_collect=collect;
+}
 void orbs_clear(void) {
     int i;
     for (i = 0; i < ORB_MAX; ++i) if (orbs[i].active) nfx_kill(orbs[i].fx);
@@ -48,7 +53,9 @@ static void add_piece(float x, float y, float z, int size) {
     for (i = 0; i < ORB_MAX && orbs[i].active; ++i) {}
     if (i >= ORB_MAX) {
         /* No room: straight into the count. */
-        if (counter) *counter += orb_value[size];
+        float at[3];
+        if(sink_position && sink_collect && sink_position(at))sink_collect(orb_value[size]);
+        else if (counter) *counter += orb_value[size];
         return;
     }
     orbs[i].active = 1;
@@ -79,6 +86,9 @@ void orbs_burst(float x, float y, float z, int total) {
 
 void orbs_update(float dt, float px, float py, float pz) {
     int i;
+    float target[3];
+    int to_sink=sink_position && sink_collect && sink_position(target);
+    if(to_sink) {px=target[0];py=target[1]-20;pz=target[2];}
     since_collected += dt;
     for (i = 0; i < ORB_MAX; ++i) {
         Orb *o = &orbs[i];
@@ -101,8 +111,11 @@ void orbs_update(float dt, float px, float py, float pz) {
             if (d < ORB_COLLECT) {
                 float chest[3] = {px, py + 100.0f, pz};
                 int flash;
-                if (counter) *counter += o->value;
-                since_collected = 0.0f;
+                if(to_sink)sink_collect(o->value);
+                else {
+                    if(counter)*counter+=o->value;
+                    since_collected=0;
+                }
                 nfx_kill(o->fx);
                 o->active = 0;
                 /* FUN_002f3750: E185 where he takes it, in the same colour. */

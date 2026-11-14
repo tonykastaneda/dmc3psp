@@ -44,7 +44,7 @@ static El els[MAX_EL];
 static unsigned short generation = 1;
 static unsigned int seed = 0x2545f491u;
 
-static const NfxBank *bank_of(int b) { return b == NFX_CERBERUS ? &nfx1 : &nfx0; }
+static const NfxBank *bank_of(int b) { return b == NFX_LEVIATHAN ? &nfx2 : b == NFX_CERBERUS ? &nfx1 : &nfx0; }
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
 static unsigned int rd16(const unsigned char *p) { return p[0] | p[1] << 8; }
 static int rs16(const unsigned char *p) { return (short)rd16(p); }

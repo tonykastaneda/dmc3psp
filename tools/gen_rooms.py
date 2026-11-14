@@ -45,7 +45,9 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
          "100": 324, "101": 328, "102": 332, "104": 340, "105": 344, "110": 364, "111": 368, "112": 372,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428,
          # SE: the Jester's arenas follow st400 at 736, four slots a room. 422 is Mission 5's.
-         "422": 824}
+         "422": 824,
+         "300": 680, "301": 684, "302": 688, "303": 692, "304": 696, "305": 700, "306": 704,
+         "307": 708, "308": 712, "309": 716, "310": 720, "311": 724, "312": 728, "313": 732}
 # Mission 7 (Upper Temen-ni-gru to the Peak of Darkness): room 1xx is GDATA 324 + 4 x (n - 100).
 SLOTS.update({"114": 380, "115": 384, "127": 432, "134": 460, "135": 464, "136": 468, "137": 472, "138": 476,
               "142": 492, "144": 500})
@@ -77,11 +79,13 @@ MISSIONS = {
     # 100 -> 101 (groups 1, 2) -> 105 Cursed Skull Chamber (group 0) -> back up -> 135 -> 138 -> 142 -> 144 Peak of
     # Darkness: Vergil (group 0, EST 58). Demo 322 after him clears the mission.
     7: ("127", None, {"115": [1], "135": [0], "136": [0], "101": [1, 2], "105": [0], "144": [0]}),
+    # EventTbl08: Heart/lungs are stage actors, woken by item 46 at 302 area 0.
+    8: ("300", None, {"302": [0], "304": [0], "305": [0], "308": [0], "312": [0]}),
 }
 # Where a mission starts in its first room, when not at start 0.
 FIRST_START = {5: 2, 7: 2}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
-CLEAR_ROOMS = {5: "121", 7: "144"}
+CLEAR_ROOMS = {5: "121", 7: "144", 8: "302"}
 OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
@@ -117,12 +121,12 @@ START_ITEMS = {5: [36]}   # Mission 5 begins with Mission 4's Astronomical Board
 # (mission, item, room it lies in, the item that must be used before it shows). The Vajura shows once the Board's
 # set in 100 and the Soul of Steel once the Vajura's set in 102: the script reveals them with gimmicks (100's
 # 200/201/400, 102's 100-104) that aren't converted, so they simply appear [inferred from the script's order].
-KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37)]
+KEY_ITEMS = [(5, 37, "100", 36), (5, 39, "102", 37), (8, 46, "305", -1)]
+# (mission, item, room, EVE area index).
+ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1), (8, 46, "302", 0)]
 # Mission 7 (EventTbl07, the walkthrough): 43 the Orihalcon Fragment (115, under a Damned Pawn), 44 the Siren's
 # Shriek (136, dropped by its statue), 45 the Crystal Skull (105). The port lays them out from the start.
 KEY_ITEMS += [(7, 43, "115", -1), (7, 44, "136", -1), (7, 45, "105", -1)]
-# (mission, item, room, EVE area index).
-ITEM_USES = [(5, 36, "100", 3), (5, 37, "102", 0), (5, 39, "112", 1)]
 # Mission 7: the Orihalcon at 137's lift panel (area 0), the Siren's Shriek at 100's crimson flame (area 2), the
 # Crystal Skull at 135's skull pillar (area 0).
 ITEM_USES += [(7, 43, "137", 0), (7, 44, "100", 2), (7, 45, "135", 0)]
@@ -340,7 +344,8 @@ def main():
              "typedef struct { short room; float x, y, z, half; } RoomCatapult;",
              "#define ROOM_NONE (-1)",
              "enum { ROOM_OP_SPAWN, ROOM_OP_WAIT, ROOM_OP_WAIT_ALIVE };",
-             f"#define MISSION_COUNT {max(MISSIONS)}"]
+             f"#define MISSION_COUNT {max(MISSIONS)}",
+             f"#define MISSION_PRESENT_MASK 0x{sum(1 << (m - 1) for m in MISSIONS):x}u"]
     for name in names:
         r = rooms[name]
         lines.append(f"static const float room_{name}_starts[][4] = {{" + ",".join("{%.1ff,%.1ff,%.1ff,%.1ff}" % tuple(s) for s in r["starts"]) + "};")
@@ -501,9 +506,7 @@ def main():
     lines.append(f"#define ROOM_LIFT_COUNT {len(lifts)}")
     lines.append("static const RoomLift room_lifts[] = {" + (",".join(lifts) or "{0}") + "};")
     lines.append("static const MissionInfo missions[MISSION_COUNT] = {")
-    for mission in range(1, max(MISSIONS) + 1):
-        # A mission not in yet keeps its place in the array: Mission 1's first room, nothing running.
-        first, end, sets = MISSIONS.get(mission, (MISSIONS[1][0], None, {}))
+    for mission, (first, end, sets) in MISSIONS.items():
         per = []
         for difficulty in (0, 1):
             cells = []
@@ -519,7 +522,7 @@ def main():
         tail = (f',{index[goal[0]]},{index[goal[2]]},{{{goal[1][0]:.1f}f,{goal[1][1]:.1f}f,{goal[1][2]:.1f}f}}' if goal
                 else ',ROOM_NONE,ROOM_NONE,{0,0,0}')
         tail += f',{FIRST_START.get(mission, 0)},{index[CLEAR_ROOMS[mission]] if mission in CLEAR_ROOMS else "ROOM_NONE"}'
-        lines.append(f'    {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
+        lines.append(f'    [{mission - 1}] = {{{index[first]},{int(end) if end else "ROOM_NONE"},{{' + ",".join(per) + "}" + tail + "},")
     lines.append("};")
     args.header.write_text("\n".join(lines) + "\n")
 

@@ -42,10 +42,13 @@ def parse_mot(data: bytes):
         raise ValueError("Unexpected MOT header size")
     loop_start, end_frame, unknown_10, unknown_14 = struct.unpack_from("<4f", data, 8)
     flag_18, unknown_1a, bone_count = struct.unpack_from("<3H", data, 0x18)
-    if not 0 < bone_count <= (header_size - 0x20) // 2:
+    if not 0 < bone_count <= (header_size - 0x1E) // 2:
         raise ValueError(f"Bone count {bone_count} does not fit the mask table")
     masks = struct.unpack_from(f"<{bone_count}H", data, 0x1E)
-    trailer_offset = struct.unpack_from("<H", data, header_size - 2)[0]
+    # st302's nine-bone Heart fills the 0x30-byte header through its last
+    # mask. In that layout the final word is a mask, not a trailer offset.
+    trailer_offset = (struct.unpack_from("<H", data, header_size - 2)[0]
+                      if 0x1E + bone_count * 2 <= header_size - 2 else 0)
     channel_count = struct.unpack_from("<I", data, header_size)[0]
     expected = [(bone, bit) for bone, mask in enumerate(masks) for bit in range(16) if mask >> bit & 1]
     if len(expected) != channel_count:
