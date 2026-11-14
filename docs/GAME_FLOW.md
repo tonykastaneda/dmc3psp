@@ -444,6 +444,32 @@ In the port: the route plays from 106 to Mission Clear in PPSSPP. Stand-ins and 
 - Mission Clear comes as Lady is beaten (`CLEAR_ROOMS`), not by climbing 119. The chessmen of EST 36 and 38 spawn as Pawns; The Fallen
   are Mission 15's (`fallen.c`).
 
+### Mission 17: "Inner-demons"
+
+Decoded from EventTbl17 (GDATA 255; `tools/event_dump.py <iso> 17 --out <dir>`). Demo 46 leads to 133 at start 1.
+The route (the walkthrough's names): 133 -> 128 God-cube Chamber (its cubes up to door 2) -> 129 Tri-sealed
+Antechamber -> 132 Trial of Wisdom -> 131 Trial of Skill (spikes; its red pod, a CATAPULT, to door 1) -> 140
+Pitch-Black Void -> 141 Skull Spire -> 138 Moonlight Mile -> 143 Dark-pact Chamber -> 139 Apparition Incarnate -> 143.
+
+| Room | What runs |
+| --- | --- |
+| 132 | Doors 0 and 1 locked, group 0: 3 Dullahans; cleared, flag 0 |
+| 131 | Areas 0-2 drive the spikes (gimmick 100) |
+| 141 | Doors locked, group 0: 4 Abyss (EST 24, class 6, em006); cleared, flag 3 |
+| 143 | Counter 0 is 0: area 0 plays demo 47 -> 139 start 0. Counter 0 is 1: area 1 -> Mission Clear |
+| 139 | Counter 0: group 0, the Doppelganger (EST 52); beaten, demo 48 -> 139 start 1, counter 0 to 1, item 35 (the Doppelganger style) unless Vergil; door 0 (the middle) back to 143 start 2 |
+| 130 | (side) Trial of the Warrior: group 0, Gluttonies, a Sloth and a Hell Vanguard, its seals' times by difficulty |
+| 121 | (side) Firestorm Chamber: group 1, 4 Enigmas and a Hell Vanguard |
+| 449 | (side) group 2, then flag 5 shuts 129's door 2 |
+
+**In the port** (`tools/gen_rooms.py` Mission 17, `psp/testroom/mission17.c`, `docs/DOPPELGANGER_SPEC.md`): the
+route above, start to Mission Clear.
+- 128's God-cubes (STAY sets) aren't moved: the door from 133 brings Dante in at start 2, by door 2 [approximation].
+- 131's red pod throws Dante to its door (the Mission 7 catapults' code).
+- 143's area 0 takes Dante to 139; area 1 is the goal (walk up the slope to it and press O) once 139 is cleared.
+- The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
+- No cutscenes; demo 48's item 35 isn't given.
+
 ## What the missions do now, and what's a stand-in
 
 Working: the stage, spawn points from the measurements above, waves, enemies dying, Mission Clear, and back to Mission Select.

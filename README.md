@@ -50,6 +50,8 @@ needs more than its 32 MB (the program alone is 16.4 MB, and the largest rooms l
 | Mission 7: Vergil on the Peak of Darkness, Yamato drawn | Mission 7: Damned Pawns closing in, in the Divine Library |
 | ![Mission 7, Hell Greeds](docs/screenshots/mission7_greeds.png) | |
 | Mission 7: Hell Greeds and the Prides their coffins summoned | |
+| ![Mission 17, the Doppelganger](docs/screenshots/mission17_doppelganger.png) | ![Mission 17, Apparition Incarnate](docs/screenshots/mission17_arena.png) |
+| Mission 17: the Doppelganger, Dante's shadow, reeling in a crest's light | Mission 17: up out of Dante's own shadow, behind him |
 | ![Mission 15, the Fallen](docs/screenshots/mission15_fallen.png) | ![Mission 15, the Provisions Storeroom](docs/screenshots/mission15_storeroom.png) |
 | Mission 15: two Fallen hovering round Dante in the Upper Subterran Garden | Mission 15: Arachnes in the Provisions Storeroom, by its flame portal |
 | ![Mission 12, Geryon on the bridge](docs/screenshots/mission12_geryon_bridge.png) | ![Mission 12, Geryon below](docs/screenshots/mission12_geryon_ground.png) |
@@ -195,6 +197,13 @@ five-eye exit seal are implemented. Ignis Fatuus is picked up in room 305 and us
 Nausika chases Dante through the tunnels. A scripted PPSSPP run verified the complete Ignis route and
 full-health boss defeat to Mission Clear using ordinary gun damage. Fidelity limits are recorded in
 [the Leviathan spec](docs/LEVIATHAN_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-8-leviathan).
+
+## Mission 17
+
+From the Dark Corridor to the Dark-pact Chamber: the Trial of Wisdom's Dullahans, the Trial of Skill's red pod, the
+Skull Spire, and the Doppelganger (CEm034: its own model and Dante's moves, decoded state choices) in Apparition
+Incarnate, where only the light of the crests Dante opens lets a blade bite. What's decoded and what's estimated:
+[the Doppelganger spec](docs/DOPPELGANGER_SPEC.md) and [game flow](docs/GAME_FLOW.md#mission-17-inner-demons).
 
 ## Mission 15
 

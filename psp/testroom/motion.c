@@ -10,8 +10,9 @@
 #include "boss_leviathan_motions.h"
 #include "boss_nausika_motions.h"
 #include "boss_geryon_motions.h"
+#include "boss_doppel_motions.h"
 
-#define TOTAL_MOTIONS (DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + CERBERUS_MOTION_COUNT + LEVIATHAN_MOTION_COUNT + VERGIL_MOTION_COUNT + NAUSIKA_MOTION_COUNT + GERYON_MOTION_COUNT)
+#define TOTAL_MOTIONS (DMC3_MOTION_COUNT + VANGUARD_MOTION_COUNT + CERBERUS_MOTION_COUNT + LEVIATHAN_MOTION_COUNT + VERGIL_MOTION_COUNT + NAUSIKA_MOTION_COUNT + GERYON_MOTION_COUNT + DOPPEL_MOTION_COUNT)
 static Motion motions[TOTAL_MOTIONS];
 
 static unsigned int rd16(const unsigned char *p) { return (unsigned int)p[0] | ((unsigned int)p[1] << 8); }
@@ -101,8 +102,12 @@ int motion_init(void) {
         if(!parse(&nausika_motion_blobs[i],&motions[at]))return -(at+1);
     }
     for (i = 0; i < GERYON_MOTION_COUNT; ++i) {
-        int at = TOTAL_MOTIONS - GERYON_MOTION_COUNT + i;
+        int at = TOTAL_MOTIONS - DOPPEL_MOTION_COUNT - GERYON_MOTION_COUNT + i;
         if (!parse(&geryon_motion_blobs[i], &motions[at])) return -(at + 1);
+    }
+    for (i = 0; i < DOPPEL_MOTION_COUNT; ++i) {
+        int at = TOTAL_MOTIONS - DOPPEL_MOTION_COUNT + i;
+        if (!parse(&doppel_motion_blobs[i], &motions[at])) return -(at + 1);
     }
     return TOTAL_MOTIONS;
 }
