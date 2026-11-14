@@ -123,8 +123,15 @@ Variant 0, rank 0 on Normal. What it showed, and what changed in the port:
   500 cm, the 0.167 a frame), the teleport behind (0x31) from far, then 0x21 / 0x22 / 0x25 up close.
 - **0x31 goes back to 0x17**, not into 0x29 (fixed). **0x19 does come up** (the no-repeat rule above; fixed).
 - The stand state lets action 0 run out (0x77) and holds (fixed).
-- Durations (PS2 / port, seconds): taunt 5.6 / 5.5; 0x47 0.9 / 0.92; 0x1a 1.7 / 1.43; 0x1c 1.85 / 1.65. The
-  combo's chained actions run 0.1-0.2 s short in the port [not resolved].
+- Durations (PS2 / port, seconds): taunt 5.6 / 5.5; 0x47 0.9 / 0.92; 0x1a 1.7 / 1.43; 0x1c 1.85 / 1.65 (the port
+  as it was then).
+- Re-measured in the port on 2026-11-14 (VERGIL_LOG, Mission 7, Dante standing still, eight combos): 0x18 9 ticks,
+  0x19 11, 0x1a 47 (1.57 s), 0x1b 17, 0x1c 53 (1.77 s), 0x47 30 (1.0 s); 30 ticks a second. Each finisher plays
+  one motion to its end (its script's last wait is "finish, frame -1"): 0x1a is vr3-05 from frame 39 (its loop
+  start, where a play with frame -1 begins) to 131, 0x1c vr3-07 from 72 to 174, 0x47 vr3-50 from 132 to 189. Against
+  the PS2's 0.1 s samples the finishers are now 0.08-0.13 s short, within that log's resolution. A frame-exact PS2
+  log wasn't taken: with this build's harness, `tools/ps2_vergil.py`'s door redirect (the text of 127's door to 114)
+  no longer takes Dante to 144, and the parsed record wasn't found [open].
 - **The sheathed scabbard rises behind his shoulder** (attach applied untransposed; fixed).
 - After his finishers the PS2's Dante is thrown about 5 m; the port's Dante less (Dante's reactions, not Vergil's).
 
