@@ -3957,7 +3957,7 @@ int main(int argc, char *argv[]) {
             }
             if (mission_mode && mission_choice.mission == 6 && m6_hazard(&from_x, &from_z)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit_damage(&combat, &player, from_x, from_z, 0, 700.0f)) fx_hit_spark(chest);   /* 125's spikes */
+                if (combat_player_hit_damage(&combat, &player, from_x, from_z, 0, 1000.0f)) fx_hit_spark(chest);   /* 125's spikes: record 0 of 0x5bbb80 (1000, light) */
             }
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};

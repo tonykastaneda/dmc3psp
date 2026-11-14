@@ -15,7 +15,9 @@
 
 /* EventTbl08 room 300: five BREAK eyes set flags 1..5; counter 5 opens
  * the fang seal at five. The model is native; progressive fang poses and
- * blinking remain approximate. Each eye currently takes three light hits. */
+ * blinking remain approximate. Each eye breaks on its first hit: a BREAK set's durability (+0x444, less each hit's
+ * damage, FUN_002f6f50) is its "vital", and the eyes' # GAME entries give none, so it's the parser's default 1
+ * (FUN_002f50d0). */
 static int current_room,eye_hp[5],render_ready;
 static float acid_wait;
 static M8Vertex *vertices[2];
@@ -23,7 +25,7 @@ static unsigned short *indices[2];
 static void *textures[M8_TEXTURE_COUNT];
 
 void mission8_reset(void) {
-    int i;for(i=0;i<5;++i)eye_hp[i]=3;
+    int i;for(i=0;i<5;++i)eye_hp[i]=1;
     current_room=-1;acid_wait=0;
 }
 int mission8_stomach_open(void) {
