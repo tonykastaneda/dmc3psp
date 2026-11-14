@@ -68,7 +68,7 @@ There is no homing during attacks.
 
 **Think, 0x17** (`4d7050`), in order: Dante dead → 0x38; DT (variants 1 and 2 only) → 0x39; Dante lunging →
 the reaction; the attack gauge full → an attack; else a **wander** pick from `0x5df610[rank*3+variant]`
-(variant 0: **strafe 0x1d 40, stand 0x1f 35, taunt 0x20 25**), never the last one again.
+(variant 0: **strafe 0x1d 40, stand 0x1f 35, taunt 0x20 25**). A pick that repeats the last one becomes the list's first other entry: **0x19, the walk in** (`4d7530`: action 1 toward Dante, 360 frames), whose own weight is 0.
 
 **The attack scheduler** (sub-object `+0x130`, class methods `0x32b270-0x32bad0`, config `0x5df3b0`):
 - Gauge `+0x38`: each frame in the wander states, + 20 within 350 cm, + 4 within 400, + 1 within 500
@@ -91,7 +91,7 @@ within 500 cm (`DAT_0061aa24`), within 45° of Vergil's facing. Then `0x5df8f0[r
 | 0x22 | `4d85f0` | 0x18 → 0x19 → 0x1b → 0x1c, then 0x47 |
 | 0x25 | `4d9220` | 0x1b → 0x1c, then 0x47 |
 | 0x2d | `4d99c0` | 0x28, then 0x29 unless within 300 (`DAT_0061aa3c`), then 0x2a (record 5, 1000: the long reach) |
-| 0x31 | `4dac60` | 0x54 facing Dante; hidden, 0x55; travels at 50 a frame to 100 behind Dante; appears facing his way (0x54); 5 frames; → 0x29 |
+| 0x31 | `4dac60` | 0x54 facing Dante; hidden, 0x55; travels at 50 a frame to 100 behind Dante; appears facing his way (0x54); 5 frames; → 0x17 (its test of `+0xb9d4` is the current state, 0x31, so never 0x29) |
 | 0x29 | `4d9680` | 0x27 (upper slash, records 11 and 12), at its chain point → 0x3d |
 | 0x3d | `4dd840` | 0x5f: flies at 45 a frame toward Dante, pitch held to 25-75°, while the chain flag's up; lands → 0x60, a shake |
 | 0x33 guard | `4db1d0` | 0x51; once a hit's blocked (`+0xbb51`), after 15 frames (`0x5dfad0[rank]`) counters with 0x25 or 0x2d (50/50, `0x5dcde0`); else at its end → 0x17 |
@@ -112,3 +112,18 @@ All of section 4 at rank 0, variant 0. Approximations:
 - **Cloth:** the coat is rigid on body bone 3; the scabbard's cord hangs straight down.
 - **Effects:** the teleport's 0x338 and the sword trails aren't drawn (a hit spark marks the teleport).
 - **Death:** he plays reaction 1:11 and the mission clears; demo 322 isn't played.
+
+## 6. Checked on the PS2 (2026-11-14)
+
+`tools/ps2_vergil.py` (harness PCSX2, the 100% save, Normal): Mission 7 started, 127's parsed door record (its next
+room at the u16 after the four corners and the height) pointed at 144, and the fight logged (`+0xb9d4` state,
+`+0xb9d7` action, every 0.1 s) with Dante standing still: `analysis/ref/vergil_ps2.txt` and `.mp4` (local).
+Variant 0, rank 0 on Normal. What it showed, and what changed in the port:
+- The states and their order: wander (0x1d, 0x1f, 0x20, 0x19) until the gauge fills (it rose 1 per 0.1 s beyond
+  500 cm, the 0.167 a frame), the teleport behind (0x31) from far, then 0x21 / 0x22 / 0x25 up close.
+- **0x31 goes back to 0x17**, not into 0x29 (fixed). **0x19 does come up** (the no-repeat rule above; fixed).
+- The stand state lets action 0 run out (0x77) and holds (fixed).
+- Durations (PS2 / port, seconds): taunt 5.6 / 5.5; 0x47 0.9 / 0.92; 0x1a 1.7 / 1.43; 0x1c 1.85 / 1.65. The
+  combo's chained actions run 0.1-0.2 s short in the port [not resolved].
+- **The sheathed scabbard rises behind his shoulder** (attach applied untransposed; fixed).
+- After his finishers the PS2's Dante is thrown about 5 m; the port's Dante less (Dante's reactions, not Vergil's).
