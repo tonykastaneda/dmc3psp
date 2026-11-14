@@ -1,0 +1,19 @@
+frames 1100
+fps 30
+realdt 0
+turbo 0
+place 20 2100 150 2899 180
+triangle 30 31
+place 200 2500 150 2499 180
+triangle 210 211
+place 400 2900 150 2499 180
+triangle 410 411
+place 600 3300 150 1699 180
+triangle 610 611
+place 800 3885 190 132 0 1
+circle 802 803
+psp_shot 100
+psp_shot 300
+psp_shot 500
+psp_shot 700
+psp_shot 850

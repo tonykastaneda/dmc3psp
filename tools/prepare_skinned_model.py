@@ -370,6 +370,8 @@ ENEMY_KINDS = (
     # Lady (class 37, EST 55), em034.pac: GDATA 138, pack 25 in the table at 0x58e740. [0] textures, [1] her body
     # (23 bones), motions in the PACs [2]-[6]. Her guns ([17] and up) aren't drawn yet.
     ("lady", LADY_SLOT, 1, None),
+    ("bishop", 127, 12, None),
+
 )
 AR_SLOT = 131
 JESTER_SLOT = 140
@@ -793,6 +795,9 @@ def main() -> None:
         raw = pac_list(beowulf_pack[2])[slot]
         parsed = parse_mot(raw)
         motions.append({"name": f"bw{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    raw=pac_list(pawn_pack[13])[1]  # Bishop death; idle clip 0 has duplicate keys rejected by the parser.
+    parsed=parse_mot(raw)
+    motions.append({"name":"bi01","data":raw[:parsed["bytes_used"]],"parsed":parsed})
     # The Blood-goyle's: "gbNN" from [8], one a state (motion N plays in state N).
     for slot, raw in enumerate(pac_list(goyle_pack[8])):
         if not raw:

@@ -219,6 +219,9 @@ static int jester_init(void);
 static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
+static void bishop_spawn_glue(void);
+static void bishop_update_glue(float f,float px,float py,float pz);
+static void bishop_hit_glue(HitKind kind,float from_x,float from_z);
 static void dullahan_spawn_glue(void);
 static void fallen_spawn_glue(void);
 static void fallen_update_glue(float f, float px, float py, float pz);
@@ -451,6 +454,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
+    if (kind == ENEMY_BISHOP) {bishop_spawn_glue();return;}
     if (kind == ENEMY_DULLAHAN) { dullahan_spawn_glue(); return; }
     if (kind == ENEMY_FALLEN) { fallen_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
@@ -605,6 +609,7 @@ int enemy_kind_for_class(int spawn_class) {
     /* EST spawn ids: a Seven Hell is 4 x its class number (0 Pride, 4 Gluttony, 8 Lust, 12 Sloth,
      * 16 Wrath, 20 Greed), and 31 is the Enigma. Anything not ported yet stands in as a Pride. */
     if (spawn_class >= 0 && spawn_class < 24) return spawn_class / 4;
+    if (spawn_class == 37)return ENEMY_BISHOP;
     if (spawn_class == 30) return ENEMY_DULLAHAN;
     if (spawn_class == 29) return ENEMY_FALLEN;
     if (spawn_class == 31) return ENEMY_ENIGMA;
@@ -1350,6 +1355,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) return;
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
+    if (e->kind == ENEMY_BISHOP) {++hits;bishop_hit_glue(kind,from_x,from_z);return;}
     if (e->kind == ENEMY_DULLAHAN) { ++hits; dullahan_hit_glue(kind,from_x,from_z); return; }
     if (e->kind == ENEMY_FALLEN) { ++hits; fallen_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
@@ -1669,6 +1675,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_ENIGMA) { enigma_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
+    if(e->kind==ENEMY_BISHOP){bishop_update_glue(f,px,py,pz);return;}
     if (e->kind == ENEMY_DULLAHAN) { dullahan_update_glue(f,px,py,pz); return; }
     if (e->kind == ENEMY_FALLEN) { fallen_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
@@ -3841,6 +3848,68 @@ static void dullahan_hit_glue(HitKind kind, float from_x, float from_z) {
     dullahan_play(b->want, b->restart);
     b->restart = 0;
 }
+
+/* Separate Bishop caster brain. */
+#include "bishop.h"
+static BishopBrain bishop_brain[ENEMY_MAX];
+static int bishop_motion_id[BISHOP_M_COUNT] = {-2};
+static void bishop_play(int m, int restart) {
+    int id;
+    if (bishop_motion_id[0] == -2) { int k; for (k = 0; k < BISHOP_M_COUNT; ++k) bishop_motion_id[k] = motion_find(bishop_motion_names[k]); }
+    id = bishop_motion_id[m];
+    if (id < 0) return;
+    if (id != e->motion || restart) {
+        e->prev_motion = e->motion; e->prev_frame = e->frame;
+        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 8.0f;
+        e->motion = id; e->frame = 0.0f; e->done = 0;
+    }
+}
+static void bishop_spawn_glue(void) {
+    BishopBrain *b = &bishop_brain[e - enemies];
+    e->motion = -1;
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    bishop_spawn(b, e->health);
+    bishop_play(b->want, 1);
+    b->restart = 0;
+    e->fade = 0.0f;
+}
+static void bishop_update_glue(float f, float px, float py, float pz) {
+    BishopBrain *b = &bishop_brain[e - enemies];
+    const Motion *m;
+    float g;
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    if (e->motion >= 0) {
+        m = motion_get(e->motion);
+        e->frame += f;
+        if (e->frame >= m->end_frame) {
+            e->done = 1;
+            e->frame = bishop_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+        }
+    }
+    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
+    b->frame = e->frame; b->done = e->done;
+    bishop_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
+    if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    if (b->restart || bishop_motion_id[b->want] != e->motion) { bishop_play(b->want, b->restart); b->restart = 0; }
+    if(b->cast){float from[3]={b->pos[0],b->pos[1]+180,b->pos[2]},to[3]={b->target[0],b->target[1]+30,b->target[2]};
+        if(b->cast==1)fx_guard_flash(to);else {fx_tracer(from,to,0xff6070ffu,8);fx_explosion(to);}}
+    if (b->land) {land_attack(1);landed_damage=700;}
+    if (b->remove) e->active = 0;
+}
+static void bishop_hit_glue(HitKind kind, float from_x, float from_z) {
+    BishopBrain *b = &bishop_brain[e - enemies];
+    float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
+    fx_hit_spark(at);
+    if (e->plan == P_DEATH) return;
+    if (bishop_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
+        e->plan = P_DEATH;
+        died();
+    }
+    bishop_play(b->want, b->restart);
+    b->restart = 0;
+}
+
 
 /* ---- Beowulf (beowulf_boss.c decides; here his body). His health is the Enemy's own, for the boss bar. */
 #include "beowulf_boss.h"
