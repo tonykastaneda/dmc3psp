@@ -75,6 +75,7 @@ int testroom_frame;
 #include "mission11.h"
 #include "mission14.h"
 #include "mission18.h"
+#include "secret_missions.h"
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -1038,7 +1039,8 @@ static void door_prompt_draw(void) {
 /* Mission 6's line of text (an item's name), in the middle of the screen. */
 static void caption_draw(void) {
     float alpha;
-    const char *text = m6_caption(&alpha);
+    const char *text = sm_caption(&alpha);
+    if (!text) text = m6_caption(&alpha);
     unsigned int a = (unsigned int)(alpha * 255.0f) << 24;
     if (!text || !menu_loaded()) return;
     sceGuDisable(GU_DEPTH_TEST);
@@ -1830,7 +1832,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup;
 /* "mkey button frame" and "mshot frame" drive and picture the menus, for tests. */
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
-static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at;
+static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
 static int cmp_fastwaves, cmp_clear_minions;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": the boss takes n heavy hits then */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
@@ -1897,6 +1899,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
+        else if (strncmp(line, "breakall ", 9) == 0) cmp_breakall_at = atoi(line + 9);   /* tests: every prop in the room breaks */
         else if (strncmp(line, "bosshits ", 9) == 0) {
             if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
         }
@@ -2655,6 +2658,7 @@ static void mission_gimmicks_draw(void) {
     if (mission_choice.mission == 11) m11_draw();
     if (mission_choice.mission == 14) m14_draw();
     if (mission_choice.mission == 18) m18_draw();
+    sm_draw();
     if (bridge_up()) {
         /* 112's bridge (mission_floor's ramp, 3000 at z 2650 to 3500 at z 4350): drawn as 20 stone steps,
          * alternating shades, each a box down to the step below. A stand-in: the game's own platform gimmick
@@ -2917,7 +2921,37 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
     }
     if (mission_choice.mission == 14 && m14_update(dt, player->x, player->y, player->z)) return 1;
-    if (mission_choice.mission == 18 && m18_update(player->x, player->y, player->z)) return 1;   /* 403's mirror: demo 50 */   /* 008's area 0: demo 326 */
+    if (mission_choice.mission == 18 && m18_update(player->x, player->y, player->z)) return 1;   /* 403's mirror: demo 50 */
+    {
+        /* The Secret Missions (secret_missions.c): their entries in this mission's rooms, and the one being played. */
+        SmView v;
+        int prompt = 0, go_room = 0, go_start = 0, k;
+        float go_place[4];
+        const RoomLift *l = room_lift();
+        v.room = room_number(mission_room); v.x = player->x; v.y = player->y; v.z = player->z;
+        v.on_ground = player->on_ground; v.health = player->health; v.alive = enemy_alive_count(); v.fight_done = done;
+        v.breakables_left = 0;
+        for (k = 0; k < ROOM_BREAKABLE_COUNT; ++k) v.breakables_left += room_breakables[k].room == mission_room && !breakable_broken[k];
+        v.lift_top = l && lift_y >= l->high - 1.0f;
+        v.pressed = pressed;
+        if (sm_update(dt, &v, &prompt, &go_room, &go_start, go_place)) {
+            char want[16];
+            snprintf(want, sizeof(want), "ROOM_%03d.BIN", go_room);
+            if (room_named(want) >= 0) {
+                enter_room(room_named(want), go_start, player, camera);
+                if (go_place[3] != 0.0f) {
+                    /* Back at the red structure, when there's floor under it (else at the room's start). */
+                    float g;
+                    if (mission_floor(go_place[0], go_place[1] + 50.0f, go_place[2], 0.0f, &g) && g > go_place[1] - 150.0f) {
+                        player->x = go_place[0]; player->y = g; player->z = go_place[2];
+                        start_camera(player, camera);
+                    }
+                }
+            }
+            return 0;
+        }
+        if (prompt) door_prompt_time = 1.0f;
+    }   /* 008's area 0: demo 326 */
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
@@ -2934,6 +2968,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (mission_choice.mission == 11) m11_status(line, sizeof(line));
             if (mission_choice.mission == 14) m14_status(line, sizeof(line));
             if (mission_choice.mission == 18) m18_status(line, sizeof(line));
+            if (!line[0]) sm_status(line, sizeof(line));
             float ep[3] = {0, 0, 0};
             if (enemy_active()) enemy_position(ep);
             if ((f = fopen(path, "a"))) { fprintf(f, "%d room=%d pos=%.0f,%.0f,%.0f alive=%d hp=%.0f items=%d%d%d e=%.0f,%.0f,%.0f %s\n", m_tick, room_number(mission_room), player->x, player->y, player->z, enemy_alive_count(), player->health, item_state[47], item_state[46], item_state[45], ep[0], ep[1], ep[2], line); fclose(f); }
@@ -3129,7 +3164,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
-    if (!m6 && mission_choice.mission != 14 && mission_choice.mission != 18 && info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE && info->clear_room == ROOM_NONE) {
+    if (!m6 && mission_choice.mission != 14 && mission_choice.mission != 18 && !sm_active() && info->end_room == ROOM_NONE && info->goal_room == ROOM_NONE && info->clear_room == ROOM_NONE) {
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
     }
@@ -3291,6 +3326,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     if (choice->mission == 14) m14_reset();
     geryon_boss_start_on_ground(0);   /* Mission 18 turns it on in 417 only */
     if (choice->mission == 18) m18_reset();
+    sm_reset();
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
@@ -3658,6 +3694,11 @@ int main(int argc, char *argv[]) {
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
+                if (cmp_breakall_at && frames == cmp_breakall_at) {
+                    int k;
+                    for (k = 0; k < ROOM_BREAKABLE_COUNT; ++k)
+                        if (room_breakables[k].room == mission_room && !breakable_broken[k]) { breakable_broken[k] = 1; stage_hide_group(room_breakables[k].number); }
+                }
             if (cmp_trim_at && frames == cmp_trim_at) enemy_trim(cmp_trim_keep);
             {
                 int h, k, n;
