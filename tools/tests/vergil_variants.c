@@ -57,5 +57,5 @@ int main(void){int i,seen=0;
  set_state(S_CUT_RANDOM);seen=0;
  for(i=0;i<2400;++i){vergil_boss_update(1,2500,-208,2800,1);if(vb.action==0x6e)seen=1;if(vb.state==S_THINK)break;}
  assert(seen && vb.state==S_THINK);
- puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut passed");return 0;
+ puts("Vergil: M7 isolation, M13 health/DT threshold, Beowulf chain, finite poses, M20 HP/DT/Force Edge/Judgment Cut, four dives, Round Trip and area-cut recovery passed");return 0;
 }

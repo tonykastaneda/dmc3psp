@@ -537,7 +537,7 @@ static void ai_step(float f) {
             fx_hit_spark(vb.cut);trace("area_cut");x=vb.dante[0]-vb.cut[0];z=vb.dante[2]-vb.cut[2];
             if(x*x+z*z<180*180){vb.landed=1;vb.landed_x=vb.cut[0];vb.landed_z=vb.cut[2];vb.landed_damage=1000;vb.landed_heavy=1;}
             ++vb.cut_index;vb.timer=15;
-            if(--vb.repeats<=0){if(--vb.waves>0){vb.repeats=6;vb.timer=60;}else{vb.step=4;vb.timer=60;}}
+            if(--vb.repeats<=0){if(--vb.waves>0){vb.repeats=6;vb.timer=0;}else{vb.step=4;vb.timer=60;}}
         }else if(vb.step==4 && (vb.timer-=f)<0){vb.step=5;set_action(0x6c);}
         else if(vb.step==5 && act==ACT_DONE){vb.step=6;set_action(0x6e);}
         else if(vb.step==6 && act==ACT_DONE)set_state(S_THINK);
