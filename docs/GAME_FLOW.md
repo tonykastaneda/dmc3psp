@@ -257,7 +257,7 @@ script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run t
 - **Nevan** (em028, GDATA 133, pack 19) has her own model and motions (`nevan_boss.c`), reclining in the air as her
   body is modelled: she hovers, glides at Dante, sweeps her blade, sends batches of bats (glows, not models) and
   vanishes to his far side. Her lightning and kiss aren't in; health, speeds and timings are estimates.
-- 210's floor draws white: its translucent layer isn't blended as the game does (not looked into yet).
+- 210's STAY 150 (a white sheet over the stage) is hidden in Mission 9 on, as the script's gimmick_cmd10 [150, 0] does.
 
 ## What the missions do now, and what's a stand-in
 

@@ -41,6 +41,8 @@ CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 # (104) and the ice (109). After he's beaten (counter 2): the entrance ice (100), his broken ice (103), the fence.
 # Mission 4's script has no room 6, so the room stays as Mission 3 left it.
 STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
+# 210, the Sunken Opera House: EventTbl09 switches STAY 150 off on entry (gimmick_cmd10 [150, 0]).
+STORY["210"] = [(9, 20, ())]
 # COLLISION sets that belong to a story piece of the same number: 122's rubble (STAY 100) and its three walls
 # in front of the door to 127, which the Mute Goddess blasts away in Mission 6 (psp/testroom/mission6.c).
 STORY_WALLS = {"122": (100,)}
