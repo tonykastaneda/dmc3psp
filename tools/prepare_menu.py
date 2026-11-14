@@ -58,6 +58,9 @@ IMAGES = [
     ("IMG_BANNER_8", [(BANNER_BASE + ENGLISH_BANNER_STEP * 7, 1, False, ZOOM, {})]),
     ("IMG_BANNER_9", [(BANNER_BASE + ENGLISH_BANNER_STEP * 8, 1, False, ZOOM, {})]),
     ("IMG_BANNER_10", [(BANNER_BASE + ENGLISH_BANNER_STEP * 9, 1, False, ZOOM, {})]),
+    ("IMG_BANNER_11", [(BANNER_BASE + ENGLISH_BANNER_STEP * 10, 1, False, ZOOM, {})]),
+    ("IMG_BANNER_12", [(BANNER_BASE + ENGLISH_BANNER_STEP * 11, 1, False, ZOOM, {})]),
+    ("IMG_BANNER_13", [(BANNER_BASE + ENGLISH_BANNER_STEP * 12, 1, False, ZOOM, {})]),
     # Only the heading and the band for now: the results themselves aren't tracked yet.
     ("IMG_CLEAR", [(1665, 1, False, None, {0: CENTRE}), (1665, 23, False, SPAN, {})]),
 ]

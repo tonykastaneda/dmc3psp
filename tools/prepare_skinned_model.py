@@ -357,6 +357,7 @@ ENEMY_KINDS = (
     # motion in [3]. The other chessmen are [7], [12] and [17].
     ("pawn", 127, 2, None),
     ("dullahan", 123, 1, None),
+    ("bishop", 127, 12, None),
 
 )
 AR_SLOT = 131
@@ -758,6 +759,9 @@ def main() -> None:
         raw = pac_list(nevan_pack[chunk])[slot]
         parsed = parse_mot(raw)
         motions.append({"name": f"nv{chunk}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    raw=pac_list(pawn_pack[13])[1]  # Bishop death; idle clip 0 has duplicate keys rejected by the parser.
+    parsed=parse_mot(raw)
+    motions.append({"name":"bi01","data":raw[:parsed["bytes_used"]],"parsed":parsed})
     # The Blood-goyle's: "gbNN" from [8], one a state (motion N plays in state N).
     for slot, raw in enumerate(pac_list(goyle_pack[8])):
         if not raw:

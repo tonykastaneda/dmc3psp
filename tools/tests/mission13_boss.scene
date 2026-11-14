@@ -1,0 +1,17 @@
+frames 16000
+fps 30
+realdt 0
+turbo 0
+gun 6
+fire 1
+stoponclear 1
+onvergil 30
+r1 1 15999
+mkey cross 60
+mkey cross 120
+mkey cross 180
+mkey cross 240
+psp_shot 1000
+psp_shot 3000
+psp_shot 5000
+psp_shot 10000
