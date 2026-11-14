@@ -456,6 +456,7 @@ void enemy_set_count(int count, float x, float z) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
+            if(e->active && e->kind==ENEMY_LEVIATHAN)leviathan_boss_kill();
             e->active = 0;
         } else if (!e->active) {
             float a = 0.785f * (float)i + 0.6f, r = spawn_ring + 60.0f * (float)(i / 8);
@@ -1355,7 +1356,11 @@ static void update_one(float dt, float px, float py, float pz) {
     dante_y = py;
     if (e->kind == ENEMY_GIGAPEDE) { giga_part_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_LEVIATHAN) {
+        float x,z,damage;
         leviathan_boss_update(f,px,py,pz,attacks_on);
+        if(leviathan_boss_attack_landed(&x,&z,&damage)) {
+            land_attack(1);landed_x=x;landed_z=z;landed_damage=damage;
+        }
         leviathan_boss_target_position(e->pos);
         e->plan=leviathan_boss_dying()?P_DEATH:P_WATCH;
         return;

@@ -18,6 +18,11 @@ float leviathan_boss_max_health(void);
 int leviathan_boss_dying(void);
 int leviathan_boss_open(void);
 int leviathan_boss_target(void);
+int leviathan_boss_active(void);
+int leviathan_boss_orb_sink(float out[3]);
+void leviathan_boss_collect_orbs(int value);
+int leviathan_boss_drain_trigger(float frames, int devil);
+int leviathan_boss_attack_landed(float *x, float *z, float *damage);
 /* Feed the killed Envy's orbs into the corresponding lung. */
 void leviathan_boss_absorb(int part, float amount);
 

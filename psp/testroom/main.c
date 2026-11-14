@@ -548,6 +548,8 @@ static int kind_max_health(int kind) {
     case ENEMY_AGNI: case ENEMY_RUDRA: return 2000;
     case ENEMY_GIGAPEDE: return 2800;
     case ENEMY_CERBERUS: return 7200;
+    case ENEMY_ENVY: return 400;
+    case ENEMY_LEVIATHAN: return 6500;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
     default: return 250;
     }
@@ -1766,6 +1768,8 @@ static BenchStep bench_steps[ENEMY_MAX + 1];
 static int bench_step_frames, bench_count, bench_fire, bench_quicksilver, bench_devil, bench_attack = 1, bench_anim = 1, bench_start = 1, bench_max = ENEMY_MAX;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
+static struct { int frame, part; float amount; } cmp_lv_charge[8];
+static int cmp_lv_charge_count; /* "lvcharge frame part amount": deterministic boss attack capture */
 static unsigned int bench_ai_us;
 static int bench_measuring;
 static unsigned int bench_began;
@@ -1873,6 +1877,10 @@ static void cmp_load(void) {
         }
         else if (strncmp(line, "hit ", 4) == 0) {
             if (cmp_hit_count < 16 && sscanf(line + 4, "%d %d", &cmp_hits[cmp_hit_count][0], &cmp_hits[cmp_hit_count][1]) == 2) ++cmp_hit_count;
+        }
+        else if (strncmp(line,"lvcharge ",9)==0 && cmp_lv_charge_count<8) {
+            int n=cmp_lv_charge_count;
+            if(sscanf(line+9,"%d %d %f",&cmp_lv_charge[n].frame,&cmp_lv_charge[n].part,&cmp_lv_charge[n].amount)==3)++cmp_lv_charge_count;
         }
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
@@ -3253,6 +3261,8 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+                if(leviathan_boss_drain_trigger(dt*60,player.devil))player.devil=0;
+                orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);
                 enemy_clamp_player(&player.z);
                 enemy_giga_ride(&player.x, &player.y, &player.z, player.on_ground);
                 orbs_update(dt, player.x, player.y, player.z);
@@ -3417,6 +3427,9 @@ int main(int argc, char *argv[]) {
             }
         }
         if (focus && focus_cmp) {
+            int lv;
+            for(lv=0;lv<cmp_lv_charge_count;++lv)
+                if(frames==cmp_lv_charge[lv].frame)leviathan_boss_absorb(cmp_lv_charge[lv].part,cmp_lv_charge[lv].amount);
             if (frames == 1 && !cmp_menu) { float gy; player.x = (float)cmp_spot_x; player.z = (float)cmp_spot_z; if (stage_floor(player.x, 2000.0f, player.z, 0.0f, &gy)) player.y = gy; player.yaw = cmp_face_yaw != 9999 ? (float)cmp_face_yaw * 0.0174533f : -1.985f; coat_reset();
                 /* The HD Collection test spot (tools/hd_ref.py), so the same stick goes the same way. */
                 camera.x = player.x - sinf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.z = player.z - cosf((float)cmp_camera_yaw * 0.0174533f) * 470.0f; camera.y = player.y + 255.0f;

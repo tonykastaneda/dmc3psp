@@ -1,6 +1,8 @@
 #include "leviathan_boss.h"
 
 #include "motion.h"
+#include "fx.h"
+#include "nfx.h"
 #include "swizzle.h"
 #include <pspgu.h>
 #include <pspgum.h>
@@ -19,11 +21,17 @@
  * Native timing is 60 Hz; callers pass elapsed 60 Hz frames.
  * Rendering and the lungs' charge rules are provided separately from this
  * encounter state. See docs/LEVIATHAN_SPEC.md for remaining approximations. */
-enum { HEART_CLOSED, HEART_OPENING, HEART_EXPOSED, HEART_ATTACK, HEART_DEAD };
+enum { HEART_CLOSED, HEART_OPENING, HEART_EXPOSED, HEART_CLOSING, HEART_ATTACK, HEART_DEAD };
 static struct {
-    int active, state, target, difficulty, attack_kind;
+    int active, state, target, difficulty, attack_kind, attack_step, landed, charge_fx, pending_open, double_open;
     float hp, timer, age, lung_hp[2], charge[2], down[2];
+    float attack_age, hit_cooldown, landed_damage, drain_timer;
 } heart;
+typedef struct { int active, fx; float age, delay, pos[3], vel[3]; } HeartOrb;
+static HeartOrb shells[12];
+static void clear_shells(void);
+static void tick_shells(float frames, float px, float py, float pz, int attacks);
+static void start_attack(int kind);
 static int difficulty = 1;
 static const float target_pos[3][3] = {
     {4978.54f, 244.41f, 2651.36f},
@@ -39,18 +47,47 @@ void leviathan_boss_set_difficulty(int value) {
     difficulty = value < 0 ? 0 : value > 4 ? 4 : value;
 }
 void leviathan_boss_spawn(void) {
+    clear_shells();
     memset(&heart, 0, sizeof(heart));
     heart.active = 1;
     heart.difficulty = difficulty;
+    heart.drain_timer=600;
     heart.hp = 6500.0f; /* DAT_005ccf9c */
     heart.lung_hp[0] = 1500.0f; /* DAT_005c986c, type 0 */
     heart.lung_hp[1] = 2000.0f; /* DAT_005c98cc, type 1 */
 }
-void leviathan_boss_kill(void) { heart.active = 0; }
+void leviathan_boss_kill(void) { clear_shells();heart.active = 0; }
+int leviathan_boss_active(void) { return heart.active && heart.state!=HEART_DEAD; }
+int leviathan_boss_orb_sink(float out[3]) {
+    if(!leviathan_boss_active() || heart.down[1]>0)return 0;
+    memcpy(out,target_pos[2],sizeof(float)*3);
+    return 1;
+}
+void leviathan_boss_collect_orbs(int value) {
+    if(!leviathan_boss_active() || value<=0)return;
+    heart.charge[1]+=value;
+    heart.hp=fminf(6500,heart.hp+value*.05f); /* FUN_00461b70 + lung 450840 */
+}
+int leviathan_boss_drain_trigger(float frames, int devil) {
+    if(!leviathan_boss_active() || heart.down[0]>0)return 0;
+    heart.drain_timer-=frames;
+    if(heart.drain_timer>0 || !devil)return 0;
+    heart.drain_timer=600;
+    /* The existing port has a DT toggle, no native DT gauge. One available
+     * trigger charge is drained and fills this lung; the missing gauge is
+     * documented rather than emulated by an invisible second resource. */
+    heart.charge[0]+=400;
+    return 1;
+}
+int leviathan_boss_attack_landed(float *x,float *z,float *damage) {
+    if(!heart.landed)return 0;
+    heart.landed=0;*x=target_pos[0][0];*z=target_pos[0][2];*damage=heart.landed_damage;
+    return 1;
+}
 float leviathan_boss_health(void) { return heart.active ? fmaxf(0, heart.hp) : 0; }
 float leviathan_boss_max_health(void) { return 6500.0f; }
 int leviathan_boss_dying(void) { return heart.state == HEART_DEAD; }
-int leviathan_boss_open(void) { return heart.state == HEART_EXPOSED || heart.state == HEART_ATTACK; }
+int leviathan_boss_open(void) { return heart.state == HEART_EXPOSED || heart.state==HEART_CLOSING || (heart.state==HEART_OPENING && heart.timer<=64) || (heart.state == HEART_ATTACK && heart.attack_age>=55); }
 int leviathan_boss_target(void) { return heart.target; }
 void leviathan_boss_target_position(float out[3]) {
     memcpy(out, target_pos[heart.target], sizeof(float) * 3);
@@ -76,9 +113,9 @@ int leviathan_boss_hit(int part, float damage, int mortal) {
         if (heart.down[side] > 0) return 0;
         heart.lung_hp[side] -= damage * damage_scale[heart.difficulty];
         if (heart.lung_hp[side] <= 0) {
-            heart.down[side] = exposed_time[heart.difficulty] + 55.0f;
-            heart.state = HEART_OPENING;
-            heart.timer = 55.0f; /* +0x838, native opening vulnerability delay */
+            /* Lung clip 2 collapses for 90 frames, then notifies the Heart;
+             * its stun timer starts at the end of that clip (450d10). */
+            heart.down[side] = exposed_time[heart.difficulty] + 200;
         }
         return 0;
     }
@@ -88,6 +125,7 @@ int leviathan_boss_hit(int part, float damage, int mortal) {
     if (mortal) heart.hp -= damage;
     if (heart.hp <= 0) {
         heart.hp = 0;
+        clear_shells();
         heart.state = HEART_DEAD;
         heart.timer = 120;
         return 1;
@@ -96,27 +134,124 @@ int leviathan_boss_hit(int part, float damage, int mortal) {
 }
 int leviathan_boss_update(float frames, float px, float py, float pz, int attacks) {
     int i;
-    (void)px; (void)py; (void)pz; (void)attacks;
+    if(frames>1) {
+        int finished=0;
+        while(frames>0) {float step=fminf(1,frames);finished|=leviathan_boss_update(step,px,py,pz,attacks);frames-=step;}
+        return finished;
+    }
     if (!heart.active || frames <= 0) return 0;
     heart.age += frames;
+    heart.hit_cooldown=fmaxf(0,heart.hit_cooldown-frames);
+    tick_shells(frames,px,py,pz,attacks);
     for (i = 0; i < 2; ++i) if (heart.down[i] > 0) {
+        float old=heart.down[i],signal=exposed_time[heart.difficulty]+110;
         heart.down[i] -= frames;
+        if(old>signal && heart.down[i]<=signal)++heart.pending_open;
         if (heart.down[i] <= 0) { heart.down[i] = 0; heart.lung_hp[i] = i ? 2000.0f : 1500.0f; }
+    }
+    if(heart.state==HEART_CLOSED && heart.pending_open) {
+        heart.state=HEART_OPENING;heart.timer=119;
+        heart.double_open=heart.pending_open>1;heart.pending_open=0;
+    }
+    if(heart.state==HEART_CLOSED && attacks) {
+        if(heart.charge[1]>500) {heart.charge[1]=0;start_attack(1);}
+        else if(heart.charge[0]>300) {heart.charge[0]=0;start_attack(0);}
     }
     if (heart.state == HEART_OPENING) {
         heart.timer -= frames;
         if (heart.timer <= 0) {
             heart.state = HEART_EXPOSED;
-            heart.timer = (heart.down[0] > 0 && heart.down[1] > 0 ? double_time : exposed_time)[heart.difficulty];
+            heart.timer = (heart.double_open ? double_time : exposed_time)[heart.difficulty];
         }
-    } else if (heart.state == HEART_EXPOSED || heart.state == HEART_ATTACK) {
+    } else if (heart.state == HEART_EXPOSED) {
         heart.timer -= frames;
-        if (heart.timer <= 0) heart.state = HEART_CLOSED;
+        if (heart.timer <= 0) {heart.state=HEART_CLOSING;heart.timer=39;}
+    } else if(heart.state==HEART_CLOSING) {
+        heart.timer-=frames;
+        if(heart.timer<=0)heart.state=HEART_CLOSED;
+    } else if(heart.state==HEART_ATTACK) {
+        heart.attack_age+=frames;
+        if(heart.attack_age>=125 && heart.attack_step==0) {
+            heart.attack_step=1;
+            if(heart.charge_fx)nfx_kill(heart.charge_fx);
+            heart.charge_fx=0;
+            if(heart.attack_kind==1) {
+                int count=heart.difficulty<2?3:heart.difficulty==2?5:heart.difficulty==3?6:9;
+                for(i=0;i<count;++i) {
+                    HeartOrb *o=&shells[i];
+                    o->active=1;o->age=0;o->delay=20+5*i;
+                    memcpy(o->pos,target_pos[0],sizeof(o->pos));o->pos[2]+=250;
+                    o->vel[0]=(i&1?-1:1)*(10+5*i);o->vel[1]=10+5*i;o->vel[2]=10;
+                    o->fx=nfx_spawn(NFX_LEVIATHAN,837,o->pos,0,1);
+                }
+                heart.timer=30;
+            } else heart.timer=180;
+        }
+        if(heart.attack_step) {
+            heart.timer-=frames;
+            if(!heart.attack_kind) {
+                float age=180-heart.timer,angle;
+                float from[3]={target_pos[0][0],target_pos[0][1],target_pos[0][2]+40},to[3];
+                if(age<30)angle=-60;
+                else if(age<90)angle=-60+(age-30)*2;
+                else if(age<120)angle=60;
+                else angle=60-(age-120)*2;
+                angle*=.0174532925f;
+                to[0]=from[0]+sinf(angle)*2000;to[1]=from[1]-175;to[2]=from[2]+cosf(angle)*2000;
+                fx_tracer(from,to,0xff4030ffu,120);
+                if(attacks && heart.hit_cooldown<=0) {
+                    float dx=to[0]-from[0],dz=to[2]-from[2];
+                    float t=((px-from[0])*dx+(pz-from[2])*dz)/(2000*2000);
+                    float x,y,z;
+                    t=fmaxf(0,fminf(1,t));x=from[0]+dx*t-px;z=from[2]+dz*t-pz;
+                    y=from[1]+(to[1]-from[1])*t;
+                    if(x*x+z*z<100*100 && y>=py-60 && y<=py+220) {
+                        heart.landed=1;heart.landed_damage=1500;heart.hit_cooldown=60;
+                    }
+                }
+            }
+            if(heart.timer<=0)heart.state=HEART_CLOSED;
+        }
     } else if (heart.state == HEART_DEAD) {
         heart.timer -= frames;
         return heart.timer <= 0;
     }
     return 0;
+}
+
+static void clear_shells(void) {
+    int i;
+    if(heart.charge_fx)nfx_kill(heart.charge_fx);
+    heart.charge_fx=0;
+    for(i=0;i<12;++i) {if(shells[i].fx)nfx_kill(shells[i].fx);memset(&shells[i],0,sizeof(shells[i]));}
+}
+static void start_attack(int kind) {
+    float at[3]={target_pos[0][0],target_pos[0][1],target_pos[0][2]+100};
+    heart.state=HEART_ATTACK;heart.attack_kind=kind;heart.attack_step=0;heart.attack_age=0;
+    heart.charge_fx=nfx_spawn(NFX_LEVIATHAN,kind?851:745,at,0,1);
+}
+static void tick_shells(float frames,float px,float py,float pz,int attacks) {
+    int i,k;
+    for(i=0;i<12;++i) {
+        HeartOrb *o=&shells[i];float from[3],distance=0;
+        float aim[3]={px-o->pos[0],py+100-o->pos[1],pz-o->pos[2]};
+        if(!o->active)continue;
+        o->age+=frames;memcpy(from,o->pos,sizeof(from));
+        if(o->age>o->delay) {
+            for(k=0;k<3;++k)distance+=aim[k]*aim[k];
+            distance=sqrtf(distance);
+            if(distance>1)for(k=0;k<3;++k)o->vel[k]+=(aim[k]/distance*6-o->vel[k])*.12f*frames;
+        }
+        for(k=0;k<3;++k)o->pos[k]+=o->vel[k]*frames;
+        nfx_move(o->fx,o->pos,atan2f(o->vel[0],o->vel[2]));
+        fx_projectile(from,o->pos,0xff8070ffu);
+        if(o->age>360 || (o->age>o->delay && distance<60)) {
+            if(distance<60 && attacks && heart.hit_cooldown<=0) {
+                heart.landed=1;heart.landed_damage=800;heart.hit_cooldown=20;
+            }
+            nfx_kill(o->fx);memset(o,0,sizeof(*o));
+        }
+    }
 }
 
 /* Native stage models are authored in world coordinates, so no boss root
@@ -164,9 +299,16 @@ static void pose_actor(int part) {
     const Motion *motion;
     /* Native slots: idle 0, Heart opening 1, closing 3; lung states are
      * refined with their state machine. Clamp transition clips. */
-    if (!part && heart.state == HEART_OPENING) { slot=1; frame=55-heart.timer; }
+    if (!part && heart.state == HEART_OPENING) { slot=1; frame=119-heart.timer; }
+    else if(!part && heart.state==HEART_CLOSING) {slot=3;frame=39-heart.timer;}
+    else if(!part && heart.state==HEART_ATTACK) {slot=4;frame=heart.attack_age;}
     else if (!part && heart.state == HEART_EXPOSED) { slot=1; frame=10000; }
-    else if (part && heart.down[part-1]>0) { slot=3; frame=10000; }
+    else if (part && heart.down[part-1]>0) {
+        float elapsed=exposed_time[heart.difficulty]+200-heart.down[part-1];
+        if(elapsed<90) {slot=2;frame=elapsed;}
+        else if(heart.down[part-1]<=110) {slot=3;frame=110-heart.down[part-1];}
+        else {slot=2;frame=10000;}
+    }
     motion=motion_get(actor_motion[part][slot]);
     memset(&sample,0,sizeof(sample));
     if (motion) motion_sample(motion, slot ? fminf(frame,motion->end_frame) : motion_wrap(motion,frame),&sample);

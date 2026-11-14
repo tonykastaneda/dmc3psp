@@ -44,20 +44,30 @@ returns an empty body for this pack.
 
 ## Current coverage and approximations
 
-This is a boss/enemy foundation, not a claim that Mission 8 is complete.
-The native Heart and lungs render, the side organs can be damaged and recover,
-and the core has a protected/exposed/death cycle. Native lung HP and damage
-factors are implemented. Lung transitions currently use the exposed timing
-with a simplified opening delay; the native hidden rank is temporarily mapped
-from difficulty. Target points are selected from native model bones rather
-than the complete posed hurt capsules. Render state uses a preliminary motion
-selection and does not yet reproduce native per-object visibility switches.
+The native Heart and lungs render and animate. Lung defeat plays the native
+90-frame collapse, signals the Heart, holds the rank's stun interval, then
+plays its 110-frame recovery. Heart opening is 119 frames, with vulnerability
+starting at frame 55, followed by exposure and its 39-frame closing motion.
+The native hidden rank is temporarily mapped from difficulty.
 
-Still required: native shell attacks, charge/orb routing and lung drain,
-full state-to-motion mapping, boss encounter entry and death event integration,
-acid floors, eye/tusk seals, goo doors, and complete M8 progression. Mission
-room routing waits for worker m6's decoded list and the orchestrator's merge
-notice. Do not infer route membership from the stage asset used to test the boss.
+Absorbed red orb pieces fly to the type-1 lung, fill its native >500 threshold,
+and heal the Heart by 5% of their value. The other lung's >300 threshold
+requests the laser. The port has a DT toggle but no native DT gauge: after its
+600-frame interval the lung removes an active toggle and fills the laser
+charge. This is a visible approximation of the native 20-frame drain ticks.
+
+Laser movement retains the decoded +/-60-degree sweep, 2 degrees per frame,
+30-frame pauses, 2000 cm length, and 1500 damage record. The visual beam uses
+the existing additive ribbon renderer. Stage effect bank 2 exports all eight
+native st302 V timelines, including V745/V851 charge effects and V837 spheres.
+Native particle/generator children remain unsupported (2 P and 7 G children).
+Projectile count, stagger, 800 damage and homing speed are based on native data;
+steering and lifetime use bounded port approximations. Target points still
+come from native model bones rather than the complete posed hurt capsules.
+
+Boss encounter entry and death integration, stage sets 1106/1107/1108 switched
+by the Heart, acid floors, eye/tusk seals, goo doors, and M8 progression remain
+to be wired to the newly decoded room lists in GAME_FLOW.md.
 
 ## Verification
 
@@ -79,3 +89,9 @@ notice. Do not infer route membership from the stage asset used to test the boss
 REA's Windows provider rejected this MIPS ELF / installed Ghidra version;
 research continued through the repository's Ghidra 12.2 headless workflow in
 read-only project mode, with local build output and no tool installation.
+
+Charged attack verification: PPSSPP `pM_heart_laser` at 80/180/240 and
+`pM_heart_projectiles` at 70/100/160. Deterministic `lvcharge frame part amount`
+scene commands supply charge without waiting for minion drops. Host tests also
+check laser damage, projectile retirement, orb diversion/healing, and restoration
+of ordinary orb collection after encounter exit.

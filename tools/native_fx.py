@@ -169,6 +169,9 @@ def main():
     summary = []
     summary.append(write_bank(lines, 0, records(read(167)), ORB_V, ORB_E))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E))
+    leviathan = records(read(690))
+    summary.append(write_bank(lines, 2, leviathan,
+                              sorted(number for kind, number in leviathan if kind == "V"), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     for bank, (v, e, t, m, skipped) in enumerate(summary):
