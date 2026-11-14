@@ -208,7 +208,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "arachne", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "beowulf_boss", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19")) {
+foreach ($name in @("main", "player", "skeleton", "motion", "coat", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "arachne", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "beowulf_boss", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

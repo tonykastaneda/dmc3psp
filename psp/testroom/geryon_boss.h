@@ -27,5 +27,7 @@ int geryon_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *d
 int geryon_boss_take_warp(float out[4]);
 void geryon_boss_trace(const char *path);
 void geryon_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out));
+/* Mission 18's 417 is 228's ground again: with this on, a spawn starts in phase 1 there (no bridge). */
+void geryon_boss_start_on_ground(int on);
 
 #endif
