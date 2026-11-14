@@ -488,6 +488,26 @@ void enemy_set_mortal(int on) { mortal = on; }
 
 int enemy_add(float x, float z) { return enemy_add_kind(ENEMY_PRIDE, x, z); }
 
+/* An EST class that spawns as another kind's stand-in keeps its own decoded health (its parameter block +0x2c):
+ * the Abyss (EST 24-27, class 6, 0x5ce060 via FUN_0041d748) 1500; the Soul Eater (EST 34, class 16, 0x5c1440 via
+ * FUN_0049b3a8) 200. Others: the kind's own. */
+int enemy_add_class(int spawn_class, float x, float z) {
+    Enemy *selected = e;
+    int i, kind = enemy_kind_for_class(spawn_class), hp = 0;
+    if (spawn_class >= 24 && spawn_class <= 27 && kind == ENEMY_PRIDE) hp = 1500;
+    if (spawn_class == 34 && kind == ENEMY_PRIDE) hp = 200;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        if (!enemies[i].active) {
+            e = &enemies[i];
+            spawn_one(kind, x, z);
+            if (hp && e->active) e->health = (short)(ENEMY_HEALTH * hp / 250);
+            e = selected;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int enemy_add_kind(int kind, float x, float z) {
     Enemy *selected = e;
     int i;
