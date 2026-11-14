@@ -352,6 +352,7 @@ static int kind_health(int kind) {
     case ENEMY_LUST: return ENEMY_HEALTH * 750 / 250;    /* 0x5ac100 +0x2c (class 2, FUN_002c5d90) */
     case ENEMY_GREED: return ENEMY_HEALTH * 1000 / 250;  /* 0x5b0080 +0x2c (class 5, FUN_00356538) */
     case ENEMY_WRATH: return ENEMY_HEALTH * 500 / 250;   /* 0x5b10f0 +0x2c (class 4, FUN_00354560) */
+    case ENEMY_DULLAHAN: return ENEMY_HEALTH * 300 / 250;   /* 0x5ccad0 +0x2c (class 12, FUN_003cc200) */
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
     case ENEMY_ENVY: return ENEMY_HEALTH * 400 / 250;
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
@@ -3836,6 +3837,7 @@ static void dullahan_spawn_glue(void) {
     e->motion = -1;
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     dullahan_spawn(b, e->health);
+    giga_note("dullahan spawn health", e->health, 0.0f);   /* tests */
     dullahan_play(b->want, 1);
     b->restart = 0;
     e->fade = 0.0f;
