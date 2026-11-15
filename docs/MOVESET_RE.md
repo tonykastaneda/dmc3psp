@@ -274,6 +274,16 @@ Known to differ from the game (each one is still to do):
 
 `CPl000Shl00..10` (decomp names) are *shells* (projectiles), not move handlers.
 
+### Motion blending (found 2026-11-14, not ported yet)
+
+`FUN_002500d0`'s last two arguments are the blend mode and frames for the script's first motion (`FUN_00254e80` stores
+them at +0x4e / +0x50; `FUN_00255420` falls back to the script's op-1 bytes 2 / 3 when they're 0xff, and mode 0 forces 0
+frames). Of Dante's requests (0x246000-0x2ea700) 443 pass (0, 0): a hard cut; hit reactions pass mode 1 with 0 frames, also
+a cut. Blends: Combo I 3:3 from `FUN_002645b0` 5 frames, High Time 3:11 3, Prop 13:19 3, Shredder 13:12 / 13:13 3, Nevan's
+strums 6:5-6:10 / 6:33 10, Kalina Ann 21:0 10, taunts 2:0-2:3 5, Cerberus 14:2-14:6 5, Beowulf 7:x 3 or by charge phase,
+1:14 3. The port fades every move start over 6 frames (`FADE_SECONDS`). Several scripts get different blends by the
+handler's branch (Beowulf 7:24 / 7:25 / 7:27-7:29, 17:0 / 17:1 / 17:8 / 17:9, 19:0, 20:3, 6:4, 6:23, 3:32), so porting it
+means following each handler, not a table by script.
 ### Motion request
 
 `FUN_002500d0(float blend, this, bank, index, p5, p6, p7)`:
