@@ -62,6 +62,7 @@ typedef enum {
     MOVE_HIT_ALT, MOVE_HIT_BACK, MOVE_HIT_HEAVY_BACK, /* 3-15 (the front's other half), 3-01, 3-03 */
     MOVE_DOWN, MOVE_DOWN_FAR,                     /* knockdown: 1:4 / 1:26 (3-04), 1:5 / 1:27 (3-05) */
     MOVE_GET_UP, MOVE_GET_UP_FAR, MOVE_RECOVER,   /* 1:7 (3-07), 1:9 (3-09), quick recovery 1:6 (3-06) */
+    MOVE_POP, MOVE_POP_LAND,                      /* kind 6: 1:13 (3-13) up and down, 1:14 (3-14) landing */
     MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT, MOVE_BACKFLIP,
     /* Every other weapon: phases generated from tools/moveset_phases.py. */
     GEN_MOVE_IDS
@@ -141,6 +142,9 @@ typedef struct {
     /* Knockdown (FUN_002e9a40): launch speeds, landed yet, a recovery press seen (+0x2868), the far set. */
     float kd_vy, kd_g, kd_speed, dead_time;
     int kd_landed, kd_press, kd_far;
+    float kd_hang;         /* kind 7: frames hanging before the flight (config +0x3c) */
+    int kd_launch, kd_pop; /* kind 7 (FUN_002e9f50) / kind 6 (FUN_002ea390) */
+    int twosome_set, twosome_shots;   /* Twosome Time's set (+0x3c6d) and shots in the series */
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */

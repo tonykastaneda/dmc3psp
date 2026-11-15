@@ -304,8 +304,17 @@ away with the player config's speeds (chunk 9: kinds 0-2 10.4 up, gravity -1.2, 
 12 (41) until the floor. A face button before its flag 2 (13 / 43), or Trickster, gives the quick recovery 1:6 at flag 3
 (20 / 50); otherwise he gets up at flag 4 (60 / 80) with 1:7 (1:9). Port, hitme 20 2 500 in M1: 200 cm in the air,
 lands lying, Trickster recovers, Swordmaster gets up. Kinds come from the records for Agni & Rudra, Cerberus and Vergil;
-other enemies still pass heavy / light (1 / 0). Not ported: class 6 (1:13 / 1:14, a heavy flinch here), the launch
-class 4's own handler (FUN_002e9f50, a knockdown here), and the Game Over screen.
+other enemies still pass heavy / light (1 / 0). Kind 6 (FUN_002ea390) pops him straight up at config +0x30 / +0x34
+(23.5, -1.2) in 1:13 and lands in 1:14 (port: 242 cm up). Kind 7 (FUN_002e9f50) holds him config +0x3c = 40 frames,
+then flies as kinds 0-2; a press between flags 2 and 3 recovers at flag 3 and flag 4 always ends in 1:6. Not ported:
+the Game Over screen.
+
+| move (script) | PS2 | port before | port after | source |
+|---|---|---|---|---|
+| Beowulf dive kick landing (`beo_cair`) | lands where the next step would meet the floor (13 cm up at 66), 7:13 slides 106 cm | took the full last step, 34 cm further | lands at 241 cm as the PS2's 247 (its 5.5 cm drift before the jump) | FUN_00242200 checks the floor before the step (FUN_002e2560, FUN_002e9a40 state 1); every port air move and the knockdown now do |
+| Beowulf ground strings (`beo_c1`, `beo_r4`, `beo_cmash`) | 7:3 85.1 cm, r4 455 | the same | the same | the PS2 drifts about 0.8 cm a frame in these saves (also idle); no port change |
+| Twosome Time's set | 18:0-3 or 18:4-7 at random (+0x3c6d), first shot from frame 15, then 0 / 15 by gun | 18:0-3 from 0 | random set, 15 / 0 / 15 | FUN_0026b1d0, FUN_0026af60 |
+| Dash and Wall Hike runs (`d_*`, `w_d`, `w_l`, `w_r`) | onset and end as the port where the street is flat | | | the fails are the PS2 trace's wall-clock sampling (repeated / skipped frames, +-10 cm height jitter) and the street's ramp; d_n, dash0, w_u identical |
 
 Also from flag 0x800: Gun Stinger (146) and Artemis's CIR shot (152) are Gunslinger only.
 Not matched yet: Twosome Time's random pick of 18:0-3 or 18:4-7 (+0x3c6d) and its start frame 15 for even

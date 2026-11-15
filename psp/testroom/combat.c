@@ -1,6 +1,7 @@
 #include "combat.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -182,6 +183,8 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_GET_UP] = {H("3-07"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_GET_UP_FAR] = {H("3-09"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_RECOVER] = {H("3-06"), "RECOVER", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_POP] = {H("3-13"), "DOWN", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_POP_LAND] = {H("3-14"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOPPELGANGER] = {H("2-58"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_LEFT] = {H("2-07"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
@@ -1016,15 +1019,26 @@ static const float knock_flags[2][4] = {{12.0f, 13.0f, 20.0f, 60.0f}, {41.0f, 43
 #define GET_UP_FAR_FREE 60.0f
 #define RECOVER_FREE 70.0f
 
+/* Kind 7 (FUN_002e9f50): he hangs config +0x3c = 40 frames, then flies as kinds 0-2; a press between flags 2 and
+ * 3 recovers at flag 3, and flag 4 always ends in the quick recovery. Kind 6 (FUN_002ea390): straight up at
+ * config +0x30 / +0x34 (23.5, -1.2) in 1:13, landing in 1:14. */
+#define KNOCK_HANG_FRAMES 40.0f
+#define POP_VY 23.5f
+#define POP_G (-1.2f)
+#define POP_LAND_FREE 70.0f
+
 static void start_knockdown(Combat *c, Player *player, int kind) {
-    int set = kind <= 2 ? 0 : kind == 3 ? 1 : kind == 4 ? 2 : 3;
+    int set = kind <= 2 || kind == 7 ? 0 : kind == 3 ? 1 : kind == 4 ? 2 : 3;
     c->kd_far = set >= 2;
-    start_move(c, c->kd_far ? MOVE_DOWN_FAR : MOVE_DOWN, 0);
-    c->kd_vy = knock_launch[set][0];
-    c->kd_g = knock_launch[set][1];
-    c->kd_speed = knock_launch[set][2];
+    c->kd_pop = kind == 6;
+    c->kd_launch = kind == 7;
+    c->kd_hang = c->kd_launch ? KNOCK_HANG_FRAMES : 0.0f;
+    start_move(c, c->kd_pop ? MOVE_POP : c->kd_far ? MOVE_DOWN_FAR : MOVE_DOWN, 0);
+    c->kd_vy = c->kd_pop ? POP_VY : knock_launch[set][0];
+    c->kd_g = c->kd_pop ? POP_G : knock_launch[set][1];
+    c->kd_speed = c->kd_pop ? 0.0f : knock_launch[set][2];
     c->kd_landed = 0;
-    c->kd_press = player->style == STYLE_TRICKSTER;
+    c->kd_press = !c->kd_launch && player->style == STYLE_TRICKSTER;
     c->air_accum = 0.0f;
     c->dead_time = 0.0f;
     player->on_ground = 0;
@@ -1037,23 +1051,32 @@ static int knockdown_update(Combat *c, Player *player, const PlayerInput *input,
     const Motion *m = motion_get(c->motion);
     float back = player->yaw + (float)M_PI, f = dt * MOTION_FPS;
     int face = input->jump || input->melee || input->gun || input->style_action;
-    float free_at = c->move == MOVE_GET_UP ? GET_UP_FREE : c->move == MOVE_GET_UP_FAR ? GET_UP_FAR_FREE : RECOVER_FREE;
-    if (c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR || c->move == MOVE_RECOVER) {
+    float free_at = c->move == MOVE_GET_UP ? GET_UP_FREE : c->move == MOVE_GET_UP_FAR ? GET_UP_FAR_FREE
+                  : c->move == MOVE_POP_LAND ? POP_LAND_FREE : RECOVER_FREE;
+    if (c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR || c->move == MOVE_RECOVER || c->move == MOVE_POP_LAND) {
         /* From the gates' frame a move or the stick takes over; the rest plays out as a normal move. */
         if (c->frame >= free_at && (face || stick_pushed(input))) { end_move(c, player); return 0; }
         return 0;
     }
-    if (c->move != MOVE_DOWN && c->move != MOVE_DOWN_FAR) return 0;
+    if (c->move != MOVE_DOWN && c->move != MOVE_DOWN_FAR && c->move != MOVE_POP) return 0;
     player->attacking = 1;
     c->phase_time += dt;
+    if (c->kd_hang > 0.0f) {   /* kind 7: held where he was hit */
+        c->kd_hang -= f;
+        c->frame = m->loop_start;
+        return 1;
+    }
     if (!c->kd_landed) {
         float floor_y = 0.0f, start_y = player->y, k = player_step_scale;
         c->frame += f;
-        if (c->frame > fl[0]) c->frame = fl[0];
-        if (face) c->kd_press = 1;
+        if (c->kd_pop) { if (c->frame > m->end_frame) c->frame = m->end_frame; }
+        else if (c->frame > fl[0]) c->frame = fl[0];
+        if (face && !c->kd_launch) c->kd_press = 1;
         player->on_ground = 0;
         c->air_accum += f / k;
-        while (c->air_accum >= 1.0f) {   /* FUN_002e3a60, one game step at a time */
+        if (player_floor_fn && !player_floor_fn(player->x, start_y, player->z, 45.0f, &floor_y)) floor_y = -1.0e9f;
+        while (c->air_accum >= 1.0f) {   /* FUN_002e3a60, one game step at a time, unless it meets the floor */
+            if (c->kd_vy < 0.0f && player->y + c->kd_vy * k <= floor_y) { player->y = floor_y; c->air_accum = 0.0f; break; }
             c->air_accum -= 1.0f;
             player->x += sinf(back) * c->kd_speed * k;
             player->z += cosf(back) * c->kd_speed * k;
@@ -1069,7 +1092,12 @@ static int knockdown_update(Combat *c, Player *player, const PlayerInput *input,
             player->on_ground = 1;
             c->kd_landed = 1;
             c->kd_speed *= KNOCK_LAND_SPEED;
+            if (c->kd_pop && player->health > 0.0f) start_move(c, MOVE_POP_LAND, 0);
         }
+        return 1;
+    }
+    if (c->kd_pop) {   /* dead from a pop: lie in its last pose */
+        c->dead_time += f;
         return 1;
     }
     {
@@ -1085,6 +1113,11 @@ static int knockdown_update(Combat *c, Player *player, const PlayerInput *input,
             if (c->frame > m->end_frame) c->frame = m->end_frame;
             c->dead_time += f;
             return 1;
+        }
+        if (c->kd_launch) {
+            /* +0x2858 / +0x285c: only a press while the window is open (flags 2-3) counts; flag 4 recovers anyway. */
+            if (c->frame >= fl[1] && c->frame < fl[2] && (face || player->style == STYLE_TRICKSTER)) c->kd_press = 1;
+            if ((c->frame >= fl[2] && c->kd_press) || c->frame >= fl[3]) { start_move(c, MOVE_RECOVER, 0); return 1; }
         }
         if (was < fl[2] && c->frame >= fl[2] && c->kd_press) { start_move(c, MOVE_RECOVER, 0); return 1; }
         if (c->frame >= fl[3] || c->frame >= m->end_frame) {
@@ -1105,6 +1138,31 @@ static MoveId twosome_move(const Player *player, const PlayerInput *input, MoveI
         if (fabsf(d) > 0.785f) return action_move(d > 0.0f ? 252 : 250);
     }
     return first;
+}
+
+/* FUN_0026b1d0 / FUN_0026af60: a Twosome Time series picks its set at random (+0x3c6d: 18:0-3, or 18:4-7 from
+ * table 0x595564), and its shots alternate the guns, playing frames 0-13 or 15-28; the first is from 15 either
+ * way (+0x299f made even for set 0, odd stays for set 1). */
+static void twosome_pose(Combat *c, int first) {
+    const Motion *m;
+    int idx, s;
+    if (c->script < 0) return;
+    if (first) { c->twosome_set = rand() & 1; c->twosome_shots = 0; }
+    idx = atoi(script_data[c->script].key + 3);
+    if (c->twosome_set && idx < 4) {
+        char key[8];
+        snprintf(key, sizeof(key), "18:%d", idx + 4);
+        for (s = 0; s < SCRIPT_DATA_COUNT; ++s)
+            if (!strcmp(script_data[s].key, key)) {
+                int mo = motion_find(script_data[s].motion);
+                if (mo >= 0) { c->script = s; c->motion = mo; }
+                break;
+            }
+    }
+    m = motion_get(c->motion);
+    c->frame = m->loop_start + ((c->twosome_shots++ & 1) ? 0.0f : 15.0f);
+    motion_root(m, c->frame, c->last_root);
+    seek_events(c);
 }
 
 void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
@@ -1156,6 +1214,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             {
                 int again = c->action == 134, in_stance = c->stance_active;
                 start_move(c, first, action);
+                if (action == 134) twosome_pose(c, !again);
                 /* FUN_0026b1d0: the first Twosome Time waits 10 frames from outside the gun stance, 3 in it,
                  * before it fires; the shot's 13 frames count from there (PS2: 22 frames from a stand). */
                 if (action == 134 && !again && c->shots_pending >= moves[first].shot) {
@@ -1307,7 +1366,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         /* One real game step every 60th of a second, however long this frame was. */
         c->air_accum += dt * MOTION_FPS / k;
         if (d->hover && !c->hover_done) c->air_accum = 0.0f;   /* waiting: he stays where he is */
+        /* FUN_00242200 checks the floor before the step (FUN_002e2560): a step that would go through it isn't
+         * taken, he lands where he is (PS2 beo_cair: the dive kick lands 34 cm short of a full last step). */
+        if (player_floor_fn && !player_floor_fn(player->x, frame_start_y, player->z, 45.0f, &floor_y)) floor_y = -1.0e9f;
         while (c->air_accum >= 1.0f) {
+            if (c->air_v[2] < 0.0f && player->y + c->air_v[2] * k <= floor_y) { player->y = floor_y; c->air_accum = 0.0f; break; }
             c->air_accum -= 1.0f;
             player->x += s * c->air_v[0] * k;
             player->z += co * c->air_v[0] * k;
@@ -1424,6 +1487,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
                     /* A new R1 sector (FUN_0026b0d0) turns first: 10 frames before that shot. */
                     MoveId was = c->move, next = twosome_move(player, input, action_move(134));
                     start_move(c, next, 0);
+                    twosome_pose(c, 0);
                     if (next != was) {
                         c->shots_pending -= moves[next].shot;
                         c->delayed_shot = moves[next].shot;
@@ -1479,15 +1543,15 @@ int combat_dante_can_die;
 float combat_dead_frames(const Combat *c) { return c->dead_time; }
 
 /* FUN_002e8d20 picks the reaction class from the attack record's kind (+0x18): kind 0 flinches (class 1), 1 heavy
- * flinch (2), 2-5 knockdown (3, 5), 6 class 6 (1:13 / 1:14, not ported: a heavy flinch here), 7 the launch (4);
- * in the air every kind but 6 knocks him down, and so does a hit that takes his health to 0. */
+ * flinch (2), 2-5 knockdown (3, 5), 6 the pop up (6), 7 the hang then knockdown (4); in the air every kind but 6
+ * knocks him down, and so does a hit that takes his health to 0. */
 int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage) {
     float to_attacker;
     int front, down;
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
         c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK ||
         c->move == MOVE_DOWN || c->move == MOVE_DOWN_FAR || c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR ||
-        c->move == MOVE_RECOVER || player->health <= 0.0f) return 1;
+        c->move == MOVE_RECOVER || c->move == MOVE_POP || c->move == MOVE_POP_LAND || player->health <= 0.0f) return 1;
     /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
     if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
@@ -1499,11 +1563,13 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
     player->jump_motion = -1;
     c->air = 0;
     c->base_y = player->y;
-    down = (kind >= 2 && kind <= 5) || kind == 7 || (!player->on_ground && kind != 6) || player->health <= 0.0f;
+    down = (kind >= 2 && kind <= 7) || !player->on_ground || player->health <= 0.0f;
+    if (kind == 6 && player->health <= 0.0f) kind = 0;   /* FUN_002e8d20: an emptying hit is class 3 */
+    if (kind == 7 && !player->on_ground) kind = 0;       /* in the air kind 7 is class 3 too */
     if (down) {
         /* FUN_002e9a40 state 0: he faces the attacker and flies away from it. */
         player->yaw = to_attacker;
-        start_knockdown(c, player, kind == 7 ? 0 : kind);
+        start_knockdown(c, player, kind);
         return 1;
     }
     /* FUN_002e96a0 (light) / FUN_002e98d0 (heavy): hit from within 90 degrees of his facing (FUN_002e2be0) he
