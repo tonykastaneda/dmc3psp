@@ -93,6 +93,46 @@ def events(script):
     return motion, start, out
 
 
+def start_blends(moveset, scripts):
+    """Blend frames each script starts with, from the PS2's requests (FUN_002500d0 -> FUN_00254e80 -> FUN_00255420):
+    the call's mode / frames (p6 / p7), or the script's first op 1 bytes 2 / 3 when the call leaves them (0xff);
+    mode 0 forces 0 frames, and mode 1 passes 0 frames in every Dante call. Dante's handlers only
+    (0x21d000-0x2ea700). A script requested with different blends by different branches takes the blend
+    (an approximation: those branches aren't followed)."""
+    import csv as _csv
+    def op1_bytes(key):
+        for o in scripts[key]["ops"]:
+            if o["op"] == 1:
+                raw = bytes.fromhex(o["raw"])
+                return raw[2], raw[3]
+        return 0, 0
+    found = {}
+    for c in _csv.DictReader((moveset / "motion_calls.csv").open()):
+        f = int(c["function"], 16)
+        if not (0x21D000 <= f < 0x2EA700) or not c["bank"].isdigit() or not c["index"].isdigit():
+            continue
+        key = f"{c['bank']}:{c['index']}"
+        if key not in scripts:
+            continue
+        p6, p7 = c["p6"].strip(), c["p7"].strip()
+        mode, frames = op1_bytes(key)
+        if p6.isdigit():
+            mode = int(p6)
+            if p7.lstrip("-").isdigit():
+                frames = int(p7)
+            elif mode == 2:
+                continue   # frames from a variable: not resolved
+        elif p6:
+            continue
+        found.setdefault(key, set()).add(0 if mode == 0 else frames)
+    out = {k: max(v) for k, v in found.items()}
+    # Trickster's dashes (FUN_00225c90): Ghidra drops the 7th argument of three of its four requests (mode 2);
+    # the fourth passes 3 frames, taken for all.
+    for i in (0, 1, 2, 3, 17, 24, 25, 26, 27):
+        out.setdefault(f"23:{i}", 3)
+    return out
+
+
 def air_values(spec, cfg):
     """(speed, speed accel, vy, gravity) per frame from a moveset_phases air spec."""
     if spec is None:
@@ -169,15 +209,16 @@ def main():
          "#ifndef DMC3PSP_TESTROOM_COMBAT_DATA_H", "#define DMC3PSP_TESTROOM_COMBAT_DATA_H", "",
          "typedef enum { EV_ACTIVE, EV_HIT, EV_GATE, EV_FLAG, EV_PLACE } ScriptEventKind;",
          "typedef struct { unsigned short frame; unsigned char kind, a, b; } ScriptEvent;",
-         "typedef struct { const char *key, *motion; short start; short count; const ScriptEvent *events; } ScriptData;",
+         "typedef struct { const char *key, *motion; short start; short count; const ScriptEvent *events; short blend; } ScriptData;",
          ""]
+    blends = start_blends(a.moveset, scripts)
     script_rows = []
     for i, key in enumerate(all_scripts):
         motion, start, ev = events(scripts[key])
         L.append(f"static const ScriptEvent script_events_{i}[] = {{ /* {key} */")
         L += [f"    {{{f}, {k}, {x}, {y}}}," for f, k, x, y in ev] or ["    {0, EV_ACTIVE, 0, 0},"]
         L.append("};")
-        script_rows.append(f'    {{"{key}", "{motion}", {start}, {max(len(ev), 1)}, script_events_{i}}},')
+        script_rows.append(f'    {{"{key}", "{motion}", {start}, {max(len(ev), 1)}, script_events_{i}, {blends.get(key, -1)}}},')
     L += ["", f"#define SCRIPT_DATA_COUNT {len(all_scripts)}", "static const ScriptData script_data[] = {"] + script_rows + ["};", ""]
 
     # Gun stance tables (FUN_00222e00): row = direction of travel against the aim
