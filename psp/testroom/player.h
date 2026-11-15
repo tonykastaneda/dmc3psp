@@ -43,7 +43,9 @@
 /* Air moves run the real game's states per 60 fps frame (FUN_002224a0 jump, FUN_00222700
  * Air Hike, FUN_00228950 Enemy Step), from Dante's table at 0x5a85c0: see air_rows in
  * player.c. All of it was checked against the HD Collection's frame traces. */
-#define JUMP_CROUCH_FRAMES 7.0f
+/* Press to the first frame of the rise, counting the press frame: 8 on the PS2 (PCSX2, the standing, running and
+ * lock-on jumps all rise 8 frames after state 4 appears). */
+#define JUMP_CROUCH_FRAMES 8.0f
 #define AIR_HIKE_HOLD_FRAMES 7      /* hangs still while the kick plays, then rises */
 #define ENEMY_STEP_COOLDOWN 30.0f   /* frames; the real one is config +0x2dc, not read yet */
 #define JUMP_LAND_STOP_FRAMES 6.0f  /* landing with the stick held: stopped, then starts again */

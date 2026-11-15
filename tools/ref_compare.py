@@ -172,7 +172,10 @@ for _style, _tag in ((1, "sm"), (2, "gs"), (3, "rg")):
         SCRIPTS.setdefault(f"{_tag}_{_n[2:]}", _from_hd(_n, style=_style))
 
 
-PS2_INPUT_LAG = 2
+# Button presses reach the PS2's state machine 1 frame after the key (jump, Air Hike, Sky Star, the run's start:
+# state change on frame +1 in nearly every capture, +2 now and then from PCSX2's keyboard path). 2 lines the port's
+# moves up with the PS2 while combat starts its scripts a frame late; PS2_INPUT_LAG=1 compares against the press.
+PS2_INPUT_LAG = int(os.environ.get("PS2_INPUT_LAG", "2"))
 
 
 def write_port_script(name):
