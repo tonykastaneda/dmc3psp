@@ -912,6 +912,10 @@ static void update_gun_layers(Combat *c, Player *player, const PlayerInput *inpu
                 if (gun_index(player) == 1) { c->motion = row[1]; c->frame = motion_get(c->motion)->loop_start; }
             }
         }
+        /* FUN_002691b0 / FUN_0026c350: the shot's motion blends in over the wait (mode 2, the wait as frames), and
+         * cuts with none (chained shots). */
+        c->fade_seconds = c->delayed_shot ? c->shot_delay / MOTION_FPS : 0.0f;
+        if (c->fade_seconds <= 0.0f) c->fade_weight = 0.0f;
     } else if (c->delayed_shot) {   /* counted down from the frame after the press, as the handler's phase 0 */
         c->shot_delay -= dt * MOTION_FPS;
         if (c->shot_delay <= 0.0f) {
@@ -1307,6 +1311,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
                     c->delayed_shot = moves[first].shot;
                     c->shot_delay = in_stance ? 3.0f : GUN_FIRST_AIM_FRAMES;
                 }
+                /* FUN_0026af60: mode 1 with the wait as the blend (0 for the chained shots: a cut). */
+                if (action == 134) {
+                    c->fade_seconds = c->delayed_shot ? c->shot_delay / MOTION_FPS : 0.0f;
+                    if (c->fade_seconds <= 0.0f) c->fade_weight = 0.0f;
+                }
             }
         }
     } else if (c->move == MOVE_NONE) {
@@ -1579,6 +1588,8 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
                     MoveId was = c->move, next = twosome_move(player, input, action_move(134));
                     start_move(c, next, 0);
                     twosome_pose(c, 0);
+                    c->fade_seconds = next != was ? GUN_FIRST_AIM_FRAMES / MOTION_FPS : 0.0f;   /* FUN_0026af60: the wait, or a cut */
+                    if (c->fade_seconds <= 0.0f) c->fade_weight = 0.0f;
                     if (next != was) {
                         c->shots_pending -= moves[next].shot;
                         c->delayed_shot = moves[next].shot;

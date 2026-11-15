@@ -86,7 +86,7 @@ had swapped the buttons (Triangle/Circle, Cross/Square): every state has the def
 one stands where the port puts its dummy, the rest far away (an enemy overhead still turns a jump into an Enemy
 Step). Dante's facing is the u16 at `+0x90`. The PS2's zone camera can't be moved, so scripts run where it
 looks the right way ("open" and, for R1, "behind"; the port copies it with spot / faceyaw / camyaw / camlock).
-`tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00); **138 of 162** on 2026-11-14 18:40 with PS2_INPUT_LAG=1, the standing port dummy and the scorer's dip fix. The rest: the Beowulf saves' drift, the street runs (ramp, trace sampling), Air Trick's rise (the parked enemy's lock point), a jump pressed with the stick on the same frame (the PS2 drops it: `w_aa`), `melee_hit` (the PS2 enemy hits back), Royalguard's strafe between blocks.
+`tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00); **138 of 162** on 2026-11-14 18:40 with PS2_INPUT_LAG=1, the standing port dummy and the scorer's dip fix. The rest: the Beowulf saves' drift, the street runs (ramp, trace sampling), Air Trick's rise (the parked enemy's lock point), a jump pressed with the stick on the same frame (the PS2 drops it: `w_aa`), `melee_hit` (the PS2 enemy hits back), Royalguard's strafe between blocks. Re-captured 19:10: ``w_d``, ``fxdash``, ``d_l`` pass (bad old captures); ``w_r`` / ``w_l`` repeat: the port runs 27 degrees off the PS2's heading (yaw -2.58 against -2.11 in ``w_r``): the PS2's zone camera turns during the run and the port's test camera is locked (``camlock 1``), so the stick maps differently and he meets a different wall; not a collision difference.
 
 Taken from the PS2's code since (the guesses they replaced in brackets):
 - Trickster's dash script by style level, table 0x5911d0 (dash count); no pending press while the dash's gate
@@ -149,7 +149,9 @@ are the PS2's dispatch numbers (`FUN_002213e0`).
   heavy 1:2 / 1:3) with their cancel gates, knockdown (1:4 / 1:5, getting up 1:7 / 1:9, quick recovery 1:6), the pop
   (1:13 / 1:14), the hang (kind 7), and death in real play (docs/MOVESET.md). Low health changes none of his moves: the
   locomotion handlers (FUN_002217a0, FUN_00221d20, FUN_00221ba0) don't read +0x2ad4. Not ported: hit stop (Dante's
-  attack hit records, chunk 7, aren't decoded; the enemy's comes from the record's +0x2c).
+  attack hit records, chunk 7, aren't decoded; the enemy's comes from the record's +0x2c). Measured: Dante's time step
+  (+0x10) stays 1.0 through a Stinger that thrusts into the enemy (PCSX2, `PS2_EXTRA=0x10,4`), so the stop is the enemy's
+  alone (if the thrust hit: the trace doesn't show the enemy), which the port already matches.
 - **Keyboard**: K cross, L circle, J square, I triangle, WASD stick, Space R1, E melee, Q gun, N Devil
   Trigger, M Start, Right Shift taunt. The pause menu holds Save Data; never send it blind keys.
 
@@ -282,7 +284,7 @@ Known to differ from the game (each one is still to do):
 
 `CPl000Shl00..10` (decomp names) are *shells* (projectiles), not move handlers.
 
-### Idle root motion (found 2026-11-14, not ported: player.c / main.c)
+### Idle root motion (ported 2026-11-14: skeleton.c / main.c)
 
 The idle state (`FUN_002217a0`) moves Dante by the idle motion's root step every frame (`FUN_002e2d70(p, 3)`: XZ against
 his facing). Rebellion's idle has none; Beowulf's sways him along his facing (PS2: 12.6 cm forward before a press, then
