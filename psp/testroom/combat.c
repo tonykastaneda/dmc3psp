@@ -1,6 +1,7 @@
 #include "combat.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -9,6 +10,7 @@
 #include "enemy.h"
 #include "leviathan_boss.h"
 #include "stage.h"
+#include "nfx.h"
 
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
@@ -156,6 +158,12 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_TR_AIR_TRICK_AIR] = {S("23:16"), "AIR TRICK", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_TR_WALL_HIKE] = {S("23:5"), "WALL HIKE", MOVE_TR_WALL_FLIP, 0, 0, 0, 0, -1, 0, 0, 0, 1},
     [MOVE_TR_WALL_FLIP] = {S("23:6"), "WALL HIKE", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 0, 1},
+    /* FUN_00227fb0 states 4-6: along the wall on the motion's root (PCSX2: 4.1 cm/frame up for 43 frames), then
+     * the kick motion, and at its flag (the arc moving 12 frames in on PCSX2) row 10 straight away from the wall. */
+    [MOVE_TR_WALL_RUN_L] = {H("s43-07"), "WALL HIKE", MOVE_TR_WALL_KICK_L, 0, 0, 0, 0, -1, 0, 0, 0, 1},
+    [MOVE_TR_WALL_KICK_L] = {H("s43-08"), "WALL HIKE", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 0, 1},
+    [MOVE_TR_WALL_RUN_R] = {H("s43-09"), "WALL HIKE", MOVE_TR_WALL_KICK_R, 0, 0, 0, 0, -1, 0, 0, 0, 1},
+    [MOVE_TR_WALL_KICK_R] = {H("s43-10"), "WALL HIKE", MOVE_NONE, 0, 0, 0, 0, -1, 0, 0, 0, 1},
     /* Hand-made (Air Hike's state and the Royalguard block states are not
      * decoded yet; these play stand-in motions). */
     /* The block states' scripts (FUN_00224850 24:0, FUN_00225a00 24:4), not yet their logic. */
@@ -182,6 +190,8 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_GET_UP] = {H("3-07"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_GET_UP_FAR] = {H("3-09"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_RECOVER] = {H("3-06"), "RECOVER", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_POP] = {H("3-13"), "DOWN", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_POP_LAND] = {H("3-14"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOPPELGANGER] = {H("2-58"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_LEFT] = {H("2-07"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
@@ -535,6 +545,7 @@ static int stick_yaw(const Player *player, const PlayerInput *input, float *yaw)
 /* FUN_0024c0b0: a Wall Hike needs a wall that goes on up: four rays from 100 cm above his feet,
  * 50 apart, all hitting it within reach and close enough to head-on (config +0xe0, +0xe8). */
 #define WALL_HIKE_AIR_DEG 25.000000f
+#define WALL_KICK_FLAG 12.0f   /* frames into 23:8 / 23:10 to the kick's first step (PCSX2: 23:10 at 100, row 10 moving at 112) */
 static int wall_ahead(const Player *player, float yaw, float degrees) {
     float d[3] = {sinf(yaw), 0.0f, cosf(yaw)}, side[3] = {cosf(yaw), 0.0f, -sinf(yaw)};
     float limit = cosf(degrees * 0.0174533f);
@@ -556,6 +567,43 @@ static int wall_ahead(const Player *player, float yaw, float degrees) {
     return 1;
 }
 
+/* FUN_0024c280: the run along a wall. A ray along the stick from 100 cm up finds a wall within 100 cm that stands
+ * near upright, the stick no more than 75 degrees off head-on (config +0xec); he turns along it, the side the stick
+ * leans to: facing into the wall + 90 degrees is +0x3c6d 1 (23:9), - 90 is 0 (23:7). The ray pair's spread gives
+ * the wall's direction. FUN_0024c570 then wants the wall to go on 300 cm the way he'll run: four rays at the wall
+ * from 75, 150, 225 and 300 cm along it, all hitting (the loop of 4 over 300 / 4 and the raycasts are read from its
+ * MIPS; the rays' length, 120 cm, from the constant beside them, is an inference). */
+#define WALL_RUN_DEG 75.0f
+static float wrap_pi(float a);
+static int wall_side(const Player *player, float yaw, int *side, float *face) {
+    float d[3] = {sinf(yaw), 0.0f, cosf(yaw)}, sd[3] = {cosf(yaw), 0.0f, -sinf(yaw)}, t[2], p[2][3], tx, tz, nx, nz, l, into;
+    int k;
+    if (!stage_loaded()) return 0;
+    for (k = 0; k < 2; ++k) {
+        float off = k ? 10.0f : -10.0f;
+        float a[3] = {player->x + sd[0] * off, player->y + 100.0f, player->z + sd[2] * off};
+        float b[3] = {a[0] + d[0] * 100.0f, a[1], a[2] + d[2] * 100.0f};
+        if (!stage_raycast(a, b, &t[k])) return 0;
+        p[k][0] = a[0] + d[0] * 100.0f * t[k]; p[k][2] = a[2] + d[2] * 100.0f * t[k];
+    }
+    tx = p[1][0] - p[0][0]; tz = p[1][2] - p[0][2];
+    l = sqrtf(tx * tx + tz * tz);
+    if (l < 1e-3f) return 0;
+    nx = -tz / l; nz = tx / l;                       /* the wall's normal, made to face him */
+    if (nx * d[0] + nz * d[2] > 0.0f) { nx = -nx; nz = -nz; }
+    if (nx * d[0] + nz * d[2] > -cosf(WALL_RUN_DEG * 0.0174533f)) return 0;
+    into = atan2f(-nx, -nz);
+    if (wrap_pi(into - yaw) < 0.0f) { *side = 1; *face = wrap_pi(into + (float)M_PI * 0.5f); }
+    else { *side = 0; *face = wrap_pi(into - (float)M_PI * 0.5f); }
+    for (k = 1; k <= 4; ++k) {
+        float hit, along = 75.0f * (float)k;
+        float a[3] = {player->x + sinf(*face) * along, player->y + 100.0f, player->z + cosf(*face) * along};
+        float b[3] = {a[0] + sinf(into) * 120.0f, a[1], a[2] + cosf(into) * 120.0f};
+        if (!stage_raycast(a, b, &hit)) return 0;
+    }
+    return 1;
+}
+
 static int extra_check(const CommandData *cmd, const Player *player, const PlayerInput *input) {
     float h;
     if (cmd->check == 2) {
@@ -564,14 +612,29 @@ static int extra_check(const CommandData *cmd, const Player *player, const Playe
          * code has a ground branch (+0xe0): something else must stop it there. */
         if (player->on_ground || !stick_pushed(input)) return 0;
         stick_yaw(player, input, &yaw);
-        return wall_ahead(player, yaw, WALL_HIKE_AIR_DEG);
+        if (wall_ahead(player, yaw, WALL_HIKE_AIR_DEG)) return 1;
+        {
+            int side;
+            float face;
+            return wall_side(player, yaw, &side, &face);   /* FUN_0024b510 case 2: straight up first */
+        }
     }
     if (cmd->check == 8) return 1;  /* FUN_0024b510 case 8: only Royal Release 194 needs more (the gauge) */
     h = command_min_height(cmd->check);
     return h >= 0.0f && height_above_floor(player) > h;
 }
 
-static int is_trickster(MoveId move) { return move >= MOVE_TR_DASH && move <= MOVE_TR_WALL_FLIP; }
+/* The next wall motion before this one has ended: they set his height from their root (base + root y), and the
+ * next one's root starts where this one's would have finished, so the base is moved to keep him where he is. */
+static void start_move(Combat *c, MoveId move, int action);
+static void wall_next_early(Combat *c, Player *player, MoveId next) {
+    float root[3];
+    start_move(c, next, 0);
+    motion_root(motion_get(c->motion), c->frame, root);
+    c->base_y = player->y - (root[1] > 0.0f ? root[1] : 0.0f);
+}
+
+static int is_trickster(MoveId move) { return move >= MOVE_TR_DASH && move <= MOVE_TR_WALL_KICK_R; }
 
 /* The command walker (FUN_002458f0 / FUN_00245f10) for Rebellion,
  * Swordmaster and Trickster: returns the action to start, or 0. */
@@ -895,8 +958,15 @@ static void start_trickster(Combat *c, Player *player, const PlayerInput *input,
         if (player->has_target)
             player->yaw = atan2f(player->target_x - player->x, player->target_z - player->z);
     } else {
-        if (pushed) player->yaw = sy;   /* into the wall */
-        start_move(c, MOVE_TR_WALL_HIKE, 0);
+        int side;
+        float face;
+        if (!wall_ahead(player, sy, WALL_HIKE_AIR_DEG) && wall_side(player, sy, &side, &face)) {
+            player->yaw = face;   /* along the wall */
+            start_move(c, side ? MOVE_TR_WALL_RUN_R : MOVE_TR_WALL_RUN_L, 0);
+        } else {
+            if (pushed) player->yaw = sy;   /* into the wall */
+            start_move(c, MOVE_TR_WALL_HIKE, 0);
+        }
         c->base_y = player->y;
     }
     c->action = 0;   /* states, not actions: player+0x2998 = 0 */
@@ -910,13 +980,15 @@ static int air_trick_update(Combat *c, Player *player, float dt) {
     if (c->air) return 1;   /* falling: the velocities in combat_update move him */
     if (c->warp_time <= 0.0f) {
         float dx, dz, dist, along, dy;
-        if (c->frame < wait) return 1;
+        if (c->frame < wait + SCRIPT_LAG) return 1;   /* the motion's end is seen a frame late, as everywhere */
         dx = player->target_x - player->x; dz = player->target_z - player->z;
         dist = sqrtf(dx * dx + dz * dz);
-        along = player->has_target ? dist - AIR_TRICK_SHORT : 0.0f;
+        dy = player->has_target ? player->target_y + AIR_TRICK_LOCK_HEIGHT - player->y : 0.0f;
+        /* FUN_00226550 state 1: across = the 3D distance to the lock point (FUN_001324b0) less +0x298, at most
+         * +0x294; up = the lock point's height difference, at most +0x29c either way. */
+        along = player->has_target ? sqrtf(dist * dist + dy * dy) - AIR_TRICK_SHORT : 0.0f;
         if (along > AIR_TRICK_MAX_XZ) along = AIR_TRICK_MAX_XZ;
         if (along < 0.0f) along = 0.0f;
-        dy = player->has_target ? player->target_y + AIR_TRICK_LOCK_HEIGHT - player->y : 0.0f;
         if (dy > AIR_TRICK_MAX_Y) dy = AIR_TRICK_MAX_Y;
         if (dy < -AIR_TRICK_MAX_Y) dy = -AIR_TRICK_MAX_Y;
         c->warp_step[0] = dist > 1.0f ? dx / dist * along : 0.0f;
@@ -931,6 +1003,11 @@ static int air_trick_update(Combat *c, Player *player, float dt) {
         player->x += c->warp_step[0] * step;
         player->y += c->warp_step[1] * step;
         player->z += c->warp_step[2] * step;
+        /* State 2: within +0x298 of the lock point the across speed stops (FUN_002e3f60). */
+        if (player->has_target) {
+            float lx = player->target_x - player->x, ly = player->target_y + AIR_TRICK_LOCK_HEIGHT - player->y, lz = player->target_z - player->z;
+            if (lx * lx + ly * ly + lz * lz < AIR_TRICK_SHORT * AIR_TRICK_SHORT) c->warp_step[0] = c->warp_step[2] = 0.0f;
+        }
         c->warp_time -= dt;
         if (c->warp_time <= 1.0e-4f) {   /* ten 60th steps exactly, as the PS2's +0x2870 countdown (not eleven by rounding) */
             /* State 9, HD Collection traces: 4 cm/frame forward and 8 up, losing 0.07 and 1. */
@@ -1016,15 +1093,26 @@ static const float knock_flags[2][4] = {{12.0f, 13.0f, 20.0f, 60.0f}, {41.0f, 43
 #define GET_UP_FAR_FREE 60.0f
 #define RECOVER_FREE 70.0f
 
+/* Kind 7 (FUN_002e9f50): he hangs config +0x3c = 40 frames, then flies as kinds 0-2; a press between flags 2 and
+ * 3 recovers at flag 3, and flag 4 always ends in the quick recovery. Kind 6 (FUN_002ea390): straight up at
+ * config +0x30 / +0x34 (23.5, -1.2) in 1:13, landing in 1:14. */
+#define KNOCK_HANG_FRAMES 40.0f
+#define POP_VY 23.5f
+#define POP_G (-1.2f)
+#define POP_LAND_FREE 70.0f
+
 static void start_knockdown(Combat *c, Player *player, int kind) {
-    int set = kind <= 2 ? 0 : kind == 3 ? 1 : kind == 4 ? 2 : 3;
+    int set = kind <= 2 || kind == 7 ? 0 : kind == 3 ? 1 : kind == 4 ? 2 : 3;
     c->kd_far = set >= 2;
-    start_move(c, c->kd_far ? MOVE_DOWN_FAR : MOVE_DOWN, 0);
-    c->kd_vy = knock_launch[set][0];
-    c->kd_g = knock_launch[set][1];
-    c->kd_speed = knock_launch[set][2];
+    c->kd_pop = kind == 6;
+    c->kd_launch = kind == 7;
+    c->kd_hang = c->kd_launch ? KNOCK_HANG_FRAMES : 0.0f;
+    start_move(c, c->kd_pop ? MOVE_POP : c->kd_far ? MOVE_DOWN_FAR : MOVE_DOWN, 0);
+    c->kd_vy = c->kd_pop ? POP_VY : knock_launch[set][0];
+    c->kd_g = c->kd_pop ? POP_G : knock_launch[set][1];
+    c->kd_speed = c->kd_pop ? 0.0f : knock_launch[set][2];
     c->kd_landed = 0;
-    c->kd_press = player->style == STYLE_TRICKSTER;
+    c->kd_press = !c->kd_launch && player->style == STYLE_TRICKSTER;
     c->air_accum = 0.0f;
     c->dead_time = 0.0f;
     player->on_ground = 0;
@@ -1037,23 +1125,32 @@ static int knockdown_update(Combat *c, Player *player, const PlayerInput *input,
     const Motion *m = motion_get(c->motion);
     float back = player->yaw + (float)M_PI, f = dt * MOTION_FPS;
     int face = input->jump || input->melee || input->gun || input->style_action;
-    float free_at = c->move == MOVE_GET_UP ? GET_UP_FREE : c->move == MOVE_GET_UP_FAR ? GET_UP_FAR_FREE : RECOVER_FREE;
-    if (c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR || c->move == MOVE_RECOVER) {
+    float free_at = c->move == MOVE_GET_UP ? GET_UP_FREE : c->move == MOVE_GET_UP_FAR ? GET_UP_FAR_FREE
+                  : c->move == MOVE_POP_LAND ? POP_LAND_FREE : RECOVER_FREE;
+    if (c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR || c->move == MOVE_RECOVER || c->move == MOVE_POP_LAND) {
         /* From the gates' frame a move or the stick takes over; the rest plays out as a normal move. */
         if (c->frame >= free_at && (face || stick_pushed(input))) { end_move(c, player); return 0; }
         return 0;
     }
-    if (c->move != MOVE_DOWN && c->move != MOVE_DOWN_FAR) return 0;
+    if (c->move != MOVE_DOWN && c->move != MOVE_DOWN_FAR && c->move != MOVE_POP) return 0;
     player->attacking = 1;
     c->phase_time += dt;
+    if (c->kd_hang > 0.0f) {   /* kind 7: held where he was hit */
+        c->kd_hang -= f;
+        c->frame = m->loop_start;
+        return 1;
+    }
     if (!c->kd_landed) {
         float floor_y = 0.0f, start_y = player->y, k = player_step_scale;
         c->frame += f;
-        if (c->frame > fl[0]) c->frame = fl[0];
-        if (face) c->kd_press = 1;
+        if (c->kd_pop) { if (c->frame > m->end_frame) c->frame = m->end_frame; }
+        else if (c->frame > fl[0]) c->frame = fl[0];
+        if (face && !c->kd_launch) c->kd_press = 1;
         player->on_ground = 0;
         c->air_accum += f / k;
-        while (c->air_accum >= 1.0f) {   /* FUN_002e3a60, one game step at a time */
+        if (player_floor_fn && !player_floor_fn(player->x, start_y, player->z, 45.0f, &floor_y)) floor_y = -1.0e9f;
+        while (c->air_accum >= 1.0f) {   /* FUN_002e3a60, one game step at a time, unless it meets the floor */
+            if (c->kd_vy < 0.0f && player->y + c->kd_vy * k <= floor_y) { player->y = floor_y; c->air_accum = 0.0f; break; }
             c->air_accum -= 1.0f;
             player->x += sinf(back) * c->kd_speed * k;
             player->z += cosf(back) * c->kd_speed * k;
@@ -1069,7 +1166,12 @@ static int knockdown_update(Combat *c, Player *player, const PlayerInput *input,
             player->on_ground = 1;
             c->kd_landed = 1;
             c->kd_speed *= KNOCK_LAND_SPEED;
+            if (c->kd_pop && player->health > 0.0f) start_move(c, MOVE_POP_LAND, 0);
         }
+        return 1;
+    }
+    if (c->kd_pop) {   /* dead from a pop: lie in its last pose */
+        c->dead_time += f;
         return 1;
     }
     {
@@ -1085,6 +1187,11 @@ static int knockdown_update(Combat *c, Player *player, const PlayerInput *input,
             if (c->frame > m->end_frame) c->frame = m->end_frame;
             c->dead_time += f;
             return 1;
+        }
+        if (c->kd_launch) {
+            /* +0x2858 / +0x285c: only a press while the window is open (flags 2-3) counts; flag 4 recovers anyway. */
+            if (c->frame >= fl[1] && c->frame < fl[2] && (face || player->style == STYLE_TRICKSTER)) c->kd_press = 1;
+            if ((c->frame >= fl[2] && c->kd_press) || c->frame >= fl[3]) { start_move(c, MOVE_RECOVER, 0); return 1; }
         }
         if (was < fl[2] && c->frame >= fl[2] && c->kd_press) { start_move(c, MOVE_RECOVER, 0); return 1; }
         if (c->frame >= fl[3] || c->frame >= m->end_frame) {
@@ -1105,6 +1212,31 @@ static MoveId twosome_move(const Player *player, const PlayerInput *input, MoveI
         if (fabsf(d) > 0.785f) return action_move(d > 0.0f ? 252 : 250);
     }
     return first;
+}
+
+/* FUN_0026b1d0 / FUN_0026af60: a Twosome Time series picks its set at random (+0x3c6d: 18:0-3, or 18:4-7 from
+ * table 0x595564), and its shots alternate the guns, playing frames 0-13 or 15-28; the first is from 15 either
+ * way (+0x299f made even for set 0, odd stays for set 1). */
+static void twosome_pose(Combat *c, int first) {
+    const Motion *m;
+    int idx, s;
+    if (c->script < 0) return;
+    if (first) { c->twosome_set = rand() & 1; c->twosome_shots = 0; }
+    idx = atoi(script_data[c->script].key + 3);
+    if (c->twosome_set && idx < 4) {
+        char key[8];
+        snprintf(key, sizeof(key), "18:%d", idx + 4);
+        for (s = 0; s < SCRIPT_DATA_COUNT; ++s)
+            if (!strcmp(script_data[s].key, key)) {
+                int mo = motion_find(script_data[s].motion);
+                if (mo >= 0) { c->script = s; c->motion = mo; }
+                break;
+            }
+    }
+    m = motion_get(c->motion);
+    c->frame = m->loop_start + ((c->twosome_shots++ & 1) ? 0.0f : 15.0f);
+    motion_root(m, c->frame, c->last_root);
+    seek_events(c);
 }
 
 void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
@@ -1156,6 +1288,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             {
                 int again = c->action == 134, in_stance = c->stance_active;
                 start_move(c, first, action);
+                if (action == 134) twosome_pose(c, !again);
                 /* FUN_0026b1d0: the first Twosome Time waits 10 frames from outside the gun stance, 3 in it,
                  * before it fires; the shot's 13 frames count from there (PS2: 22 frames from a stand). */
                 if (action == 134 && !again && c->shots_pending >= moves[first].shot) {
@@ -1307,7 +1440,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         /* One real game step every 60th of a second, however long this frame was. */
         c->air_accum += dt * MOTION_FPS / k;
         if (d->hover && !c->hover_done) c->air_accum = 0.0f;   /* waiting: he stays where he is */
+        /* FUN_00242200 checks the floor before the step (FUN_002e2560): a step that would go through it isn't
+         * taken, he lands where he is (PS2 beo_cair: the dive kick lands 34 cm short of a full last step). */
+        if (player_floor_fn && !player_floor_fn(player->x, frame_start_y, player->z, 45.0f, &floor_y)) floor_y = -1.0e9f;
         while (c->air_accum >= 1.0f) {
+            if (c->air_v[2] < 0.0f && player->y + c->air_v[2] * k <= floor_y) { player->y = floor_y; c->air_accum = 0.0f; break; }
             c->air_accum -= 1.0f;
             player->x += s * c->air_v[0] * k;
             player->z += co * c->air_v[0] * k;
@@ -1424,6 +1561,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
                     /* A new R1 sector (FUN_0026b0d0) turns first: 10 frames before that shot. */
                     MoveId was = c->move, next = twosome_move(player, input, action_move(134));
                     start_move(c, next, 0);
+                    twosome_pose(c, 0);
                     if (next != was) {
                         c->shots_pending -= moves[next].shot;
                         c->delayed_shot = moves[next].shot;
@@ -1454,6 +1592,32 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         return;
     }
 
+    /* The run along a wall (FUN_00227fb0 state 4): FUN_0024c880 looks for the wall beside him each frame, a ray
+     * from 100 cm up 150 cm toward it; when it's gone he kicks off at once. The kick (state 5) leaves at the
+     * motion's flag: row 10 away from the wall, his facing kept. */
+    if (c->move == MOVE_TR_WALL_RUN_L || c->move == MOVE_TR_WALL_RUN_R) {
+        float to = player->yaw + (c->move == MOVE_TR_WALL_RUN_R ? -0.5f : 0.5f) * (float)M_PI, hit;
+        float a[3] = {player->x, player->y + 100.0f, player->z};
+        float b[3] = {a[0] + sinf(to) * 150.0f, a[1], a[2] + cosf(to) * 150.0f};
+        if (stage_loaded() && !stage_raycast(a, b, &hit)) { wall_next_early(c, player, d->next); return; }
+    }
+    /* Straight up (state 1), the same check ahead of him (FUN_0024c880 with +0x3c6d 2): once the wall has ended
+     * under 100 cm up from his feet he goes to the flip at once, not on up past its top. The game also wants the
+     * hit within 20 degrees of head-on and 300 cm clear overhead; the reach, 100 cm, is the straight check's. */
+    if (c->move == MOVE_TR_WALL_HIKE && c->phase_time * MOTION_FPS > 2.0f) {
+        float a[3] = {player->x, player->y + 100.0f, player->z}, hit;
+        float b[3] = {a[0] + sinf(player->yaw) * 100.0f, a[1], a[2] + cosf(player->yaw) * 100.0f};
+        if (stage_loaded() && !stage_raycast(a, b, &hit)) { wall_next_early(c, player, d->next); return; }
+    }
+    if ((c->move == MOVE_TR_WALL_KICK_L || c->move == MOVE_TR_WALL_KICK_R) && c->phase_time * MOTION_FPS >= WALL_KICK_FLAG) {
+        float away = player->yaw + (c->move == MOVE_TR_WALL_KICK_R ? 0.5f : -0.5f) * (float)M_PI;
+        float at[3] = {player->x + sinf(away) * 5.0f, player->y, player->z + cosf(away) * 5.0f};
+        end_move(c, player);
+        player_wall_kick(player, away);
+        nfx_spawn_e(NFX_STATIC, 235, at, away, 0);   /* FUN_002fd0c0: E235 5 cm out along the wall's normal */
+        return;
+    }
+
     /* Continuations within the action, or the end of the move. */
     if (c->move == MOVE_STINGER_HOLD) {
         if (stinger_dash_over(c, player)) start_move(c, d->next, 0);
@@ -1469,7 +1633,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         else {
             int wall_kick = c->move == MOVE_TR_WALL_FLIP;
             end_move(c, player);
-            if (wall_kick) player_wall_kick(player, player->yaw + (float)M_PI);
+            if (wall_kick) {
+                float away = player->yaw + (float)M_PI, at[3] = {player->x + sinf(away) * 5.0f, player->y, player->z + cosf(away) * 5.0f};
+                player_wall_kick(player, away);
+                nfx_spawn_e(NFX_STATIC, 235, at, away, 0);   /* FUN_00227fb0 state 2: FUN_002fd0c0's E235 */
+            }
         }
     }
 }
@@ -1479,15 +1647,15 @@ int combat_dante_can_die;
 float combat_dead_frames(const Combat *c) { return c->dead_time; }
 
 /* FUN_002e8d20 picks the reaction class from the attack record's kind (+0x18): kind 0 flinches (class 1), 1 heavy
- * flinch (2), 2-5 knockdown (3, 5), 6 class 6 (1:13 / 1:14, not ported: a heavy flinch here), 7 the launch (4);
- * in the air every kind but 6 knocks him down, and so does a hit that takes his health to 0. */
+ * flinch (2), 2-5 knockdown (3, 5), 6 the pop up (6), 7 the hang then knockdown (4); in the air every kind but 6
+ * knocks him down, and so does a hit that takes his health to 0. */
 int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage) {
     float to_attacker;
     int front, down;
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
         c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK ||
         c->move == MOVE_DOWN || c->move == MOVE_DOWN_FAR || c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR ||
-        c->move == MOVE_RECOVER || player->health <= 0.0f) return 1;
+        c->move == MOVE_RECOVER || c->move == MOVE_POP || c->move == MOVE_POP_LAND || player->health <= 0.0f) return 1;
     /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
     if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
@@ -1499,11 +1667,13 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
     player->jump_motion = -1;
     c->air = 0;
     c->base_y = player->y;
-    down = (kind >= 2 && kind <= 5) || kind == 7 || (!player->on_ground && kind != 6) || player->health <= 0.0f;
+    down = (kind >= 2 && kind <= 7) || !player->on_ground || player->health <= 0.0f;
+    if (kind == 6 && player->health <= 0.0f) kind = 0;   /* FUN_002e8d20: an emptying hit is class 3 */
+    if (kind == 7 && !player->on_ground) kind = 0;       /* in the air kind 7 is class 3 too */
     if (down) {
         /* FUN_002e9a40 state 0: he faces the attacker and flies away from it. */
         player->yaw = to_attacker;
-        start_knockdown(c, player, kind == 7 ? 0 : kind);
+        start_knockdown(c, player, kind);
         return 1;
     }
     /* FUN_002e96a0 (light) / FUN_002e98d0 (heavy): hit from within 90 degrees of his facing (FUN_002e2be0) he

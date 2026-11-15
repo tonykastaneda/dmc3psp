@@ -128,6 +128,13 @@ are the PS2's dispatch numbers (`FUN_002213e0`).
 - **Devil Trigger** runs him 1.1x as fast.
 - **Turbo**: one step every 60th of a second with a delta of 1.2. The air states step the same way in the port, so arcs match frame for frame at either speed and at 30 or 60 FPS (`tools/hd_score.py`).
 - **Wall Hike** checks four rays at +100 to +250 cm within a 25 degree limit. On the ground it stays a dash at every real wall tried, despite a ground branch in the code (+0xe0, 30 degrees); why is unknown.
+  In the air FUN_0024b510 case 2 tries that straight one first (+0xe8, 25 degrees), then the run along the wall
+  (`FUN_0024c280`, +0xec 75 degrees, read over PINE; then `FUN_0024c570`'s four rays 75-300 cm along it): he turns
+  along the wall the side the stick leans (+0x3c6d 0 / 1, 23:7 / 23:9 on their root), `FUN_0024c880` checks the wall
+  beside him each frame, then 23:8 / 23:10 and 12 frames in row 10 straight away from the wall (PCSX2 at the street's
+  wall: the climb identical frame for frame, the kick on the same frame). Straight up, the same check ahead ends the
+  climb at the wall's top. Each kick spawns E235 (`FUN_002fd0c0`). Bank 0's motions past 0x13 (2-36 to 2-40 among
+  them) aren't packed; 2-16 stands in.
 - **Port**: START opens a debug menu: game speed (Turbo is the default in play; test scenes run at normal
   speed), dummies 0 to 4, stand or attack, animation viewer. Attacking dummies are a stand-in, not the real AI,
   with one coming in at a time. Dante's hit reactions have no damage, knockback or knockdown yet.

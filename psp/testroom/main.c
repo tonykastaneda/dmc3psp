@@ -1823,6 +1823,8 @@ static int cmp_lv_auto_from=-1,cmp_lv_auto_target=-1;
 static int cmp_vr_auto_from=-1,cmp_stop_on_clear;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
 static int cmp_enemy_audit, cmp_enemy_stress;
+static int cmp_audit_fast, cmp_audit_room_count;
+static struct { int frame, mission, room, start; } cmp_audit_rooms[128];
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
 static struct { int frame, part; float amount; } cmp_lv_charge[8];
 static int cmp_lv_charge_count; /* "lvcharge frame part amount": deterministic boss attack capture */
@@ -1959,6 +1961,13 @@ static void cmp_load(void) {
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
         else if (strncmp(line, "enemyaudit ", 11) == 0) cmp_enemy_audit = atoi(line + 11);
         else if (strncmp(line, "enemystress ", 12) == 0) cmp_enemy_stress = atoi(line + 12);
+        else if (strncmp(line, "auditfast ", 10) == 0) cmp_audit_fast = atoi(line + 10);
+        else if (strncmp(line, "auditroom ", 10) == 0 && cmp_audit_room_count < 128) {
+            int n = cmp_audit_room_count;
+            if (sscanf(line+10,"%d %d %d %d",&cmp_audit_rooms[n].frame,&cmp_audit_rooms[n].mission,
+                       &cmp_audit_rooms[n].room,&cmp_audit_rooms[n].start) == 4 &&
+                cmp_audit_rooms[n].mission >= 1 && cmp_audit_rooms[n].mission <= MISSION_COUNT) ++cmp_audit_room_count;
+        }
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
@@ -3698,6 +3707,14 @@ int main(int argc, char *argv[]) {
             if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
             read_pad(&input, &previous_buttons, &previous_l);
         }
+        if (focus_cmp && cmp_enemy_audit && cmp_audit_room_count) {
+            int a;
+            for (a = 0; a < cmp_audit_room_count; ++a) if (cmp_audit_rooms[a].frame == frames) {
+                mission_choice.mission = cmp_audit_rooms[a].mission;
+                cmp_start_room = cmp_audit_rooms[a].room; cmp_start_pos = cmp_audit_rooms[a].start;
+                start_mission(&mission_choice,&player,&camera);
+            }
+        }
         last_time = frame_start;
         {
             int was_open = debug_open || pause_active;
@@ -4582,7 +4599,7 @@ int main(int argc, char *argv[]) {
 
         ++frames;
         testroom_frame = frames;
-        sceDisplayWaitVblankStart();
+        if (!(focus_cmp && cmp_enemy_audit && cmp_audit_fast)) sceDisplayWaitVblankStart();
         draw_buffer = sceGuSwapBuffers();
         if (focus_pending) { focus_hold(focus_pending); focus_pending = NULL; }
     }

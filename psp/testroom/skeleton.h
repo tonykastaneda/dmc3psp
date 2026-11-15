@@ -42,6 +42,9 @@ typedef struct {
     int viewer;            /* motion viewer active */
     int viewer_motion;
     float viewer_frame;
+    float idle_time;       /* frames stood still in the plain idle (FUN_002217a0's +0x2874, from 600) */
+    int long_idle;         /* 2-03 playing */
+    float long_frame;
 } AnimState;
 
 void anim_reset(AnimState *anim);

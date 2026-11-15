@@ -140,9 +140,17 @@ static void air_kick(Player *player, int kind, const float stick[2]) {
     player->hike_fx = kind == AIR_STEP ? 2 : 1;
 }
 
+/* Bank 0's motions past 0x13 (the falls 0x24 / 0x25, Air Hike's rise 0x26 / 0x27, the wall kick 0x28, the high
+ * landings 0x1f / 0x20) aren't in the PAC chunk the port packs: the in-air loop 2-16 stands in, so the air steps
+ * that need a motion to run still run. */
+static int air_motion(const char *name) {
+    int m = motion_find(name);
+    return m >= 0 ? m : motion_find("2-16");
+}
+
 /* Wall Hike's kick off the wall (FUN_00227fb0 step 3): row 10, on the arc at once. */
 void player_wall_kick(Player *player, float away_yaw) {
-    int m = motion_find("2-40");
+    int m = air_motion("2-40");
     player->air_kind = AIR_HIKE;
     player->air_col = 0;
     player->air_hold = 0.0f;
@@ -394,7 +402,7 @@ void player_settle(Player *player, int walls) {
         if (walls && fabsf(ground - player->y) > 1.0f) stage_collide(&player->x, &player->z, ground, PLAYER_RADIUS);
         player->y = ground;
     } else {
-        int m = motion_find("2-36");   /* 2:0x24 */
+        int m = air_motion("2-36");   /* 2:0x24 */
         player->on_ground = 0;
         player->vy = 0.0f;
         if (!player->attacking && m >= 0) {
