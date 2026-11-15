@@ -295,8 +295,17 @@ script id at player+0x24c6 on the PS2). Before / after are the port.
 
 Dante hit (FUN_002e96a0 light, FUN_002e98d0 heavy): from within 90 degrees of his facing (FUN_002e2be0) he turns to the
 attacker and plays 1:0 or, half the time, 1:15 (heavy 1:2); from behind he turns away and plays 1:1 (heavy 1:3). The
-port played 1:0 / 1:2 turned to the attacker every time. Not ported yet: knockdown (FUN_002e9a40: 1:4 / 1:26 / 1:5 /
-1:27 by the attack's kind +0x2ae2, launched with config speeds, quick recovery on a face button), death.
+port played 1:0 / 1:2 turned to the attacker every time.
+
+Knockdown (FUN_002e8d20 -> FUN_002e9a40): the attack record's kind (+0x18) picks the reaction: 0 flinch, 1 heavy
+flinch, 2-5 and 7 knockdown, any hit in the air or one that empties his health too. He faces the attacker and flies
+away with the player config's speeds (chunk 9: kinds 0-2 10.4 up, gravity -1.2, 10 back; 3: 12 / -1.2 / 15; 4: 10.4 /
+-0.8 / 6.4; others 12.4 / -0.8 / 12), slides on at 0.3 of it, and script 1:4 (1:5 for kinds 4+) holds its pose at
+12 (41) until the floor. A face button before its flag 2 (13 / 43), or Trickster, gives the quick recovery 1:6 at flag 3
+(20 / 50); otherwise he gets up at flag 4 (60 / 80) with 1:7 (1:9). Port, hitme 20 2 500 in M1: 200 cm in the air,
+lands lying, Trickster recovers, Swordmaster gets up. Kinds come from the records for Agni & Rudra, Cerberus and Vergil;
+other enemies still pass heavy / light (1 / 0). Not ported: class 6 (1:13 / 1:14, a heavy flinch here), the launch
+class 4's own handler (FUN_002e9f50, a knockdown here), and the Game Over screen.
 
 Also from flag 0x800: Gun Stinger (146) and Artemis's CIR shot (152) are Gunslinger only.
 Not matched yet: Twosome Time's random pick of 18:0-3 or 18:4-7 (+0x3c6d) and its start frame 15 for even
