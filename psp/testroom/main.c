@@ -2987,7 +2987,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20 op 8c 13620 then wait 300; cinematic side effects omitted. */
         m20_ending_frames+=dt*60;
-        if(m20_ending_frames>=13920){enemy_kill_all();return 1;}
+        if(m20_ending_frames>=13920 && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
     }
     if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
     fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
