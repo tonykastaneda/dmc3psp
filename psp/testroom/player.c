@@ -158,9 +158,12 @@ static void air_step(Player *player, const float stick[2], int held) {
     float limit = player_room_limit, k = player_step_scale;
     if (player->air_kind == AIR_JUMP) {
         if (player->jump_time < JUMP_CROUCH_FRAMES) {
-            /* FUN_002222c0: on the ground, turning to the stick's direction over 5 frames. */
-            float left = 5.0f - player->jump_time;
-            if (left > 0.0f && player->air_col != 2) player->yaw = wrap_angle(player->yaw + wrap_angle(player->air_yaw - player->yaw) / left);
+            /* FUN_002222c0: the press frame only sets the state up (step 0); from the next one he turns to
+             * the stick's direction over 5 frames (FUN_002e3010, a fifth of the turn a frame) while the
+             * crouch plays, until the motion's flag (+0x24d5) starts the arc. */
+            float left = 6.0f - player->jump_time;
+            if (player->jump_time >= 1.0f && left > 0.0f && player->air_col != 2)
+                player->yaw = wrap_angle(player->yaw + wrap_angle(player->air_yaw - player->yaw) / left);
             player->jump_time += k;
             if (player->jump_time >= JUMP_CROUCH_FRAMES) {
                 air_arc(player, 0);
@@ -508,7 +511,17 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
                 /* One real game step every 60th of a second, however long this frame was. */
                 player->air_accum += dt * MOTION_FPS / player_step_scale;
                 while (player->air_accum >= 1.0f) {
+                    float floor_y;
                     player->air_accum -= 1.0f;
+                    /* FUN_00242200, before the step in every air state (FUN_002224a0, FUN_00222700, FUN_00228950):
+                     * falling, and this step would take him to within 10 cm of the floor, he's put on it and lands
+                     * without moving this frame. PS2 (PCSX2 runjump): touchdown with no carry, 6.4 cm sooner. */
+                    if (player->air_vy < 0.0f && floor_at(player->x, player->y, player->z, &floor_y) &&
+                        player->y + player->air_vy * player_step_scale <= floor_y + 10.0f) {
+                        player->y = floor_y;
+                        player->air_accum = 0.0f;
+                        break;
+                    }
                     air_step(player, stick_world, input->jump_held);
                 }
                 player->vy = (player->y - prev_y) / (dt > 0.0f ? dt : 1.0f / 60.0f);
