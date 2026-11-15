@@ -45,7 +45,7 @@
 #define AIR_TRICK_AIR_WAIT 8.0f   /* from the air the warp starts at frame 8 */
 
 enum { BTN_NONE, BTN_TRI, BTN_CIR, BTN_SQ };
-enum { NEXT_END, NEXT_TIME, NEXT_FLAG1, NEXT_FLAG2, NEXT_LAND, NEXT_MASH, NEXT_CHARGE, NEXT_TIMER, NEXT_STANCE, NEXT_SHOT };
+enum { NEXT_END, NEXT_TIME, NEXT_FLAG1, NEXT_FLAG2, NEXT_LAND, NEXT_MASH, NEXT_CHARGE, NEXT_TIMER, NEXT_STANCE, NEXT_SHOT, NEXT_PATTERN };
 #define GUN_WALK_SPEED 3.5f        /* cm per frame: movement table +4 */
 #define GUN_WALK_TURN 0.19635f     /* 0x800 per frame: the travel direction's turn limit */
 #define GUN_AIM_TURN 0.41888f      /* player config +0xc0 = 24 degrees per frame */
@@ -92,6 +92,16 @@ typedef struct {
     float flag_g;          /* at flag 1 only the gravity changes to this (Aerial Rave: -1.5), 0 = no */
     float stop_below;      /* forward speed under this stops (FUN_002e3f60; Aerial Rave: 2) */
     int hover;             /* the air velocities wait, no movement or gravity, until flag 1 or the end (Nevan 6:34) */
+    /* The air guns (FUN_0026b8b0, FUN_0026a710, FUN_0026d040, FUN_0026e850): moving keep_min or more as the
+     * move starts keeps keep_speed forward, else he stops (keep_min 0 = air_v as it is). */
+    float keep_min, keep_speed;
+    float until_height;    /* falling this close to the floor or closer ends the phase (Rain Storm: 150) */
+    float mash_gap;        /* NEXT_PATTERN: held while btn has more than mash_presses presses, gaps <= mash_gap */
+    int mash_presses;
+    MoveId moving_move;    /* the next phase instead when the jump had the stick (0 / MOVE_NONE = none) */
+    float set_speed;       /* forward speed set as the phase starts, vy and gravity kept (0 = no) */
+    float auto_first;      /* frames to the first auto_fire shot (0 = auto_fire) */
+    int auto_keep;         /* the auto_fire timer runs on from the phase before */
 } MoveDef;
 
 #define S(key) key, NULL
@@ -319,6 +329,7 @@ void combat_reset(Combat *c) {
 }
 
 static void end_move(Combat *c, Player *player) {
+    int was_action = c->action;
     c->last_move_for_end = c->move;
     c->fade_seconds = FADE_SECONDS;   /* back to locomotion: player.c's own blends (not traced here) */
     c->fade_motion = c->motion;
@@ -334,7 +345,11 @@ static void end_move(Combat *c, Player *player) {
     c->dashes = 0;        /* FUN_0021f500 (back to neutral) clears the dash count */
     c->warp_time = 0.0f;
     /* Still in the air: the fall carries on from the move's vertical speed (FUN_0021df00 is handed +0x64). */
-    if (c->air && !player->on_ground) player->vy = c->air_v[2] * MOTION_FPS;
+    if (c->air && !player->on_ground) {
+        player->vy = c->air_v[2] * MOTION_FPS;
+        /* Rain Storm's end (FUN_0026b8b0 step 3 -> FUN_0021df00 type 8): the fall state, then a landing stop. */
+        if (was_action == 135) player_fall_from_move(player, c->air_v[2]);
+    }
     c->air = 0;
     /* Shots hand over to the stance; anything else leaves the legs to it too. */
     if (moves[c->last_move_for_end].layered) c->stance_timer = c->stance_timer > GUN_STANCE_AFTER_SHOT ? c->stance_timer : GUN_STANCE_AFTER_SHOT;
@@ -393,7 +408,7 @@ static void start_move(Combat *c, MoveId move, int action) {
     c->charge_looped = 0;
     c->phase_frames = 0.0f;
     c->shots_pending += moves[move].shot;
-    c->auto_timer = moves[move].auto_fire;
+    if (!moves[move].auto_keep) c->auto_timer = moves[move].auto_first > 0.0f ? moves[move].auto_first : moves[move].auto_fire;
     c->shot_buffered = 0;
     if (moves[move].layered) c->upper_pending = 1;
     else if (!moves[move].gun || !c->stance_active) c->lower_motion = -1;
@@ -401,7 +416,9 @@ static void start_move(Combat *c, MoveId move, int action) {
     if (moves[move].air) {
         memcpy(c->air_v, moves[move].air_v, sizeof(c->air_v));
         c->air = 1;
+        if (moves[move].keep_min > 0.0f) c->air_v[0] = c->carry_speed >= moves[move].keep_min ? moves[move].keep_speed : 0.0f;
     }
+    if (moves[move].set_speed > 0.0f) { c->air_v[0] = moves[move].set_speed; c->air_v[1] = 0.0f; }
     c->pending = 0;
     c->active = 0;
     c->phase_time = 0.0f;
@@ -1264,6 +1281,10 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     c->held_tri = input->melee_held;
     c->held_sq = input->gun_held;
     c->held_cir = input->style_held;
+    /* What an air move starting this frame carries on from: the last air move's speed, or the jump's. */
+    c->carry_speed = c->move != MOVE_NONE && c->air ? c->air_v[0] : player->on_ground ? player->speed : player->air_speed;
+    if (player->on_ground) c->jump_moving = 0;
+    else if (c->move == MOVE_NONE) c->jump_moving = player->air_col != 4;
 
     if (c->fade_weight > 0.0f) c->fade_weight -= c->fade_seconds > 0.0f ? dt / c->fade_seconds : 1.0f;
     if (c->fade_weight < 0.0f) c->fade_weight = 0.0f;
@@ -1605,10 +1626,28 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
                 seek_events(c);
             }
             break;
+        case NEXT_PATTERN: {
+            /* FUN_0026b8b0 step 2: the input pattern (kind 8, FUN_00253650) is tested every frame; it fails once
+             * the presses run out or a gap passes mash_gap. Only the 9-frame CIR counter exists here
+             * (SHORT_MASH_GAP_SECONDS), which is Rain Storm's pattern 43. After `frames` the table's next pattern
+             * (44) can't match. */
+            int presses = c->cir_short_mash;
+            float gap = c->since_cir_short * MOTION_FPS;
+            c->phase_frames += dt * MOTION_FPS;
+            if (presses <= d->mash_presses || gap > d->mash_gap || c->phase_frames > d->frames) go = 1;
+            else if (at_end) {
+                c->frame = m->loop_start;
+                motion_root(m, c->frame, c->last_root);
+                seek_events(c);
+            }
+            break;
+        }
         default: break;
         }
+        if (d->until_height > 0.0f && height_above_floor(player) <= d->until_height) go = 1;
         if (go) {
-            if (d->next != MOVE_NONE) start_move(c, d->next, 0);
+            MoveId next = d->moving_move && d->moving_move != MOVE_NONE && c->jump_moving ? d->moving_move : d->next;
+            if (next != MOVE_NONE) start_move(c, next, 0);
             else end_move(c, player);
         }
         return;

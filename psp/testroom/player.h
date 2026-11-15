@@ -172,6 +172,7 @@ extern int camera_auto_follow;
 
 void player_reset(Player *player, FollowCamera *camera);
 void player_wall_kick(Player *player, float away_yaw);
+void player_fall_from_move(Player *player, float vy);
 /* After the frame's wall and body pushes: floor follow, or a fall off an edge. */
 void player_settle(Player *player, int walls);
 /* What one game step counts for: 1 at normal speed, 1.2 in Turbo. The real game runs one step

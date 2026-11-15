@@ -11,6 +11,7 @@ A phase is P(script, ...):
             charge   the button is released (motion loops from `start` until then);
                      `tiers` picks the next script by charge time (FUN_00279 family)
             timer    `frames` frames, replaying the motion
+            pattern  while the `mash` input pattern holds, `frames` at most, replaying the motion
   start   motion frame to start at (FUN_002500d0's first argument)
   air     (speed, speed_accel, vy, gravity) per 60 fps frame: FUN_002e3f50 and
           FUN_002e3ef0, applied when the phase starts. A number is an offset into
@@ -45,6 +46,15 @@ class P:
     flag_g: float = 0.0         # at flag 1 only the gravity changes to this (the air swings' -1.5)
     stop_below: float = 0.0     # forward speed under this stops (FUN_002e3f50(0, 0))
     hover: bool = False         # the air velocities wait (no movement, no gravity) until flag 1 or the motion's end
+    # The air guns' start (FUN_00131b50(+0x170) < 3 ? FUN_002e3f60 : FUN_002e3f50(v, 0)): (min, speed) keeps
+    # `speed` forward when he was already moving at `min` or more, else stops him.
+    keep: tuple = ()
+    until_h: float = 0.0        # the phase also ends once falling at this height above the floor or less
+    mash: tuple = ()            # adv="pattern": (gap, presses) kind-8 input pattern, held each frame; `frames` at most
+    moving: Optional[tuple] = None  # (script, speed): the next phase instead, for a jump with the stick (+0x2904 != 4)
+    speed: float = -1.0         # forward speed set as the phase starts (vy and gravity kept)
+    auto_first: float = 0.0     # frames before the first `auto` shot (else `auto`)
+    auto_keep: bool = False     # the `auto` timer runs on from the last phase
 
 
 def wcfg_air(spd, vy):
@@ -152,22 +162,31 @@ ACTIONS = {
     130: [P("8:6", adv="shot", frames=13.0, refire=7.0, shot=1, layered=True)],
     131: [P("8:6", adv="shot", frames=13.0, refire=7.0, shot=1, layered=True)],
     # Air shots, HD Collection traces: a kick upward each, and more presses fire again (combat.c).
-    132: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
-    133: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1)],
+    # FUN_0026a710: forward config +0x120 = 1.5 when he was already moving 3 or more, else stopped.
+    132: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1, keep=(3.0, 1.5))],
+    133: [P("8:32", adv="land", air=("raw", 0.0, 0.0, 11.0, -1.25), shot=1, keep=(3.0, 1.5))],
     134: [P("18:0", shot=2, adv="timer", frames=13.0)],   # FUN_0026b1d0: back to the stance 13 frames in
     # Twosome Time's way with R1 (FUN_0026b0d0 / FUN_0026af60): table 0x595550 by FUN_00254180's sector:
     # forward 18:0, left 18:3, back 18:2, right 18:1. Not commands: combat.c swaps them in for action 134.
     250: [P("18:1", shot=2, adv="timer", frames=13.0)],
     251: [P("18:2", shot=2, adv="timer", frames=13.0)],
     252: [P("18:3", shot=2, adv="timer", frames=13.0)],
-    # Rain Storm (FUN_0026b8b0): vy / gravity from the config +0x18c / +0x190 (5, -0.35) at the start, then
-    # +0x1a0 / +0x1a4 (0, -0.5) in the loop; the end keeps falling on those.
-    135: [P("18:15", air=("vy", 0x18C, 0x190)), P("18:16", adv="mash", loop="18:16", btn="CIR", air=("vy", 0x1A0, 0x1A4), auto=7.0, shot=1), P("18:17")],
+    # Rain Storm (FUN_0026b8b0): vy / gravity from the config +0x18c / +0x190 (5, -0.35) at the start, 1.5
+    # forward if he was moving 3 or more; then +0x1a0 / +0x1a4 (0, -0.5) in the loop, stopped. Shots from 12
+    # frames in, then every cfg +0x688/+0x68c/+0x690 by the style level (4 at the top). The loop holds while
+    # input pattern 43 does (CIR more than 3 times, gaps <= 9 frames; PTR_PTR_00594b7c[.][0]), 35 frames at most
+    # (+0x194, then pattern 44, which can't match), and ends at +0x188 = 150 over the floor: 18:17 after a
+    # jump straight up (+0x2904 4 / 2), else 18:18 with 2.0 forward.
+    135: [P("18:15", air=("vy", 0x18C, 0x190), keep=(3.0, 1.5), auto=4.0, auto_first=12.0),
+          P("18:16", adv="pattern", btn="CIR", mash=(9.0, 3), frames=35.0, until_h=150.0, air=("vy", 0x1A0, 0x1A4),
+            auto=4.0, auto_keep=True, moving=("18:18", 2.0)),
+          P("18:17")],
     136: [P("8:33"), P("8:34", adv="mash", loop="8:34", btn="SQ", auto=7.0, shot=1), P("8:39")],
     # Shotgun (the motion runs to its end, FUN_0026be70)
     140: [P("9:6", shot=1, layered=True)], 141: [P("9:6", shot=1, layered=True)],
-    142: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)],
-    143: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)],
+    # FUN_0026d040: forward config +0x138 = 1.75 when already moving 3 or more.
+    142: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1, keep=(3.0, 1.75))],
+    143: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1, keep=(3.0, 1.75))],
     144: [P("19:0", shot=1)],
     145: [P("19:1", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
     146: [P("19:2"), P("19:3", adv="timer", frames=20.0, shot=1), P("19:4")],
@@ -175,7 +194,7 @@ ACTIONS = {
     # Artemis
     # Fires on release: a few frames of 10:3, then 10:4 (HD Collection traces).
     150: [P("10:3", adv="timer", frames=4.0), P("10:4", shot=1)], 152: [P("10:3", adv="timer", frames=4.0), P("10:4", shot=1)],
-    151: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)], 153: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)],   # FUN_0026e850: vy config +0x13c / +0x140 at the shot (forward 1.75, +0x138, only when already moving 3 or more: not ported)
+    151: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1, keep=(3.0, 1.75))], 153: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1, keep=(3.0, 1.75))],   # FUN_0026e850: vy config +0x13c / +0x140 at the shot, forward +0x138 = 1.75 only when already moving 3 or more
     154: [P("20:2", shot=1)],
     155: [P("20:3", adv="mash", loop="20:3", loop_start=69.0, btn="CIR", shot=1), P("20:4")],
     # Spiral / Kalina Ann (FUN_0026f480 / FUN_00270300 pick from the tables above)

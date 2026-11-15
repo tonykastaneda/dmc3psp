@@ -164,6 +164,12 @@ SCRIPTS = {
     "hightime": (150, [("r1", 12, 140), ("ldown", 30, 60), ("triangle", 40, 43)]),
     "hightime_h": (170, [("r1", 12, 160), ("ldown", 30, 60), ("triangle", 40, 100)]),
     "stinger_c": (200, [("r1", 12, 190), ("lup", 30, 60), ("triangle", 40, 43), ("triangle", 80, 83)]),
+    # Rain Storm (Gunslinger, air circle) out of a running jump: circle mashed, circle held, mashed with the
+    # stick let go at take-off, and held from a standing jump.
+    "gs_rsrun": (280, [("style2", 2, 3), ("lup", 6, 270), ("cross", 60, 62)] + [("circle", f, f + 3) for f in range(84, 220, 8)]),
+    "gs_rsrunh": (280, [("style2", 2, 3), ("lup", 6, 270), ("cross", 60, 62), ("circle", 84, 230)]),
+    "gs_rsrunlet": (280, [("style2", 2, 3), ("lup", 6, 60), ("cross", 60, 62)] + [("circle", f, f + 3) for f in range(84, 220, 8)]),
+    "gs_rshold": (240, [("style2", 2, 3), ("cross", 20, 22), ("circle", 44, 200)]),
 }
 
 

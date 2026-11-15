@@ -110,6 +110,8 @@ typedef struct {
     int shot_buffered;     /* square pressed during a shot: fires again at the refire frame */
     int shot_hand;         /* alternates Ebony and Ivory */
     float auto_timer;
+    float carry_speed;     /* forward speed this frame before the move (FUN_00131b50(+0x170)), for keep_min */
+    int jump_moving;       /* this airtime's jump had the stick (+0x2904 != 4) */
     /* Gun stance (player+0x28a6, FUN_002436e0: R1 held, or just after a shot). */
     int stance_active;
     float stance_timer;    /* player+0x3c60: frames the stance outlasts R1 */

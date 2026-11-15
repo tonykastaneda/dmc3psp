@@ -151,6 +151,25 @@ static void air_script_motion(Player *player, const char *name, float frame) {
     player->jump_frame = frame;
 }
 
+/* A velocity-driven move whose motion ends in the air (Rain Storm's 18:17 / 18:18: FUN_0021df00(vy, -1.5, p, 8)):
+ * forward speed stopped, the move's vertical speed kept, 1.5 cm/frame^2, 0:36 playing (2-04 from 50), no stick
+ * drift (state 0xc), then the jump's landing (0:32) with its stop. */
+void player_fall_from_move(Player *player, float vy) {
+    player->air_kind = AIR_NONE;
+    player->air_col = 0;
+    player->air_yaw = player->yaw;
+    player->air_speed = 0.0f;
+    player->air_drift = 0.0f;
+    player->air_vy = vy;
+    player->air_g = -1.5f;
+    player->air_hold = 0.0f;
+    player->air_accum = 0.0f;
+    player->jump_time = JUMP_CROUCH_FRAMES;
+    player->vy = 0.0f;
+    player->speed = 0.0f;
+    air_script_motion(player, "2-04", 50.0f);   /* 0:36 */
+}
+
 /* Wall Hike's kick off the wall (FUN_00227fb0 step 3): row 10, on the arc at once. */
 void player_wall_kick(Player *player, float away_yaw) {
     player->air_kind = AIR_HIKE;

@@ -53,7 +53,7 @@ INPUTS = {  # command_table.csv input_text -> C enum
     "[Artemis equipped] hold CIR + charge CIR 0f release": "IN_RELEASE_CIR",
 }
 GAME_STYLES = {"2", "3"}  # weapon-independent style rows emitted: Trickster, Royalguard
-ADV = {"end": 0, "flag1": 2, "flag2": 3, "land": 4, "mash": 5, "charge": 6, "timer": 7, "stance": 8, "shot": 9}
+ADV = {"end": 0, "flag1": 2, "flag2": 3, "land": 4, "mash": 5, "charge": 6, "timer": 7, "stance": 8, "shot": 9, "pattern": 10}
 BTN = {"TRI": "BTN_TRI", "CIR": "BTN_CIR", "SQ": "BTN_SQ"}
 POSTURE = {"ground": "POSTURE_GROUND", "air": "POSTURE_AIR", "both": "POSTURE_BOTH"}
 
@@ -158,7 +158,7 @@ def build_moves(rows, weapon_cfg):
 
     def add(p, name, is_gun, next_ref):
         i = len(moves)
-        moves.append(dict(p=p, name=name, gun=is_gun, next=next_ref, loop=-1, lock=-1, tiers=[-1, -1, -1], tier_start=[-1.0] * 3))
+        moves.append(dict(p=p, name=name, gun=is_gun, next=next_ref, loop=-1, lock=-1, moving=-1, tiers=[-1, -1, -1], tier_start=[-1.0] * 3))
         return i
 
     for action, phases in sorted(ACTIONS.items()):
@@ -182,6 +182,11 @@ def build_moves(rows, weapon_cfg):
                 from moveset_phases import P
                 j = add(P(p.lock, adv=p.adv, frames=p.frames, refire=p.refire, shot=p.shot, layered=p.layered), name, is_gun, moves[i]["next"])
                 moves[i]["lock"] = j
+            if p.moving:
+                from moveset_phases import P
+                after = moves[moves[i]["next"]]["next"] if moves[i]["next"] is not None else None
+                j = add(P(p.moving[0], speed=p.moving[1]), name, is_gun, after)
+                moves[i]["moving"] = j
             for t, (script, start) in enumerate(p.tiers):
                 from moveset_phases import P
                 j = add(P(script, start=start), name, is_gun, moves[i]["next"])
@@ -363,9 +368,23 @@ def main():
             f.append(".hover = 1")
         if p.auto:
             f.append(f".auto_fire = {fl(p.auto)}")
+        if p.auto_first:
+            f.append(f".auto_first = {fl(p.auto_first)}")
+        if p.auto_keep:
+            f.append(".auto_keep = 1")
+        if p.keep:
+            f.append(f".keep_min = {fl(p.keep[0])}, .keep_speed = {fl(p.keep[1])}")
+        if p.until_h:
+            f.append(f".until_height = {fl(p.until_h)}")
+        if p.mash:
+            f.append(f".mash_gap = {fl(p.mash[0])}, .mash_presses = {p.mash[1]}")
+        if m["moving"] >= 0:
+            f.append(f".moving_move = {ref(m['moving'])}")
+        if p.speed >= 0.0:
+            f.append(f".set_speed = {fl(p.speed)}")
         if p.refire:
             f.append(f".refire = {fl(p.refire)}")
-        if p.adv in ("mash", "charge"):
+        if p.adv in ("mash", "charge", "pattern"):
             f.append(f".btn = {BTN[p.btn]}")
         if m["loop"] >= 0:
             f.append(f".loop_move = {ref(m['loop'])}")
