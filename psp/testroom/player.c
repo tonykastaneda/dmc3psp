@@ -607,7 +607,10 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
                     player->air_kind = AIR_NONE;
                     player->land_stop = JUMP_LAND_STOP_FRAMES;
                     player->speed = 0.0f;
-                    player->jump_motion = motion_find("2-04");
+                    /* FUN_0021ddb0: 0:31 (2-04 from 52) after a takeoff with the stick at rest (column 4), else
+                     * 0:32 (2-05 from 52); PCSX2: 001f after standing jumps and Air Hikes, 0020 after running jumps
+                     * and flips. */
+                    player->jump_motion = motion_find(player->air_col == 4 ? "2-04" : "2-05");
                     player->jump_frame = JUMP_LAND_FRAME;
                 }
             }
