@@ -3227,6 +3227,10 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }
     if (!held) room_set_cleared(mission_room);
     if (!held && mission_choice.mission == 18) m18_cleared(room_number(mission_room));
+    /* A direct-room audit must finish its requested samples after the last
+     * wave dies, without entering the blocking Mission Clear menu or taking
+     * a scripted exit. Ordinary audit mode still exercises normal routes. */
+    if (focus_cmp && cmp_enemy_audit == 2) return 0;
     if (mission_choice.mission == 12) {
         int next = 0, start = 0;
         if (m12_room_done(room_number(mission_room), &next, &start)) {   /* mission12.c: the ride's end */

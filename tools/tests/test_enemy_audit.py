@@ -60,6 +60,22 @@ class AuditEvidenceTests(unittest.TestCase):
         self.assertEqual(self.parse(rooms[1, 0])["violations"], 0)
         self.assertEqual(self.parse(rooms[3, 4])["violations"], 1)
 
+    def test_missing_authored_crossing_rows_cannot_pass(self):
+        with self.assertRaises(ValueError):
+            self.parse("mission,room,frame,slot,kind,other,violation,depth,x,y,z\n"
+                       "# frames=4 bodies=12 violations=0 expected=1\n")
+
+    def test_batch_preserves_authored_crossing_footer(self):
+        sys.path.insert(0, str(Path(__file__).parents[1]))
+        from enemy_audit_sweep import split_rooms
+        rooms = split_rooms("mission,room,frame,slot,kind,other,violation,depth,x,y,z\n"
+                            "4,111,2,0,100,-1,expected_wall,25,0,0,0\n"
+                            "# room_summary mission=4 room=111 frames=4 bodies=12 violations=0 expected=1\n"
+                            "# frames=4 bodies=12 violations=0 expected=1\n")
+        self.assertEqual(self.parse(rooms[4, 111])["expected"], {"expected_wall": 1})
+        with self.assertRaises(ValueError):
+            self.parse(rooms[4, 111].replace("4,111,2,0,100,-1,expected_wall,25,0,0,0", ""))
+
     def test_encounters_keep_each_secret_room_once(self):
         header = "static const RoomOp m1_1_600_ops static const RoomOp m2_1_600_ops "
         header += "static const RoomOp m3_1_006_ops static const RoomOp m3_0_006_ops"

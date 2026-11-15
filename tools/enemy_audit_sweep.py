@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -14,11 +15,11 @@ from enemy_audit import ROOT, GAME_ROOT, encounters, summarize
 def split_rooms(data):
     """Retain zero-violation rooms as evidence, using their body/frame counters."""
     summaries = {}
-    for m, r, frames, bodies, violations in re.findall(
-            r"# room_summary mission=(\d+) room=(-?\d+) frames=(\d+) bodies=(\d+) violations=(\d+)", data):
+    for m, r, frames, bodies, violations, expected in re.findall(
+            r"# room_summary mission=(\d+) room=(-?\d+) frames=(\d+) bodies=(\d+) violations=(\d+)(?: expected=(\d+))?", data):
         key = int(m), int(r)
-        row = summaries.setdefault(key, [0, 0, 0])
-        for i, value in enumerate((frames, bodies, violations)):
+        row = summaries.setdefault(key, [0, 0, 0, 0])
+        for i, value in enumerate((frames, bodies, violations, expected or 0)):
             row[i] += int(value)
     lines = data.splitlines()
     header = lines[0] + "\n"
@@ -29,7 +30,7 @@ def split_rooms(data):
         fields = line.split(",")
         rows.setdefault((int(fields[0]), int(fields[1])), []).append(line)
     return {key: header + "\n".join(rows.get(key, [])) + "\n" +
-            "# frames=%d bodies=%d violations=%d\n" % tuple(counts)
+            "# frames=%d bodies=%d violations=%d expected=%d\n" % tuple(counts)
             for key, counts in summaries.items()}
 
 
@@ -76,6 +77,10 @@ def main():
     if args.resume and meta_path.exists() and json.loads(meta_path.read_text()) != json.loads(json.dumps(metadata)):
         ap.error("resume metadata differs; use a new label for a changed executable or test")
     meta_path.write_text(json.dumps(metadata, indent=2))
+    executable = out / "EBOOT.PBP"
+    # Each batch must use the executable identified by metadata, even if a
+    # subsequent local build finishes while this long sweep is still running.
+    shutil.copy2(ROOT / "build/testroom/EBOOT.PBP", executable)
     results = []
     if args.resume and (out / "results.json").exists():
         results = json.loads((out / "results.json").read_text())
@@ -90,6 +95,7 @@ def main():
         cmd = [sys.executable, str(ROOT / "tools/ppsspp_scene.py"), name,
                "--mission", str(batch[0][0]), "--room", str(batch[0][1]),
                "--frames", str(len(batch) * args.frames),
+               "--eboot", str(executable),
                "--timeout", str(args.timeout),
                "--line", "enemyaudit 2", "--line", "auditfast 1", "--line", "fastwaves 1"]
         if args.stress:

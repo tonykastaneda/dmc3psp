@@ -171,6 +171,15 @@ contacts still fail. These records are not silently discarded or counted as
 zero mesh intersections. The collision audit continues to test proxy bodies,
 not weapons, cloth or exact triangle-to-triangle character meshes.
 
+The merged-build observation sweep covered all 93 scripted encounter cases:
+55,819 frames and 194,491 body samples, with no empty or incomplete captures.
+Its remaining ordinary-body case was M18 / 420: nine contacts during a landing
+against a doorway shoulder. Extending the wall-swept escape search from four
+to eight rings clears that exact 419-to-420 replay, with zero reports across
+601 room frames (`enemy_m18_corner_final_1115.png`, also frame 1119).
+Direct-room audit mode retains completed rooms until their requested sampling
+time ends, avoiding the blocking Mission Clear menu during wave-retirement tests.
+
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
 none of it is in the repo.
@@ -254,8 +263,9 @@ Things that are still not the game's:
 - **Bodies.** Enemies stop 96 cm apart and 88 cm from Dante, measured. How much Dante gives when pushed
   (`ENEMY_YIELDS`) is an estimate.
 - **Dante's hurt shape.** The port uses a vertical capsule, `DANTE_*`, not the game's.
-- **Knock-back on Dante.** Heavy or not comes from the attack type (`OP6`): the wide swing counts as
-  heavy. That reading is from the record's values, not from code.
+- **Knock-back on Dante.** `OP6` selects an attack record. Pride's records 0 and 1
+  both specify light kind 0; the wide swing increases damage to 800 rather than
+  changing that kind. See the executable check above.
 
 Not ported yet:
 
@@ -263,7 +273,6 @@ Not ported yet:
 - Rage (plan 41, `FUN_0032bc90`): only fires when another enemy dies, and these don't.
 - The spawn-in (plan 14, action 13). They start already walking.
 - Hits while lying down, and hitting walls.
-- Stage collision on the enemies' own moves.
 - Effects and sounds (`M[0x48]`), and DMD's Devil Trigger on enemies.
 
 ## Testing it
