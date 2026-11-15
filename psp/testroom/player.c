@@ -124,7 +124,7 @@ static void air_arc(Player *player, int row) {
 /* Air Hike and Enemy Step start the same way: the stick picks the direction, or none. */
 static void air_kick(Player *player, int kind, const float stick[2]) {
     int pushed = stick[0] != 0.0f || stick[1] != 0.0f;
-    int m = motion_find(kind == AIR_STEP ? "2-33" : "2-17");
+    int m = motion_find("2-17");   /* 0:17 Air Hike, 0:33 Enemy Step: both 2-17 from its start (2-33 isn't a motion) */
     player->air_kind = kind;
     player->air_col = pushed ? 0 : 4;
     if (pushed) player->yaw = player->air_yaw = atan2f(stick[0], stick[1]);
@@ -140,17 +140,19 @@ static void air_kick(Player *player, int kind, const float stick[2]) {
     player->hike_fx = kind == AIR_STEP ? 2 : 1;
 }
 
-/* Bank 0's motions past 0x13 (the falls 0x24 / 0x25, Air Hike's rise 0x26 / 0x27, the wall kick 0x28, the high
- * landings 0x1f / 0x20) aren't in the PAC chunk the port packs: the in-air loop 2-16 stands in, so the air steps
- * that need a motion to run still run. */
-static int air_motion(const char *name) {
+/* Bank 0's indices past 0x1d aren't motions but scripts replaying the base ones from a frame (op 1;
+ * analysis/moveset/motion_scripts.json): 0:36 / 0:37, the falls, 2-04 / 2-05 from 50; 0:38 / 0:39, Air Hike's rise,
+ * 2-04 / 2-05 from 7; 0:40, the wall kick, 2-09 from 7; 0:31 / 0:32, the landings, 2-04 / 2-05 from 52. */
+static void air_script_motion(Player *player, const char *name, float frame) {
     int m = motion_find(name);
-    return m >= 0 ? m : motion_find("2-16");
+    if (m < 0) m = motion_find("2-16");
+    if (m < 0) return;
+    player->jump_motion = m;
+    player->jump_frame = frame;
 }
 
 /* Wall Hike's kick off the wall (FUN_00227fb0 step 3): row 10, on the arc at once. */
 void player_wall_kick(Player *player, float away_yaw) {
-    int m = air_motion("2-40");
     player->air_kind = AIR_HIKE;
     player->air_col = 0;
     player->air_hold = 0.0f;
@@ -160,7 +162,7 @@ void player_wall_kick(Player *player, float away_yaw) {
     air_arc(player, 10);
     player->vy = 0.0f;
     player->on_ground = 0;
-    if (m >= 0) { player->jump_motion = m; player->jump_frame = 0.0f; }
+    air_script_motion(player, "2-09", 7.0f);   /* 0:40 */
 }
 
 /* One 60 fps frame of the air states. */
@@ -220,9 +222,8 @@ static void air_step(Player *player, const float stick[2], int held) {
         if (player->air_hold <= 0.0f) {
             player->air_hold = 0.0f;
             int first = player->air_kind == AIR_STEP ? 6 : 2;
-            int m = motion_find(player->air_col == 4 ? "2-38" : "2-39");
             air_arc(player, held ? first + 1 : first);
-            if (m >= 0) { player->jump_motion = m; player->jump_frame = 0.0f; }
+            air_script_motion(player, player->air_col == 4 ? "2-04" : "2-05", 7.0f);   /* 0:38 / 0:39 */
         }
         return;
     }
@@ -395,17 +396,26 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
 /* FUN_0021fe30 / FUN_0021f470, once the frame's moves and wall pushes are done: on the ground, with no floor within
  * 30 cm below him, he falls (state 9 from FUN_0021df00: no speed, 1.5 cm/frame^2, the stick's drift). */
 void player_settle(Player *player, int walls) {
-    float ground;
+    float ground, above;
+    int near;
     if (!player->on_ground) return;
-    if (floor_at(player->x, player->y, player->z, &ground) && ground >= player->y - LEDGE_DROP) {
+    /* FUN_00242200 looks for the floor from 130 cm over his feet. The port's floor test reaches 45 up, enough for a
+     * walk; a dash up a steep slope (M18 room 400's 58 degree bank, 34-60 cm a frame) outran it, left the slope
+     * over him, found nothing below and dropped him through the hill and out of the level. So before a fall the
+     * game's own reach is tried: a surface up to 130 cm over his feet takes him. */
+    near = floor_at(player->x, player->y, player->z, &ground) && ground >= player->y - LEDGE_DROP;
+    if (!near && floor_at(player->x, player->y + 130.0f - STEP_HEIGHT, player->z, &above) && above > player->y) {
+        ground = above;
+        near = 1;
+    }
+    if (near) {
         /* Up or down a slope the walls meet him at another height: push out again there. */
         if (walls && fabsf(ground - player->y) > 1.0f) stage_collide(&player->x, &player->z, ground, PLAYER_RADIUS);
         player->y = ground;
     } else {
-        int m = air_motion("2-36");   /* 2:0x24 */
         player->on_ground = 0;
         player->vy = 0.0f;
-        if (!player->attacking && m >= 0) {
+        if (!player->attacking) {
             /* State 9 as FUN_0021df00 sets it up, run by the air steps (one a 60th, the landing check first). */
             player->air_kind = AIR_NONE;
             player->air_col = 4;
@@ -417,8 +427,7 @@ void player_settle(Player *player, int walls) {
             player->air_hold = 0.0f;
             player->air_accum = 0.0f;
             player->jump_time = JUMP_CROUCH_FRAMES;
-            player->jump_motion = m;
-            player->jump_frame = 0.0f;
+            air_script_motion(player, "2-04", 50.0f);   /* 0:36 */
             player->speed = 0.0f;
         }
     }
@@ -564,7 +573,8 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
                 float prev_y = player->y;
                 const Motion *held_motion = motion_get(player->jump_motion);
                 /* The pose holds before the landing frames however long the fall is. */
-                if (player->air_kind == AIR_JUMP) {
+                /* The jump motions (2-04, 2-05, 2-09) carry their landing from frame 52 on. */
+                if (player->air_kind == AIR_JUMP || held_motion->end_frame > JUMP_LAND_FRAME) {
                     if (player->jump_frame > JUMP_LAND_FRAME - 1.0f) player->jump_frame = JUMP_LAND_FRAME - 1.0f;
                 } else if (player->jump_frame > held_motion->end_frame - 1.0f) {
                     player->jump_frame = held_motion->end_frame - 1.0f;
@@ -600,7 +610,10 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
                     player->air_kind = AIR_NONE;
                     player->land_stop = JUMP_LAND_STOP_FRAMES;
                     player->speed = 0.0f;
-                    player->jump_motion = motion_find("2-04");
+                    /* FUN_0021ddb0: 0:31 (2-04 from 52) after a takeoff with the stick at rest (column 4), else
+                     * 0:32 (2-05 from 52); PCSX2: 001f after standing jumps and Air Hikes, 0020 after running jumps
+                     * and flips. */
+                    player->jump_motion = motion_find(player->air_col == 4 ? "2-04" : "2-05");
                     player->jump_frame = JUMP_LAND_FRAME;
                 }
             }
@@ -636,5 +649,6 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
 
 camera:
     /* The game's camera, room by room: camera.c (docs/CAMERA.md). */
-    camera_update(player, camera, input->snap_camera, dt);
+    /* One camera step a frame: main.c's Devil Trigger speed-up (dt * 1.1) is Dante's, not the camera's. */
+    camera_update(player, camera, input->snap_camera, player->devil ? dt / 1.1f : dt);
 }

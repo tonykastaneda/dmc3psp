@@ -179,19 +179,19 @@ static const MoveDef moves[MOVE_COUNT] = {
      * him: 3-00 back 72 cm, 3-02 back 201, while 3-01 and 3-03 go forward, for hits from behind.
      * He always turns to face the hit here, so these two. Which hit picks which is an estimate,
      * and so is the air one: 1:4 was seen once when Dante was knocked away in the air. */
-    [MOVE_HIT] = {H("3-00"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_HIT_HEAVY] = {H("3-02"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT] = {S("1:0"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_HEAVY] = {S("1:2"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_AIR] = {H("3-04"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1, .air = 1, .air_v = {0.0f, 0.0f, 0.0f, -1.5f}},
-    [MOVE_HIT_ALT] = {H("3-15"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_HIT_BACK] = {H("3-01"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_HIT_HEAVY_BACK] = {H("3-03"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_ALT] = {S("1:15"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_BACK] = {S("1:1"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_HEAVY_BACK] = {S("1:3"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOWN] = {H("3-04"), "DOWN", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOWN_FAR] = {H("3-05"), "DOWN", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_GET_UP] = {H("3-07"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_GET_UP_FAR] = {H("3-09"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_RECOVER] = {H("3-06"), "RECOVER", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_GET_UP] = {S("1:7"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_GET_UP_FAR] = {S("1:9"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_RECOVER] = {S("1:6"), "RECOVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_POP] = {H("3-13"), "DOWN", MOVE_NONE, 0, 0, 0, 0, -1},
-    [MOVE_POP_LAND] = {H("3-14"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_POP_LAND] = {S("1:14"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOPPELGANGER] = {H("2-58"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_LEFT] = {H("2-07"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
@@ -635,6 +635,10 @@ static void wall_next_early(Combat *c, Player *player, MoveId next) {
 }
 
 static int is_trickster(MoveId move) { return move >= MOVE_TR_DASH && move <= MOVE_TR_WALL_KICK_R; }
+static int is_reaction(MoveId move) {
+    return move == MOVE_HIT || move == MOVE_HIT_HEAVY || move == MOVE_HIT_ALT || move == MOVE_HIT_BACK || move == MOVE_HIT_HEAVY_BACK ||
+           move == MOVE_GET_UP || move == MOVE_GET_UP_FAR || move == MOVE_RECOVER || move == MOVE_POP_LAND;
+}
 
 /* The command walker (FUN_002458f0 / FUN_00245f10) for Rebellion,
  * Swordmaster and Trickster: returns the action to start, or 0. */
@@ -659,7 +663,9 @@ static int walk_commands(Combat *c, const Player *player, const PlayerInput *inp
             /* Trickster states clear the current action (player+0x2998 = 0),
              * so the walker only needs the cancel flag and the gates. Other
              * hand-made moves don't cancel. */
-            if (!is_trickster(c->move) || !(cmd->flags & 0x200)) continue;
+            /* Hit reactions too: FUN_002e8d20 clears the action (+0x2998 = 0), and their scripts (1:0, 1:2, 1:7...)
+             * open the gates, e.g. 1:0 attacks from 34 and the jump from 24. */
+            if (!(is_trickster(c->move) || is_reaction(c->move)) || !(cmd->flags & 0x200)) continue;
             ok = conditions(c, cmd);
             if (ok == 2) return cmd->action;
             /* No pending press here: on the PS2 a second dash pressed while gate 8 is only buffering (motion
@@ -1311,6 +1317,12 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     player->attacking = 1;
     player->free_fall = d->physics == 1;
     if (player->free_fall && player->on_ground && c->phase_time > 2.0f / MOTION_FPS) { end_move(c, player); return; }
+    /* FUN_00224850 marks the release 24:31 interruptible (+0x2898 0x40000): on the PS2 the stick takes over at
+     * once (24:31 one frame, then the strafe) and a CIR press blocks again (rg_lfm). */
+    if (c->move == MOVE_RG_END) {   /* from the frame after the release */
+        if (input->style_action && player->style == STYLE_ROYALGUARD && player->on_ground) { start_move(c, MOVE_RG_BLOCK, 0); return; }
+        if (stick_pushed(input)) { end_move(c, player); return; }
+    }
     if ((c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD) && !input->style_held) {
         start_move(c, MOVE_RG_END, 0);
         return;
@@ -1667,6 +1679,7 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
     player->jump_motion = -1;
     c->air = 0;
     c->base_y = player->y;
+    c->action = 0;   /* FUN_002e8d20: +0x2998 = 0, the walker only needs the reaction's gates */
     down = (kind >= 2 && kind <= 7) || !player->on_ground || player->health <= 0.0f;
     if (kind == 6 && player->health <= 0.0f) kind = 0;   /* FUN_002e8d20: an emptying hit is class 3 */
     if (kind == 7 && !player->on_ground) kind = 0;       /* in the air kind 7 is class 3 too */

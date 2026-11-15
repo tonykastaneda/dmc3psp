@@ -175,7 +175,7 @@ ACTIONS = {
     # Artemis
     # Fires on release: a few frames of 10:3, then 10:4 (HD Collection traces).
     150: [P("10:3", adv="timer", frames=4.0), P("10:4", shot=1)], 152: [P("10:3", adv="timer", frames=4.0), P("10:4", shot=1)],
-    151: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)], 153: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
+    151: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)], 153: [P("10:13", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1)],   # FUN_0026e850: vy config +0x13c / +0x140 at the shot (forward 1.75, +0x138, only when already moving 3 or more: not ported)
     154: [P("20:2", shot=1)],
     155: [P("20:3", adv="mash", loop="20:3", loop_start=69.0, btn="CIR", shot=1), P("20:4")],
     # Spiral / Kalina Ann (FUN_0026f480 / FUN_00270300 pick from the tables above)

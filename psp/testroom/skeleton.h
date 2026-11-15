@@ -47,6 +47,9 @@ typedef struct {
     float long_frame;
 } AnimState;
 
+/* The melee weapon whose ready idle he stands in while a fight is on (FUN_0021d280: 3+w:0), or -1 out of one (the
+ * plain 0:0). Set by main every frame. */
+extern int anim_battle_weapon;
 void anim_reset(AnimState *anim);
 void anim_update(AnimState *anim, const Player *player, float dt);
 void anim_pose(const AnimState *anim, const Player *player, const Combat *combat, Pose *pose, float time);
