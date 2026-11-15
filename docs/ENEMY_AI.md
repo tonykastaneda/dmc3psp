@@ -1,5 +1,111 @@
 # Enemy AI: the Seven Hells (the Hell Pride, CEm000 / CComEm000)
 
+## Collision audit (2026-11-14)
+
+`enemyaudit 1` in a scene writes `ENEMY_AUDIT.CSV` beside its EBOOT. Each
+violation records mission, room, scene frame, enemy slot/kind, other slot,
+category, depth in centimetres and feet position. The footer records checked
+frames, active bodies and violations. Sampling runs after Dante's existing body
+and wall pass. It is observational: it never corrects an actor. The 0.5 cm
+tolerance excludes floating-point contact noise.
+
+Run from a built worktree with its slot set:
+
+```
+$env:DMC3_SLOT='pM'
+python tools/enemy_audit.py --label baseline
+python tools/enemy_audit.py --label stress --stress
+```
+
+The runner discovers Normal encounter rooms from the generated mission scripts,
+including secret-room encounters once, and preserves CSVs, scene logs, screenshots
+and `results.json` under `analysis/testroom/enemy_audit_<label>/`. `--mission`,
+`--room`, `--frames` and `--resume` narrow or resume a run. Missing files, truncated
+captures and mismatched row counts fail. `EMPTY` explicitly means no enemy was
+observed; it does not certify a fight. Scenes accelerate timed spawn waits, but
+retain live-count gates. `enemystress 45` cycles heavy knockback, launch, juggle
+and slam hits through every active enemy every 45 frames, using normal hit handling.
+
+Wall checks query the loaded stage on a copy of the actor. Floor checks use the
+mission floor callback (including platforms). Bounds are the stage's XZ bounds;
+missing floor is checked separately. Airborne reactions, authored leaps and
+flying kinds may be above the floor. Ordinary body checks retain the port's
+measured 48 cm radius and 170 cm vertical overlap interval; these are not newly
+decoded per-kind native shapes. Special bosses use their own existing push
+queries against Dante and ordinary enemies. The Gigapede intentionally crosses
+arena walls on its authored path; offstage segments and hidden teleport phases
+are excluded. This checks the port's collision proxies, not rendered mesh overlap.
+
+Initial measurements before changing movement:
+
+| Mission / room | Frames | Violations | Maximum depth / finding |
+| --- | ---: | ---: | --- |
+| 1 / 000 | 600 + initial frame | 16 | Enemy 62.035 cm; Dante 16.413 cm |
+| 3 / 002 | 600 + initial frame | 0 | 2,995 body samples |
+| 3 / 004 | 600 + initial frame | 1,707 | Enemy 77.649 cm; outside bounds 513.081 cm; 866 missing-floor samples |
+
+These are baseline results, not a claim of zero clipping or complete mission
+coverage. Full regression results follow as fixes are verified.
+
+Reference check, 16:29-16:30: loaded the shared PCSX2 save in Mission 2 and
+sampled the five `CEm000` actor roots through PINE 120 times at roughly 10 Hz.
+The smallest grounded enemy-enemy distance was **95.807 cm**; a preceding
+object census showed a Pride **88 cm** from Dante. Local evidence is
+`analysis/testroom/enemy_ps2_spacing.json`, `enemy_ps2_loaded.png` and
+`enemy_ps2_spacing.png`. The exclusive PCSX2 lock was released immediately.
+The disc's Seven Hells pack also gives its root kind-6 sphere as radius 50 at
+local y=50 (descriptor 0 in chunks 39/40). Kind-6 descriptors are hurt shapes;
+they do not establish the native terrain or push radius. This audit retains
+the measured 48 cm body separation radius rather than treating hurt data as
+a newly decoded contact shape.
+
+First correction: Sloth warps retain their original radius and first random
+heading, then try 31 other headings with floor, storey and wall clearance;
+failure keeps the previous position. Ordinary enemies now sweep both horizontal
+travel and height in steps of at most 15 cm, retain support at open arena edges,
+and update floor height after wall correction. Invalid spawns search locally for
+supported placement instead of inventing floor at y=0. A final symmetric body
+solve runs after Dante's existing body/wall pass and handles airborne and exactly
+coincident enemies. Every correction to an enemy also meets the stage walls.
+These constraints adapt the port's collision engine; they are not a translation
+of the PS2's complete contact solver. No Dante movement code was changed.
+
+| Mission / room | Before | After | Samples | Evidence (`analysis/testroom/`) |
+| --- | ---: | ---: | ---: | --- |
+| 1 / 000 | 16 | 0 | 601 | `enemy_collision_v1_m01_r000_599.png` |
+| 3 / 002 | 0 | 0 | 601 | `enemy_collision_v1_m03_r002_599.png` |
+| 3 / 004 | 1,707 | 0 | 601 | `enemy_collision_v1_m03_r004_599.png` |
+| 3 / 006 | 0 | 0 | 601 | `enemy_collision_v1_m03_r006_599.png` |
+
+Pawn hops use `PW_RISE`/`PW_FALL`, not the common airborne flag; the audit now
+recognizes those native hop states. Gigapede visibility likewise comes from
+its segment renderer rather than the skinned actor's hidden flag. Direct-room
+tests can use `enemyaudit 2` / `--force-encounters` to bypass item/puzzle holds;
+normal play and `enemyaudit 1` keep those gates. `--eboot` pins a scene or batch
+to a saved executable for reproducible before/after captures.
+
+### Native collision grid coverage
+
+The stage grids formerly used only rendered floor bounds. In room 304 this
+made 752 of 905 native collision triangles unreachable by the runtime grids:
+the grid was 7 x 9 cells around (7600,4400), while the EST enemy spawns lie
+around x=3359..6325, z=1700..2600. Native floor exists at those spawn points
+(for example 291.379 at 4142,1739), but the lookup returned no floor.
+
+`prepare_stage.py` now sizes all three grids from rendered floor **and native
+walls/floors**, with wall-query clearance. If rendered floor is absent, native
+floor is retained before considering a synthetic deck. The build runs
+`tools/audit_stage_grids.py --repair` to regenerate truncated cached stages
+from the player's ISO. This repaired **74 / 143** local stages; all **143 / 143**
+now contain every native collision vertex. The generated assets remain local.
+
+PPSSPP room 304 changed from **1,520 missing-floor reports to zero** across
+600-frame captures; the new run checked 2,990 active-body samples. M1 stayed at
+zero (1,800 samples). Evidence: `enemy_grids_v3_batch_000_599.png`,
+`enemy_grids_v3_batch_000_1199.png`, and `enemy_stage_grids_before/after.json`
+under `analysis/testroom/`. Four stage-grid/edge tests pass. This also restores
+floor lookup for Dante in the tunnel; no `player.c` change was needed.
+
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
 none of it is in the repo.

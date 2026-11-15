@@ -341,6 +341,41 @@ static float spawn_search_y = 2000.0f;
 static int vergil_floor(float x, float y, float z, float *out) { return floor_under(x, y - 200.0f, z, out); }
 void enemy_spawn_height(float y) { spawn_search_y = y + 100.0f; }
 
+static void body_wall(float *x, float *z, float y) {
+    int k;
+    /* The stage query has a bounded triangle pass. At corners, another plane
+     * can reintroduce a contact already visited in that pass. */
+    for (k = 0; k < 4; ++k) {
+        float ox = *x, oz = *z;
+        stage_collide(x, z, y, ENEMY_RADIUS);
+        if (fabsf(*x-ox)+fabsf(*z-oz) < 0.01f) break;
+    }
+}
+
+/* Repair only invalid EST placements. Search locally, rather than creating a
+ * floor at zero when a prop or a collision hole covers the authored point. */
+static void spawn_site(float *x, float *z) {
+    float ground, cx = *x, cz = *z;
+    int ring, k;
+    if (!stage_loaded()) return;
+    if (floor_under(cx, spawn_search_y, cz, &ground)) {
+        body_wall(&cx, &cz, ground);
+        if (floor_under(cx, spawn_search_y, cz, &ground)) { *x = cx; *z = cz; return; }
+    }
+    for (ring = 1; ring <= 16; ++ring) {
+        for (k = 0; k < 32; ++k) {
+            float a = (float)k * (2*PI/32);
+            cx = *x+sinf(a)*(float)(ring*64); cz = *z+cosf(a)*(float)(ring*64);
+            if (!floor_under(cx, spawn_search_y, cz, &ground)) continue;
+            body_wall(&cx, &cz, ground);
+            if (!floor_under(cx, spawn_search_y, cz, &ground)) continue;
+            *x = cx; *z = cz;
+            return;
+        }
+    }
+    /* Leave genuinely unsupported stage data visible to the audit. */
+}
+
 static void script_play(int n);
 
 /* How much each takes, in units of a light hit. Estimates: the game's health and damage values aren't
@@ -433,6 +468,7 @@ static void spawn_one(int kind, float x, float z) {
         vanguard_spawn(x,y,z);return;
     }
     if (kind < 0 || kind >= ENEMY_KIND_COUNT) kind = ENEMY_PRIDE;
+    spawn_site(&x, &z);
     m = &enemy_models[kind];
     /* Each dummy's own skinned copy, the first time that slot is used; big enough for any kind. */
     if (!e->vertices) {
@@ -1031,11 +1067,26 @@ static void action_enter(int a) {
 /* The Sloth reappears this far from Dante at a random angle, on the floor under him, facing him. */
 static void warp_to(float px, float pz, float r) {
     float a = (float)(ai_random() & 0xffffu) * (2.0f * PI / 65536.0f), g;
-    e->pos[0] = px + sinf(a) * r;
-    e->pos[2] = pz + cosf(a) * r;
-    if (player_floor_fn && player_floor_fn(e->pos[0], dante_y + 400.0f, e->pos[2], 0.0f, &g)) e->pos[1] = g;
-    else e->pos[1] = dante_y;
-    e->floor_y = e->pos[1];
+    int k;
+    /* Keep the native radius and first random heading. Invalid headings must not
+     * materialize outside Love Planet (or across a wall on another storey).
+     * Like Vanguard's placement adaptation, try the remaining headings before
+     * retaining the last valid position. Never invent floor at Dante's height. */
+    for (k = 0; k < 32; ++k) {
+        float angle = a + (float)k * (2.0f * PI / 32.0f);
+        float x = px + sinf(angle) * r, z = pz + cosf(angle) * r;
+        float cx = x, cz = z, t;
+        float from[3] = {px, dante_y + 100.0f, pz}, to[3];
+        if (!floor_under(x, dante_y + 200.0f, z, &g) || fabsf(g-dante_y) > 400.0f) continue;
+        if (stage_loaded()) {
+            stage_collide(&cx, &cz, g, ENEMY_RADIUS);
+            if (hypotf(cx-x, cz-z) > 0.5f) continue;
+            to[0] = x; to[1] = g + 100.0f; to[2] = z;
+            if (stage_raycast(from, to, &t) && t < 0.99f) continue;
+        }
+        e->pos[0] = x; e->pos[1] = e->floor_y = g; e->pos[2] = z;
+        break;
+    }
     e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
 }
 
@@ -1538,6 +1589,104 @@ void enemy_trace_write(const char *path) {
 
 void enemy_set_ai_only(int on) { ai_only = on; }
 
+static FILE *audit_file;
+static unsigned int audit_frames, audit_bodies, audit_violations;
+
+static int body_airborne(const Enemy *a) {
+    if (a->kind == ENEMY_GOYLE || a->kind == ENEMY_FALLEN || a->kind == ENEMY_NEVAN) return 1;
+    /* pawn.inc's PW_RISE/PW_FALL use their own hop physics, not Enemy.air. */
+    if (a->kind == ENEMY_PAWN) return a->action == 1 || a->action == 2;
+    return a->air || (a->action == A_LEAP && a->step == 1);
+}
+
+void enemy_audit_start(const char *path) {
+    if (audit_file) fclose(audit_file);
+    audit_file = fopen(path, "w");
+    audit_frames = audit_bodies = audit_violations = 0;
+    if (audit_file) fprintf(audit_file, "mission,room,frame,slot,kind,other,violation,depth,x,y,z\n");
+}
+
+static void audit_violation(int mission, int room, int frame, int slot, int other, const char *what, float depth) {
+    const Enemy *a = &enemies[slot];
+    ++audit_violations;
+    fprintf(audit_file, "%d,%d,%d,%d,%d,%d,%s,%.3f,%.3f,%.3f,%.3f\n",
+            mission, room, frame, slot, a->kind, other, what, depth, a->pos[0], a->pos[1], a->pos[2]);
+}
+
+/* Query each authored boss push shape on a copy, so auditing never moves Dante. */
+static float audit_boss_overlap(int kind, float x, float y, float z, float radius) {
+    float cx = x, cz = z;
+    switch (kind) {
+    case ENEMY_CERBERUS: cerberus_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_VERGIL: vergil_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_GERYON: geryon_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_DOPPELGANGER: doppelganger_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_ARKHAM: arkham_boss_push_out(&cx, &cz, y, radius); break;
+    default: return -1;
+    }
+    return sqrtf((cx-x)*(cx-x)+(cz-z)*(cz-z));
+}
+
+void enemy_audit_frame(int mission, int room, int frame, float px, float py, float pz) {
+    int i, j;
+    if (!audit_file || !stage_loaded()) return;
+    ++audit_frames;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        const Enemy *a = &enemies[i];
+        float x, z, g, depth;
+        const StageInfo *s = stage_info();
+        if (!a->active || (a->hidden && a->kind != ENEMY_GIGAPEDE)) continue;
+        /* Segments draw through giga_draw, not the skinned actor's hidden flag. */
+        if (a->kind == ENEMY_GIGAPEDE && giga_part_out(a->step)) continue;
+        ++audit_bodies;
+        /* Gigapede's authored path intentionally crosses walls; its in-room segments are tested below. */
+        if (a->kind == ENEMY_GIGAPEDE && !stage_walkable_below(a->pos[0], a->pos[2])) continue;
+        x = a->pos[0]; z = a->pos[2];
+        stage_collide(&x, &z, a->pos[1], ENEMY_RADIUS);
+        depth = sqrtf((x-a->pos[0])*(x-a->pos[0]) + (z-a->pos[2])*(z-a->pos[2]));
+        if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "wall", depth);
+        depth = fmaxf(fmaxf(s->min[0]-a->pos[0], a->pos[0]-s->max[0]),
+                      fmaxf(s->min[2]-a->pos[2], a->pos[2]-s->max[2]));
+        if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "bounds", depth);
+        if (floor_under(a->pos[0], a->pos[1], a->pos[2], &g)) {
+            if (g-a->pos[1] > 0.5f) audit_violation(mission, room, frame, i, -1, "below_floor", g-a->pos[1]);
+            /* Only flag unsupported stationary ground actors; flying, launches and authored leaps are legal. */
+            if (a->kind < ENEMY_KIND_COUNT && !body_airborne(a) && a->fall == 0 &&
+                a->pos[1]-g > 5.0f)
+                audit_violation(mission, room, frame, i, -1, "floating", a->pos[1]-g);
+        } else audit_violation(mission, room, frame, i, -1, "no_floor", 0);
+        /* Special bosses have posed push shapes rather than this ordinary cylinder. */
+        depth = audit_boss_overlap(a->kind, px, py, pz, PLAYER_RADIUS);
+        if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "dante", depth);
+        if (a->kind == ENEMY_GIGAPEDE || a->kind == ENEMY_LEVIATHAN) continue;
+        for (j = i+1; j < ENEMY_MAX; ++j) {
+            const Enemy *b = &enemies[j];
+            float dx = a->pos[0]-b->pos[0], dz = a->pos[2]-b->pos[2];
+            if (!b->active || b->hidden || b->kind == ENEMY_GIGAPEDE || b->kind == ENEMY_LEVIATHAN) continue;
+            depth = audit_boss_overlap(a->kind, b->pos[0], b->pos[1], b->pos[2], ENEMY_RADIUS);
+            if (depth < 0) depth = audit_boss_overlap(b->kind, a->pos[0], a->pos[1], a->pos[2], ENEMY_RADIUS);
+            if (depth < 0) {
+                if (fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
+                depth = ENEMY_RADIUS*2-sqrtf(dx*dx+dz*dz);
+            }
+            if (depth > 0.5f) audit_violation(mission, room, frame, i, j, "enemy", depth);
+        }
+        if (audit_boss_overlap(a->kind, px, py, pz, PLAYER_RADIUS) < 0 && fabsf(py-a->pos[1]) < 170) {
+            float dx = px-a->pos[0], dz = pz-a->pos[2];
+            depth = ENEMY_RADIUS+PLAYER_RADIUS-sqrtf(dx*dx+dz*dz);
+            if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "dante", depth);
+        }
+    }
+    fflush(audit_file);
+}
+
+void enemy_audit_finish(void) {
+    if (!audit_file) return;
+    fprintf(audit_file, "# frames=%u bodies=%u violations=%u\n", audit_frames, audit_bodies, audit_violations);
+    fclose(audit_file);
+    audit_file = NULL;
+}
+
 static void land_attack(int heavy) {
     trace_row(heavy ? 2 : 1);
     landed = 1;
@@ -1763,15 +1912,82 @@ static void update_one(float dt, float px, float py, float pz) {
     }
 }
 
+/* All ordinary kinds share this final collision pass, including flying bodies,
+ * root-motion lunges and reactions. It runs after their individual brains.
+ * The boss modules with independent positions keep their own authored solvers. */
+static void body_move(Enemy *a, float x, float y, float z) {
+    float dx = x-a->pos[0], dz = z-a->pos[2], dy = y-a->pos[1];
+    float cx = a->pos[0], cz = a->pos[2], old_y = a->pos[1], ground;
+    int grounded = !body_airborne(a) && fabsf(y-a->floor_y) < 0.5f;
+    int steps = (int)(fmaxf(hypotf(dx, dz), fabsf(dy)) / 15.0f) + 1, s;
+    /* Long placements (Sloth warp) have already selected a valid landing. */
+    if (steps > 256) { cx = x; cz = z; dx = dz = 0; steps = 1; }
+    for (s = 1; s <= steps; ++s) {
+        float nx = cx+dx/steps, nz = cz+dz/steps;
+        float sy = old_y+dy*(float)s/steps;
+        if (stage_loaded()) {
+            body_wall(&nx, &nz, sy);
+            /* Open collision edges are often lower than a launched enemy.
+             * Keep its footprint over the arena, even above those edge walls. */
+            if (!floor_under(nx, fmaxf(old_y,y), nz, &ground) &&
+                floor_under(cx, fmaxf(old_y,y), cz, &ground)) break;
+        }
+        cx = nx; cz = nz;
+    }
+    a->pos[0] = cx; a->pos[1] = y; a->pos[2] = cz;
+    if (floor_under(cx, y, cz, &ground)) {
+        a->floor_y = ground;
+        if (y < ground || grounded) a->pos[1] = ground;
+    }
+    if (stage_loaded()) body_wall(&a->pos[0], &a->pos[2], a->pos[1]);
+}
+
+static void resolve_bodies(float px, float py, float pz) {
+    int pass, i, j;
+    /* Revisit contacts after every enemy has moved: the old one-sided pass
+     * could undo a previous actor's separation, especially in mid-air. */
+    for (pass = 0; pass < 12; ++pass) {
+        int contacts = 0;
+        for (i = 0; i < ENEMY_MAX; ++i) {
+            Enemy *a = &enemies[i];
+            float dx, dz, distance, depth;
+            if (!a->active || a->hidden || a->kind >= ENEMY_KIND_COUNT) continue;
+            for (j = i+1; j < ENEMY_MAX; ++j) {
+                Enemy *b = &enemies[j];
+                if (!b->active || b->hidden || b->kind >= ENEMY_KIND_COUNT || fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
+                dx = a->pos[0]-b->pos[0]; dz = a->pos[2]-b->pos[2];
+                distance = hypotf(dx, dz); depth = 2*ENEMY_RADIUS-distance;
+                if (depth <= 0.01f) continue;
+                if (distance < 0.001f) { dx = 1; dz = 0; distance = 1; }
+                dx /= distance; dz /= distance;
+                body_move(a, a->pos[0]+dx*(depth*.5f+.01f), a->pos[1], a->pos[2]+dz*(depth*.5f+.01f));
+                body_move(b, b->pos[0]-dx*(depth*.5f+.01f), b->pos[1], b->pos[2]-dz*(depth*.5f+.01f));
+                ++contacts;
+            }
+            if (fabsf(a->pos[1]-py) >= 170) continue;
+            dx = a->pos[0]-px; dz = a->pos[2]-pz;
+            distance = hypotf(dx, dz); depth = ENEMY_RADIUS+PLAYER_RADIUS-distance;
+            if (depth > 0.01f) {
+                if (distance < 0.001f) { dx = 1; dz = 0; distance = 1; }
+                body_move(a, a->pos[0]+dx/distance*(depth+.01f), a->pos[1], a->pos[2]+dz/distance*(depth+.01f));
+                ++contacts;
+            }
+        }
+        if (!contacts) break;
+    }
+}
+
+void enemy_finish_collisions(float px, float py, float pz) { resolve_bodies(px, py, pz); }
+
 void enemy_update(float dt, float px, float py, float pz) {
     Enemy *selected = e;
     int i;
     ++trace_tick;
     if (attack_token > 0.0f) attack_token -= dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f);
     for (i = 0; i < ENEMY_MAX; ++i) {
-        float was_x, was_z;
+        float was_x, was_y, was_z;
         e = &enemies[i];
-        was_x = e->pos[0]; was_z = e->pos[2];
+        was_x = e->pos[0]; was_y = e->pos[1]; was_z = e->pos[2];
         update_one(dt, px, py, pz);
         if (e->active && e->kind == ENEMY_GREED) greed_tick(i, dt * MOTION_FPS, px, pz);
         /* The room's walls, as for Dante: swept along everything that moved it this frame (its walk, root
@@ -1779,14 +1995,11 @@ void enemy_update(float dt, float px, float py, float pz) {
          * shove can't carry it through. A spawn or a jump past 6 m is a placement, not a move: checked where it
          * lands. The Gigapede flies its own paths. */
         if (e->active && e->kind < ENEMY_KIND_COUNT && stage_loaded()) {
-            float mx = e->pos[0] - was_x, mz = e->pos[2] - was_z, cx = was_x, cz = was_z, l = sqrtf(mx * mx + mz * mz);
-            int steps = l > 600.0f ? 1 : (int)(l / 15.0f) + 1, s;
-            if (l > 600.0f) { cx = e->pos[0]; cz = e->pos[2]; mx = mz = 0.0f; }
-            for (s = 1; s <= steps; ++s) {
-                cx += mx / (float)steps; cz += mz / (float)steps;
-                stage_collide(&cx, &cz, e->pos[1], ENEMY_RADIUS);
-            }
-            e->pos[0] = cx; e->pos[2] = cz;
+            float x = e->pos[0], y = e->pos[1], z = e->pos[2];
+            /* A warp is placement, not travel through the intervening walls. */
+            if (hypotf(x-was_x,z-was_z) > 600) { was_x = x; was_y = y; was_z = z; }
+            e->pos[0] = was_x; e->pos[1] = was_y; e->pos[2] = was_z;
+            body_move(e, x, y, z);
         }
     }
     arrows_update(dt * MOTION_FPS, px, py, pz);

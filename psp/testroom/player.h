@@ -124,6 +124,7 @@ typedef struct {
     float start_yaw;    /* direction latched when a start begins */
     float start_turn;   /* turn per frame during a start */
     float accel;        /* speed change per frame while ramping up to a run */
+    float lean;         /* body roll into a turn while moving, radians (player+0x28ec -> model rotation Z) */
     Action last_action;
     float action_timer; /* seconds the HUD keeps showing last_action */
 } Player;
@@ -168,6 +169,8 @@ extern int camera_auto_follow;
 
 void player_reset(Player *player, FollowCamera *camera);
 void player_wall_kick(Player *player, float away_yaw);
+/* After the frame's wall and body pushes: floor follow, or a fall off an edge. */
+void player_settle(Player *player, int walls);
 /* What one game step counts for: 1 at normal speed, 1.2 in Turbo. The real game runs one step
  * every 60th of a second with this as its delta, whatever the frame rate here. */
 extern float player_step_scale;

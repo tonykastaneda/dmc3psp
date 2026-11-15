@@ -203,6 +203,10 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $VanguardHeader) -or
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\prepare_vanguard.py'), $Iso.FullName, '--output', $Generated)
 }
 
+# Cached stage files can predate the collision-grid extent fix. Regenerate only
+# those whose grids omit native collision vertices; fresh files pass read-only.
+Invoke-Native $Python @((Join-Path $Root "tools\audit_stage_grids.py"), "--repair")
+
 $CFlags = @(
     "-O2", "-G0", "-Wall", "-Wextra", "-fno-strict-aliasing", "-D_PSP_FW_VERSION=600",
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
