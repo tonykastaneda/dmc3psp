@@ -20,6 +20,7 @@
 #define MAX_RAIL 32
 
 int camera_battle, camera_boss;
+float camera_boss_at[3];
 
 static const CamRoom *room;
 static int room_start;
@@ -417,7 +418,8 @@ static void boss_begin(const Player *player) {
     float t[3];
     boss_target(player, t);
     b_pitch = 0.0523599f;
-    b_yaw = atan2f(t[0] - out_eye[0], t[2] - out_eye[2]) + 5.0f * DEG;
+    /* From Dante toward the boss (FUN_003595b0's object, +100 up), 5 degrees round. */
+    b_yaw = atan2f(camera_boss_at[0] - t[0], camera_boss_at[2] - t[2]) + 5.0f * DEG;
     boss_orbit(t, 400.0f, out_eye);
     sweep(t, out_eye);
     copy3(out_target, t);
@@ -466,6 +468,30 @@ static void boss_cerberus(const Player *player) {
     out_fov = 50.0f * DEG;
 }
 
+/* Vergil in 144 (id 9, FUN_0051ce80 -> FUN_0051d0b0): the target 40% of the way from Dante (+150) to Vergil
+ * (+100), far enough back to hold both (their distance / tan 22.5, at least 400). Past 800 it goes to 2 degrees
+ * and turns to look along them (5 degrees off) at 0x7f a frame, 400 further back; else 15 degrees, the yaw kept. */
+static void boss_vergil(const Player *player) {
+    float d_t[3], v[3] = {camera_boss_at[0], camera_boss_at[1] + 100.0f, camera_boss_at[2]}, t[3], e[3], h, d;
+    int k;
+    boss_target(player, d_t);
+    for (k = 0; k < 3; ++k) t[k] = v[k] * 0.4f + d_t[k] * 0.6f;   /* FUN_001316b0(0.4, out, vergil, dante) */
+    h = sqrtf((d_t[0] - t[0]) * (d_t[0] - t[0]) + (d_t[2] - t[2]) * (d_t[2] - t[2]));
+    d = h / 0.4142129f;
+    if (d < 400.0f) d = 400.0f;
+    if (d > 800.0f) {
+        float want = atan2f(t[0] - d_t[0], t[2] - d_t[2]) - 5.0f * DEG, diff = wrap(want - b_yaw), step = 0x7f / 65536.0f * 2.0f * PI_F;
+        b_pitch = 2.0f * DEG;
+        b_yaw += fabsf(diff) < step ? diff : diff > 0.0f ? step : -step;
+        d = h + 400.0f;
+    } else b_pitch = 15.0f * DEG;
+    boss_orbit(t, d, e);
+    boss_ease(out_eye, e, 0.95f, 0.95f);
+    boss_ease(out_target, t, 0.95f, 0.95f);
+    if (player->on_ground && out_eye[1] - player->y < 20.0f) out_eye[1] = player->y + 20.0f;
+    out_fov = 50.0f * DEG;
+}
+
 static int area_inside(const CamArea *a, const float p[3]) {
     int i, pos = 0, neg = 0;
     if (p[1] < a->c[0][1] || p[1] > a->c[0][1] + a->height) return 0;
@@ -506,9 +532,9 @@ static int choose_zone(const float p[3]) {
 static void frame(const Player *player, FollowCamera *camera, int reset_pressed) {
     float feet[3] = {player->x, player->y, player->z};
     int next = choose_zone(feet), cut = 0;
-    if (camera_boss == 3) {
+    if (camera_boss == 3 || camera_boss == 9) {
         if (!boss_on) boss_begin(player);
-        boss_cerberus(player);
+        if (camera_boss == 3) boss_cerberus(player); else boss_vergil(player);
         zone = -1; fixed_on = 0; blend_n = 0;
         camera->x = out_eye[0]; camera->y = out_eye[1]; camera->z = out_eye[2];
         camera->tx = out_target[0]; camera->ty = out_target[1]; camera->tz = out_target[2];

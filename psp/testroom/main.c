@@ -3963,9 +3963,13 @@ int main(int argc, char *argv[]) {
             float was_x = sweep_x, was_z = sweep_z;
             camera_battle = mission_mode && enemy_alive_count() > 0;   /* the rooms' battle cameras (camera.c) */
             {   /* The boss's own camera (camera.c): Cerberus's in 006 (id 3); others not ported yet (-1). */
-                float bh, bm;
+                float bh, bm, at[1][3];
+                const char *f = mission_room >= 0 ? rooms[mission_room].file : "";
                 camera_boss = mission_mode && enemy_boss_health(&bh, &bm) && bh > 0.0f
-                    ? (mission_room >= 0 && !strcmp(rooms[mission_room].file, "ROOM_006.BIN") ? 3 : -1) : 0;
+                    ? (!strcmp(f, "ROOM_006.BIN") ? 3 : !strcmp(f, "ROOM_144.BIN") ? 9 : -1) : 0;
+                if (camera_boss > 0 && enemy_alive_positions(at, 1) > 0) {
+                    camera_boss_at[0] = at[0][0]; camera_boss_at[1] = at[0][1]; camera_boss_at[2] = at[0][2];
+                }
             }
             player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame

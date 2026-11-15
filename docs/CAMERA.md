@@ -136,7 +136,12 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
   turned away from the arena centre (2520, 200, 3000; data 0x5e0730), or behind Dante toward his lock-on
   target, re-aimed only past 15/35 degrees (pitch clamped -20..15); blocked, the eye stops at the wall and
   both rise up to 20; it never comes within 800 of the centre; eased by 0.9 a frame (`FUN_0042ec50`);
-  FOV 50. The other bosses use the follow camera until theirs are ported.
+  FOV 50. Vergil's in 144 (id 9, `FUN_0051ce80` -> `FUN_0051d0b0`) too: target 40% of the way from Dante
+  (+150) to Vergil (+100), distance their gap / tan 22.5 (at least 400); past 800 it drops to 2 degrees and
+  turns behind Dante toward him (5 degrees off) at 0x7f a frame, 400 further back; otherwise 15 degrees with
+  the yaw held; eased 0.95; its first frame looks from Dante to the boss, 5 degrees round. Not ported: the
+  FOV swell to 80 on Vergil's flag +0xbb4f, his other rooms (234 `FUN_0051d270`, else `FUN_0051d530`).
+  The other bosses use the follow camera until theirs are ported.
 - The PSP has no L2/R2, so the follow camera's manual turn isn't there; SELECT is the camera reset.
 - Approximations: the margin test of step 2 above (plain areas); the spline projection is a search on each
   candidate segment, not the game's polynomial roots (same nearest point); the follow camera's lock-on

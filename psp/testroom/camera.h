@@ -19,8 +19,10 @@ void camera_update(const Player *player, FollowCamera *camera, int reset_pressed
 float camera_stick_yaw(FollowCamera *camera, float stick_x, float stick_y, int stick_active);
 /* Dante is in his combat stance: the rooms' "battle" zones apply (main.c: enemies alive in the room). */
 extern int camera_battle;
-/* A boss fight is on: the game's per-boss cameras aren't ported, so the follow camera (main.c). */
+/* A boss fight is on (main.c): the boss camera's id (FUN_003595b0: 3 Cerberus, 9 Vergil), -1 for a boss whose
+ * camera isn't ported (the follow camera), 0 none. */
 extern int camera_boss;
+extern float camera_boss_at[3];   /* the boss's feet, for the bosses' cameras that frame him */
 /* Index of the room's zone in use (-1: the follow camera). */
 int camera_zone(void);
 
