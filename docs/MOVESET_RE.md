@@ -137,7 +137,11 @@ are the PS2's dispatch numbers (`FUN_002213e0`).
   them) aren't packed; 2-16 stands in.
 - **Port**: START opens a debug menu: game speed (Turbo is the default in play; test scenes run at normal
   speed), dummies 0 to 4, stand or attack, animation viewer. Attacking dummies are a stand-in, not the real AI,
-  with one coming in at a time. Dante's hit reactions have no damage, knockback or knockdown yet.
+  with one coming in at a time. Dante's reactions follow FUN_002e8d20 by the attack record's kind: flinches (1:0 / 1:15 / 1:1,
+  heavy 1:2 / 1:3) with their cancel gates, knockdown (1:4 / 1:5, getting up 1:7 / 1:9, quick recovery 1:6), the pop
+  (1:13 / 1:14), the hang (kind 7), and death in real play (docs/MOVESET.md). Low health changes none of his moves: the
+  locomotion handlers (FUN_002217a0, FUN_00221d20, FUN_00221ba0) don't read +0x2ad4. Not ported: hit stop (Dante's
+  attack hit records, chunk 7, aren't decoded; the enemy's comes from the record's +0x2c).
 - **Keyboard**: K cross, L circle, J square, I triangle, WASD stick, Space R1, E melee, Q gun, N Devil
   Trigger, M Start, Right Shift taunt. The pause menu holds Save Data; never send it blind keys.
 
