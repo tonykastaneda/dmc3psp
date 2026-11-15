@@ -38,5 +38,7 @@ void stage_add_box(float x, float y, float z, float hx, float hy, float hz, floa
 int stage_collide(float *x, float *z, float y, float radius);
 /* First hit of segment a->b against collision walls/floors: *t in [0, 1]. */
 int stage_raycast(const float a[3], const float b[3], float *t);
+/* Read-only native triangle / oriented model-bounds intersection. */
+int stage_intersects_bounds(const float origin[3], const float axes[3][3], const float bounds[2][3]);
 
 #endif

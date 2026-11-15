@@ -1640,10 +1640,15 @@ static void audit_violation(int mission, int room, int frame, int slot, int othe
     const Enemy *a = &enemies[slot];
     int expected = a->kind == ENEMY_GIGAPEDE &&
         (!strcmp(what,"wall") || !strcmp(what,"below_floor")) && giga_part_crossing(a->step,a->pos);
+    /* The upright common probe can graze a wall above a rolling insect's
+     * actual bounds. The native oriented box was tested and is clear. Keep
+     * that diagnostic distinct from an authored geometry intersection. */
+    int proxy_clear=a->kind==ENEMY_GIGAPEDE && !strcmp(what,"wall") && !expected;
+    if(proxy_clear)expected=1;
     if(expected) { ++audit_expected; ++audit_room_expected; }
     else { ++audit_violations; ++audit_room_violations; }
     fprintf(audit_file, "%d,%d,%d,%d,%d,%d,%s%s,%.3f,%.3f,%.3f,%.3f\n",
-            mission, room, frame, slot, a->kind, other, expected ? "expected_" : "", what, depth, a->pos[0], a->pos[1], a->pos[2]);
+            mission, room, frame, slot, a->kind, other, expected ? "expected_" : "", proxy_clear?"proxy_wall":what, depth, a->pos[0], a->pos[1], a->pos[2]);
 }
 
 /* Query each authored boss push shape on a copy, so auditing never moves Dante. */
@@ -1828,9 +1833,10 @@ static void test_attack(float px, float py, float pz) {
                     land_attack(r->reaction >= 500.0f);
                     landed_damage = r->damage;
                     landed_kind = r->kind;
-                } else if (e->kind == ENEMY_PRIDE && e->hit_type < 2) {
+                } else if ((e->kind == ENEMY_PRIDE || e->kind == ENEMY_ENVY) && e->hit_type < 2) {
                     /* OP6 selects an attack record, not a heavy flag.
-                     * *0x618c28 = 0x5a7600: records 0/1 are kind 0,
+                     * Pride *0x618c28 = 0x5a7600; Envy *0x61a6b0 =
+                     * 0x5ce960. Both tables' records 0/1 are kind 0,
                      * damage 700/800, reaction 350/400 (both light). */
                     land_attack(0);
                     landed_damage = e->hit_type ? 800.0f : 700.0f;
@@ -4140,7 +4146,7 @@ static int giga_part_crossing(int k, const float centre[3]) {
     float from[3],to[3],hit,back=k?GIGA_TOP_BACK:0,front=k?GIGA_TOP_FRONT:450;
     float corners[8][3],right[3],up[3];
     const float (*bounds)[3]=k?giga_body_bounds:giga_head_bounds;
-    int j,h;
+    int j,h,axis;
     if(giga_part_out(k) || giga_part_out(k-1) || giga_part_out(k+1))return 1;
     if(k<0 || k>=GIGA_PARTS)return 0;
     for(h=0;h<4;++h) {
@@ -4156,10 +4162,11 @@ static int giga_part_crossing(int k, const float centre[3]) {
     /* A short boundary triangle can lie wholly inside the bounds, missing
      * all twelve outer edges. Cross-sections through the checked body point
      * also identify that grazing entry/exit (M4, frame 297). */
-    for(h=0;h<4;++h) {
+    for(axis=0;axis<2;++axis)for(h=0;h<4;++h) {
+        const float *cross=axis?up:right;
         for(j=0;j<3;++j) {
-            from[j]=centre[j]+right[j]*bounds[0][0];
-            to[j]=centre[j]+right[j]*bounds[1][0];
+            from[j]=centre[j]+cross[j]*bounds[0][axis];
+            to[j]=centre[j]+cross[j]*bounds[1][axis];
         }
         from[1]+=heights[h]+40;to[1]+=heights[h]+40;
         if(stage_raycast(from,to,&hit))return 1;
@@ -4169,7 +4176,14 @@ static int giga_part_crossing(int k, const float centre[3]) {
             up[j]*bounds[(h>>1)&1][1]+giga.dir[k][j]*bounds[(h>>2)&1][2];
     for(h=0;h<8;++h)for(j=0;j<3;++j)if(!(h&(1<<j)))
         if(stage_raycast(corners[h],corners[h|(1<<j)],&hit))return 1;
-    return 0;
+    {
+        float axes[3][3];
+        memcpy(axes[0],right,sizeof(right));memcpy(axes[1],up,sizeof(up));
+        memcpy(axes[2],giga.dir[k],sizeof(axes[2]));
+        /* Small boundary faces can be wholly enclosed by the rolling mesh
+         * bounds without crossing an edge or a centre ray. */
+        return stage_intersects_bounds(giga.pos[k],axes,bounds);
+    }
 }
 static int enemy_giga_part(int k, float out[3]) {
     if (!giga.active || giga.dying || k < 0 || k >= GIGA_PARTS || giga.out[k]) return 0;

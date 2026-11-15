@@ -468,6 +468,41 @@ int stage_raycast(const float a[3], const float b[3], float *t) {
     return 1;
 }
 
+static int bounds_axis_overlap(const float v[3][3],const float half[3],const float axis[3]) {
+    float a=dot3(v[0],axis),b=dot3(v[1],axis),c=dot3(v[2],axis);
+    float radius=half[0]*fabsf(axis[0])+half[1]*fabsf(axis[1])+half[2]*fabsf(axis[2]);
+    return fminf(a,fminf(b,c))<=radius && fmaxf(a,fmaxf(b,c))>=-radius;
+}
+int stage_intersects_bounds(const float origin[3],const float axes[3][3],const float bounds[2][3]) {
+    float half[3],centre[3];unsigned int index;int a,k,j;
+    if(!header)return 0;
+    for(a=0;a<3;++a){half[a]=(bounds[1][a]-bounds[0][a])*.5f;centre[a]=(bounds[0][a]+bounds[1][a])*.5f;}
+    for(index=0;index<hits->walls+hits->floors;++index) {
+        const float *t=hit_tri(index);float v[3][3],edge[3][3],normal[3];int overlap=1;
+        for(k=0;k<3;++k)for(a=0;a<3;++a) {
+            float d[3]={t[k*3]-origin[0],t[k*3+1]-origin[1],t[k*3+2]-origin[2]};
+            v[k][a]=dot3(d,axes[a])-centre[a];
+        }
+        /* The three box normals, triangle normal, and nine edge-cross-axis
+         * normals form the complete triangle/box separating-axis test. */
+        for(a=0;a<3;++a)if(fminf(v[0][a],fminf(v[1][a],v[2][a]))>half[a] ||
+            fmaxf(v[0][a],fmaxf(v[1][a],v[2][a])) < -half[a]){overlap=0;break;}
+        if(!overlap)continue;
+        for(k=0;k<3;++k)for(a=0;a<3;++a)edge[k][a]=v[(k+1)%3][a]-v[k][a];
+        normal[0]=edge[0][1]*edge[1][2]-edge[0][2]*edge[1][1];
+        normal[1]=edge[0][2]*edge[1][0]-edge[0][0]*edge[1][2];
+        normal[2]=edge[0][0]*edge[1][1]-edge[0][1]*edge[1][0];
+        if(!bounds_axis_overlap(v,half,normal))continue;
+        for(k=0;k<3 && overlap;++k)for(j=0;j<3;++j) {
+            float axis[3]={0,0,0};
+            axis[(j+1)%3]=edge[k][(j+2)%3];axis[(j+2)%3]=-edge[k][(j+1)%3];
+            if(!bounds_axis_overlap(v,half,axis)){overlap=0;break;}
+        }
+        if(overlap)return 1;
+    }
+    return 0;
+}
+
 int stage_walkable_below(float x, float z) {
     const Cell *cell;
     if (!header) return 0;

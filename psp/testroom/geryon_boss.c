@@ -59,7 +59,7 @@ typedef struct { int on, kind; float pos[3], vel[3], life, rise; } Shell;   /* k
 #define SHELLS 12
 static struct {
     int active, dying, hidden, phase, state, action, think_count, laps, side, warp_ready, rank;
-    float pos[3], yaw, hp, timer, near_time, floor_y, axis_dir;
+    float pos[3], yaw, hp, timer, near_time, floor_y, axis_dir, leave_yaw;
     float dante[3], centre[3];
     Player horse, cart;
     Shell shells[SHELLS];
@@ -410,7 +410,18 @@ static void ai_step(float f) {
         break;
     case S_LEAVE:
         /* Phase 0 at 80%: off the bridge's far end, and the bridge falls (demo 33). */
-        move_forward(RUN_SPEED, f);
+        gb.pos[0]+=sinf(gb.leave_yaw)*RUN_SPEED*f;
+        gb.pos[2]+=cosf(gb.leave_yaw)*RUN_SPEED*f;
+        {
+            float yaw=gb.yaw,x=gb.dante[0],z=gb.dante[2];
+            gb.yaw=gb.leave_yaw;
+            geryon_boss_push_out(&x,&z,gb.dante[1],DANTE_RADIUS);
+            /* The port flips the whole carriage instantly, rather than
+             * animating its turn. At the bridge end that sweeps it over
+             * Dante. Keep the previous facing until the exit travel clears
+             * him; the authored exit direction and timing remain intact. */
+            if(hypotf(x-gb.dante[0],z-gb.dante[2])>.1f)gb.yaw=yaw;
+        }
         if (gb.timer > 90.0f) {
             gb.hidden = 1;
             set_state(S_SWITCH);
@@ -586,7 +597,7 @@ int geryon_boss_hit(int kind, float from_x, float from_z, int mortal) {
     if (gb.phase == 0 && gb.hp <= LEAVE_HEALTH) {
         /* He leaves the bridge for its far end, whichever is further from Dante. */
         float axis = atan2f(bridge_b[0] - bridge_a[0], bridge_b[2] - bridge_a[2]);
-        gb.yaw = bridge_t(gb.dante) < 0.5f ? axis : wrap_angle(axis + PI);
+        gb.leave_yaw = bridge_t(gb.dante) < 0.5f ? axis : wrap_angle(axis + PI);
         set_action(A_CHARGE, 1);
         set_state(S_LEAVE);
         return 0;
