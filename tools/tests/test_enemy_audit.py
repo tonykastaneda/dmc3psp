@@ -81,6 +81,29 @@ class AuditEvidenceTests(unittest.TestCase):
         header += "static const RoomOp m3_1_006_ops static const RoomOp m3_0_006_ops"
         self.assertEqual(audit.encounters(header), [(1, 600), (3, 6)])
 
+    def test_script_coverage_survives_room_split(self):
+        sys.path.insert(0, str(Path(__file__).parents[1]))
+        from enemy_audit_sweep import split_rooms
+        rooms = split_rooms("mission,room,frame,slot,kind,other,violation,depth,x,y,z\n"
+                            "# room_summary mission=2 room=1 frames=1200 bodies=20 violations=0 expected=0 script_at=7 script_total=10\n"
+                            "# frames=1200 bodies=20 violations=0 expected=0\n")
+        result = self.parse(rooms[2, 1])
+        self.assertFalse(result["script_complete"])
+        self.assertEqual((result["script_at"], result["script_total"]), (7, 10))
+
+    def test_wave_budget_accounts_for_live_count_gates(self):
+        sys.path.insert(0, str(Path(__file__).parents[1]))
+        from enemy_audit_sweep import wave_budgets
+        header = "static const RoomOp m2_1_001_ops[] = {" + ",".join(
+            ["{0,0,0,0,0}", "{2,0,60,0,0}"] * 7) + "};"
+        self.assertEqual(wave_budgets(header, 225, 900)[2, 1], 1800)
+
+    def test_ending_budget_excludes_ladys_ally_slot(self):
+        sys.path.insert(0, str(Path(__file__).parents[1]))
+        from enemy_audit_sweep import wave_budgets
+        header = "static const RoomOp m20_1_012_ops[] = {{0,55,0,0,0},{2,0,5,0,0}};"
+        self.assertEqual(wave_budgets(header, 225, 1)[20, 12], 225)
+
 
 if __name__ == "__main__":
     unittest.main()

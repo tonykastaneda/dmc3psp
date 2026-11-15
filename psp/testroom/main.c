@@ -4117,9 +4117,13 @@ int main(int argc, char *argv[]) {
         player_settle(&player, stage_loaded() && !on_bridge(player.x, player.z, player.y));
         if (dummy_ready) settle_bodies_and_walls(&player);
         if (dummy_ready) enemy_finish_collisions(player.x, player.y, player.z);
-        if (focus_cmp && cmp_enemy_audit) enemy_audit_frame(mission_choice.mission,
-            mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
-            frames, player.x, player.y, player.z);
+        if (focus_cmp && cmp_enemy_audit) {
+            enemy_audit_frame(mission_choice.mission,
+                mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
+                frames, player.x, player.y, player.z);
+            if(mission_mode && mission_room != ROOM_NONE)
+                enemy_audit_script(script_at,missions[mission_choice.mission-1].scripts[mission_choice.difficulty&1][mission_room].count);
+        }
         if (input.style >= 0) style_switched = 1;
         if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
             /* Dante's actual travel against the stick's on-screen direction. */

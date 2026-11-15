@@ -45,8 +45,13 @@ def summarize(path):
         raise ValueError("audit row count differs from footer")
     if match[4] is not None and sum(expected.values()) != int(match[4]):
         raise ValueError("authored crossing row count differs from footer")
-    return dict(frames=int(match[1]), bodies=int(match[2]), violations=int(match[3]),
-                counts=dict(counts), max_depth=depths, expected=dict(expected))
+    result = dict(frames=int(match[1]), bodies=int(match[2]), violations=int(match[3]),
+                  counts=dict(counts), max_depth=depths, expected=dict(expected))
+    progress = re.findall(r"script_at=(-?\d+) script_total=(-?\d+)", data)
+    if progress:
+        at, total = map(int, progress[-1])
+        result.update(script_at=at, script_total=total, script_complete=at >= total >= 0)
+    return result
 
 
 def main():
