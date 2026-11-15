@@ -1319,7 +1319,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     if (player->free_fall && player->on_ground && c->phase_time > 2.0f / MOTION_FPS) { end_move(c, player); return; }
     /* FUN_00224850 marks the release 24:31 interruptible (+0x2898 0x40000): on the PS2 the stick takes over at
      * once (24:31 one frame, then the strafe) and a CIR press blocks again (rg_lfm). */
-    if (c->move == MOVE_RG_END && c->phase_time > 0.0f) {
+    if (c->move == MOVE_RG_END) {   /* from the frame after the release */
         if (input->style_action && player->style == STYLE_ROYALGUARD && player->on_ground) { start_move(c, MOVE_RG_BLOCK, 0); return; }
         if (stick_pushed(input)) { end_move(c, player); return; }
     }
