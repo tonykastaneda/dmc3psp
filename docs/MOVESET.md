@@ -288,7 +288,7 @@ script id at player+0x24c6 on the PS2). Before / after are the port.
 
 | Every scripted move's start (`dash0`, `r_1`, `sm_1`, `d_n`; PS2_INPUT_LAG=1) | root moves 9 frames after the dash's request, ends 59 later | moves 10 after, ends 59 later | 9 / 59 | the script's clock runs from the frame after the request (STARTUP_FRAMES 2 -> 1); waits and the motion's end are seen a frame after the frame they name (SCRIPT_LAG 1), so gates and ends keep their frame |
 | Stinger, dummy 14 m off (`stinger_far`) | 3:14 41, dash 3:15 52-69 (17), 3:42; 794 cm | dash 3 frames at 16 cm | 3:15 52-69, 778 cm | FUN_00264fe0 with config chunk 11: level 2 dashes +0x28 = 16 frames over +0x2c = 560 cm, ends once the count is below 0 |
-| Stinger, dummy 6 m off (`stinger`) | dash stops within 130 cm of the target (+0x34) | 3 frames | stops within 130 cm | same; the port's dummy walks in, the PS2's is held, so this one stops 3 frames earlier on the port |
+| Stinger, dummy 6 m off (`stinger`) | dash stops within 130 cm of the target (+0x34), 579 cm | 3 frames | stops within 130 cm, 573 cm | same (ref_compare now makes the port's dummy stand, `attack 0`, as the PS2 harness parks its enemy) |
 | Aerial Rave, CIR every 9 frames (`sm_airm`) | 13:7 40, 13:8 58, 13:9 74, lands 108; 3 strikes | a 4th strike 13:10 at 93, lands 119 | 3 strikes, lands 107 | a press counts on its own frame only (+0x4a14 / +0x4a40); the port kept presses 3 frames (BUFFER_SECONDS), which caught one made before 13:9's gate 4 started buffering |
 | Stinger then TRI at 80 (`stinger_c`) | no Combo I (press before gate 0 buffers) | Combo I at 84 | none | same |
 | High Time tapped / held (`hightime`, `hightime_h`) | 3:11 42-97; held 3:13 from 63, peak 348 | same | same | (already matched) |
@@ -304,8 +304,19 @@ away with the player config's speeds (chunk 9: kinds 0-2 10.4 up, gravity -1.2, 
 12 (41) until the floor. A face button before its flag 2 (13 / 43), or Trickster, gives the quick recovery 1:6 at flag 3
 (20 / 50); otherwise he gets up at flag 4 (60 / 80) with 1:7 (1:9). Port, hitme 20 2 500 in M1: 200 cm in the air,
 lands lying, Trickster recovers, Swordmaster gets up. Kinds come from the records for Agni & Rudra, Cerberus and Vergil;
-other enemies still pass heavy / light (1 / 0). Not ported: class 6 (1:13 / 1:14, a heavy flinch here), the launch
-class 4's own handler (FUN_002e9f50, a knockdown here), and the Game Over screen.
+other enemies still pass heavy / light (1 / 0). Kind 6 (FUN_002ea390) pops him straight up at config +0x30 / +0x34
+(23.5, -1.2) in 1:13 and lands in 1:14 (port: 242 cm up). Kind 7 (FUN_002e9f50) holds him config +0x3c = 40 frames,
+then flies as kinds 0-2; a press between flags 2 and 3 recovers at flag 3 and flag 4 always ends in 1:6. Not ported:
+the Game Over screen.
+
+| move (script) | PS2 | port before | port after | source |
+|---|---|---|---|---|
+| Beowulf dive kick landing (`beo_cair`) | lands where the next step would meet the floor (13 cm up at 66), 7:13 slides 106 cm | took the full last step, 34 cm further | lands at 241 cm as the PS2's 247 (its 5.5 cm drift before the jump) | FUN_00242200 checks the floor before the step (FUN_002e2560, FUN_002e9a40 state 1); every port air move and the knockdown now do |
+| Beowulf ground strings (`beo_c1`, `beo_r4`, `beo_cmash`) | 7:3 85.1 cm, r4 455 | the same | the same | the PS2 drifts about 0.8 cm a frame in these saves (also idle); no port change |
+| Twosome Time's set | 18:0-3 or 18:4-7 at random (+0x3c6d), first shot from frame 15, then 0 / 15 by gun | 18:0-3 from 0 | random set, 15 / 0 / 15 | FUN_0026b1d0, FUN_0026af60 |
+| Air Trick (`a_trick`, `a_trick_far`, `t_air`) | warp 10 frames: across = 3D distance to the lock point less 120, at most 500; stops across within 120 (FUN_00226550); 576 cm | horizontal distance; port dummy walked in: 514 cm; warp 2 frames early | 579 cm, warp a frame early, `t_air` passes | the rise is the lock point's height: the PS2's parked street enemy gives 92-118, the port keeps a Hell Pride's 145 |
+| Lock-on side roll (`flipl`) | 366 cm | 355 | 354 | same length and roll; the PS2 creeps 3 cm late in the roll and 8 cm turning to the target in the gun stance after; not ported |
+| Dash and Wall Hike runs (`d_*`, `w_d`, `w_l`, `w_r`) | onset and end as the port where the street is flat | | | the fails are the PS2 trace's wall-clock sampling (repeated / skipped frames, +-10 cm height jitter) and the street's ramp; d_n, dash0, w_u identical |
 
 Also from flag 0x800: Gun Stinger (146) and Artemis's CIR shot (152) are Gunslinger only.
 Not matched yet: Twosome Time's random pick of 18:0-3 or 18:4-7 (+0x3c6d) and its start frame 15 for even
