@@ -41,6 +41,14 @@ class AuditEvidenceTests(unittest.TestCase):
                             "# frames=4 bodies=12 violations=1\n")
         self.assertEqual(result["counts"], {"enemy": 1})
 
+    def test_authored_crossing_is_retained_separately(self):
+        result = self.parse("mission,room,frame,slot,kind,other,violation,depth,x,y,z\n"
+                            "4,111,2,0,100,-1,expected_wall,25,0,0,0\n"
+                            "4,111,3,0,100,-1,wall,2,0,0,0\n"
+                            "# frames=4 bodies=12 violations=1 expected=1\n")
+        self.assertEqual(result["counts"], {"wall": 1})
+        self.assertEqual(result["expected"], {"expected_wall": 1})
+
     def test_batch_retains_zero_violation_room_evidence(self):
         sys.path.insert(0, str(Path(__file__).parents[1]))
         from enemy_audit_sweep import split_rooms

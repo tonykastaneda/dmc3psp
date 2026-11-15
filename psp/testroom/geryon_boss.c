@@ -3,6 +3,7 @@
 #include "enemy.h"
 #include "fx.h"
 #include "motion.h"
+#include "stage.h"
 #include "swizzle.h"
 
 #include <pspgu.h>
@@ -312,7 +313,7 @@ static void contact(float frames) {
     dx = gb.dante[0] - gb.pos[0]; dz = gb.dante[2] - gb.pos[2];
     along = s * dx + c * dz;
     across = c * dx - s * dz;
-    if (along > -950.0f && along < 380.0f && fabsf(across) < (along > -200.0f ? 110.0f : 330.0f) + DANTE_RADIUS) {
+    if (along > -950.0f-DANTE_RADIUS && along < 380.0f+DANTE_RADIUS && fabsf(across) < (along > -200.0f ? 110.0f : 330.0f) + DANTE_RADIUS) {
         land(gb.pos[0], gb.pos[2], 1500.0f, 1);
         gb.contact_wait = 60.0f;
     }
@@ -601,19 +602,76 @@ int geryon_boss_hit(int kind, float from_x, float from_z, int mortal) {
 }
 
 /* ---- Frame ------------------------------------------------------------------------------------------------ */
+/* Constrain the same horse/carriage footprint used by push_out. The bridge
+ * has its own authored axis; only the ground phase uses room collision. */
+static int ground_project(void) {
+    static const float along[] = {250, 0, -330, -650, -900};
+    static const float radius[] = {90, 90, 330, 330, 250};
+    float s=sinf(gb.yaw),c=cosf(gb.yaw);
+    int pass,k;
+    for(pass=0;pass<8;++pass) {
+        float moved=0;
+        for(k=0;k<5;++k) {
+            float x=gb.pos[0]+s*along[k],z=gb.pos[2]+c*along[k],ox=x,oz=z;
+            stage_collide(&x,&z,gb.pos[1],radius[k]);
+            gb.pos[0]+=x-ox;gb.pos[2]+=z-oz;
+            moved+=fabsf(x-ox)+fabsf(z-oz);
+        }
+        if(moved<.01f)break;
+    }
+    for(k=0;k<5;++k) {
+        float x=gb.pos[0]+s*along[k],z=gb.pos[2]+c*along[k],ox=x,oz=z,y;
+        stage_collide(&x,&z,gb.pos[1],radius[k]);
+        if(hypotf(x-ox,z-oz)>.1f)return 0;
+        if(floor_fn && !floor_fn(ox,gb.pos[1]+100,oz,&y))return 0;
+    }
+    return 1;
+}
+
 void geryon_boss_update(float frames, float px, float py, float pz, int attacks) {
+    float previous[3],previous_yaw=gb.yaw;int old_phase=gb.phase,was_hidden=gb.hidden;
     if (!gb.active) return;
+    memcpy(previous,gb.pos,sizeof(previous));
     ++gb.tick;
     gb.dante[0] = px; gb.dante[1] = py; gb.dante[2] = pz;
     if (!gb.dying && (attacks || gb.state == S_LEAVE || gb.state == S_SWITCH)) ai_step(frames);
     tick(&gb.horse, frames);
     tick(&gb.cart, frames);
+    if(gb.phase && !gb.hidden && stage_loaded()) {
+        float target[3],dx,dz;
+        int k,steps;
+        memcpy(target,gb.pos,sizeof(target));dx=target[0]-previous[0];dz=target[2]-previous[2];
+        steps=(int)(hypotf(dx,dz)/15)+1;
+        if(!old_phase || steps>40) {
+            if(!ground_project()){gb.pos[0]=gb.centre[0];gb.pos[2]=gb.centre[2];ground_project();}
+        } else {
+            memcpy(gb.pos,previous,sizeof(previous));
+            for(k=0;k<steps;++k) {
+                float safe[3];memcpy(safe,gb.pos,sizeof(safe));
+                gb.pos[0]+=dx/steps;gb.pos[2]+=dz/steps;
+                if(!ground_project()){memcpy(gb.pos,safe,sizeof(safe));break;}
+            }
+        }
+    }
     if (!gb.dying) shells_update(frames);
     if (gb.phase == 0) gb.pos[1] = bridge_start[1];
     else if (floor_fn) {
         float y;
         if (floor_fn(gb.pos[0], gb.pos[1] + 100.0f, gb.pos[2], &y)) gb.floor_y = y;
         gb.pos[1] = gb.floor_y;
+    }
+    if(!gb.hidden && !gb.dying && !was_hidden && old_phase==gb.phase) {
+        float x=px,z=pz;
+        geryon_boss_push_out(&x,&z,py,DANTE_RADIUS);
+        if(hypotf(x-px,z-pz)>.1f) {
+            float target[3],yaw=gb.yaw;
+            memcpy(target,gb.pos,sizeof(target));
+            memcpy(gb.pos,previous,sizeof(previous));gb.yaw=previous_yaw;
+            x=px;z=pz;geryon_boss_push_out(&x,&z,py,DANTE_RADIUS);
+            if(hypotf(x-px,z-pz)>.1f){memcpy(gb.pos,target,sizeof(target));gb.yaw=yaw;}
+            /* Keep a clear previous pose if a charge/turn would crush Dante
+             * against the bridge end. His normal hurt reaction still runs. */
+        }
     }
     if (trace_on && (gb.tick % 30) == 0) trace("tick");
 }

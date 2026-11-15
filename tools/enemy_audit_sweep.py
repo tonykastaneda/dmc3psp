@@ -34,13 +34,14 @@ def split_rooms(data):
 
 
 def table(results, expected):
-    lines = ["| Mission | Rooms observed / expected | Body samples | Violations | Empty / error rooms |",
-             "| --- | ---: | ---: | ---: | ---: |"]
+    lines = ["| Mission | Rooms observed / expected | Body samples | Violations | Authored crossings | Empty / error rooms |",
+             "| --- | ---: | ---: | ---: | ---: | ---: |"]
     for m in sorted({case[0] for case in expected}):
         rows = [r for r in results if r["mission"] == m]
         lines.append(f"| {m} | {len(rows)} / {sum(a == m for a, _ in expected)} | "
                      f"{sum(r.get('bodies', 0) for r in rows):,} | "
                      f"{sum(r.get('violations', 0) for r in rows):,} | "
+                     f"{sum(sum(r.get('expected', {}).values()) for r in rows):,} | "
                      f"{sum(r['status'] in ('EMPTY', 'ERROR') for r in rows)} |")
     return "\n".join(lines) + "\n"
 
@@ -112,6 +113,9 @@ def main():
                 cmd += ["--line", f"bosshits {i * args.frames+120} 20"]  # Existing M12 regression's bridge trigger.
         (out / (name + ".command.json")).write_text(json.dumps(cmd, indent=2))
         run = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+        player_log = game / "CMP_OUT.TXT"
+        if player_log.exists():
+            (out / (name + ".player.txt")).write_bytes(player_log.read_bytes())
         (out / (name + ".log")).write_text(run.stdout + run.stderr)
         evidence = {}
         error = None
