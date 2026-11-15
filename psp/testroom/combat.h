@@ -53,6 +53,8 @@ typedef enum {
     MOVE_TR_SKY_STAR,                             /* 181: 23:11 */
     MOVE_TR_AIR_TRICK, MOVE_TR_AIR_TRICK_AIR,     /* 182: 23:15 / 23:16 */
     MOVE_TR_WALL_HIKE, MOVE_TR_WALL_FLIP,         /* 183: 23:5 -> 23:6 */
+    MOVE_TR_WALL_RUN_L, MOVE_TR_WALL_KICK_L,      /* 183 along the wall: 23:7 -> 23:8 (+0x3c6d 0) */
+    MOVE_TR_WALL_RUN_R, MOVE_TR_WALL_KICK_R,      /* 23:9 -> 23:10 (+0x3c6d 1) */
     /* Not decoded yet: hand-made. */
     MOVE_RG_BLOCK, MOVE_RG_HOLD, MOVE_RG_END, MOVE_RG_AIR_BLOCK,
     MOVE_TAUNT,                                   /* SELECT: script 2:0 */

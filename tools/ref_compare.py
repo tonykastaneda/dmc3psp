@@ -51,15 +51,21 @@ def with_dummy(events, distance=None):
 SETUPS = {
     "open": dict(x=2750.0, z=2450.0, face=FACE_YAW, cam=CAMERA_YAW, flip=True, dummy=DUMMY_DISTANCE, settle=0.6),
     "behind": dict(x=1800.0, z=3000.0, face=-60, cam=-60, flip=False, dummy=600, settle=2.5),
+    # A ("wall", 0, 0) line: 3 m short of the street's wall at about (970, 3310), facing it; the PS2's zone camera
+    # there looks along -67 deg (read over PINE), so the stick isn't turned round. The dummy waits 15 m behind.
+    "wall": dict(x=1226.0, z=3152.0, face=-58, cam=-67, flip=False, dummy=-1500, settle=2.5),
 }
 
 
 def setup_for(events):
+    if any(b == "wall" for b, a, c in events):
+        return SETUPS["wall"]
     return SETUPS["behind" if any(b == "r1" for b, a, c in events) else "open"]
 
 
 def prepared(events):
     s = setup_for(events)
+    events = [e for e in events if e[0] != "wall"]
     return with_dummy(flipped(events) if s["flip"] else list(events), s["dummy"]), s
 
 SCRIPTS = {
@@ -72,6 +78,10 @@ SCRIPTS = {
     "menu": (240, [("menu_start", 20, 20), ("lup", 22, 38), ("menu_cross", 30, 30), ("shot", 35, 0), ("menu_start", 45, 45),
                    ("lup", 60, 200), ("shot", 120, 0), ("menu_start", 150, 150), ("menu_down", 155, 155), ("shot", 160, 0),
                    ("menu_start", 165, 165)]),
+    # Wall Hike at the street's wall (the "wall" setup): run at it, jump, circle against it.
+    "p_wall": (200, [("wall", 0, 0), ("style0", 2, 3), ("lup", 6, 120), ("cross", 26, 28), ("circle", 56, 58)]),
+    # The same with the stick angled 45 degrees in the air: the run along the wall (+0x3c6d 0 / 1).
+    "p_wallrun": (200, [("wall", 0, 0), ("style0", 2, 3), ("lup", 6, 120), ("lleft", 40, 120), ("cross", 26, 28), ("circle", 56, 58)]),
     "a_wall": (340, [("lup", 6, 330), ("cross", 180, 186), ("circle", 215, 221)]),
     "a_trick": (170, [("r1", 6, 160), ("lup", 20, 60), ("circle", 40, 46), ("enemy", 900, 0)]),
     "a_jump": (110, [("cross", 6, 12)]),
