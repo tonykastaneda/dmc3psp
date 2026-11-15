@@ -2336,8 +2336,8 @@ static int on_bridge(float x, float z, float y);
 static void push_from_bodies(float *x, float *z, float y);
 /* The frame's last word on where he stands: bodies push him, then the walls push him back, and the walls won, so
  * wedged between a wall and an enemy that can't give way (M6 room 126: a Pride pinned in the north doorway's pocket)
- * he stood up to 4.6 cm inside it. Bodies and walls take turns until neither moves him; if a body still overlaps him
- * he keeps the last spot that was clear of both, as solid bodies would leave him. */
+ * he stood up to 4.6 cm inside it. Bodies and walls take turns until neither moves him; if a body or a wall still
+ * overlaps him he keeps the last spot that was clear of both, as solid bodies would leave him. */
 static float settle_clear_x, settle_clear_z, settle_clear_y = -1.0e9f;
 static void settle_bodies_and_walls(Player *player) {
     int k;
@@ -2358,8 +2358,12 @@ static void settle_bodies_and_walls(Player *player) {
     }
     tx = player->x; tz = player->z;
     push_from_bodies(&tx, &tz, player->y);
+    /* A notch narrower than he is (between the ribs of M16 room 106's pillars, a corner of M14 room 237) has no spot
+     * clear of both its faces either: the passes swap between them and leave him 4-5 cm in one. Same answer. */
+    if (stage_loaded() && !on_bridge(player->x, player->z, player->y) && fabsf(tx - player->x) + fabsf(tz - player->z) <= 0.5f)
+        stage_collide(&tx, &tz, player->y, PLAYER_RADIUS - 1.0f);
     if (fabsf(tx - player->x) + fabsf(tz - player->z) > 0.5f) {
-        /* Still inside a body: back to the last clear spot, when it's this room's and near (not a warp). */
+        /* Still inside a body or a notch: back to the last clear spot, when it's this room's and near (not a warp). */
         float dx = player->x - settle_clear_x, dz = player->z - settle_clear_z;
         if (dx * dx + dz * dz < 150.0f * 150.0f && fabsf(player->y - settle_clear_y) < 100.0f) {
             player->x = settle_clear_x; player->z = settle_clear_z;
