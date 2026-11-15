@@ -137,6 +137,9 @@ typedef struct {
      * quickly and it eases back out, so an edge the line to him keeps grazing doesn't make it jump. */
     float free_x, free_z, clip;
     float lift;   /* raised over him when a wall is too close behind to stay in front of it */
+    float fov, roll;   /* vertical FOV and roll, radians (camera.c; 0 = not set: 60 degrees) */
+    float stick_yaw, stick_angle;  /* camera.c: the stick's reference held across a camera cut */
+    int stick_hold;
 } FollowCamera;
 
 typedef struct {
