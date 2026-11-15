@@ -4094,6 +4094,7 @@ int main(int argc, char *argv[]) {
 
         skin_start = sceKernelGetSystemTimeLow();
         if (motions_loaded > 0) {
+            anim_battle_weapon = dummy_ready && enemy_alive_count() > 0 ? player.melee_weapon : -1;
             anim_update(&anim, &player, dt);
             anim_pose(&anim, &player, &combat, &pose, time);
         } else {
