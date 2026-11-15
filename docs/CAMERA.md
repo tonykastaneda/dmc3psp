@@ -145,6 +145,8 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 - `camera.c` runs the same zone selection, Pan and Rail cameras, blends, and the follow camera's goals,
   steps, buttons and sphere collision, with the room's values. The PSP's screen is 16:9, the PS2's 4:3:
   the vertical FOV is the game's, so the PSP shows more at the sides.
+- Roll (rail points' and pan cameras' +0x64, up to 10 degrees, mostly inside Leviathan) turns the view about
+  its axis (sceGumRotateZ before the look-at). Its direction isn't checked against the PS2 yet.
 - Boss cameras: Cerberus's (id 3, `FUN_004fbdf0`) is ported: target 150 over Dante, eye 400 out at 4 degrees,
   turned away from the arena centre (2520, 200, 3000; data 0x5e0730), or behind Dante toward his lock-on
   target, re-aimed only past 15/35 degrees (pitch clamped -20..15); blocked, the eye stops at the wall and

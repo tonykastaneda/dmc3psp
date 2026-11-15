@@ -1180,6 +1180,8 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         ScePspFVector3 eye = {camera->x, camera->y, camera->z};
         ScePspFVector3 target = {camera->tx, camera->ty, camera->tz};
         ScePspFVector3 up = {0.0f, 1.0f, 0.0f};
+        /* The game's camera roll (rail points, pan cameras: FUN_00131990 turns the view about its axis). */
+        if (camera->roll != 0.0f) sceGumRotateZ(camera->roll);
         sceGumLookAt(&eye, &target, &up);
     }
     sceGumMatrixMode(GU_MODEL);
