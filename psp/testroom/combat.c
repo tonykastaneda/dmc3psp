@@ -913,13 +913,15 @@ static int air_trick_update(Combat *c, Player *player, float dt) {
     if (c->air) return 1;   /* falling: the velocities in combat_update move him */
     if (c->warp_time <= 0.0f) {
         float dx, dz, dist, along, dy;
-        if (c->frame < wait) return 1;
+        if (c->frame < wait + SCRIPT_LAG) return 1;   /* the motion's end is seen a frame late, as everywhere */
         dx = player->target_x - player->x; dz = player->target_z - player->z;
         dist = sqrtf(dx * dx + dz * dz);
-        along = player->has_target ? dist - AIR_TRICK_SHORT : 0.0f;
+        dy = player->has_target ? player->target_y + AIR_TRICK_LOCK_HEIGHT - player->y : 0.0f;
+        /* FUN_00226550 state 1: across = the 3D distance to the lock point (FUN_001324b0) less +0x298, at most
+         * +0x294; up = the lock point's height difference, at most +0x29c either way. */
+        along = player->has_target ? sqrtf(dist * dist + dy * dy) - AIR_TRICK_SHORT : 0.0f;
         if (along > AIR_TRICK_MAX_XZ) along = AIR_TRICK_MAX_XZ;
         if (along < 0.0f) along = 0.0f;
-        dy = player->has_target ? player->target_y + AIR_TRICK_LOCK_HEIGHT - player->y : 0.0f;
         if (dy > AIR_TRICK_MAX_Y) dy = AIR_TRICK_MAX_Y;
         if (dy < -AIR_TRICK_MAX_Y) dy = -AIR_TRICK_MAX_Y;
         c->warp_step[0] = dist > 1.0f ? dx / dist * along : 0.0f;
@@ -934,6 +936,11 @@ static int air_trick_update(Combat *c, Player *player, float dt) {
         player->x += c->warp_step[0] * step;
         player->y += c->warp_step[1] * step;
         player->z += c->warp_step[2] * step;
+        /* State 2: within +0x298 of the lock point the across speed stops (FUN_002e3f60). */
+        if (player->has_target) {
+            float lx = player->target_x - player->x, ly = player->target_y + AIR_TRICK_LOCK_HEIGHT - player->y, lz = player->target_z - player->z;
+            if (lx * lx + ly * ly + lz * lz < AIR_TRICK_SHORT * AIR_TRICK_SHORT) c->warp_step[0] = c->warp_step[2] = 0.0f;
+        }
         c->warp_time -= dt;
         if (c->warp_time <= 1.0e-4f) {   /* ten 60th steps exactly, as the PS2's +0x2870 countdown (not eleven by rounding) */
             /* State 9, HD Collection traces: 4 cm/frame forward and 8 up, losing 0.07 and 1. */
