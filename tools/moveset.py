@@ -119,6 +119,11 @@ def main():
                 c["input_text"], cond, " ".join(sc), " ".join(mots),
                 " ".join(active), " ".join(f"g{g}@{','.join(map(str, f))}" for g, f in sorted(opens.items()))))
         lines.append("")
+    # The hand-written PS2 comparison at the end of the file is kept.
+    marker = "## Checked against the PS2"
+    old = a.out.read_text(encoding="utf-8") if a.out.exists() else ""
+    if marker in old:
+        lines.append(old[old.index(marker):].rstrip("\n"))
     a.out.write_text("\n".join(lines), encoding="utf-8")
     print(f"{len(cmds)} commands in {len(groups)} groups -> {a.out}")
 

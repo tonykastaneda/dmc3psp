@@ -267,3 +267,26 @@ frame ranges), **opens** (gate@frames it opens, first listed script).
 | 111 | melee | ground | press TRI | gate0 | 7:25 25:18446744073709551615 7:4 7:43 7:44 | s27-25 s27-04 |  |  |
 | 112 | melee | ground | press TRI | gate0 | 7:34 34:18446744073709551615 7:5 7:45 7:46 | s27-34 s27-05 |  |  |
 | 116 | melee | air | press TRI | gate0 | 7:13 7:12 | s27-13 s27-12 |  | g0@47 g4@46 g5@47 g6@46 g8@46 g9@50 g10@50 g15@54 |
+
+## Checked against the PS2
+
+Hand-written; `tools/moveset.py` keeps this section. Frames at 60 fps, from the press reaching the game to
+the move handing back to neutral, read off `tools/ref_compare.py` recordings (`analysis/ref/cmp_*`, the
+script id at player+0x24c6 on the PS2). Before / after are the port.
+
+| move (script) | PS2 | port before | port after | source |
+|---|---|---|---|---|
+| E&I shot from a stand (`ei_g1`) | 20-42 (22) | 20-32 (12) | 20-42 (22) | FUN_002688c0: first shot outside the stance waits >= 10 frames, then 13 |
+| E&I mash (`ei_gm`) | 19-69 | 20-32, 33-69 | 20-69 | same |
+| E&I locked, in the stance (`fxgun`) | 41-54, 61-73, 81-93 | 40-52, 60-72, 80-92 | 42-54, 62-74, 82-94 | wait = turn to target only; 13 counted from the shot |
+| E&I held 96 frames, Trickster (`ei_gh`) | one shot, nothing on release | shot + charged shot at release | one shot | command flag 0x800: charged shots check the style (Gunslinger only) |
+| Shotgun from a stand (`sg_g1`) | 9:4 20-29, 9:7 29-89 | 9:6 20-80 | aim 20-29, shot to 87 | FUN_0026be70: waits >= 9 frames with the aim (column 0) |
+| Shotgun held (`sg_gh`) | one shot | shot + charged shot | one shot | flag 0x800 as above |
+| Twosome Time (`gs_1`) | 20-42 | 20-32 | 20-42 | FUN_0026b1d0: waits 10 (3 in the stance), ends 13 after |
+| Twosome Time mash (`gs_mash`) | 20-123, one chain | 4 separate moves, ends 122 | 20-123, one chain | re-fires from 7 frames after the shot (+0x2856), earlier presses wait |
+| Twosome Time R1 fwd mash, stick let go (`gs_lfm`) | 18:1 38, 18:0 from 63, ends 111 | 18:1 38-53, 62-77, 18:0 86-101 | 18:1 38, 18:0 from 74, ends 111 | a new R1 sector waits 10 frames (FUN_0026b0d0) |
+
+Also from flag 0x800: Gun Stinger (146) and Artemis's CIR shot (152) are Gunslinger only.
+Not matched yet: Twosome Time's random pick of 18:0-3 or 18:4-7 (+0x3c6d) and its start frame 15 for even
+shots; the shotgun ends 2 frames early; the shot motions are the level column (the game blends the up / down
+columns 1 / 5 over it by +0x2430).
