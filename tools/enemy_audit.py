@@ -49,6 +49,9 @@ def main():
     ap.add_argument("--label", default="baseline")
     ap.add_argument("--resume", action="store_true")
     ap.add_argument("--stress", action="store_true", help="apply heavy/launch/air/slam to all live enemies repeatedly")
+    ap.add_argument("--force-encounters", action="store_true", help="bypass item/puzzle holds in direct room captures")
+    ap.add_argument("--line", action="append", default=[], help="extra scene instruction")
+    ap.add_argument("--eboot", type=Path, help="pin all scenes to this executable")
     args = ap.parse_args()
     slot = os.environ.get("DMC3_SLOT")
     if not slot:
@@ -71,10 +74,14 @@ def main():
                 cmd = [sys.executable, str(ROOT / "tools/ppsspp_scene.py"),
                        "enemy_" + args.label + "_" + name, "--mission", str(mission),
                        "--room", str(room), "--frames", str(args.frames),
-                       "--shot", str(args.frames - 1), "--line", "enemyaudit 1",
+                       "--shot", str(args.frames - 1), "--line", "enemyaudit " + ("2" if args.force_encounters else "1"),
                        "--line", "fastwaves 1"]
                 if args.stress:
                     cmd += ["--line", "enemystress 45"]
+                for line in args.line:
+                    cmd += ["--line", line]
+                if args.eboot:
+                    cmd += ["--eboot", str(args.eboot.resolve())]
                 log = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
                 (out / (name + ".log")).write_text(log.stdout + log.stderr)
                 if log.returncode:

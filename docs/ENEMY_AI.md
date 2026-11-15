@@ -47,6 +47,41 @@ Initial measurements before changing movement:
 These are baseline results, not a claim of zero clipping or complete mission
 coverage. Full regression results follow as fixes are verified.
 
+Reference check, 16:29-16:30: loaded the shared PCSX2 save in Mission 2 and
+sampled the five `CEm000` actor roots through PINE 120 times at roughly 10 Hz.
+The smallest grounded enemy-enemy distance was **95.807 cm**; a preceding
+object census showed a Pride **88 cm** from Dante. Local evidence is
+`analysis/testroom/enemy_ps2_spacing.json`, `enemy_ps2_loaded.png` and
+`enemy_ps2_spacing.png`. The exclusive PCSX2 lock was released immediately.
+The disc's Seven Hells pack also gives its root terrain sphere as radius 50 at
+local y=50 (descriptor 0 in chunks 39/40). That sphere is a different proxy
+from the measured 48 cm body separation radius; this audit retains the latter.
+
+First correction: Sloth warps retain their original radius and first random
+heading, then try 31 other headings with floor, storey and wall clearance;
+failure keeps the previous position. Ordinary enemies now sweep both horizontal
+travel and height in steps of at most 15 cm, retain support at open arena edges,
+and update floor height after wall correction. Invalid spawns search locally for
+supported placement instead of inventing floor at y=0. A final symmetric body
+solve runs after Dante's existing body/wall pass and handles airborne and exactly
+coincident enemies. Every correction to an enemy also meets the stage walls.
+These constraints adapt the port's collision engine; they are not a translation
+of the PS2's complete contact solver. No Dante movement code was changed.
+
+| Mission / room | Before | After | Samples | Evidence (`analysis/testroom/`) |
+| --- | ---: | ---: | ---: | --- |
+| 1 / 000 | 16 | 0 | 601 | `enemy_collision_v1_m01_r000_599.png` |
+| 3 / 002 | 0 | 0 | 601 | `enemy_collision_v1_m03_r002_599.png` |
+| 3 / 004 | 1,707 | 0 | 601 | `enemy_collision_v1_m03_r004_599.png` |
+| 3 / 006 | 0 | 0 | 601 | `enemy_collision_v1_m03_r006_599.png` |
+
+Pawn hops use `PW_RISE`/`PW_FALL`, not the common airborne flag; the audit now
+recognizes those native hop states. Gigapede visibility likewise comes from
+its segment renderer rather than the skinned actor's hidden flag. Direct-room
+tests can use `enemyaudit 2` / `--force-encounters` to bypass item/puzzle holds;
+normal play and `enemyaudit 1` keep those gates. `--eboot` pins a scene or batch
+to a saved executable for reproducible before/after captures.
+
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
 none of it is in the repo.

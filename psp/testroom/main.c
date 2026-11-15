@@ -2910,6 +2910,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }
     int m6 = mission_choice.mission == 6, held = room_held() || (m6 && m6_script_held(room_number(mission_room)))
         || (mission_choice.mission == 11 && m11_script_held(room_number(mission_room)));
+    if (focus_cmp && cmp_enemy_audit > 1) held = 0; /* Audit rooms directly without solving their item puzzles. */
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20 op 8c 13620 then wait 300; cinematic side effects omitted. */
@@ -4003,6 +4004,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        if (dummy_ready) enemy_finish_collisions(player.x, player.y, player.z);
         if (focus_cmp && cmp_enemy_audit) enemy_audit_frame(mission_choice.mission,
             mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
             frames, player.x, player.y, player.z);
