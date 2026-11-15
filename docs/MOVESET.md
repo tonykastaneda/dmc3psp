@@ -286,6 +286,18 @@ script id at player+0x24c6 on the PS2). Before / after are the port.
 | Twosome Time mash (`gs_mash`) | 20-123, one chain | 4 separate moves, ends 122 | 20-123, one chain | re-fires from 7 frames after the shot (+0x2856), earlier presses wait |
 | Twosome Time R1 fwd mash, stick let go (`gs_lfm`) | 18:1 38, 18:0 from 63, ends 111 | 18:1 38-53, 62-77, 18:0 86-101 | 18:1 38, 18:0 from 74, ends 111 | a new R1 sector waits 10 frames (FUN_0026b0d0) |
 
+| Every scripted move's start (`dash0`, `r_1`, `sm_1`, `d_n`; PS2_INPUT_LAG=1) | root moves 9 frames after the dash's request, ends 59 later | moves 10 after, ends 59 later | 9 / 59 | the script's clock runs from the frame after the request (STARTUP_FRAMES 2 -> 1); waits and the motion's end are seen a frame after the frame they name (SCRIPT_LAG 1), so gates and ends keep their frame |
+| Stinger, dummy 14 m off (`stinger_far`) | 3:14 41, dash 3:15 52-69 (17), 3:42; 794 cm | dash 3 frames at 16 cm | 3:15 52-69, 778 cm | FUN_00264fe0 with config chunk 11: level 2 dashes +0x28 = 16 frames over +0x2c = 560 cm, ends once the count is below 0 |
+| Stinger, dummy 6 m off (`stinger`) | dash stops within 130 cm of the target (+0x34) | 3 frames | stops within 130 cm | same; the port's dummy walks in, the PS2's is held, so this one stops 3 frames earlier on the port |
+| Aerial Rave, CIR every 9 frames (`sm_airm`) | 13:7 40, 13:8 58, 13:9 74, lands 108; 3 strikes | a 4th strike 13:10 at 93, lands 119 | 3 strikes, lands 107 | a press counts on its own frame only (+0x4a14 / +0x4a40); the port kept presses 3 frames (BUFFER_SECONDS), which caught one made before 13:9's gate 4 started buffering |
+| Stinger then TRI at 80 (`stinger_c`) | no Combo I (press before gate 0 buffers) | Combo I at 84 | none | same |
+| High Time tapped / held (`hightime`, `hightime_h`) | 3:11 42-97; held 3:13 from 63, peak 348 | same | same | (already matched) |
+
+Dante hit (FUN_002e96a0 light, FUN_002e98d0 heavy): from within 90 degrees of his facing (FUN_002e2be0) he turns to the
+attacker and plays 1:0 or, half the time, 1:15 (heavy 1:2); from behind he turns away and plays 1:1 (heavy 1:3). The
+port played 1:0 / 1:2 turned to the attacker every time. Not ported yet: knockdown (FUN_002e9a40: 1:4 / 1:26 / 1:5 /
+1:27 by the attack's kind +0x2ae2, launched with config speeds, quick recovery on a face button), death.
+
 Also from flag 0x800: Gun Stinger (146) and Artemis's CIR shot (152) are Gunslinger only.
 Not matched yet: Twosome Time's random pick of 18:0-3 or 18:4-7 (+0x3c6d) and its start frame 15 for even
 shots; the shotgun ends 2 frames early; the shot motions are the level column (the game blends the up / down

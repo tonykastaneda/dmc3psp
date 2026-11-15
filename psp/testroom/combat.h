@@ -59,6 +59,7 @@ typedef enum {
     MOVE_QUICKSILVER, MOVE_DOPPELGANGER,          /* R1 + CIR in those styles: 25:0, 26:0 */
     MOVE_DEVIL_ON,                                /* turning Devil Trigger on: 0:50 */
     MOVE_HIT, MOVE_HIT_HEAVY, MOVE_HIT_AIR,       /* Dante hit: 3-00, 3-02, 3-04 */
+    MOVE_HIT_ALT, MOVE_HIT_BACK, MOVE_HIT_HEAVY_BACK, /* 3-15 (the front's other half), 3-01, 3-03 */
     MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT, MOVE_BACKFLIP,
     /* Every other weapon: phases generated from tools/moveset_phases.py. */
     GEN_MOVE_IDS

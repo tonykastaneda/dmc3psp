@@ -13,7 +13,6 @@
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
 #define STINGER_HOLD_SECONDS (3.0f / MOTION_FPS)  /* FUN_00264fe0, maxed: HD Collection traces */
-#define STINGER_HOLD_SPEED 16.0f                  /* cm/frame during it */
 #define HIGH_TIME_HOLD_FRAME 20.0f                /* TRI still down here: the rising version */
 #define MASH_GAP_SECONDS (13.0f / MOTION_FPS)     /* input patterns 16 / 40: gaps <= 13 frames */
 #define MASH_PRESSES 6                            /* ... more than 6 presses */
@@ -22,9 +21,12 @@
 #define SHORT_MASH_PRESSES 2
 #define MASH_KEEP_SECONDS 0.30f                   /* a press this recent keeps a mash loop going */
 #define DANCE_STAB_PLAYS 2   /* action 207's handler (0x267000) replays 3:52 twice, then 3:53 */
-#define BUFFER_SECONDS 0.05f                      /* the real game drops a press made before its gate opens */
 #define MAX_DASHES 3          /* FUN_00245f10: dashes in a row < 3 at the top style level */
-#define STARTUP_FRAMES 2.0f
+#define STARTUP_FRAMES 1.0f
+/* The script's waits and the motion's end are seen a frame after the frame they name (FUN_00255160 resumes a
+ * script once the motion has passed it). PS2, PS2_INPUT_LAG=1: the root moves from the frame after the request,
+ * gates and the end come a frame later than that clock. */
+#define SCRIPT_LAG 1.0f
 #define TRICKSTER_LEVEL 2     /* player+0x3c75, 0 = Lv1: the full moveset is Lv3 */
 #define SNAP_DASH 0.349f      /* 0xe39 = 20 deg: a dash this close to the target aims at it */
 #define SNAP_SKY_STAR 0.175f  /* 0x71c = 10 deg (Sky Star) */
@@ -172,6 +174,9 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_HIT] = {H("3-00"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_HEAVY] = {H("3-02"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_AIR] = {H("3-04"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1, .air = 1, .air_v = {0.0f, 0.0f, 0.0f, -1.5f}},
+    [MOVE_HIT_ALT] = {H("3-15"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_BACK] = {H("3-01"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_HEAVY_BACK] = {H("3-03"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOPPELGANGER] = {H("2-58"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_LEFT] = {H("2-07"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
@@ -327,7 +332,7 @@ static void seek_events(Combat *c) {
     c->next_event = 0;
     if (c->script < 0) return;
     sd = &script_data[c->script];
-    while (c->next_event < sd->count && sd->events[c->next_event].frame < c->frame) ++c->next_event;
+    while (c->next_event < sd->count && sd->events[c->next_event].frame + SCRIPT_LAG < c->frame) ++c->next_event;
 }
 
 /* Starts a move. A new action resets the gates (each script opens its own);
@@ -466,11 +471,9 @@ static unsigned int read_inputs(Combat *c, const Player *player, const PlayerInp
         if (c->tri_held >= CHARGE_SECONDS) in |= 1u << IN_CHARGE_TRI;
         c->tri_held = 0.0f;
     }
-    /* Keep a press alive for a few frames so a tap just before a gate opens
-     * still counts (the game's pattern history plays this role). */
-    c->buffer_time -= dt;
-    if (in) { c->buffered = in; c->buffer_time = BUFFER_SECONDS; }
-    else if (c->buffer_time > 0.0f) in = c->buffered;
+    /* A press counts on its own frame only: the patterns' bits (+0x4a40, FUN_002532d0) and the plain presses
+     * (+0x4a14, FUN_00245f10) are this frame's; a gate that buffers (1) keeps it as pending instead. PS2: a TRI
+     * 3 frames before 13:9's gate 4 starts buffering gives no 4th Aerial Rave strike. */
     return in;
 }
 
@@ -620,7 +623,7 @@ static int run_events(Combat *c) {
     int hits = 0;
     if (c->script < 0) return 0;
     sd = &script_data[c->script];
-    while (c->next_event < sd->count && sd->events[c->next_event].frame <= c->frame) {
+    while (c->next_event < sd->count && sd->events[c->next_event].frame + SCRIPT_LAG <= c->frame) {
         const ScriptEvent *e = &sd->events[c->next_event++];
         if (e->kind == EV_GATE) c->gates[e->a & 0x0F] = e->b;
         else if (e->kind == EV_FLAG) c->flag = e->a;
@@ -975,6 +978,24 @@ static void start_handmade(Combat *c, Player *player, const PlayerInput *input) 
     }
 }
 
+/* FUN_00264fe0: Stinger's dash (3:15) from Rebellion's config (chunk 11): level 1 (action 7) +0x1c / +0x20,
+ * 8 frames over 200 cm; level 2 (action 8) +0x28 / +0x2c, 16 frames over 560 cm. It stops early within
+ * +0x34 = 130 cm of the target (one less than 200 cm above or below). */
+static float stinger_dash(const Combat *c, int frames) {
+    if (c->action == 7) return frames ? 8.0f : 200.0f;
+    return frames ? 16.0f : 560.0f;
+}
+
+static int stinger_dash_over(const Combat *c, const Player *player) {
+    /* +0x2870 counts down and the dash ends once it's below 0. */
+    if (c->phase_time * MOTION_FPS > stinger_dash(c, 1)) return 1;
+    if (player->has_target && fabsf(player->y - player->target_y) < 200.0f) {
+        float dx = player->target_x - player->x, dz = player->target_z - player->z;
+        if (dx * dx + dz * dz < 130.0f * 130.0f) return 1;
+    }
+    return 0;
+}
+
 /* Twosome Time with R1 goes the stick's way against his facing (FUN_0026b0d0, table 0x595550): back 18:2,
  * left 18:3, right 18:1 (the generated actions 251 / 252 / 250); forward or neutral stays 18:0. */
 static MoveId twosome_move(const Player *player, const PlayerInput *input, MoveId first) {
@@ -1138,7 +1159,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
     {
         /* Moves the real game drives by speed, not by the motion (HD Collection traces). */
-        float speed = c->move == MOVE_STINGER_HOLD ? STINGER_HOLD_SPEED : 0.0f;
+        float speed = c->move == MOVE_STINGER_HOLD ? stinger_dash(c, 0) / stinger_dash(c, 1) : 0.0f;
         if (c->script >= 0) {
             const char *key = script_data[c->script].key;
             if (!strcmp(key, "7:31")) speed = 43.0f;       /* Beowulf's Straight */
@@ -1229,7 +1250,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
 
     /* Generated phases: what moves on to the next script. */
     if (d->next_on >= NEXT_FLAG1) {
-        int at_end = c->frame >= m->end_frame;
+        int at_end = c->frame >= m->end_frame + SCRIPT_LAG;
         int go = 0;
         float since = d->btn == BTN_TRI ? c->since_tri : d->btn == BTN_SQ ? c->since_sq : c->since_cir;
         int held = d->btn == BTN_TRI ? input->melee_held : d->btn == BTN_SQ ? input->gun_held : input->style_held;
@@ -1334,12 +1355,14 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
 
     /* Continuations within the action, or the end of the move. */
-    if (d->next != MOVE_NONE && d->next_on == 1 && c->phase_time >= STINGER_HOLD_SECONDS) {
+    if (c->move == MOVE_STINGER_HOLD) {
+        if (stinger_dash_over(c, player)) start_move(c, d->next, 0);
+    } else if (d->next != MOVE_NONE && d->next_on == 1 && c->phase_time >= STINGER_HOLD_SECONDS) {
         start_move(c, d->next, 0);
     } else if (c->air && d->flag_air) {
         /* Still flying: the pose holds until the floor. */
         if (c->frame > m->end_frame) c->frame = m->end_frame;
-    } else if (c->frame >= m->end_frame) {
+    } else if (c->frame >= m->end_frame + SCRIPT_LAG) {
         ++c->plays;
         if (c->move == MOVE_SM_DANCE_STAB && c->plays < DANCE_STAB_PLAYS) start_move(c, c->move, 0);
         else if (d->next != MOVE_NONE) start_move(c, d->next, 0);
@@ -1352,18 +1375,28 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
 }
 
 int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from_z, int heavy, float damage) {
-    if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR) return 1;
+    float to_attacker;
+    int front;
+    if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
+        c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK) return 1;
     /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
     if (damage < 0.0f) damage = heavy ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
     player->health -= damage;
     if (player->health < 1.0f) player->health = 1.0f;
-    player->yaw = atan2f(from_x - player->x, from_z - player->z);
+    /* FUN_002e96a0 (light) / FUN_002e98d0 (heavy): hit from within 90 degrees of his facing (FUN_002e2be0) he
+     * turns to the attacker and plays 1:0 or, half the time, 1:15 (heavy 1:2); from behind he turns away from it
+     * and plays 1:1 (heavy 1:3). */
+    to_attacker = atan2f(from_x - player->x, from_z - player->z);
+    front = fabsf(wrap_pi(to_attacker - player->yaw)) <= (float)M_PI * 0.5f;
+    player->yaw = front ? to_attacker : wrap_pi(to_attacker + (float)M_PI);
     player->air_kind = AIR_NONE;
     player->jump_motion = -1;
     c->air = 0;
     c->base_y = player->y;
-    start_move(c, !player->on_ground ? MOVE_HIT_AIR : heavy ? MOVE_HIT_HEAVY : MOVE_HIT, 0);
+    start_move(c, !player->on_ground ? MOVE_HIT_AIR
+                  : heavy ? (front ? MOVE_HIT_HEAVY : MOVE_HIT_HEAVY_BACK)
+                  : !front ? MOVE_HIT_BACK : (rand() % 10 < 5 ? MOVE_HIT_ALT : MOVE_HIT), 0);
     return 1;
 }
 int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy) {
@@ -1432,7 +1465,7 @@ int combat_selftest_inputs(int *total, int *first_failed_action) {
         p.gun_weapon = 5;
         if (cmd->weapon < 5) p.melee_weapon = cmd->weapon;
         else if (cmd->weapon < 10) p.gun_weapon = cmd->weapon;
-        if (cmd->type == 3) {
+        if (cmd->style != 0xFF) {
             static const Style styles[4] = {STYLE_SWORDMASTER, STYLE_GUNSLINGER, STYLE_TRICKSTER, STYLE_ROYALGUARD};
             p.style = styles[cmd->style & 3];
         }
