@@ -191,7 +191,29 @@ void anim_update(AnimState *anim, const Player *player, float dt) {
     anim->move_blend = approach(anim->move_blend, moving ? 1.0f : 0.0f,
                                 frames / (moving ? START_BLEND_FRAMES : STOP_BLEND_FRAMES));
     anim->run_blend = approach(anim->run_blend, player->running ? 1.0f : 0.0f, frames / WALK_RUN_BLEND_FRAMES);
-    anim->idle_frame = motion_wrap(idle, anim->idle_frame + frames);
+    /* FUN_002217a0: the idle moves him by its motion's root step (FUN_002e2d70(p, 3)). Only the weapons' battle idles
+     * have any: Beowulf's (s27-00) sways him about 12 cm along his facing (PS2 beo_*). */
+    anim->idle_root_step[0] = anim->idle_root_step[1] = 0.0f;
+    /* The gun stance is its own state (FUN_0021dba0), and leaving it the PS2 idles in the gun's 8:0 first (no sway;
+     * its length isn't traced: 60 frames here). */
+    anim->stance_hold = player->gun_stance || player->locked_on ? 60.0f : anim->stance_hold - frames;
+    if (battle_idle_motion() >= 0 && !moving && player->on_ground && !player->attacking && player->jump_motion < 0 &&
+        anim->stance_hold <= 0.0f) {
+        const Motion *bm = motion_get(battle_idle_motion());
+        float a = motion_wrap(bm, anim->battle_frame), b = motion_wrap(bm, anim->battle_frame + frames), ra[3], rb[3];
+        motion_root(bm, a, ra);
+        motion_root(bm, b, rb);
+        if (b >= a) {
+            anim->idle_root_step[0] = rb[0] - ra[0];
+            anim->idle_root_step[1] = rb[2] - ra[2];
+        } else {   /* wrapped: to the end, then from the loop start */
+            float re[3], rs[3];
+            motion_root(bm, bm->end_frame, re);
+            motion_root(bm, bm->loop_start, rs);
+            anim->idle_root_step[0] = re[0] - ra[0] + rb[0] - rs[0];
+            anim->idle_root_step[1] = re[2] - ra[2] + rb[2] - rs[2];
+        }
+    }    anim->idle_frame = motion_wrap(idle, anim->idle_frame + frames);
     /* FUN_002217a0 (timer set to 600 by FUN_0021d280): 10 s standing in 2-00, not in Devil Trigger, and he
      * starts the long idle 2-03 with no blend, until anything else happens. The game also waits on a global flag
      * (+8 of the stage object, not decoded). */
@@ -206,6 +228,7 @@ void anim_update(AnimState *anim, const Player *player, float dt) {
         anim->idle_time = 0.0f;
         anim->long_idle = 0;
     }
+    if (battle_idle_motion() >= 0) anim->battle_frame = motion_wrap(motion_get(battle_idle_motion()), anim->battle_frame + frames);
     if (anim->long_idle) anim->long_frame = motion_wrap(motion_get(motion_find("2-03")), anim->long_frame + frames);
     anim->walk_frame = motion_wrap(walk, anim->walk_frame + frames);
     anim->run_frame = motion_wrap(run, anim->run_frame + frames);
@@ -294,6 +317,7 @@ static void locomotion_sample(const AnimState *anim, const Combat *combat, Motio
     /* Standing with the sword still drawn: Rebellion's ready stance. */
     if (combat && combat->sword_out > 0.0f && combat_idle_motion() >= 0) idle_motion = combat_idle_motion();
     if (anim->long_idle && idle_motion == MOTION_IDLE) motion_sample(motion_get(motion_find("2-03")), anim->long_frame, &idle);
+    else if (idle_motion == battle_idle_motion()) motion_sample(motion_get(idle_motion), anim->battle_frame, &idle);
     else motion_sample(motion_get(idle_motion), motion_wrap(motion_get(idle_motion), anim->idle_frame), &idle);
     /* Only the motions with weight are sampled: this runs on the PSP every frame. */
     if (anim->move_blend <= 0.0f) { *out = idle; return; }

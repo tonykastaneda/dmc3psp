@@ -36,6 +36,9 @@ void pose_procedural(Pose *pose, const Player *player, float time);
  * browsing every MOT. */
 typedef struct {
     float idle_frame, walk_frame, run_frame;
+    float idle_root_step[2];   /* the battle idle's root step this frame (x, z in his facing; FUN_002e2d70) */
+    float battle_frame;        /* the battle idle's own frame (wrapped at its length) */
+    float stance_hold;         /* frames left before the idle sways again after the gun stance */
     float move_blend;      /* 0 = idle, 1 = moving */
     float run_blend;       /* 0 = walk, 1 = run */
     int was_running;
