@@ -25,26 +25,31 @@ MAX_INIT = 8
 def parse_config(text):
     """The CONFIG set's camera keys, as FUN_002ff0f0 reads them (comments after ';' dropped)."""
     out = dict(pitch=-1.0, len=-1.0, battle=-1.0, aov=-1.0, init=[])
-    block = re.search(r"#\s*SET\s+\d+\s+CONFIG(.*?)(?=\n#\s*SET|\Z)", text, re.S)
+    # A set's header starts its line: ";# SET 0 CONFIG" is a commented-out one (";#" is one token to the game).
+    block = re.search(r"^#\s*SET\s+\d+\s+CONFIG(.*?)(?=^#\s*SET|\Z)", text, re.S | re.M)
     if not block:
         return out
-    for raw in block.group(1).split("\n"):
-        line = raw.split(";")[0].strip()
-        if not line:
-            continue
-        key, *rest = line.replace(",", " ").split()
-        try:
-            vals = [float(v) for v in rest]
-        except ValueError:
-            continue
-        if key == "cam_rotx" and vals:
-            out["pitch"] = vals[0]
-        elif key == "cam_len" and len(vals) >= 2:
-            out["len"], out["battle"] = vals[0], vals[1]
-        elif key == "cam_aov" and vals:
-            out["aov"] = vals[0]
-        elif key == "cam_init" and len(vals) >= 3 and len(out["init"]) < MAX_INIT:
-            out["init"].append(vals[:3])
+    # The game reads tokens, not lines: ';' is just a token it doesn't know, so a setting after one ("; cam_aov 57")
+    # still counts and, coming later, wins (PCSX2, room 111: FOV 57, not the 64 before it).
+    tokens = block.group(1).replace(",", " ").split()
+
+    def nums(i, n):
+        vals = []
+        for t in tokens[i + 1:i + 1 + n]:
+            try:
+                vals.append(float(t))
+            except ValueError:
+                break
+        return vals
+    for i, key in enumerate(tokens):
+        if key == "cam_rotx" and (v := nums(i, 1)):
+            out["pitch"] = v[0]
+        elif key == "cam_len" and len(v := nums(i, 2)) == 2:
+            out["len"], out["battle"] = v
+        elif key == "cam_aov" and (v := nums(i, 1)):
+            out["aov"] = v[0]
+        elif key == "cam_init" and len(v := nums(i, 3)) == 3 and len(out["init"]) < MAX_INIT:
+            out["init"].append(v)
     return out
 
 
