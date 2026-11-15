@@ -282,6 +282,13 @@ Known to differ from the game (each one is still to do):
 
 `CPl000Shl00..10` (decomp names) are *shells* (projectiles), not move handlers.
 
+### Idle root motion (found 2026-11-14, not ported: player.c / main.c)
+
+The idle state (`FUN_002217a0`) moves Dante by the idle motion's root step every frame (`FUN_002e2d70(p, 3)`: XZ against
+his facing). Rebellion's idle has none; Beowulf's sways him along his facing (PS2: 12.6 cm forward before a press, then
+forward or back after a move), the port's idle applies no root. That is the 9 Beowulf scorecard fails (`beo_*`): their
+moves match once the sway is taken off.
+
 ### Motion blending (ported 2026-11-14)
 
 `FUN_002500d0`'s last two arguments are the blend mode and frames for the script's first motion (`FUN_00254e80` stores
