@@ -385,6 +385,22 @@ def build_grid(tris, x0, z0, cell, w, h, margin=0.0):
     return cells
 
 
+def collision_grid_bounds(rendered_floors, hit_walls, hit_floors):
+    """All three grids share dimensions; native collision can exceed rendered floor.
+
+    Include a wall-query margin so a capsule centred just outside an edge can
+    still find the wall. Slice only vertices, not collision normals/plane data.
+    """
+    triangles = list(rendered_floors) + list(hit_walls) + list(hit_floors)
+    xs = [v for t in triangles for v in t[0:9:3]]
+    zs = [v for t in triangles for v in t[2:9:3]]
+    x0 = math.floor((min(xs) - 60.0) / GRID_CELL) * GRID_CELL
+    z0 = math.floor((min(zs) - 60.0) / GRID_CELL) * GRID_CELL
+    w = int(math.ceil((max(xs) + 60.0 - x0) / GRID_CELL)) + 1
+    h = int(math.ceil((max(zs) + 60.0 - z0) / GRID_CELL)) + 1
+    return x0, z0, w, h
+
+
 def write_grid(blob, cells):
     offset = align(blob)
     cursor = 0
@@ -481,6 +497,8 @@ def main() -> None:
     # Chamber's balconies over its shaft (the walkthrough: "drop down to the ground level").
     edge_walls = [] if args.slot in NO_EDGE_WALL_SLOTS else open_edge_walls(hit_floors, hit_walls, floor, door_boxes)
     hit_walls += edge_walls
+    if not floor and hit_floors:
+        floor = [t[:9] for t in hit_floors]
     if not floor:
         # A room with no floor of its own (216, the Temperance Wagon's ride: the wagon is a gimmick over a backdrop):
         # the wagon's deck where the room's start is, 8 m x 4 m [approximation: the ride doesn't move].
@@ -488,11 +506,7 @@ def main() -> None:
         floor = [(x0, y, z0, x1, y, z0, x1, y, z1), (x0, y, z0, x1, y, z1, x0, y, z1)]
         hit_floors = [f + (0.0, 1.0, 0.0, -y) for f in floor]
         print(f"{name}: no floor; the wagon's deck at ({sx:.0f}, {sy:.0f}, {sz:.0f})")
-    xs = [v for t in floor for v in t[0::3]]
-    zs = [v for t in floor for v in t[2::3]]
-    gx0, gz0 = math.floor(min(xs) / GRID_CELL) * GRID_CELL, math.floor(min(zs) / GRID_CELL) * GRID_CELL
-    gw = int(math.ceil((max(xs) - gx0) / GRID_CELL)) + 1
-    gh = int(math.ceil((max(zs) - gz0) / GRID_CELL)) + 1
+    gx0, gz0, gw, gh = collision_grid_bounds(floor, hit_walls, hit_floors)
     cells = [[] for _ in range(gw * gh)]
     for ti, t in enumerate(floor):
         cx0 = int((min(t[0::3]) - gx0) // GRID_CELL); cx1 = int((max(t[0::3]) - gx0) // GRID_CELL)

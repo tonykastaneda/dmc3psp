@@ -267,3 +267,47 @@ frame ranges), **opens** (gate@frames it opens, first listed script).
 | 111 | melee | ground | press TRI | gate0 | 7:25 25:18446744073709551615 7:4 7:43 7:44 | s27-25 s27-04 |  |  |
 | 112 | melee | ground | press TRI | gate0 | 7:34 34:18446744073709551615 7:5 7:45 7:46 | s27-34 s27-05 |  |  |
 | 116 | melee | air | press TRI | gate0 | 7:13 7:12 | s27-13 s27-12 |  | g0@47 g4@46 g5@47 g6@46 g8@46 g9@50 g10@50 g15@54 |
+
+## Checked against the PS2
+
+Hand-written; `tools/moveset.py` keeps this section. Frames at 60 fps, from the press reaching the game to
+the move handing back to neutral, read off `tools/ref_compare.py` recordings (`analysis/ref/cmp_*`, the
+script id at player+0x24c6 on the PS2). Before / after are the port.
+
+| move (script) | PS2 | port before | port after | source |
+|---|---|---|---|---|
+| E&I shot from a stand (`ei_g1`) | 20-42 (22) | 20-32 (12) | 20-42 (22) | FUN_002688c0: first shot outside the stance waits >= 10 frames, then 13 |
+| E&I mash (`ei_gm`) | 19-69 | 20-32, 33-69 | 20-69 | same |
+| E&I locked, in the stance (`fxgun`) | 41-54, 61-73, 81-93 | 40-52, 60-72, 80-92 | 42-54, 62-74, 82-94 | wait = turn to target only; 13 counted from the shot |
+| E&I held 96 frames, Trickster (`ei_gh`) | one shot, nothing on release | shot + charged shot at release | one shot | command flag 0x800: charged shots check the style (Gunslinger only) |
+| Shotgun from a stand (`sg_g1`) | 9:4 20-29, 9:7 29-89 | 9:6 20-80 | aim 20-29, shot to 87 | FUN_0026be70: waits >= 9 frames with the aim (column 0) |
+| Shotgun held (`sg_gh`) | one shot | shot + charged shot | one shot | flag 0x800 as above |
+| Twosome Time (`gs_1`) | 20-42 | 20-32 | 20-42 | FUN_0026b1d0: waits 10 (3 in the stance), ends 13 after |
+| Twosome Time mash (`gs_mash`) | 20-123, one chain | 4 separate moves, ends 122 | 20-123, one chain | re-fires from 7 frames after the shot (+0x2856), earlier presses wait |
+| Twosome Time R1 fwd mash, stick let go (`gs_lfm`) | 18:1 38, 18:0 from 63, ends 111 | 18:1 38-53, 62-77, 18:0 86-101 | 18:1 38, 18:0 from 74, ends 111 | a new R1 sector waits 10 frames (FUN_0026b0d0) |
+
+| Every scripted move's start (`dash0`, `r_1`, `sm_1`, `d_n`; PS2_INPUT_LAG=1) | root moves 9 frames after the dash's request, ends 59 later | moves 10 after, ends 59 later | 9 / 59 | the script's clock runs from the frame after the request (STARTUP_FRAMES 2 -> 1); waits and the motion's end are seen a frame after the frame they name (SCRIPT_LAG 1), so gates and ends keep their frame |
+| Stinger, dummy 14 m off (`stinger_far`) | 3:14 41, dash 3:15 52-69 (17), 3:42; 794 cm | dash 3 frames at 16 cm | 3:15 52-69, 778 cm | FUN_00264fe0 with config chunk 11: level 2 dashes +0x28 = 16 frames over +0x2c = 560 cm, ends once the count is below 0 |
+| Stinger, dummy 6 m off (`stinger`) | dash stops within 130 cm of the target (+0x34) | 3 frames | stops within 130 cm | same; the port's dummy walks in, the PS2's is held, so this one stops 3 frames earlier on the port |
+| Aerial Rave, CIR every 9 frames (`sm_airm`) | 13:7 40, 13:8 58, 13:9 74, lands 108; 3 strikes | a 4th strike 13:10 at 93, lands 119 | 3 strikes, lands 107 | a press counts on its own frame only (+0x4a14 / +0x4a40); the port kept presses 3 frames (BUFFER_SECONDS), which caught one made before 13:9's gate 4 started buffering |
+| Stinger then TRI at 80 (`stinger_c`) | no Combo I (press before gate 0 buffers) | Combo I at 84 | none | same |
+| High Time tapped / held (`hightime`, `hightime_h`) | 3:11 42-97; held 3:13 from 63, peak 348 | same | same | (already matched) |
+
+Dante hit (FUN_002e96a0 light, FUN_002e98d0 heavy): from within 90 degrees of his facing (FUN_002e2be0) he turns to the
+attacker and plays 1:0 or, half the time, 1:15 (heavy 1:2); from behind he turns away and plays 1:1 (heavy 1:3). The
+port played 1:0 / 1:2 turned to the attacker every time.
+
+Knockdown (FUN_002e8d20 -> FUN_002e9a40): the attack record's kind (+0x18) picks the reaction: 0 flinch, 1 heavy
+flinch, 2-5 and 7 knockdown, any hit in the air or one that empties his health too. He faces the attacker and flies
+away with the player config's speeds (chunk 9: kinds 0-2 10.4 up, gravity -1.2, 10 back; 3: 12 / -1.2 / 15; 4: 10.4 /
+-0.8 / 6.4; others 12.4 / -0.8 / 12), slides on at 0.3 of it, and script 1:4 (1:5 for kinds 4+) holds its pose at
+12 (41) until the floor. A face button before its flag 2 (13 / 43), or Trickster, gives the quick recovery 1:6 at flag 3
+(20 / 50); otherwise he gets up at flag 4 (60 / 80) with 1:7 (1:9). Port, hitme 20 2 500 in M1: 200 cm in the air,
+lands lying, Trickster recovers, Swordmaster gets up. Kinds come from the records for Agni & Rudra, Cerberus and Vergil;
+other enemies still pass heavy / light (1 / 0). Not ported: class 6 (1:13 / 1:14, a heavy flinch here), the launch
+class 4's own handler (FUN_002e9f50, a knockdown here), and the Game Over screen.
+
+Also from flag 0x800: Gun Stinger (146) and Artemis's CIR shot (152) are Gunslinger only.
+Not matched yet: Twosome Time's random pick of 18:0-3 or 18:4-7 (+0x3c6d) and its start frame 15 for even
+shots; the shotgun ends 2 frames early; the shot motions are the level column (the game blends the up / down
+columns 1 / 5 over it by +0x2430).

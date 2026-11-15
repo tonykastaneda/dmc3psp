@@ -578,7 +578,9 @@ static int kind_max_health(int kind) {
 }
 static int mission_difficulty(void);
 static void enemy_died(int kind, float x, float y, float z) {
-    orbs_burst(x, y, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
+    /* FUN_00366f10: from the body's root + 70, with the floor at the root - 100: 170 cm over his feet. */
+
+    orbs_burst(x, y + 170.0f, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
 }
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
@@ -1212,6 +1214,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         ScePspFVector3 position = {player->x, player->y, player->z};
         sceGumTranslate(&position);
         sceGumRotateY(player->yaw + MODEL_YAW_OFFSET);
+        if (player->lean != 0.0f) sceGumRotateZ(player->lean);   /* the run's lean into a turn (player+0x88) */
     }
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
@@ -1784,6 +1787,8 @@ static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the
 /* "cmp": CMP_SCRIPT.TXT's inputs ("button first last" a line), Dante's position each frame
  * to CMP_OUT.TXT, to line up with the same script on the real game (tools/ref_compare.py). */
 static int focus_cmp;
+static int cmp_death;
+static int cmp_hit_frame = -1, cmp_hit_kind, cmp_hit_damage = 500;   /* "hitme f kind damage": hit Dante from 1 m ahead */
 #define CMP_MAX_EVENTS 64
 #define CMP_MAX_FRAMES 18000
 static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
@@ -1792,6 +1797,8 @@ static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
 #define CMP_MAX_WALKS 64
 static struct { float x, z; int first, last; } cmp_walks[CMP_MAX_WALKS];
 static int cmp_walk_count;
+/* "spin degrees first last": the stick at full tilt, its direction turning that much a frame (wall probes). */
+static float cmp_spin_rate; static int cmp_spin_from, cmp_spin_to;
 static float cmp_px, cmp_pz, cmp_cam_yaw;   /* where he is and the camera's yaw, for walkto */
 static int cmp_event_count, cmp_frames;
 static int cmp_game_shots[256];   /* saved by the game itself: works on the PSP and sees only its own picture */
@@ -1813,6 +1820,7 @@ static int cmp_swing,cmp_swing_from,cmp_swing_to;
 static int cmp_lv_auto_from=-1,cmp_lv_auto_target=-1;
 static int cmp_vr_auto_from=-1,cmp_stop_on_clear;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
+static int cmp_enemy_audit, cmp_enemy_stress;
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
 static struct { int frame, part; float amount; } cmp_lv_charge[8];
 static int cmp_lv_charge_count; /* "lvcharge frame part amount": deterministic boss attack capture */
@@ -1860,7 +1868,7 @@ static unsigned int menu_script_pad(int frame) {
     for (i = 0; i < menu_key_count; ++i) if (frame >= menu_keys[i].frame && frame < menu_keys[i].frame + 3) held |= menu_keys[i].button;
     return held;
 }
-static struct { float x, y, z, yaw, dt, floor, cframe; short move, script, ground, room; } cmp_log[CMP_MAX_FRAMES];
+static struct { float x, y, z, yaw, dt, floor, cframe, pen; short move, script, ground, room, cross, outside; } cmp_log[CMP_MAX_FRAMES];
 static int cmp_realdt;   /* "realdt 1": the real clock, as in play, not a fixed step */
 static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": for a test, the mission begins in that room */
 static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
@@ -1875,6 +1883,8 @@ static void cmp_load(void) {
         if (strncmp(line, "frames ", 7) == 0) cmp_frames = atoi(line + 7);
         else if (strncmp(line, "shot ", 5) == 0) { if (cmp_shot_count < 32) cmp_shots[cmp_shot_count++] = atoi(line + 5); }
         else if (strncmp(line, "enemy ", 6) == 0) cmp_enemy_distance = atoi(line + 6);
+        else if (strncmp(line, "hitme ", 6) == 0) sscanf(line + 6, "%d %d %d", &cmp_hit_frame, &cmp_hit_kind, &cmp_hit_damage);
+        else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "faceyaw ", 8) == 0) cmp_face_yaw = atoi(line + 8);
         else if (strncmp(line, "spot ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_spot_x, &cmp_spot_z);
@@ -1945,9 +1955,12 @@ static void cmp_load(void) {
             if(sscanf(line+9,"%d %d %f",&cmp_lv_charge[n].frame,&cmp_lv_charge[n].part,&cmp_lv_charge[n].amount)==3)++cmp_lv_charge_count;
         }
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
+        else if (strncmp(line, "enemyaudit ", 11) == 0) cmp_enemy_audit = atoi(line + 11);
+        else if (strncmp(line, "enemystress ", 12) == 0) cmp_enemy_stress = atoi(line + 12);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
+        else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
             if (sscanf(line + 7, "%f %f %d %d", &cmp_walks[cmp_walk_count].x, &cmp_walks[cmp_walk_count].z,
                        &cmp_walks[cmp_walk_count].first, &cmp_walks[cmp_walk_count].last) == 4) ++cmp_walk_count;
@@ -1967,6 +1980,10 @@ static void cmp_pad(int frame, PlayerInput *input) {
     int i;
     if(cmp_swing>0 && frame>=cmp_swing_from && frame<=cmp_swing_to && frame%cmp_swing==0) {input->melee=1;input->melee_held=1;}
     if (bench_fire && frame>=cmp_fire_from && frame % bench_fire == 0) { input->gun = 1; input->gun_held = 1; }
+    if (cmp_spin_rate != 0.0f && frame >= cmp_spin_from && frame <= cmp_spin_to) {
+        float a = (float)(frame - cmp_spin_from) * cmp_spin_rate * 0.0174533f;
+        input->stick_x = sinf(a); input->stick_y = cosf(a);
+    }
     for (i = 0; i < cmp_walk_count; ++i) {
         float wx = cmp_walks[i].x - cmp_px, wz = cmp_walks[i].z - cmp_pz, l = sqrtf(wx * wx + wz * wz);
         float s = sinf(cmp_cam_yaw), c = cosf(cmp_cam_yaw);
@@ -2916,6 +2933,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }
     int m6 = mission_choice.mission == 6, held = room_held() || (m6 && m6_script_held(room_number(mission_room)))
         || (mission_choice.mission == 11 && m11_script_held(room_number(mission_room)));
+    if (focus_cmp && cmp_enemy_audit > 1) held = 0; /* Audit rooms directly without solving their item puzzles. */
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20 op 8c 13620 then wait 300; cinematic side effects omitted. */
@@ -3487,6 +3505,10 @@ int main(int argc, char *argv[]) {
         focus_cmp = strncmp(text, "cmp", 3) == 0;
         if (focus_cmp) {
             cmp_load();
+            if (cmp_enemy_audit) {
+                path_in_game_dir(path, sizeof(path), "ENEMY_AUDIT.CSV");
+                enemy_audit_start(path);
+            }
             path_in_game_dir(path,sizeof(path),"VANGUARD_LOG.TXT");
             vanguard_trace(path);
             path_in_game_dir(path,sizeof(path),"CERBERUS_LOG.TXT");
@@ -3755,6 +3777,14 @@ int main(int argc, char *argv[]) {
                         if (room_breakables[k].room == mission_room && !breakable_broken[k]) { breakable_broken[k] = 1; stage_hide_group(room_breakables[k].number); }
                 }
             if (cmp_trim_at && frames == cmp_trim_at) enemy_trim(cmp_trim_keep);
+            if (focus_cmp && cmp_enemy_stress > 0 && frames > 0 && frames % cmp_enemy_stress == 0) {
+                int k;
+                static const HitKind reactions[] = {HIT_HEAVY, HIT_LAUNCH, HIT_AIR, HIT_SLAM};
+                for (k = 0; k < ENEMY_MAX; ++k) {
+                    enemy_select(k);
+                    if (enemy_active()) enemy_hit(reactions[(frames / cmp_enemy_stress - 1) % 4], player.x, player.z);
+                }
+            }
             {
                 int h, k, n;
                 for (h = 0; h < cmp_boss_hit_count; ++h) if (cmp_boss_hits[h][0] == frames)
@@ -3975,9 +4005,15 @@ int main(int argc, char *argv[]) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
                 if (combat_player_hit_damage(&combat, &player, from_x, from_z, 0, 1000.0f)) fx_hit_spark(chest);   /* 125's spikes: record 0 of 0x5bbb80 (1000, light) */
             }
+            /* Death only in real play (and scenes that ask for it): test scenes rely on him lasting. After he has
+             * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
+            combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
+            if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
+            if (focus_cmp && frames == cmp_hit_frame)
+                combat_player_hit_kind(&combat, &player, player.x + sinf(player.yaw) * 100.0f, player.z + cosf(player.yaw) * 100.0f, cmp_hit_kind, (float)cmp_hit_damage);
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit_damage(&combat, &player, from_x, from_z, heavy, enemy_attack_damage())) {
+                if (combat_player_hit_kind(&combat, &player, from_x, from_z, enemy_attack_kind(heavy), enemy_attack_damage())) {
                     fx_hit_spark(chest);
                     if(focus_cmp)vanguard_note("player_hurt",player.health);
                 } else {
@@ -4004,6 +4040,11 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        player_settle(&player, stage_loaded() && !on_bridge(player.x, player.z, player.y));
+        if (dummy_ready) enemy_finish_collisions(player.x, player.y, player.z);
+        if (focus_cmp && cmp_enemy_audit) enemy_audit_frame(mission_choice.mission,
+            mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
+            frames, player.x, player.y, player.z);
         if (input.style >= 0) style_switched = 1;
         if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
             /* Dante's actual travel against the stick's on-screen direction. */
@@ -4221,6 +4262,24 @@ int main(int argc, char *argv[]) {
                     cmp_log[frames].floor = g;
                 }
                 cmp_log[frames].room = (short)(mission_mode && mission_room != ROOM_NONE ? atoi(rooms[mission_room].file + 5) : -1);
+                /* Wall probes: how far into a wall he still is after every push this frame, whether the way from
+                 * last frame's spot went through a wall (waist and chest height), and whether he's off the
+                 * collision's floor grid. */
+                cmp_log[frames].pen = 0.0f; cmp_log[frames].cross = 0; cmp_log[frames].outside = 0;
+                if (stage_loaded()) {
+                    float px = player.x, pz = player.z;
+                    if (stage_collide(&px, &pz, player.y, PLAYER_RADIUS - 2.0f)) cmp_log[frames].pen = sqrtf((px - player.x) * (px - player.x) + (pz - player.z) * (pz - player.z));
+                    if (frames > 0 && cmp_log[frames - 1].room == cmp_log[frames].room) {
+                        int h;
+                        for (h = 0; h < 2; ++h) {
+                            float lift = h ? 150.0f : 70.0f, t;
+                            float a[3] = {cmp_log[frames - 1].x, cmp_log[frames - 1].y + lift, cmp_log[frames - 1].z};
+                            float b[3] = {player.x, player.y + lift, player.z};
+                            if ((a[0] - b[0]) * (a[0] - b[0]) + (a[2] - b[2]) * (a[2] - b[2]) > 0.01f && stage_raycast(a, b, &t)) cmp_log[frames].cross |= 1 << h;
+                        }
+                    }
+                    cmp_log[frames].outside = (short)!stage_walkable_below(player.x, player.z);
+                }
             }
             if (frames >= cmp_frames) {
                 char path[320];
@@ -4244,11 +4303,13 @@ int main(int argc, char *argv[]) {
                     enemy_trace_write(path);
                 }
                 path_in_game_dir(path, sizeof(path), "CMP_OUT.TXT");
+                enemy_audit_finish();
                 report = fopen(path, "w");
                 if (report) {
                     for (i = 0; i < cmp_frames && i < CMP_MAX_FRAMES; ++i)
-                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s %s %.4f %d %d %.1f %.1f\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw, combat_script_key(cmp_log[i].script),
-                                cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-", cmp_log[i].dt, cmp_log[i].ground, cmp_log[i].room, cmp_log[i].floor, cmp_log[i].cframe);
+                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s %s %.4f %d %d %.1f %.1f %.2f %d %d\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw, combat_script_key(cmp_log[i].script),
+                                cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-", cmp_log[i].dt, cmp_log[i].ground, cmp_log[i].room, cmp_log[i].floor, cmp_log[i].cframe,
+                                cmp_log[i].pen, cmp_log[i].cross, cmp_log[i].outside);
                     fclose(report);
                 }
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");

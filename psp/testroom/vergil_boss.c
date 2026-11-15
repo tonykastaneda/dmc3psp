@@ -59,7 +59,7 @@ static struct {
     float centre[3], travel[3], dante[3], dante_yaw;
     int dante_action, blocked, yamato_drawn, turned_back;
     ScriptPlayer body;
-    int landed, landed_heavy;
+    int landed, landed_heavy, landed_kind;
     float landed_x, landed_z, landed_damage;
     int tick, variant, dt, dt_unlocked, m13_chain, m20_low, m20_temp_dt, repeats, waves, cut_index, sword, sword_hit;
     float dt_left,dt_cooldown, cut[3], dive_height, retreat_speed, retreat_distance;
@@ -891,10 +891,12 @@ static void test_attack_caps(float px, float py, float pz) {
             vb.landed_z = vb.pos[2];
             vb.landed_damage = a->damage;
             vb.landed_heavy = a->kind != 0 || a->reaction >= 500.0f;
+    vb.landed_kind = a->kind + 1;   /* 0: this landing had no record */
             trace("landed");
         }
     }
 }
+int vergil_boss_attack_kind(void) { int k = vb.landed_kind - 1; vb.landed_kind = 0; return k; }   /* -1: no record */
 int vergil_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *damage) {
     if (!vb.landed) return 0;
     vb.landed = 0;

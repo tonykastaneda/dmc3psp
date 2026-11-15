@@ -30,7 +30,21 @@ Implemented in `psp/testroom/player.c` (`locomotion_step`).
   gun or Ebony & Ivory (`+0x3ba1`), and sets `+0x28a6`. Back in neutral `FUN_0021d280`
   then enters the gun stance (`FUN_0021dba0`, states 10, 12, 13) instead of the
   states above. See "Gun stance" below.
-- **Not ported**: the body lean in `player+0x28ec`, row 1, 2-51, long idle. The
+- **Lean** (`FUN_00221d20`): `player+0x28ec`, copied to the model's rotation Z (`+0x88`) every frame by
+  `FUN_0021fe30`: 10 degrees into the turn still to make once it's 5 or more (scaled under that, none under 1),
+  moving 0.25 degrees a frame; any state change clears it. Ported (`Player.lean`, `sceGumRotateZ`).
+- **Edges** (`FUN_0021fe30` -> `FUN_0021f470`): on the ground he's pushed 10 cm down each frame and
+  `FUN_00242200(-20)` looks for floor; none within 30 cm below and he falls (`FUN_0021df00` column 4: state 9,
+  no speed, 1.5 cm/frame^2, motion 2:0x24). The port decides it after the frame's wall pushes (`player_settle`).
+- **Landing** (`FUN_00242200`, before the step in every air state): falling, and y + vy within 10 cm of the
+  floor, he's put on it without that frame's carry.
+- **Jump press**: the press frame only sets state 4 up; the turn to the stick (5 frames, `FUN_002e3010`) and the
+  crouch follow, and the rise starts 8 frames after the press (PCSX2, every jump capture).
+- **Comparison lag**: on the PS2 a press changes the state the frame after the key nearly always (now and then
+  two, from PCSX2's keyboard path); `PS2_INPUT_LAG=1 tools/ref_compare.py` compares from the press. At that lag
+  the run, stop, turnaround, jumps, Air Hike and air drift match to the centimetre; combat's scripted moves start a
+  frame late (the dash moves 10 frames after the press, 9 on the PS2).
+- **Not ported**: row 1, 2-51, long idle. The
   stop transition and its blend length weren't traced; the test room stops at
   once and blends over 10 frames. Its camera follow (rate and angle limit) is
   its own tuning, not taken from the game's camera code.
@@ -69,7 +83,8 @@ looks the right way ("open" and, for R1, "behind"; the port copies it with spot 
 Taken from the PS2's code since (the guesses they replaced in brackets):
 - Trickster's dash script by style level, table 0x5911d0 (dash count); no pending press while the dash's gate
   only buffers; left and right lock-on dashes (swapped).
-- Scripts start counting two frames after a move begins (gates were two frames early).
+- Scripts start counting the frame after a move begins, and their waits and the motion's end are seen a frame after the
+  frame they name (measured with PS2_INPUT_LAG=1: root motion from the next frame, gates and ends a frame later).
 - Helm Breaker, `FUN_00264b90`: vy and gravity from the config (`pl000` chunk 11, `player+0x2844`) +0x60.. (a
   1800 cm/s slam). Aerial Rave `FUN_00268270..`, Agni & Rudra 5:17 `FUN_002737d0`, Nevan 6:15/6:34
   `FUN_00276ac0` (6:34 hovers until its flag), Rain Storm `FUN_0026b8b0`, Beowulf's dive kick `FUN_00267d20`
@@ -102,7 +117,8 @@ are the PS2's dispatch numbers (`FUN_002213e0`).
   can be cancelled into Sky Star at once.
 - **Air Trick**: after the warp, state 9: 4 forward losing 0.07, 8 up losing 1.
 - **Wall Hike** (state 31): stick into the wall. Ends with row 10 away from the wall.
-- **Rebellion**: Stinger's second level ends in 3:42, 3 frames of hold at 16 cm/frame. Held High
+- **Rebellion**: Stinger (FUN_00264fe0) dashes 3:15 for config +0x1c / +0x28 frames (8 / 16) over +0x20 / +0x2c cm (200 /
+  560), stopping within +0x34 = 130 cm of the target, then 3:16 (level 1) or 3:42 (level 2); PCSX2-checked. Held High
   Time goes to 3:13, 30 up losing 1.35. Shredder runs a fixed 60 frames.
 - **Aerial Rave**: sinks at 1.17 + 0.14 a frame, restarted by each strike.
 - **Guns**: Ebony & Ivory in the air 8:32, 11 up, losing 1.25, and each press after 13 frames 5.5 up
