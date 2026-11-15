@@ -78,7 +78,7 @@ had swapped the buttons (Triangle/Circle, Cross/Square): every state has the def
 one stands where the port puts its dummy, the rest far away (an enemy overhead still turns a jump into an Enemy
 Step). Dante's facing is the u16 at `+0x90`. The PS2's zone camera can't be moved, so scripts run where it
 looks the right way ("open" and, for R1, "behind"; the port copies it with spot / faceyaw / camyaw / camlock).
-`tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00).
+`tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00); **138 of 162** on 2026-11-14 18:40 with PS2_INPUT_LAG=1, the standing port dummy and the scorer's dip fix. The rest: the Beowulf saves' drift, the street runs (ramp, trace sampling), Air Trick's rise (the parked enemy's lock point), a jump pressed with the stick on the same frame (the PS2 drops it: `w_aa`), `melee_hit` (the PS2 enemy hits back), Royalguard's strafe between blocks.
 
 Taken from the PS2's code since (the guesses they replaced in brackets):
 - Trickster's dash script by style level, table 0x5911d0 (dash count); no pending press while the dash's gate
