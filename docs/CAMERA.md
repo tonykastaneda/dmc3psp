@@ -145,6 +145,17 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 | 100 (2490.7, 4148.3), the same: FOV 45.54 | 2356.3 208.3 2920.6 | same, FOV 45.5 |
 | 100 (3143.2, 2246.8), rail zone 1, target lifted | 2440.7 150.5 3779.4 / 2500.1 579.1 2572.5 | 2440.7 150.5 3779.4 / 2500.3 581.0 2569.0 |
 | 400 (2572.3, 9761.8), M18's opening, rail zone 1, FOV 70 | 2671.5 -228.7 10616.6 | same |
+| 201 (1275.4, 3729.7), M9's start, pan zone 0 | 2018.0 336.1 3804.5 / 1275.2 172.0 3729.3 | same |
+| 201 (2499.9, 3640.0), pan zone 3 | 2546.7 348.9 3040.2 | same |
+| 106 (2500.1, 2950.0), M16's start, rail zone 0 | 2922.9 480.7 2426.8 | same |
+| 219 (1997.2, 2497.2), rail zone 2, FOV 70 | 2250.4 622.0 3195.1 | same |
+
+## Known differences that aren't the camera
+
+- M18's opening (room 400): the camera is the game's (table above), but the port shows black where the PS2
+  shows white fog and a bright backdrop through the room's openings. The port draws no fog; the room's fog
+  isn't decoded (LIG2's header colours are a lead; `FogColor` in the executable is a model-script command).
+  Every other mission's opening shows at most 1.3% of the screen at the clear colour.
 
 ## The port
 
