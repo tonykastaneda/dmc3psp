@@ -18,6 +18,9 @@
 #define CAM_RADIUS 50.0f             /* FUN_0024f560 / FUN_0024f640 */
 #define RAIL_STEP 25.0f              /* cm per frame along the path (FUN_002af5a0) */
 #define MAX_RAIL 32
+/* FUN_0024f370's lock-on framing. Off: without FUN_0024f6c0 (its keep-both-in-view correction, not ported)
+ * Dante left the picture while strafing round a target; the follow camera is better until that's in. */
+#define LOCK_FRAMING 0
 
 int camera_battle, camera_boss;
 float camera_boss_at[3];
@@ -28,7 +31,8 @@ static float pitch = FOLLOW_PITCH, len = FOLLOW_LEN, fov_follow = FOLLOW_FOV;
 
 /* The follow camera. */
 static float f_eye[3], f_target[3], f_bearing, f_turn_speed, f_turn_goal, f_moved[3];
-static int f_turning, f_frozen;
+static int f_turning, f_frozen, f_locked;
+static float f_cap_e = -1.0f, f_cap_t = -1.0f, lock_len = 400.0f;
 
 /* The zones. */
 static int zone = -1, zone_prev = -1, fixed_on;
@@ -66,6 +70,17 @@ static void ease(float p[3], const float goal[3], float k) {
     for (i = 0; i < 3; ++i) p[i] += (goal[i] - p[i]) / d * step;
 }
 
+/* The follow camera's step (FUN_0024e9c0): d*d/2000, capped while *cap > 0; the cap ends once the step is under it. */
+static void ease_capped(float p[3], const float goal[3], float *cap) {
+    float d = dist3(p, goal), step;
+    int i;
+    if (d < 1e-4f) return;
+    step = d * d / (2.0f * FOLLOW_EASE);
+    if (*cap > 0.0f) { if (*cap < step) step = *cap; else *cap = -1.0f; }
+    if (step > d) step = d;
+    for (i = 0; i < 3; ++i) p[i] += (goal[i] - p[i]) / d * step;
+}
+
 /* The camera's collision: a 50 cm ball from a to b, stopping in front of what it hits. */
 static int sweep(const float a[3], float b[3]) {
     float d = dist3(a, b), far[3], t;
@@ -89,6 +104,7 @@ void camera_room(const char *room_file, int start) {
     /* FUN_0024e6a0: only the values the room gives (not negative). */
     pitch = room && room->pitch >= 0.0f ? room->pitch * DEG : FOLLOW_PITCH;
     len = room && room->len >= 0.0f ? room->len : FOLLOW_LEN;
+    lock_len = room && room->battle >= 0.0f ? room->battle : 400.0f;
     fov_follow = room && room->aov > 0.0f ? room->aov * DEG : FOLLOW_FOV;
 }
 
@@ -145,16 +161,42 @@ static void follow_frame(const Player *player, int reset_pressed) {
         return;
     }
     copy3(old_eye, f_eye);
-    /* FUN_0024f2a0: the goal keeps the eye's bearing, at the room's pitch and distance. */
     goal_t[0] = player->x; goal_t[1] = player->y + FOLLOW_HEIGHT; goal_t[2] = player->z;
-    v[0] = f_eye[0] - goal_t[0]; v[2] = f_eye[2] - goal_t[2];
-    h = sqrtf(v[0] * v[0] + v[2] * v[2]);
-    if (h < 1e-3f) { v[0] = sinf(f_bearing); v[2] = cosf(f_bearing); h = 1.0f; }
-    v[1] = tanf(pitch) * h;
-    l = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-    for (i = 0; i < 3; ++i) goal_e[i] = goal_t[i] + v[i] / l * len;
-    ease(f_eye, goal_e, 1.0f / (2.0f * FOLLOW_EASE));
-    ease(f_target, goal_t, 1.0f / (2.0f * FOLLOW_EASE));
+    if (LOCK_FRAMING && player->locked_on && player->has_target) {
+        /* FUN_0024f370 (lock-on held, a target): between Dante's head and the target, weighted toward the one
+         * nearer the eye, at the battle distance plus half their separation. The target's point is taken at
+         * the same 140 over its feet (the game's FUN_002e2160 point isn't read). */
+        float head[3], tp[3] = {player->target_x, player->target_y + FOLLOW_HEIGHT, player->target_z}, extra, w, a, b;
+        int pass;
+        copy3(head, goal_t);
+        for (i = 0; i < 3; ++i) goal_t[i] = (tp[i] + head[i]) * 0.5f;
+        extra = dist3(goal_t, tp) * 0.5f + lock_len;
+        for (pass = 0; pass < 2; ++pass) {
+            v[0] = f_eye[0] - goal_t[0]; v[2] = f_eye[2] - goal_t[2];
+            h = sqrtf(v[0] * v[0] + v[2] * v[2]);
+            if (h < 1e-3f) { v[0] = sinf(f_bearing); v[2] = cosf(f_bearing); h = 1.0f; }
+            v[1] = tanf(pitch) * h;
+            l = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+            for (i = 0; i < 3; ++i) goal_e[i] = goal_t[i] + v[i] / l * extra;
+            if (pass) break;
+            a = dist3(goal_e, head); b = dist3(goal_e, tp);
+            w = a + b > 1e-3f ? a / (a + b) : 0.5f;
+            for (i = 0; i < 3; ++i) goal_t[i] = tp[i] * w + head[i] * (1.0f - w);
+        }
+        f_locked = 1;
+    } else {
+        /* FUN_0024f2a0: the goal keeps the eye's bearing, at the room's pitch and distance. */
+        v[0] = f_eye[0] - goal_t[0]; v[2] = f_eye[2] - goal_t[2];
+        h = sqrtf(v[0] * v[0] + v[2] * v[2]);
+        if (h < 1e-3f) { v[0] = sinf(f_bearing); v[2] = cosf(f_bearing); h = 1.0f; }
+        v[1] = tanf(pitch) * h;
+        l = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        for (i = 0; i < 3; ++i) goal_e[i] = goal_t[i] + v[i] / l * len;
+        /* Leaving lock-on: both steps capped at 15 a frame until they're under it (FUN_0024f040). */
+        if (f_locked) { f_cap_e = f_cap_t = 15.0f; f_locked = 0; }
+    }
+    ease_capped(f_eye, goal_e, &f_cap_e);
+    ease_capped(f_target, goal_t, &f_cap_t);
     /* The camera reset: behind him, a sixth of the angle each frame. */
     if (reset_pressed && !f_turning) {
         f_turning = 1;

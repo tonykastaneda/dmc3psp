@@ -46,7 +46,7 @@ The parser starts every value at -1 and `FUN_0024e6a0` ignores negative ones, so
 camera's parameters (0x70 for types 0 and 3, 0x450 for type 1, 0x860 for type 2, none for 4 and 5), then
 `header[0x14]` areas of 0x50 bytes.
 
-Zone header: `[1]` camera type, `[2]` stick mode + 1 (0 = the room's), `[6]` 1 = "battle" zone (only while
+Zone header: `[1]` camera type, `[2]` Dante's shadow type + 1 for the zone (0 = the room's `shadow` key; `FUN_002bd660` -> `FUN_002e1100`), `[6]` 1 = "battle" zone (only while
 Dante is in his combat stance, player `+0x28ae` and `+0x28a9`), `[0x14]` area count, `[0x15..0x34]` 16
 transitions `{from zone, frames}`, `[0x35]` priority (lower wins), `[0x3c]` a sound/BGM group.
 
