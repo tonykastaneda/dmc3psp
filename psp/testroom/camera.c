@@ -18,8 +18,9 @@
 #define CAM_RADIUS 50.0f             /* FUN_0024f560 / FUN_0024f640 */
 #define RAIL_STEP 25.0f              /* cm per frame along the path (FUN_002af5a0) */
 #define MAX_RAIL 32
-/* FUN_0024f370's lock-on framing. Off: without FUN_0024f6c0 (its keep-both-in-view correction, not ported)
- * Dante left the picture while strafing round a target; the follow camera is better until that's in. */
+/* FUN_0024f370's lock-on framing, with FUN_0024f6c0's keep-both-in-view correction. Off: in the street with
+ * a target 8 m off and Dante strafing, the corrected goal fed back into the next frame's bearing and the eye
+ * drifted out of the room (cam_lock_*.png); FUN_001c1b10 (the plane test) is guessed, not decoded. */
 #define LOCK_FRAMING 0
 
 int camera_battle, camera_boss;
@@ -79,6 +80,40 @@ static void ease_capped(float p[3], const float goal[3], float *cap) {
     if (*cap > 0.0f) { if (*cap < step) step = *cap; else *cap = -1.0f; }
     if (step > d) step = d;
     for (i = 0; i < 3; ++i) p[i] += (goal[i] - p[i]) / d * step;
+}
+
+/* FUN_0024f6c0: the view's four sides (corner rays (+-sin(fov/2), +-sin(fov/2), 1) in the camera's frame); where
+ * Dante's head or the target is outside one, the eye and target both move until it's on it. */
+static void keep_in_view(float eye[3], float tgt[3], const float a[3], const float b[3], float fov) {
+    float f[3], r[3], u[3], l, s = sinf(fov * 0.5f), c[4][3];
+    static const float sx[4] = {-1.0f, 1.0f, 1.0f, -1.0f}, sy[4] = {1.0f, 1.0f, -1.0f, -1.0f};
+    int i, k, side;
+    for (i = 0; i < 3; ++i) f[i] = tgt[i] - eye[i];
+    l = sqrtf(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+    if (l < 1e-3f) return;
+    for (i = 0; i < 3; ++i) f[i] /= l;
+    r[0] = f[2]; r[1] = 0.0f; r[2] = -f[0];   /* up x forward */
+    l = sqrtf(r[0] * r[0] + r[2] * r[2]);
+    if (l < 1e-3f) return;
+    r[0] /= l; r[2] /= l;
+    u[0] = f[1] * r[2] - f[2] * r[1]; u[1] = f[2] * r[0] - f[0] * r[2]; u[2] = f[0] * r[1] - f[1] * r[0];
+    for (k = 0; k < 4; ++k) for (i = 0; i < 3; ++i) c[k][i] = r[i] * sx[k] * s + u[i] * sy[k] * s + f[i];
+    for (side = 0; side < 4; ++side) {
+        const float *p = c[side], *q = c[(side + 1) & 3];
+        float n[3] = {p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]}, d, nl;
+        const float *pt[2] = {a, b};
+        nl = sqrtf(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+        if (nl < 1e-6f) continue;
+        if (n[0] * f[0] + n[1] * f[1] + n[2] * f[2] < 0.0f) nl = -nl;   /* facing in */
+        for (i = 0; i < 3; ++i) n[i] /= nl;
+        for (k = 0; k < 2; ++k) {
+            d = (pt[k][0] - eye[0]) * n[0] + (pt[k][1] - eye[1]) * n[1] + (pt[k][2] - eye[2]) * n[2];
+            if (d < 0.0f) {
+                for (i = 0; i < 3; ++i) { eye[i] += n[i] * d; tgt[i] += n[i] * d; }
+                break;
+            }
+        }
+    }
 }
 
 /* The camera's collision: a 50 cm ball from a to b, stopping in front of what it hits. */
@@ -183,6 +218,7 @@ static void follow_frame(const Player *player, int reset_pressed) {
             w = a + b > 1e-3f ? a / (a + b) : 0.5f;
             for (i = 0; i < 3; ++i) goal_t[i] = tp[i] * w + head[i] * (1.0f - w);
         }
+        keep_in_view(goal_e, goal_t, head, tp, fov_follow);
         f_locked = 1;
     } else {
         /* FUN_0024f2a0: the goal keeps the eye's bearing, at the room's pitch and distance. */
