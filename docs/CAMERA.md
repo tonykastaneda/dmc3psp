@@ -158,6 +158,13 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
   the yaw held; eased 0.95; its first frame looks from Dante to the boss, 5 degrees round. Not ported: the
   FOV swell to 80 on Vergil's flag +0xbb4f, his other rooms (234 `FUN_0051d270`, else `FUN_0051d530`).
   The other bosses use the follow camera until theirs are ported.
+- Boss camera ids from their set-up functions (vtable +0x130 calling `FUN_003595b0`): 2 Geryon (CEm029),
+  3 Cerberus (CEm025), 4 Gigapede (CEm023), 5 CEm026, 6 CEm028, 7 CEm030, 8 Leviathan (`FUN_00461260`),
+  9 Vergil (CEm035), 10 Doppelganger (CEm034), 11 CEm031, 12 Arkham (CEm032), 13 `FUN_00405930`.
+  Gigapede's (`FUN_005125c0`) switches on scene `+0x24 -> +0x4511` (set by `FUN_0023ebe0` from the zone's
+  `[0x3c]`): 0, 1, 2, 3, 6, 100, 101 put the eye at fixed points (table 0x5e0c20, about 20 m up) with the
+  target over Dante (`FUN_00512c00`); anything else orbits 600 out toward the head (`FUN_005126e0`). Which
+  of these the fight in 111 uses wasn't seen, so the port keeps its own Gigapede view (main.c).
 - The PSP has no L2/R2, so the follow camera's manual turn isn't there; SELECT is the camera reset.
 - Approximations: the spline projection is a search on each
   candidate segment, not the game's polynomial roots (same nearest point); the follow camera's lock-on
