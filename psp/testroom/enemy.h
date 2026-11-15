@@ -71,6 +71,10 @@ void enemy_set_anim_auto(int on);
 /* For tests: log every change of plan or action. */
 void enemy_trace_start(void);
 void enemy_trace_write(const char *path);
+/* Scene-only collision audit; sample after Dante's body/wall pass. Never changes actors. */
+void enemy_audit_start(const char *path);
+void enemy_audit_frame(int mission, int room, int frame, float px, float py, float pz);
+void enemy_audit_finish(void);
 /* Run them without drawing them. */
 void enemy_set_ai_only(int on);
 /* For the PSP benchmark, to see what costs what. */
@@ -79,6 +83,8 @@ int enemy_anim_rate(void);          /* poses a second each right now, 0 = every 
 int enemy_poses_done(void);         /* running total, to measure the saving */
 /* (px, py, pz) is Dante, whom they go for when attacking. */
 void enemy_update(float dt, float px, float py, float pz);
+/* Final enemy contact solve after Dante's body/wall pass; never moves Dante. */
+void enemy_finish_collisions(float px, float py, float pz);
 /* An attack reached Dante this frame: returns 1 once per hit, from where, and if it's a heavy one. */
 int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
 /* Original attack-record damage, or -1 for the generic 700/800 fallback. */

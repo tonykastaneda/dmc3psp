@@ -1815,6 +1815,7 @@ static int cmp_swing,cmp_swing_from,cmp_swing_to;
 static int cmp_lv_auto_from=-1,cmp_lv_auto_target=-1;
 static int cmp_vr_auto_from=-1,cmp_stop_on_clear;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
+static int cmp_enemy_audit, cmp_enemy_stress;
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
 static struct { int frame, part; float amount; } cmp_lv_charge[8];
 static int cmp_lv_charge_count; /* "lvcharge frame part amount": deterministic boss attack capture */
@@ -1949,6 +1950,8 @@ static void cmp_load(void) {
             if(sscanf(line+9,"%d %d %f",&cmp_lv_charge[n].frame,&cmp_lv_charge[n].part,&cmp_lv_charge[n].amount)==3)++cmp_lv_charge_count;
         }
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
+        else if (strncmp(line, "enemyaudit ", 11) == 0) cmp_enemy_audit = atoi(line + 11);
+        else if (strncmp(line, "enemystress ", 12) == 0) cmp_enemy_stress = atoi(line + 12);
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
@@ -2921,6 +2924,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }
     int m6 = mission_choice.mission == 6, held = room_held() || (m6 && m6_script_held(room_number(mission_room)))
         || (mission_choice.mission == 11 && m11_script_held(room_number(mission_room)));
+    if (focus_cmp && cmp_enemy_audit > 1) held = 0; /* Audit rooms directly without solving their item puzzles. */
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20 op 8c 13620 then wait 300; cinematic side effects omitted. */
@@ -3491,6 +3495,10 @@ int main(int argc, char *argv[]) {
         focus_cmp = strncmp(text, "cmp", 3) == 0;
         if (focus_cmp) {
             cmp_load();
+            if (cmp_enemy_audit) {
+                path_in_game_dir(path, sizeof(path), "ENEMY_AUDIT.CSV");
+                enemy_audit_start(path);
+            }
             path_in_game_dir(path,sizeof(path),"VANGUARD_LOG.TXT");
             vanguard_trace(path);
             path_in_game_dir(path,sizeof(path),"CERBERUS_LOG.TXT");
@@ -3759,6 +3767,14 @@ int main(int argc, char *argv[]) {
                         if (room_breakables[k].room == mission_room && !breakable_broken[k]) { breakable_broken[k] = 1; stage_hide_group(room_breakables[k].number); }
                 }
             if (cmp_trim_at && frames == cmp_trim_at) enemy_trim(cmp_trim_keep);
+            if (focus_cmp && cmp_enemy_stress > 0 && frames > 0 && frames % cmp_enemy_stress == 0) {
+                int k;
+                static const HitKind reactions[] = {HIT_HEAVY, HIT_LAUNCH, HIT_AIR, HIT_SLAM};
+                for (k = 0; k < ENEMY_MAX; ++k) {
+                    enemy_select(k);
+                    if (enemy_active()) enemy_hit(reactions[(frames / cmp_enemy_stress - 1) % 4], player.x, player.z);
+                }
+            }
             {
                 int h, k, n;
                 for (h = 0; h < cmp_boss_hit_count; ++h) if (cmp_boss_hits[h][0] == frames)
@@ -4009,6 +4025,10 @@ int main(int argc, char *argv[]) {
             }
         }
         player_settle(&player, stage_loaded() && !on_bridge(player.x, player.z, player.y));
+        if (dummy_ready) enemy_finish_collisions(player.x, player.y, player.z);
+        if (focus_cmp && cmp_enemy_audit) enemy_audit_frame(mission_choice.mission,
+            mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
+            frames, player.x, player.y, player.z);
         if (input.style >= 0) style_switched = 1;
         if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
             /* Dante's actual travel against the stick's on-screen direction. */
@@ -4267,6 +4287,7 @@ int main(int argc, char *argv[]) {
                     enemy_trace_write(path);
                 }
                 path_in_game_dir(path, sizeof(path), "CMP_OUT.TXT");
+                enemy_audit_finish();
                 report = fopen(path, "w");
                 if (report) {
                     for (i = 0; i < cmp_frames && i < CMP_MAX_FRAMES; ++i)
