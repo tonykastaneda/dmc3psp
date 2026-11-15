@@ -147,6 +147,7 @@ typedef struct {
     float kd_hang;         /* kind 7: frames hanging before the flight (config +0x3c) */
     int kd_launch, kd_pop; /* kind 7 (FUN_002e9f50) / kind 6 (FUN_002ea390) */
     int twosome_set, twosome_shots;   /* Twosome Time's set (+0x3c6d) and shots in the series */
+    float fade_seconds;    /* this move's blend in from the last pose (0: a cut) */
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */

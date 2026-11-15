@@ -282,7 +282,7 @@ Known to differ from the game (each one is still to do):
 
 `CPl000Shl00..10` (decomp names) are *shells* (projectiles), not move handlers.
 
-### Motion blending (found 2026-11-14, not ported yet)
+### Motion blending (ported 2026-11-14)
 
 `FUN_002500d0`'s last two arguments are the blend mode and frames for the script's first motion (`FUN_00254e80` stores
 them at +0x4e / +0x50; `FUN_00255420` falls back to the script's op-1 bytes 2 / 3 when they're 0xff, and mode 0 forces 0
