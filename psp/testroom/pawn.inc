@@ -53,6 +53,13 @@ static void pawn_update(float f, float px, float py, float pz) {
     e->timer += f;
     if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->floor_y = g;
     if (e->plan == P_DEATH) {
+        /* A hit can shatter a pawn halfway through its own hop. Keep the
+         * remaining body falling while it fades, rather than freezing it
+         * above the floor for the entire death interval. */
+        if(e->pos[1]>e->floor_y) {
+            e->vel[1]-=3.2f*f;
+            e->pos[1]=fmaxf(e->floor_y,e->pos[1]+e->vel[1]*f);
+        }
         if (e->timer > 30.0f) e->active = 0;
         return;
     }

@@ -165,11 +165,41 @@ checked against scene bounds, since the wall-mounted organs extend beyond
 the walkable-floor envelope.
 
 Gigapede entry/exit contacts on its authored carapace path are retained as
-`expected_wall` records, with separate counters. Segment adjacency and rays
-along that carapace identify a scripted boundary crossing; other in-room
+`expected_wall` / `expected_below_floor` records, with separate counters.
+Segment adjacency, native mesh bounds and their cross-sections identify a
+scripted boundary crossing; other in-room
 contacts still fail. These records are not silently discarded or counted as
 zero mesh intersections. The collision audit continues to test proxy bodies,
 not weapons, cloth or exact triangle-to-triangle character meshes.
+
+The merged-build observation sweep covered all 93 scripted encounter cases:
+55,819 frames and 194,491 body samples, with no empty or incomplete captures.
+Its remaining ordinary-body case was M18 / 420: nine contacts during a landing
+against a doorway shoulder. Extending the wall-swept escape search from four
+to eight rings clears that exact 419-to-420 replay, with zero reports across
+601 room frames (`enemy_m18_corner_final_1115.png`, also frame 1119).
+Direct-room audit mode retains completed rooms until their requested sampling
+time ends, avoiding the blocking Mission Clear menu during wave-retirement tests.
+
+Pawns killed during a hop previously froze above the floor throughout their
+30-frame death interval. Their remaining body now follows the existing pawn
+fall acceleration while fading. Stress reports fell from 36 / 12 floating
+samples in M7 / 115 / 135 to zero in both rooms over 1,200 frames each.
+This is a port death-motion correction, not a newly decoded native death state.
+
+After merging master `218b7c6`, the six-case stress probe (M1 / 000, M4 / 111,
+M7 / 115 and 135, M18 / 413 and 420) records zero unintended contacts over
+7,202 frames. All six scripts reached their ends. The two Gigapede captures
+each retain 41 expected wall and 16 expected floor crossings. Evidence:
+`enemy_audit_merged218_core/`, screenshot `enemy_merged218_core_batch_003_3599.png`.
+
+Room summaries now include `script_at` / `script_total`. `--complete-waves`
+requires `--kill-every`, budgets enough intervals through the script's live-count
+gates, and rejects unfinished scripts even if no contacts occurred. For example,
+M20's ending needs substantially longer than a fixed 1,200-frame sample.
+Use `--stress --kill-every 225 --complete-waves --frames 900` for the extended
+corpus; lift rooms receive at least 1,800 frames. These direct-room tests bypass
+item puzzles; they do not claim an end-to-end mission walkthrough.
 
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
@@ -254,8 +284,9 @@ Things that are still not the game's:
 - **Bodies.** Enemies stop 96 cm apart and 88 cm from Dante, measured. How much Dante gives when pushed
   (`ENEMY_YIELDS`) is an estimate.
 - **Dante's hurt shape.** The port uses a vertical capsule, `DANTE_*`, not the game's.
-- **Knock-back on Dante.** Heavy or not comes from the attack type (`OP6`): the wide swing counts as
-  heavy. That reading is from the record's values, not from code.
+- **Knock-back on Dante.** `OP6` selects an attack record. Pride's records 0 and 1
+  both specify light kind 0; the wide swing increases damage to 800 rather than
+  changing that kind. See the executable check above.
 
 Not ported yet:
 
@@ -263,7 +294,6 @@ Not ported yet:
 - Rage (plan 41, `FUN_0032bc90`): only fires when another enemy dies, and these don't.
 - The spawn-in (plan 14, action 13). They start already walking.
 - Hits while lying down, and hitting walls.
-- Stage collision on the enemies' own moves.
 - Effects and sounds (`M[0x48]`), and DMD's Devil Trigger on enemies.
 
 ## Testing it

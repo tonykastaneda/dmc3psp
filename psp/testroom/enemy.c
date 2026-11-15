@@ -288,7 +288,7 @@ static void giga_hit(HitKind kind);
 static void giga_draw(void);
 float enemy_giga_health(void);
 static int giga_part_out(int k);
-static int giga_part_crossing(int k);
+static int giga_part_crossing(int k, const float centre[3]);
 static void giga_kill(void);
 float enemy_giga_max_health(void);
 #define ARROW_MAX_PUBLIC 24
@@ -1607,17 +1607,22 @@ static unsigned int audit_frames, audit_bodies, audit_violations;
 static unsigned int audit_expected, audit_room_expected;
 static int audit_mission = -1, audit_room = -1;
 static unsigned int audit_room_frames, audit_room_bodies, audit_room_violations;
+static int audit_script_at = -1, audit_script_total = -1;
+
+void enemy_audit_script(int at, int total) { audit_script_at=at; audit_script_total=total; }
 
 static void audit_room_summary(void) {
     if (audit_file && audit_mission >= 0)
-        fprintf(audit_file,"# room_summary mission=%d room=%d frames=%u bodies=%u violations=%u expected=%u\n",
-                audit_mission,audit_room,audit_room_frames,audit_room_bodies,audit_room_violations,audit_room_expected);
+        fprintf(audit_file,"# room_summary mission=%d room=%d frames=%u bodies=%u violations=%u expected=%u script_at=%d script_total=%d\n",
+                audit_mission,audit_room,audit_room_frames,audit_room_bodies,audit_room_violations,audit_room_expected,
+                audit_script_at,audit_script_total);
 }
 
 static int body_airborne(const Enemy *a) {
     if (a->kind == ENEMY_GOYLE || a->kind == ENEMY_FALLEN || a->kind == ENEMY_NEVAN) return 1;
     /* pawn.inc's PW_RISE/PW_FALL use their own hop physics, not Enemy.air. */
-    if (a->kind == ENEMY_PAWN) return a->action == 1 || a->action == 2;
+    if (a->kind == ENEMY_PAWN) return a->action == 1 || a->action == 2 ||
+        (a->plan == P_DEATH && a->pos[1] > a->floor_y + .5f);
     return a->air || (a->action == A_LEAP && a->step == 1);
 }
 
@@ -1633,11 +1638,12 @@ void enemy_audit_start(const char *path) {
 
 static void audit_violation(int mission, int room, int frame, int slot, int other, const char *what, float depth) {
     const Enemy *a = &enemies[slot];
-    int expected = a->kind == ENEMY_GIGAPEDE && !strcmp(what,"wall") && giga_part_crossing(a->step);
+    int expected = a->kind == ENEMY_GIGAPEDE &&
+        (!strcmp(what,"wall") || !strcmp(what,"below_floor")) && giga_part_crossing(a->step,a->pos);
     if(expected) { ++audit_expected; ++audit_room_expected; }
     else { ++audit_violations; ++audit_room_violations; }
-    fprintf(audit_file, "%d,%d,%d,%d,%d,%d,%s,%.3f,%.3f,%.3f,%.3f\n",
-            mission, room, frame, slot, a->kind, other, expected ? "expected_wall" : what, depth, a->pos[0], a->pos[1], a->pos[2]);
+    fprintf(audit_file, "%d,%d,%d,%d,%d,%d,%s%s,%.3f,%.3f,%.3f,%.3f\n",
+            mission, room, frame, slot, a->kind, other, expected ? "expected_" : "", what, depth, a->pos[0], a->pos[1], a->pos[2]);
 }
 
 /* Query each authored boss push shape on a copy, so auditing never moves Dante. */
@@ -1662,6 +1668,7 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
         audit_mission = mission; audit_room = room;
         audit_room_frames = audit_room_bodies = audit_room_violations = 0;
         audit_room_expected = 0;
+        audit_script_at = audit_script_total = -1;
     }
     ++audit_frames;
     ++audit_room_frames;
@@ -2102,7 +2109,10 @@ static void body_escape(Enemy *a, float px, float py, float pz) {
     if (worst <= 0.5f) return;
     memcpy(original,a->pos,sizeof(original)); memcpy(best,original,sizeof(best));
     angle = atan2f(a->pos[0]-cx,a->pos[2]-cz);
-    for (ring = 0; ring < 4; ++ring) for (k = 0; k < 32; ++k) {
+    /* The outer rings let a landing body go around a doorway's shoulder.
+     * Staying within one body diameter can leave every candidate blocked by
+     * that same corner (M18's room 420). Every route remains wall-swept. */
+    for (ring = 0; ring < 8; ++ring) for (k = 0; k < 32; ++k) {
         float turn = (float)((k+1)/2)*(PI/16)*(k&1 ? 1 : -1);
         float score, moved;
         memcpy(a->pos,original,sizeof(original)); a->floor_y = original_floor;
@@ -2113,7 +2123,7 @@ static void body_escape(Enemy *a, float px, float py, float pz) {
         if (score < best_score-0.001f || (score <= best_score && moved < best_move)) {
             best_score = score; best_move = moved; memcpy(best,a->pos,sizeof(best)); best_floor = a->floor_y;
         }
-        if (best_score < 0.0001f) { ring = 4; break; }
+        if (best_score < 0.0001f) { ring = 8; break; }
     }
     memcpy(a->pos,best,sizeof(best)); a->floor_y = best_floor;
 }
@@ -4125,9 +4135,11 @@ void enemy_giga_ride(float *x, float *y, float *z, int on_ground) {
 }
 
 static int giga_part_out(int k) { return k >= 0 && k < GIGA_PARTS && giga.out[k]; }
-static int giga_part_crossing(int k) {
+static int giga_part_crossing(int k, const float centre[3]) {
     static const float heights[]={0,5,65,120};
     float from[3],to[3],hit,back=k?GIGA_TOP_BACK:0,front=k?GIGA_TOP_FRONT:450;
+    float corners[8][3],right[3],up[3];
+    const float (*bounds)[3]=k?giga_body_bounds:giga_head_bounds;
     int j,h;
     if(giga_part_out(k) || giga_part_out(k-1) || giga_part_out(k+1))return 1;
     if(k<0 || k>=GIGA_PARTS)return 0;
@@ -4136,6 +4148,27 @@ static int giga_part_crossing(int k) {
         from[1]+=heights[h];to[1]+=heights[h];
         if(stage_raycast(from,to,&hit))return 1;
     }
+    /* A centre ray misses the first and last frames of an authored crossing:
+     * the carapace reaches a wall before its centre line does. Check the
+     * transformed bounds from the native mesh, rather than widening a ray
+     * by an arbitrary distance or exempting every Gigapede wall contact. */
+    giga_axes(k,right,up);
+    /* A short boundary triangle can lie wholly inside the bounds, missing
+     * all twelve outer edges. Cross-sections through the checked body point
+     * also identify that grazing entry/exit (M4, frame 297). */
+    for(h=0;h<4;++h) {
+        for(j=0;j<3;++j) {
+            from[j]=centre[j]+right[j]*bounds[0][0];
+            to[j]=centre[j]+right[j]*bounds[1][0];
+        }
+        from[1]+=heights[h]+40;to[1]+=heights[h]+40;
+        if(stage_raycast(from,to,&hit))return 1;
+    }
+    for(h=0;h<8;++h)for(j=0;j<3;++j)
+        corners[h][j]=giga.pos[k][j]+right[j]*bounds[h&1][0]+
+            up[j]*bounds[(h>>1)&1][1]+giga.dir[k][j]*bounds[(h>>2)&1][2];
+    for(h=0;h<8;++h)for(j=0;j<3;++j)if(!(h&(1<<j)))
+        if(stage_raycast(corners[h],corners[h|(1<<j)],&hit))return 1;
     return 0;
 }
 static int enemy_giga_part(int k, float out[3]) {

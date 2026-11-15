@@ -74,6 +74,7 @@ void enemy_trace_write(const char *path);
 /* Scene-only collision audit; sample after Dante's body/wall pass. Never changes actors. */
 void enemy_audit_start(const char *path);
 void enemy_audit_frame(int mission, int room, int frame, float px, float py, float pz);
+void enemy_audit_script(int at, int total); /* sampled room-script coverage */
 void enemy_audit_finish(void);
 /* Run them without drawing them. */
 void enemy_set_ai_only(int on);
