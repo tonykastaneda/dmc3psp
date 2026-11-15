@@ -13,6 +13,8 @@ typedef struct {
 int stage_load(const char *path);   /* 1 on success */
 int stage_loaded(void);
 const StageInfo *stage_info(void);
+/* Native collision bounds, independent of the visible scenery's extent. */
+const StageInfo *stage_collision_info(void);
 /* Draw inside an open display list with the view/projection already set. */
 void stage_draw(void);
 int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */

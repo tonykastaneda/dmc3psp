@@ -1,4 +1,5 @@
 #include "player.h"
+#include "camera.h"
 
 #include "stage.h"
 
@@ -449,22 +450,14 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         camera->snapping = 1;
         set_action(player, ACTION_CAMERA_SNAP);
     }
-    /* SELECT's snap swings the eye round him. */
-    if (camera->snapping) {
-        float delta = wrap_angle(camera->target_yaw - camera->yaw);
-        float turn = delta * (1.0f - expf(-CAMERA_SNAP_RATE * dt));
-        float dx = camera->x - player->x, dz = camera->z - player->z, c = cosf(turn), s = sinf(turn);
-        camera->x = player->x + dx * c + dz * s;
-        camera->z = player->z - dx * s + dz * c;
-        if (fabsf(delta) < 0.002f) camera->snapping = 0;
-    }
+    /* The turn itself is the game's camera reset (camera.c: behind him in 6 frames). */
 
     magnitude = sqrtf(input->stick_x * input->stick_x + input->stick_y * input->stick_y);
     if (magnitude > 1.0f) magnitude = 1.0f;
     if (magnitude * STICK_TILT_SCALE < STICK_TILT_NEUTRAL) magnitude = 0.0f;
     /* The stick is read against the camera as it is now (FUN_00254670), so it
      * always means the same direction on screen, even while the camera turns. */
-    player->camera_yaw = camera->yaw;
+    player->camera_yaw = camera_stick_yaw(camera, input->stick_x, input->stick_y, magnitude > 0.0f);
     /* A comparison test with the real game's fixed zone camera reads the stick against that, not the follow
      * camera (main.c "camlock"). */
     if (player_stick_yaw_lock < 100.0f) player->camera_yaw = player_stick_yaw_lock;
@@ -645,61 +638,6 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
     }
 
 camera:
-    {
-        /* The real camera: see CAMERA_* in player.h. */
-        float frames = dt * MOTION_FPS, dx, dz, h, goal_x, goal_z, rate;
-        goal_x = (player->x - camera->last_x) / (frames > 0.0f ? frames : 1.0f) * CAMERA_LEAD_FRAMES;
-        goal_z = (player->z - camera->last_z) / (frames > 0.0f ? frames : 1.0f) * CAMERA_LEAD_FRAMES;
-        camera->last_x = player->x;
-        camera->last_z = player->z;
-        if (goal_x * goal_x + goal_z * goal_z > 400.0f * 400.0f) goal_x = goal_z = 0.0f;  /* a warp */
-        rate = goal_x * goal_x + goal_z * goal_z > camera->lead_x * camera->lead_x + camera->lead_z * camera->lead_z
-             ? CAMERA_LEAD_RISE : CAMERA_LEAD_FALL;
-        camera->lead_x += (goal_x - camera->lead_x) * (1.0f - expf(-rate * dt));
-        camera->lead_z += (goal_z - camera->lead_z) * (1.0f - expf(-rate * dt));
-        camera->tx = player->x + camera->lead_x;
-        camera->tz = player->z + camera->lead_z;
-        camera->ty += (player->y + CAMERA_TARGET_HEIGHT - camera->ty) * (1.0f - expf(-8.0f * dt));
-        /* The free position: set somewhere else (a new room, a test), or not set yet, it starts from where the
-         * camera is. */
-        {
-            float fx = camera->free_x - camera->x, fz = camera->free_z - camera->z;
-            if (camera->clip <= 0.0f || fx * fx + fz * fz > 1500.0f * 1500.0f) {
-                camera->free_x = camera->x; camera->free_z = camera->z; camera->clip = 1.0f;
-            }
-        }
-        dx = camera->free_x - player->x;
-        dz = camera->free_z - player->z;
-        h = sqrtf(dx * dx + dz * dz);
-        if (h > 1.0f) {
-            float next = h + (CAMERA_DISTANCE - h) * (1.0f - expf(-CAMERA_LEASH_RATE * dt));
-            camera->free_x = player->x + dx / h * next;
-            camera->free_z = player->z + dz / h * next;
-        }
-        camera->y += (player->y + CAMERA_HEIGHT + camera->lift - camera->y) * (1.0f - expf(-8.0f * dt));
-        {
-            /* Pulled in when a wall comes between them, as on the real game near walls: quickly in, slowly
-             * back out. */
-            float from[3] = {player->x, player->y + CAMERA_TARGET_HEIGHT, player->z};
-            float to[3] = {camera->free_x, camera->y, camera->free_z}, t, allowed = 1.0f;
-            float reach = sqrtf((to[0] - from[0]) * (to[0] - from[0]) + (to[2] - from[2]) * (to[2] - from[2]));
-            float lift = 0.0f;
-            if (stage_loaded() && stage_raycast(from, to, &t) && t < 1.0f) {
-                allowed = t * 0.92f;
-                /* It comes no closer than this on the real game. Where a wall is closer behind him than that,
-                 * the old boom went on through it and showed the inside of the wall: now it stays in front
-                 * of the wall and rises to look down over him instead. */
-                if (reach * allowed < CAMERA_MIN_DISTANCE && reach > 0.0f)
-                    lift = fminf(220.0f, (CAMERA_MIN_DISTANCE - reach * allowed) * 0.9f);
-                if (allowed > 1.0f) allowed = 1.0f;
-            }
-            camera->lift += (lift - camera->lift) * (1.0f - expf(-(lift > camera->lift ? 10.0f : 2.5f) * dt));
-            if (allowed < camera->clip) camera->clip += (allowed - camera->clip) * (1.0f - expf(-25.0f * dt));
-            else camera->clip += (allowed - camera->clip) * (1.0f - expf(-2.5f * dt));
-            if (camera->clip < allowed - 0.35f) camera->clip = allowed - 0.35f;   /* never far behind a wall's edge */
-            camera->x = from[0] + (to[0] - from[0]) * camera->clip;
-            camera->z = from[2] + (to[2] - from[2]) * camera->clip;
-        }
-        camera->yaw = atan2f(camera->tx - camera->x, camera->tz - camera->z);
-    }
+    /* The game's camera, room by room: camera.c (docs/CAMERA.md). */
+    camera_update(player, camera, input->snap_camera, dt);
 }

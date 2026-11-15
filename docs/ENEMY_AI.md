@@ -84,6 +84,26 @@ tests can use `enemyaudit 2` / `--force-encounters` to bypass item/puzzle holds;
 normal play and `enemyaudit 1` keep those gates. `--eboot` pins a scene or batch
 to a saved executable for reproducible before/after captures.
 
+The corner correction also tries nearby supported points around a pinned body,
+accepting a reduction in total penetration and sweeping every candidate against
+the room. Airborne enemies retain their ground-level wall footprint, preventing
+a launch from clearing a doorway barrier and landing in a sealed pocket. This
+is a conservative port constraint, not a decoded native pathfinding rule.
+With the corrected grids, M6 / 126 changed from 58 contacts to **zero** over
+601 samples (`enemy_footprint_v4_batch_002_599.png`); M1 remained zero.
+M3 / 009, M7 / 136 and M18 / 401 also passed the corner suite. The audit now
+uses native collision bounds rather than visible-scenery bounds, and never
+checks a Gigapede segment against its own rideable back as floor. Clearing a
+room removes the old Gigapede's dynamic floor as well as its actor slots.
+
+`tools/enemy_audit_sweep.py --label <name>` batches direct-room captures using
+fixed simulation steps. It records each room's frame/body/violation counters,
+CSV, screenshot, command and executable hash, including zero-contact rooms;
+incomplete batches fail. `--stress` adds reactions, and `--kill-every` can retire
+waves after they have been exercised. Lift cases activate and ride the platform;
+M8's Heart test seeds its normal Ignis-Fatuus-use prerequisite. Audit-only
+`auditfast 1` omits the vblank wait; it is not a performance benchmark.
+
 ### Native collision grid coverage
 
 The stage grids formerly used only rendered floor bounds. In room 304 this

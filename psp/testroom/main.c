@@ -25,6 +25,7 @@
 
 #include "model_runtime.h"
 #include "player.h"
+#include "camera.h"
 #include "skeleton.h"
 #include "motion.h"
 #include "coat.h"
@@ -1167,14 +1168,20 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGumLoadIdentity();
     /* Near/far chosen for 16-bit depth precision: on the stage the near
      * plane sits at 25 cm (camera is 3 m back) and far covers the backdrop. */
-    if (stage_loaded()) sceGumPerspective(60.0f, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
-    else sceGumPerspective(60.0f, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
+    {
+        /* The game's vertical FOV for this camera (camera.c; 55 degrees on the follow camera by default). */
+        float fov = camera->fov > 0.05f ? camera->fov * 57.29578f : 60.0f;
+        if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
+        else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
+    }
     sceGumMatrixMode(GU_VIEW);
     sceGumLoadIdentity();
     {
         ScePspFVector3 eye = {camera->x, camera->y, camera->z};
         ScePspFVector3 target = {camera->tx, camera->ty, camera->tz};
         ScePspFVector3 up = {0.0f, 1.0f, 0.0f};
+        /* The game's camera roll (rail points, pan cameras: FUN_00131990 turns the view about its axis). */
+        if (camera->roll != 0.0f) sceGumRotateZ(camera->roll);
         sceGumLookAt(&eye, &target, &up);
     }
     sceGumMatrixMode(GU_MODEL);
@@ -1816,6 +1823,8 @@ static int cmp_lv_auto_from=-1,cmp_lv_auto_target=-1;
 static int cmp_vr_auto_from=-1,cmp_stop_on_clear;
 static int bench_low_steps, bench_done, bench_ai_only, bench_trace;
 static int cmp_enemy_audit, cmp_enemy_stress;
+static int cmp_audit_fast, cmp_audit_room_count;
+static struct { int frame, mission, room, start; } cmp_audit_rooms[128];
 static int cmp_hits[16][2], cmp_hit_count;  /* "hit frame kind": the first dummy takes this hit */
 static struct { int frame, part; float amount; } cmp_lv_charge[8];
 static int cmp_lv_charge_count; /* "lvcharge frame part amount": deterministic boss attack capture */
@@ -1952,6 +1961,13 @@ static void cmp_load(void) {
         else if (strncmp(line, "aitrace ", 8) == 0) bench_trace = atoi(line + 8);
         else if (strncmp(line, "enemyaudit ", 11) == 0) cmp_enemy_audit = atoi(line + 11);
         else if (strncmp(line, "enemystress ", 12) == 0) cmp_enemy_stress = atoi(line + 12);
+        else if (strncmp(line, "auditfast ", 10) == 0) cmp_audit_fast = atoi(line + 10);
+        else if (strncmp(line, "auditroom ", 10) == 0 && cmp_audit_room_count < 128) {
+            int n = cmp_audit_room_count;
+            if (sscanf(line+10,"%d %d %d %d",&cmp_audit_rooms[n].frame,&cmp_audit_rooms[n].mission,
+                       &cmp_audit_rooms[n].room,&cmp_audit_rooms[n].start) == 4 &&
+                cmp_audit_rooms[n].mission >= 1 && cmp_audit_rooms[n].mission <= MISSION_COUNT) ++cmp_audit_room_count;
+        }
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
@@ -2137,6 +2153,9 @@ static void focus_hold(const char *name) {
 static void start_camera(const Player *player, FollowCamera *camera) {
     float best_yaw = camera->yaw, best_score = -1.0f, offset;
     if (!stage_loaded()) return;
+    /* The game's start-up placement for the room (camera.c). */
+    camera_start(player, camera);
+    if (camera->fov > 0.0f) return;
     for (offset = 0.0f; offset < 6.28f; offset += 0.3927f) {
         int side;
         for (side = -1; side <= 1; side += 2) {
@@ -2871,8 +2890,9 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     player->yaw = s[3] * 0.0174533f;
     player->on_ground = 1;
     coat_reset();
+    camera_room(rooms[room].file, start);
     start_camera(player, camera);
-    
+
 }
 
 /* Parts of the room that hurt on touch (room_hazards: 205's and 207's bladed pillars). Touching one hurts once
@@ -3328,6 +3348,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
     }
     player_floor_fn = stage_floor;
     camera_auto_follow = 1;
+    camera_room("ROOM_001.BIN", 0);   /* STAGE.BIN is st001 */
     combat_reset(&combat);
     player_reset(player, camera);
     enemy_set_mortal(0);
@@ -3686,6 +3707,14 @@ int main(int argc, char *argv[]) {
             if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
             read_pad(&input, &previous_buttons, &previous_l);
         }
+        if (focus_cmp && cmp_enemy_audit && cmp_audit_room_count) {
+            int a;
+            for (a = 0; a < cmp_audit_room_count; ++a) if (cmp_audit_rooms[a].frame == frames) {
+                mission_choice.mission = cmp_audit_rooms[a].mission;
+                cmp_start_room = cmp_audit_rooms[a].room; cmp_start_pos = cmp_audit_rooms[a].start;
+                start_mission(&mission_choice,&player,&camera);
+            }
+        }
         last_time = frame_start;
         {
             int was_open = debug_open || pause_active;
@@ -3951,6 +3980,18 @@ int main(int argc, char *argv[]) {
         prev_z = player.z;
         {
             float was_x = sweep_x, was_z = sweep_z;
+            /* The rooms' flight zones (CAM header [6]): Air Raid, Nevan's Devil Trigger flight (player +0x28ae and
+             * +0x28a9, docs/MOVESET_RE.md). */
+            camera_battle = player.air_kind == AIR_RAID;
+            {   /* The boss's own camera (camera.c): Cerberus's in 006 (id 3); others not ported yet (-1). */
+                float bh, bm, at[1][3];
+                const char *f = mission_room >= 0 ? rooms[mission_room].file : "";
+                camera_boss = mission_mode && enemy_boss_health(&bh, &bm) && bh > 0.0f
+                    ? (!strcmp(f, "ROOM_006.BIN") ? 3 : !strcmp(f, "ROOM_144.BIN") ? 9 : -1) : 0;
+                if (camera_boss > 0 && enemy_alive_positions(at, 1) > 0) {
+                    camera_boss_at[0] = at[0][0]; camera_boss_at[1] = at[0][1]; camera_boss_at[2] = at[0][2];
+                }
+            }
             player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame
              * covers more than his radius, and pushing out from the end alone lets him through a wall (Mission
@@ -4558,7 +4599,7 @@ int main(int argc, char *argv[]) {
 
         ++frames;
         testroom_frame = frames;
-        sceDisplayWaitVblankStart();
+        if (!(focus_cmp && cmp_enemy_audit && cmp_audit_fast)) sceDisplayWaitVblankStart();
         draw_buffer = sceGuSwapBuffers();
         if (focus_pending) { focus_hold(focus_pending); focus_pending = NULL; }
     }
