@@ -75,8 +75,8 @@ def main():
             press("lup", 0.4, 0.15)
         for _ in range(20 - args.mission):
             press("lleft", 0.35, 0.12)
-        press("cross", 14)                                            # Normal: the opening demo
-        press("start", 8); press("start", 3)                          # skip it: Customize
+        press("cross", 24)                                            # Normal: the opening demo (loads ~20 s)
+        press("start", 4)                                             # skip it: Customize
         press("lup", 1.0, 0.2); press("cross", 3)                     # its Exit
         press("lleft", 1.5, 0.2); press("cross", 15)                  # Mission Start
     p = r.Pine()
