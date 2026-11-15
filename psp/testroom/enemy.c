@@ -140,6 +140,12 @@ typedef struct {
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
 } Enemy;
 
+static float body_radius(const Enemy *a) { return a->kind == ENEMY_VANGUARD ? 50.0f : ENEMY_RADIUS; }
+static int body_solid(const Enemy *a) {
+    return a->active && !a->hidden && a->plan != P_DEATH &&
+        (a->kind < ENEMY_KIND_COUNT || a->kind == ENEMY_VANGUARD);
+}
+
 static int hl_motion[HL_MOTIONS];
 static Vertex *weapon_vertices[ENEMY_KIND_COUNT];
 static unsigned short *indices[ENEMY_KIND_COUNT], *weapon_indices[ENEMY_KIND_COUNT];
@@ -147,6 +153,8 @@ static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
 /* Which bone holds the weapon, by kind. */
 static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5, 7, 11, HAND_BONE};
 static Enemy enemies[ENEMY_MAX];
+static float torso_offset[ENEMY_MAX][3];
+static int torso_kind(int kind) { return kind <= ENEMY_GREED || kind == ENEMY_ENVY; }
 static Enemy *e = &enemies[0];
 static int hits, attacks_on;
 static int landed;
@@ -280,6 +288,7 @@ static void giga_hit(HitKind kind);
 static void giga_draw(void);
 float enemy_giga_health(void);
 static int giga_part_out(int k);
+static int giga_part_crossing(int k);
 static void giga_kill(void);
 float enemy_giga_max_health(void);
 #define ARROW_MAX_PUBLIC 24
@@ -342,13 +351,13 @@ static float spawn_search_y = 2000.0f;
 static int vergil_floor(float x, float y, float z, float *out) { return floor_under(x, y - 200.0f, z, out); }
 void enemy_spawn_height(float y) { spawn_search_y = y + 100.0f; }
 
-static void body_wall(float *x, float *z, float y) {
+static void body_wall(float *x, float *z, float y, float radius) {
     int k;
     /* The stage query has a bounded triangle pass. At corners, another plane
      * can reintroduce a contact already visited in that pass. */
     for (k = 0; k < 4; ++k) {
         float ox = *x, oz = *z;
-        stage_collide(x, z, y, ENEMY_RADIUS);
+        stage_collide(x, z, y, radius);
         if (fabsf(*x-ox)+fabsf(*z-oz) < 0.01f) break;
     }
 }
@@ -360,7 +369,7 @@ static void spawn_site(float *x, float *z) {
     int ring, k;
     if (!stage_loaded()) return;
     if (floor_under(cx, spawn_search_y, cz, &ground)) {
-        body_wall(&cx, &cz, ground);
+        body_wall(&cx, &cz, ground, ENEMY_RADIUS);
         if (floor_under(cx, spawn_search_y, cz, &ground)) { *x = cx; *z = cz; return; }
     }
     for (ring = 1; ring <= 16; ++ring) {
@@ -368,7 +377,7 @@ static void spawn_site(float *x, float *z) {
             float a = (float)k * (2*PI/32);
             cx = *x+sinf(a)*(float)(ring*64); cz = *z+cosf(a)*(float)(ring*64);
             if (!floor_under(cx, spawn_search_y, cz, &ground)) continue;
-            body_wall(&cx, &cz, ground);
+            body_wall(&cx, &cz, ground, ENEMY_RADIUS);
             if (!floor_under(cx, spawn_search_y, cz, &ground)) continue;
             *x = cx; *z = cz;
             return;
@@ -466,7 +475,7 @@ static void spawn_one(int kind, float x, float z) {
         floor_under(x,spawn_search_y,z,&y);
         e->kind=kind;e->pos[0]=x;e->pos[1]=y;e->pos[2]=z;e->floor_y=y;
         e->active=1;e->plan=P_WATCH;e->air=e->hidden=0;
-        vanguard_spawn(x,y,z);return;
+        vanguard_select((int)(e-enemies));vanguard_spawn(x,y,z);return;
     }
     if (kind < 0 || kind >= ENEMY_KIND_COUNT) kind = ENEMY_PRIDE;
     spawn_site(&x, &z);
@@ -495,6 +504,7 @@ static void spawn_one(int kind, float x, float z) {
     e->plan_step = 0;
     e->health = kind_health(kind);
     e->posed_motion = -1;
+    e->posed_frame = -1.0f; /* Force a bind pose even when this kind has no idle clip. */
     e->overlay_motion = -1;
     e->hidden = 0;
     e->active = 1;
@@ -605,7 +615,7 @@ void enemy_kill_all(void) {
     coffins_reset();
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].active && enemies[i].plan != P_DEATH) {
-            if (enemies[i].kind == ENEMY_VANGUARD) vanguard_kill();
+            if (enemies[i].kind == ENEMY_VANGUARD) { vanguard_select(i); vanguard_kill(); }
             if (enemies[i].kind == ENEMY_CERBERUS) cerberus_boss_kill();
             if (enemies[i].kind == ENEMY_VERGIL) vergil_boss_kill();
             if (enemies[i].kind == ENEMY_GERYON) geryon_boss_kill();
@@ -638,7 +648,7 @@ void enemy_remove_defeated(void) {
 void enemy_clear_minions(void) {
     Enemy *selected=e;int i;
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind<ENEMY_KIND_COUNT && enemies[i].plan!=P_DEATH) {
-        e=&enemies[i];e->plan=P_DEATH;e->plan_step=0;e->air=0;died();
+        e=&enemies[i];e->plan=P_DEATH;e->plan_step=0;e->air=0;died();e->active=0;
     }
     e=selected;
 }
@@ -668,7 +678,7 @@ void enemy_select_nearest(float x, float z) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *o = &enemies[i];
         float dx = o->pos[0] - x, dz = o->pos[2] - z, d = dx * dx + dz * dz;
-        if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && vanguard_hidden()) &&
+        if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && o->hidden) &&
             !(o->kind == ENEMY_GIGAPEDE && giga_part_out(o->step)) &&
             !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) &&
             !(o->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) &&
@@ -747,7 +757,7 @@ void enemy_clamp_player(float *z) {
     }
 }
 
-int enemy_active(void) { return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && !(e->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) && !(e->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) && !(e->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())) && !(e->kind == ENEMY_ARKHAM && arkham_boss_dying()); }
+int enemy_active(void) { if (e->kind == ENEMY_VANGUARD) vanguard_select((int)(e-enemies)); return e->active && e->plan != P_DEATH && !(e->kind == ENEMY_GIGAPEDE && giga_part_out(e->step)) && !(e->kind == ENEMY_VANGUARD && vanguard_hidden()) && !(e->kind == ENEMY_CERBERUS && cerberus_boss_dying()) && !(e->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) && !(e->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) && !(e->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())) && !(e->kind == ENEMY_ARKHAM && arkham_boss_dying()); }
 void enemy_position(float out[3]) {
     if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_target_position(out); return; }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_target_position(out);
@@ -794,7 +804,7 @@ int enemy_boss_health(float *health, float *maximum) {
     }
     int i;
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VANGUARD) {
-        *health=vanguard_health();*maximum=vanguard_max_health();return 1;
+        vanguard_select(i);*health=vanguard_health();*maximum=vanguard_max_health();return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_CERBERUS) {
         *health=cerberus_boss_health();*maximum=cerberus_boss_max_health();return 1;
@@ -1417,6 +1427,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     float toward;
     int behind;
     if (!e->active) return;
+    if (e->kind == ENEMY_VANGUARD) vanguard_select((int)(e-enemies));
     if (e->kind == ENEMY_LEVIATHAN) {
         float damage=kind==HIT_PISTOL ? 8.0f : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
         if (leviathan_boss_dying()) return;
@@ -1521,6 +1532,7 @@ void enemy_push_out(float *x, float *z, float y, float r) {
     Enemy *selected = e;
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
+        if (enemies[i].kind == ENEMY_VANGUARD) vanguard_select(i);
         if (enemies[i].kind == ENEMY_GIGAPEDE) continue;
         if (enemies[i].kind == ENEMY_LEVIATHAN) continue;
         if (enemies[i].kind == ENEMY_VANGUARD && (vanguard_hidden() || vanguard_dying())) continue;
@@ -1549,10 +1561,10 @@ void enemy_push_out(float *x, float *z, float y, float r) {
         float dx, dz, d, min;
         e = &enemies[i];
         if (o->active && is_lying()) continue;
-        if (!o->active) continue;
+        if (!o->active || o->plan == P_DEATH) continue;
         dx = *x - o->pos[0]; dz = *z - o->pos[2];
         d = sqrtf(dx * dx + dz * dz);
-        min = r + ENEMY_RADIUS;
+        min = r + body_radius(o);
         /* Only bodies at his height: Dante over a Pride's head or the Vanguard mid-uppercut isn't shoved. */
         if (d < min && d > 1e-3f && fabsf(o->pos[1] - o->floor_y) < 150.0f && fabsf(o->pos[1] - y) < 170.0f) {
             *x = o->pos[0] + dx / d * min;
@@ -1592,13 +1604,14 @@ void enemy_set_ai_only(int on) { ai_only = on; }
 
 static FILE *audit_file;
 static unsigned int audit_frames, audit_bodies, audit_violations;
+static unsigned int audit_expected, audit_room_expected;
 static int audit_mission = -1, audit_room = -1;
 static unsigned int audit_room_frames, audit_room_bodies, audit_room_violations;
 
 static void audit_room_summary(void) {
     if (audit_file && audit_mission >= 0)
-        fprintf(audit_file,"# room_summary mission=%d room=%d frames=%u bodies=%u violations=%u\n",
-                audit_mission,audit_room,audit_room_frames,audit_room_bodies,audit_room_violations);
+        fprintf(audit_file,"# room_summary mission=%d room=%d frames=%u bodies=%u violations=%u expected=%u\n",
+                audit_mission,audit_room,audit_room_frames,audit_room_bodies,audit_room_violations,audit_room_expected);
 }
 
 static int body_airborne(const Enemy *a) {
@@ -1612,6 +1625,7 @@ void enemy_audit_start(const char *path) {
     if (audit_file) fclose(audit_file);
     audit_file = fopen(path, "w");
     audit_frames = audit_bodies = audit_violations = 0;
+    audit_expected = audit_room_expected = 0;
     audit_mission = audit_room = -1;
     audit_room_frames = audit_room_bodies = audit_room_violations = 0;
     if (audit_file) fprintf(audit_file, "mission,room,frame,slot,kind,other,violation,depth,x,y,z\n");
@@ -1619,10 +1633,11 @@ void enemy_audit_start(const char *path) {
 
 static void audit_violation(int mission, int room, int frame, int slot, int other, const char *what, float depth) {
     const Enemy *a = &enemies[slot];
-    ++audit_violations;
-    ++audit_room_violations;
+    int expected = a->kind == ENEMY_GIGAPEDE && !strcmp(what,"wall") && giga_part_crossing(a->step);
+    if(expected) { ++audit_expected; ++audit_room_expected; }
+    else { ++audit_violations; ++audit_room_violations; }
     fprintf(audit_file, "%d,%d,%d,%d,%d,%d,%s,%.3f,%.3f,%.3f,%.3f\n",
-            mission, room, frame, slot, a->kind, other, what, depth, a->pos[0], a->pos[1], a->pos[2]);
+            mission, room, frame, slot, a->kind, other, expected ? "expected_wall" : what, depth, a->pos[0], a->pos[1], a->pos[2]);
 }
 
 /* Query each authored boss push shape on a copy, so auditing never moves Dante. */
@@ -1646,13 +1661,16 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
         audit_room_summary();
         audit_mission = mission; audit_room = room;
         audit_room_frames = audit_room_bodies = audit_room_violations = 0;
+        audit_room_expected = 0;
     }
     ++audit_frames;
     ++audit_room_frames;
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *a = &enemies[i];
         float x, z, g, depth;
-        const StageInfo *s = stage_collision_info();
+        /* Leviathan's fixed organs sit in the room's scenery outside the
+         * walkable floor envelope; these are native bone hurt anchors. */
+        const StageInfo *s = a->kind == ENEMY_LEVIATHAN ? stage_info() : stage_collision_info();
         if (!a->active || (a->hidden && a->kind != ENEMY_GIGAPEDE)) continue;
         /* Segments draw through giga_draw, not the skinned actor's hidden flag. */
         if (a->kind == ENEMY_GIGAPEDE && giga_part_out(a->step)) continue;
@@ -1661,7 +1679,7 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
         /* Gigapede's authored path intentionally crosses walls; its in-room segments are tested below. */
         if (a->kind == ENEMY_GIGAPEDE && !stage_walkable_below(a->pos[0], a->pos[2])) continue;
         x = a->pos[0]; z = a->pos[2];
-        stage_collide(&x, &z, a->pos[1], ENEMY_RADIUS);
+        stage_collide(&x, &z, a->pos[1], body_radius(a));
         depth = sqrtf((x-a->pos[0])*(x-a->pos[0]) + (z-a->pos[2])*(z-a->pos[2]));
         if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "wall", depth);
         depth = fmaxf(fmaxf(s->min[0]-a->pos[0], a->pos[0]-s->max[0]),
@@ -1676,6 +1694,7 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
                 a->pos[1]-g > 5.0f)
                 audit_violation(mission, room, frame, i, -1, "floating", a->pos[1]-g);
         } else audit_violation(mission, room, frame, i, -1, "no_floor", 0);
+        if (a->plan == P_DEATH) continue; /* Corpses retain world checks, but are not live body contacts. */
         /* Special bosses have posed push shapes rather than this ordinary cylinder. */
         depth = audit_boss_overlap(a->kind, px, py, pz, PLAYER_RADIUS);
         if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "dante", depth);
@@ -1683,19 +1702,32 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
         for (j = i+1; j < ENEMY_MAX; ++j) {
             const Enemy *b = &enemies[j];
             float dx = a->pos[0]-b->pos[0], dz = a->pos[2]-b->pos[2];
-            if (!b->active || b->hidden || b->kind == ENEMY_GIGAPEDE || b->kind == ENEMY_LEVIATHAN) continue;
+            if (!b->active || b->hidden || b->plan == P_DEATH || b->kind == ENEMY_GIGAPEDE || b->kind == ENEMY_LEVIATHAN) continue;
+            if(torso_kind(a->kind) && torso_kind(b->kind)) {
+                float tx=dx+torso_offset[i][0]-torso_offset[j][0];
+                float ty=a->pos[1]-b->pos[1]+torso_offset[i][1]-torso_offset[j][1];
+                float tz=dz+torso_offset[i][2]-torso_offset[j][2];
+                depth=body_radius(a)+body_radius(b)-sqrtf(tx*tx+ty*ty+tz*tz);
+                if(depth>.5f)audit_violation(mission,room,frame,i,j,"torso_enemy",depth);
+            }
             depth = audit_boss_overlap(a->kind, b->pos[0], b->pos[1], b->pos[2], ENEMY_RADIUS);
             if (depth < 0) depth = audit_boss_overlap(b->kind, a->pos[0], a->pos[1], a->pos[2], ENEMY_RADIUS);
             if (depth < 0) {
                 if (fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
-                depth = ENEMY_RADIUS*2-sqrtf(dx*dx+dz*dz);
+                depth = body_radius(a)+body_radius(b)-sqrtf(dx*dx+dz*dz);
             }
             if (depth > 0.5f) audit_violation(mission, room, frame, i, j, "enemy", depth);
         }
         if (audit_boss_overlap(a->kind, px, py, pz, PLAYER_RADIUS) < 0 && fabsf(py-a->pos[1]) < 170) {
             float dx = px-a->pos[0], dz = pz-a->pos[2];
-            depth = ENEMY_RADIUS+PLAYER_RADIUS-sqrtf(dx*dx+dz*dz);
+            depth = body_radius(a)+PLAYER_RADIUS-sqrtf(dx*dx+dz*dz);
             if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "dante", depth);
+        }
+        if(torso_kind(a->kind)) {
+            float tx=a->pos[0]+torso_offset[i][0],ty=a->pos[1]+torso_offset[i][1],tz=a->pos[2]+torso_offset[i][2];
+            float near_y=fmaxf(py+DANTE_LOW,fminf(py+DANTE_HIGH,ty));
+            depth=ENEMY_RADIUS+PLAYER_RADIUS-sqrtf((tx-px)*(tx-px)+(tz-pz)*(tz-pz)+(ty-near_y)*(ty-near_y));
+            if(depth>.5f)audit_violation(mission,room,frame,i,-1,"torso_dante",depth);
         }
     }
     fflush(audit_file);
@@ -1704,7 +1736,7 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
 void enemy_audit_finish(void) {
     if (!audit_file) return;
     audit_room_summary();
-    fprintf(audit_file, "# frames=%u bodies=%u violations=%u\n", audit_frames, audit_bodies, audit_violations);
+    fprintf(audit_file, "# frames=%u bodies=%u violations=%u expected=%u\n", audit_frames, audit_bodies, audit_violations,audit_expected);
     fclose(audit_file);
     audit_file = NULL;
 }
@@ -1727,7 +1759,7 @@ static void keep_apart(float px, float py, float pz, float f) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *o = &enemies[i];
-        if (o == e || !o->active || fabsf(o->pos[1] - e->pos[1]) > 100.0f) continue;
+        if (o == e || !o->active || o->plan == P_DEATH || fabsf(o->pos[1] - e->pos[1]) > 100.0f) continue;
         dx = e->pos[0] - o->pos[0];
         if (dx > min || dx < -min) continue;
         dz = e->pos[2] - o->pos[2];
@@ -1789,6 +1821,13 @@ static void test_attack(float px, float py, float pz) {
                     land_attack(r->reaction >= 500.0f);
                     landed_damage = r->damage;
                     landed_kind = r->kind;
+                } else if (e->kind == ENEMY_PRIDE && e->hit_type < 2) {
+                    /* OP6 selects an attack record, not a heavy flag.
+                     * *0x618c28 = 0x5a7600: records 0/1 are kind 0,
+                     * damage 700/800, reaction 350/400 (both light). */
+                    land_attack(0);
+                    landed_damage = e->hit_type ? 800.0f : 700.0f;
+                    landed_kind = 0;
                 } else land_attack(e->hit_type == 1);
                 return;
             }
@@ -1887,6 +1926,7 @@ static void update_one(float dt, float px, float py, float pz) {
     }
     if (e->kind == ENEMY_VANGUARD) {
         float ground;
+        vanguard_select((int)(e-enemies));
         if(vanguard_update(f,px,py,pz,attacks_on,e->pos,&e->active))land_attack(1);
         if(floor_under(e->pos[0],e->pos[1],e->pos[2],&ground))e->floor_y=ground;
         else e->floor_y=e->pos[1];
@@ -1918,7 +1958,7 @@ static void update_one(float dt, float px, float py, float pz) {
     {
         float g;
         int leaping = e->action == A_LEAP && e->step == 1;
-        if (!e->air && !leaping) keep_apart(px, py, pz, f);
+        if (!e->air && !leaping && e->plan != P_DEATH) keep_apart(px, py, pz, f);
         else e->pushed = 0;
         if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
         if (e->air || leaping) {
@@ -1938,6 +1978,7 @@ static void update_one(float dt, float px, float py, float pz) {
  * root-motion lunges and reactions. It runs after their individual brains.
  * The boss modules with independent positions keep their own authored solvers. */
 static void body_move(Enemy *a, float x, float y, float z) {
+    float radius = body_radius(a);
     float dx = x-a->pos[0], dz = z-a->pos[2], dy = y-a->pos[1];
     float cx = a->pos[0], cz = a->pos[2], old_y = a->pos[1], ground;
     int grounded = !body_airborne(a) && fabsf(y-a->floor_y) < 0.5f;
@@ -1950,12 +1991,12 @@ static void body_move(Enemy *a, float x, float y, float z) {
         float nx = cx+dx/steps, nz = cz+dz/steps;
         float sy = old_y+dy*(float)s/steps;
         if (stage_loaded()) {
-            body_wall(&nx, &nz, sy);
+            body_wall(&nx, &nz, sy, radius);
             /* Arena wall footprints also constrain launches and flying actors.
              * Otherwise a launch clears a low door barrier and lands trapped
              * in its sealed pocket (Trial of Wisdom's north doorway). */
             if (body_airborne(a) && sy > a->floor_y+5)
-                body_wall(&nx,&nz,a->floor_y);
+                body_wall(&nx,&nz,a->floor_y,radius);
             /* Open collision edges are often lower than a launched enemy.
              * Keep its footprint over the arena, even above those edge walls. */
             if (!floor_under(nx, fmaxf(old_y,y), nz, &ground) &&
@@ -1972,9 +2013,9 @@ static void body_move(Enemy *a, float x, float y, float z) {
         int k;
         for (k = 0; k < 3; ++k) {
             float before = a->pos[1];
-            body_wall(&a->pos[0], &a->pos[2], a->pos[1]);
+            body_wall(&a->pos[0], &a->pos[2], a->pos[1],radius);
             if (body_airborne(a) && a->pos[1] > a->floor_y+5)
-                body_wall(&a->pos[0],&a->pos[2],a->floor_y);
+                body_wall(&a->pos[0],&a->pos[2],a->floor_y,radius);
             if (floor_under(a->pos[0],a->pos[1],a->pos[2],&ground)) {
                 a->floor_y = ground;
                 if (a->pos[1] < ground || grounded) a->pos[1] = ground;
@@ -1985,10 +2026,10 @@ static void body_move(Enemy *a, float x, float y, float z) {
          * the last clear point instead of committing an unresolved contact. */
         {
             float tx = a->pos[0], tz = a->pos[2];
-            stage_collide(&tx,&tz,a->pos[1],ENEMY_RADIUS);
+            stage_collide(&tx,&tz,a->pos[1],radius);
             if (hypotf(tx-a->pos[0],tz-a->pos[2]) > 0.1f) {
                 tx = original[0]; tz = original[2];
-                stage_collide(&tx,&tz,original[1],ENEMY_RADIUS);
+                stage_collide(&tx,&tz,original[1],radius);
                 if (hypotf(tx-original[0],tz-original[2]) < 0.1f) {
                     memcpy(a->pos,original,sizeof(original)); a->floor_y = original_floor;
                 }
@@ -1997,18 +2038,41 @@ static void body_move(Enemy *a, float x, float y, float z) {
     }
 }
 
+static int torso_circle(const Enemy *a,const Enemy *b,float px,float py,float pz,float *x,float *z,float *radius) {
+    int i=(int)(a-enemies),j=b?(int)(b-enemies):0;
+    float ay,by,dy,r;
+    if(!torso_kind(a->kind) || (b && !torso_kind(b->kind)))return 0;
+    ay=a->pos[1]+torso_offset[i][1];
+    by=b?b->pos[1]+torso_offset[j][1]:fmaxf(py+DANTE_LOW,fminf(py+DANTE_HIGH,ay));
+    dy=ay-by;r=body_radius(a)+(b?body_radius(b):PLAYER_RADIUS);
+    if(fabsf(dy)>=r)return 0;
+    *x=(b?b->pos[0]+torso_offset[j][0]:px)-torso_offset[i][0];
+    *z=(b?b->pos[2]+torso_offset[j][2]:pz)-torso_offset[i][2];
+    *radius=sqrtf(r*r-dy*dy);
+    return 1;
+}
+
 static float body_overlap_score(const Enemy *a, float px, float py, float pz) {
     float score = 0, depth;
+    float tx,tz,tr;
     int i;
     if (fabsf(a->pos[1]-py) < 170) {
-        depth = ENEMY_RADIUS+PLAYER_RADIUS-hypotf(a->pos[0]-px,a->pos[2]-pz);
+        depth = body_radius(a)+PLAYER_RADIUS-hypotf(a->pos[0]-px,a->pos[2]-pz);
         if (depth > 0) score += depth*depth;
+    }
+    if(torso_circle(a,0,px,py,pz,&tx,&tz,&tr)) {
+        depth=tr-hypotf(a->pos[0]-tx,a->pos[2]-tz);
+        if(depth>0)score+=depth*depth;
     }
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *b = &enemies[i];
-        if (b == a || !b->active || b->hidden || b->kind >= ENEMY_KIND_COUNT || fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
-        depth = 2*ENEMY_RADIUS-hypotf(a->pos[0]-b->pos[0],a->pos[2]-b->pos[2]);
-        if (depth > 0) score += depth*depth;
+        if (b == a || !body_solid(b)) continue;
+        depth = (body_radius(a)+body_radius(b))-hypotf(a->pos[0]-b->pos[0],a->pos[2]-b->pos[2]);
+        if (depth > 0 && fabsf(a->pos[1]-b->pos[1]) < 170) score += depth*depth;
+        if(torso_circle(a,b,0,0,0,&tx,&tz,&tr)) {
+            depth=tr-hypotf(a->pos[0]-tx,a->pos[2]-tz);
+            if(depth>0)score+=depth*depth;
+        }
     }
     return score;
 }
@@ -2017,18 +2081,23 @@ static float body_overlap_score(const Enemy *a, float px, float py, float pz) {
  * and another actor. Try nearby points on the contact circle, sweeping each
  * candidate through the stage and accepting only a lower total penetration. */
 static void body_escape(Enemy *a, float px, float py, float pz) {
-    float cx = px, cz = pz, radius = ENEMY_RADIUS+PLAYER_RADIUS;
+    float cx = px, cz = pz, radius = body_radius(a)+PLAYER_RADIUS;
     float worst = fabsf(a->pos[1]-py) < 170 ? radius-hypotf(a->pos[0]-px,a->pos[2]-pz) : 0;
     float original[3], best[3], original_floor = a->floor_y, best_floor = a->floor_y;
     float best_score = body_overlap_score(a,px,py,pz), best_move = 0, angle;
+    float tx,tz,tr,depth;
     int i, k, ring;
     if (best_score <= 0.25f) return;
+    if(torso_circle(a,0,px,py,pz,&tx,&tz,&tr) && (depth=tr-hypotf(a->pos[0]-tx,a->pos[2]-tz))>worst)
+        {worst=depth;cx=tx;cz=tz;radius=tr;}
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *b = &enemies[i];
         float depth;
-        if (b == a || !b->active || b->hidden || b->kind >= ENEMY_KIND_COUNT || fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
-        depth = 2*ENEMY_RADIUS-hypotf(a->pos[0]-b->pos[0],a->pos[2]-b->pos[2]);
-        if (depth > worst) { worst = depth; cx = b->pos[0]; cz = b->pos[2]; radius = 2*ENEMY_RADIUS; }
+        if (b == a || !body_solid(b)) continue;
+        depth = (body_radius(a)+body_radius(b))-hypotf(a->pos[0]-b->pos[0],a->pos[2]-b->pos[2]);
+        if (fabsf(a->pos[1]-b->pos[1]) < 170 && depth > worst) { worst = depth; cx = b->pos[0]; cz = b->pos[2]; radius = (body_radius(a)+body_radius(b)); }
+        if(torso_circle(a,b,0,0,0,&tx,&tz,&tr) && (depth=tr-hypotf(a->pos[0]-tx,a->pos[2]-tz))>worst)
+            {worst=depth;cx=tx;cz=tz;radius=tr;}
     }
     if (worst <= 0.5f) return;
     memcpy(original,a->pos,sizeof(original)); memcpy(best,original,sizeof(best));
@@ -2058,13 +2127,14 @@ static void resolve_bodies(float px, float py, float pz) {
         for (i = 0; i < ENEMY_MAX; ++i) {
             Enemy *a = &enemies[i];
             float dx, dz, distance, depth;
-            if (!a->active || a->hidden || a->kind >= ENEMY_KIND_COUNT) continue;
+            if (!body_solid(a)) continue;
             for (j = i+1; j < ENEMY_MAX; ++j) {
                 Enemy *b = &enemies[j];
-                if (!b->active || b->hidden || b->kind >= ENEMY_KIND_COUNT || fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
+                float tx,tz,tr;
+                if (!body_solid(b)) continue;
                 dx = a->pos[0]-b->pos[0]; dz = a->pos[2]-b->pos[2];
-                distance = hypotf(dx, dz); depth = 2*ENEMY_RADIUS-distance;
-                if (depth <= 0.01f) continue;
+                distance = hypotf(dx, dz); depth = (body_radius(a)+body_radius(b))-distance;
+                if (depth > 0.01f && fabsf(a->pos[1]-b->pos[1]) < 170) {
                 if (distance < 0.001f) { dx = 1; dz = 0; distance = 1; }
                 dx /= distance; dz /= distance;
                 body_move(a, a->pos[0]+dx*(depth*.5f+.01f), a->pos[1], a->pos[2]+dz*(depth*.5f+.01f));
@@ -2072,31 +2142,71 @@ static void resolve_bodies(float px, float py, float pz) {
                 /* Give the unblocked body the part its pinned neighbour could
                  * not take, instead of repeatedly losing half the correction. */
                 dx = b->pos[0]-a->pos[0]; dz = b->pos[2]-a->pos[2]; distance = hypotf(dx,dz);
-                depth = 2*ENEMY_RADIUS-distance;
+                depth = (body_radius(a)+body_radius(b))-distance;
                 if (depth > 0.01f && distance > 0.001f)
                     body_move(b,b->pos[0]+dx/distance*(depth+.01f),b->pos[1],b->pos[2]+dz/distance*(depth+.01f));
                 ++contacts;
+                }
+                if(torso_circle(a,b,0,0,0,&tx,&tz,&tr)) {
+                    dx=a->pos[0]-tx;dz=a->pos[2]-tz;distance=hypotf(dx,dz);depth=tr-distance;
+                    if(depth>.01f) {
+                        if(distance<.001f){dx=a->pos[0]-b->pos[0];dz=a->pos[2]-b->pos[2];distance=hypotf(dx,dz);}
+                        if(distance<.001f){dx=1;dz=0;distance=1;}
+                        dx/=distance;dz/=distance;
+                        body_move(a,a->pos[0]+dx*(depth*.5f+.01f),a->pos[1],a->pos[2]+dz*(depth*.5f+.01f));
+                        body_move(b,b->pos[0]-dx*(depth*.5f+.01f),b->pos[1],b->pos[2]-dz*(depth*.5f+.01f));
+                        ++contacts;
+                    }
+                }
             }
-            if (fabsf(a->pos[1]-py) >= 170) continue;
+            if (fabsf(a->pos[1]-py) < 170) {
             dx = a->pos[0]-px; dz = a->pos[2]-pz;
-            distance = hypotf(dx, dz); depth = ENEMY_RADIUS+PLAYER_RADIUS-distance;
+            distance = hypotf(dx, dz); depth = body_radius(a)+PLAYER_RADIUS-distance;
             if (depth > 0.01f) {
                 if (distance < 0.001f) { dx = 1; dz = 0; distance = 1; }
                 body_move(a, a->pos[0]+dx/distance*(depth+.01f), a->pos[1], a->pos[2]+dz/distance*(depth+.01f));
                 ++contacts;
+            }
+            }
+            {
+                float tx,tz,tr;
+                if(torso_circle(a,0,px,py,pz,&tx,&tz,&tr)) {
+                    dx=a->pos[0]-tx;dz=a->pos[2]-tz;distance=hypotf(dx,dz);depth=tr-distance;
+                    if(depth>.01f) {
+                        if(distance<.001f){dx=a->pos[0]-px;dz=a->pos[2]-pz;distance=hypotf(dx,dz);}
+                        if(distance<.001f){dx=1;dz=0;distance=1;}
+                        body_move(a,a->pos[0]+dx/distance*(depth+.01f),a->pos[1],a->pos[2]+dz/distance*(depth+.01f));
+                        ++contacts;
+                    }
+                }
             }
         }
         if (!contacts) break;
         if (pass == 7 || pass == 15 || pass == 23) {
             for (i = 0; i < ENEMY_MAX; ++i) {
                 Enemy *a = &enemies[i];
-                if (a->active && !a->hidden && a->kind < ENEMY_KIND_COUNT) body_escape(a,px,py,pz);
+                if (body_solid(a)) body_escape(a,px,py,pz);
             }
         }
     }
 }
 
-void enemy_finish_collisions(float px, float py, float pz) { resolve_bodies(px, py, pz); }
+void enemy_finish_collisions(float px, float py, float pz) {
+    int i;
+    Enemy *selected=e;
+    for(i=0;i<ENEMY_MAX;++i)if(body_solid(&enemies[i]) && torso_kind(enemies[i].kind)) {
+        float c,s;
+        e=&enemies[i];evaluate_pose();c=cosf(e->yaw);s=sinf(e->yaw);
+        torso_offset[i][0]=world_pos[3][0]*c+world_pos[3][2]*s;
+        torso_offset[i][1]=world_pos[3][1];
+        torso_offset[i][2]=world_pos[3][2]*c-world_pos[3][0]*s;
+    }
+    e=selected;
+    resolve_bodies(px, py, pz);
+    for (i=0;i<ENEMY_MAX;++i) if(enemies[i].active && enemies[i].kind==ENEMY_VANGUARD) {
+        vanguard_select(i);vanguard_contact_position(enemies[i].pos,enemies[i].floor_y);
+    }
+}
 
 void enemy_update(float dt, float px, float py, float pz) {
     Enemy *selected = e;
@@ -2131,7 +2241,13 @@ static void evaluate_pose(void) {
     static MotionSample a, b, over;
     M3 local;
     int i, k;
-    motion_sample(motion_get(e->motion), e->frame, &a);
+    {
+        const Motion *motion = motion_get(e->motion);
+        /* Bishop's stationary idle intentionally has no motion channels. A
+         * reused slot must still skin its bind pose, not sample NULL. */
+        if (motion) motion_sample(motion, e->frame, &a);
+        else memset(&a,0,sizeof(a));
+    }
     if (e->overlay_motion >= 0) {
         motion_sample(motion_get(e->overlay_motion), e->overlay_frame, &over);
         for (i = e->overlay_lo; i <= e->overlay_hi && i < MOTION_MAX_BONES; ++i) {
@@ -2295,7 +2411,7 @@ void enemy_draw(void) {
         if (e->kind == ENEMY_DOPPELGANGER) { doppelganger_boss_draw(); continue; }
         if (e->kind == ENEMY_ARKHAM) { arkham_boss_draw(); continue; }
         if (e->kind == ENEMY_LEVIATHAN) { leviathan_boss_draw(); continue; }
-        if (e->kind == ENEMY_VANGUARD) {vanguard_draw();continue;}
+        if (e->kind == ENEMY_VANGUARD) {vanguard_select((int)(e-enemies));vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
     }
@@ -4009,6 +4125,19 @@ void enemy_giga_ride(float *x, float *y, float *z, int on_ground) {
 }
 
 static int giga_part_out(int k) { return k >= 0 && k < GIGA_PARTS && giga.out[k]; }
+static int giga_part_crossing(int k) {
+    static const float heights[]={0,5,65,120};
+    float from[3],to[3],hit,back=k?GIGA_TOP_BACK:0,front=k?GIGA_TOP_FRONT:450;
+    int j,h;
+    if(giga_part_out(k) || giga_part_out(k-1) || giga_part_out(k+1))return 1;
+    if(k<0 || k>=GIGA_PARTS)return 0;
+    for(h=0;h<4;++h) {
+        for(j=0;j<3;++j){from[j]=giga.pos[k][j]+giga.dir[k][j]*back;to[j]=giga.pos[k][j]+giga.dir[k][j]*front;}
+        from[1]+=heights[h];to[1]+=heights[h];
+        if(stage_raycast(from,to,&hit))return 1;
+    }
+    return 0;
+}
 static int enemy_giga_part(int k, float out[3]) {
     if (!giga.active || giga.dying || k < 0 || k >= GIGA_PARTS || giga.out[k]) return 0;
     out[0] = giga.pos[k][0] - giga.dir[k][0] * 250.0f; out[1] = giga.pos[k][1]; out[2] = giga.pos[k][2] - giga.dir[k][2] * 250.0f;

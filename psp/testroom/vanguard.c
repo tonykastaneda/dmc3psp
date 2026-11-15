@@ -25,22 +25,28 @@
 #define ANGLE(x) ((x) * (2.0f * PI / 65536.0f))
 typedef struct { float m[3][3], p[3]; } Transform;
 typedef struct { float u,v,nx,ny,nz,x,y,z; } Vertex;
-static struct {
+typedef struct {
     float pos[3], yaw, hp, gauge, timer, frame, previous_frame, fade, fade_step, vy, ground;
     float cap_left[24], token, strain;
     int active, hidden, visible, dying, plan, action, phase, chain, motion, previous_motion, script, pc, stop, finish, done, hit_done, loop;
-    int ids[80], ticks, trace, dead_reported;
+    int ticks, trace, dead_reported;
     /* Presentation only: model opacity and the P312 body particles (see teleport_fx below). */
     float dissolve, dissolve_rate, emit_delay, emit_left; int emit_mode;
-} vg;
+} VanguardState;
+static VanguardState actors[ENEMY_MAX];
+static int actor_slot, motion_ids[80], trace_enabled;
+#define vg actors[actor_slot]
 static Transform body[48];
 static Transform bind_body[48];
-static Vertex *vertices[9];
+static Vertex *actor_vertices[ENEMY_MAX][9];
+#define vg_vertices actor_vertices[actor_slot]
 static unsigned short *indices[9];
 static void *textures[2];
 static char trace_path[320];
 static int no_texture,no_lighting;
 static int vg_difficulty=1;
+void vanguard_select(int slot) { if (slot >= 0 && slot < ENEMY_MAX) actor_slot = slot; }
+void vanguard_contact_position(const float pos[3], float floor_y) { memcpy(vg.pos,pos,sizeof(vg.pos)); vg.ground=floor_y; }
 void vanguard_set_difficulty(int difficulty) {vg_difficulty=difficulty;}
 void vanguard_render_test(int texture,int lighting) {no_texture=texture;no_lighting=lighting;}
 extern unsigned int enemy_ai_random(void);
@@ -105,7 +111,7 @@ void vanguard_note(const char *event,float value) {
     f=fopen(trace_path,"a");
     if(f) {fprintf(f,"t=%d event=%s value=%.1f hp=%.0f\n",vg.ticks,event,value,vg.hp);fclose(f);}
 }
-void vanguard_trace(const char *path) { vg.trace=path && *path; if(vg.trace)snprintf(trace_path,sizeof(trace_path),"%s",path); }
+void vanguard_trace(const char *path) { trace_enabled=path && *path; vg.trace=trace_enabled; if(vg.trace)snprintf(trace_path,sizeof(trace_path),"%s",path); }
 
 static void run_ops(void) {
     int n;
@@ -115,7 +121,7 @@ static void run_ops(void) {
             int blend=o->c&255;
             vg.previous_motion=vg.motion; vg.previous_frame=vg.frame;
             vg.fade=blend>0?1:0; vg.fade_step=blend>0?1.0f/blend:1;
-            vg.motion=vg.ids[o->a]; vg.frame=o->b==32767?motion_get(vg.motion)->loop_start:(float)o->b;
+            vg.motion=motion_ids[o->a]; vg.frame=o->b==32767?motion_get(vg.motion)->loop_start:(float)o->b;
             vg.loop=(o->c>>8)&1;
         } else if(o->op==1) { vg.stop=o->b; vg.finish=o->a; return; }
         else if(o->op==2) { vg.cap_left[o->a]=o->b<0?100000:(float)o->b; vg.hit_done=0; }
@@ -415,10 +421,17 @@ int vanguard_update(float frames,float px,float py,float pz,int attacks,float po
     memcpy(pos,vg.pos,sizeof(vg.pos));*alive=vg.active;return hit;
 }
 void vanguard_spawn(float x,float y,float z) {
-    int trace_on=vg.trace,ids[80];memcpy(ids,vg.ids,sizeof(ids));memset(&vg,0,sizeof(vg));memcpy(vg.ids,ids,sizeof(ids));vg.trace=trace_on;
+    int part,i;
+    memset(&vg,0,sizeof(vg));vg.trace=trace_enabled;
+    for(part=0;part<9;++part) if(!vg_vertices[part]) {
+        const VanguardMesh *m=&vanguard_parts[part];
+        vg_vertices[part]=memalign(16,sizeof(Vertex)*m->vertices);
+        if(!vg_vertices[part])return;
+        for(i=0;i<m->vertices;++i){vg_vertices[part][i].u=m->uvs[i].u;vg_vertices[part][i].v=m->uvs[i].v;}
+    }
     vg.pos[0]=x;vg.pos[1]=y;vg.pos[2]=z;vg.ground=y;vg.hp=VANGUARD_HP;vg.active=1;vg.visible=1;vg.plan=14;vg.action=13;
     vg.strain=VANGUARD_STRAIN_MAX;
-    vg.motion=vg.previous_motion=vg.ids[0];play(13);pose();trace("spawn");
+    vg.motion=vg.previous_motion=motion_ids[0];play(13);pose();trace("spawn");
 }
 int vanguard_hidden(void) {return vg.hidden;}
 int vanguard_dying(void) {return vg.dying;}
@@ -427,14 +440,14 @@ float vanguard_max_health(void) {return VANGUARD_HP;}
 
 int vanguard_init(void) {
     int i,k;
-    for(i=0;i<80;++i) {char name[8];snprintf(name,sizeof(name),"%s-%02d",i<71?"vg":"vx",i<71?i:i-71);vg.ids[i]=motion_find(name);if(vg.ids[i]<0)return 0;}
-    vg.motion=vg.ids[0];vg.frame=0;pose();memcpy(bind_body,body,sizeof(body));
+    for(i=0;i<80;++i) {char name[8];snprintf(name,sizeof(name),"%s-%02d",i<71?"vg":"vx",i<71?i:i-71);motion_ids[i]=motion_find(name);if(motion_ids[i]<0)return 0;}
+    vg.motion=motion_ids[0];vg.frame=0;pose();memcpy(bind_body,body,sizeof(body));
     for(k=0;k<9;++k) {
         const VanguardMesh *m=&vanguard_parts[k];
-        vertices[k]=memalign(16,sizeof(Vertex)*m->vertices);indices[k]=memalign(16,sizeof(unsigned short)*m->indices_count);
-        if(!vertices[k] || !indices[k])return 0;
+        vg_vertices[k]=memalign(16,sizeof(Vertex)*m->vertices);indices[k]=memalign(16,sizeof(unsigned short)*m->indices_count);
+        if(!vg_vertices[k] || !indices[k])return 0;
         memcpy(indices[k],m->indices,sizeof(unsigned short)*m->indices_count);
-        for(i=0;i<m->vertices;++i) {vertices[k][i].u=m->uvs[i].u;vertices[k][i].v=m->uvs[i].v;}
+        for(i=0;i<m->vertices;++i) {vg_vertices[k][i].u=m->uvs[i].u;vg_vertices[k][i].v=m->uvs[i].v;}
     }
     for(i=0;i<2;++i) {
         const Dmc3Texture *t=&vanguard_textures[i];size_t size=(size_t)t->width*t->height;
@@ -461,7 +474,7 @@ static void skin_part(int part) {
         static MotionSample weapon;
         int spinning=vg.action==69 && vg.phase==3 && vg.frame>=203;
         int returning=vg.action==73 && vg.phase==2;
-        const Motion *motion=spinning?motion_get(vg.ids[76]):returning?motion_get(vg.ids[78]):0;
+        const Motion *motion=spinning?motion_get(motion_ids[76]):returning?motion_get(motion_ids[78]):0;
         if(!spinning && !returning) {
             euler(&local,0.207f,0,0);local.p[0]=-15;local.p[1]=-61.4f;local.p[2]=-18.93f;
             multiply(&attachment,&attachment,&local);
@@ -477,7 +490,7 @@ static void skin_part(int part) {
         }
     }
     for(i=0;i<m->vertices;++i) {
-        Vertex *v=&vertices[part][i];float p[3]={0},n[3]={0};
+        Vertex *v=&vg_vertices[part][i];float p[3]={0},n[3]={0};
         for(j=0;j<3;++j) {
             int b=m->bones[i][j],w=m->weights[i][j];const Transform *t;
             float src[3]={m->positions[i].x-m->rest[b].x,m->positions[i].y-m->rest[b].y,m->positions[i].z-m->rest[b].z};
@@ -502,12 +515,13 @@ static void skin_part(int part) {
         }
         v->x=p[0];v->y=p[1];v->z=p[2];v->nx=n[0];v->ny=n[1];v->nz=n[2];
     }
-    sceKernelDcacheWritebackRange(vertices[part],sizeof(Vertex)*m->vertices);
+    sceKernelDcacheWritebackRange(vg_vertices[part],sizeof(Vertex)*m->vertices);
 }
 void vanguard_draw(void) {
     int part,i;
     float alpha=1-vg.dissolve;
     if(!vg.active || !vg.visible || alpha<=0.02f)return;
+    pose(); /* Bone scratch space was last used by whichever actor updated last. */
     sceGumMatrixMode(GU_MODEL);sceGumLoadIdentity();
     {ScePspFVector3 p={vg.pos[0],vg.pos[1],vg.pos[2]};sceGumTranslate(&p);}sceGumRotateY(vg.yaw);
     sceGuEnable(GU_TEXTURE_2D);sceGuEnable(GU_LIGHTING);sceGuEnable(GU_ALPHA_TEST);
@@ -530,7 +544,7 @@ void vanguard_draw(void) {
             const Dmc3ModelObject *o=&m->objects[i];const Dmc3Texture *t=&vanguard_textures[o->texture];
             sceGuClutLoad(32,vanguard_palettes[o->texture]);sceGuTexImage(0,t->width,t->height,t->width,textures[o->texture]);sceGuTexFlush();
             sceGumDrawArray(GU_TRIANGLES,GU_TEXTURE_32BITF|GU_NORMAL_32BITF|GU_VERTEX_32BITF|GU_INDEX_16BIT|GU_TRANSFORM_3D,
-                           o->index_count,indices[part]+o->index_start,vertices[part]);
+                           o->index_count,indices[part]+o->index_start,vg_vertices[part]);
         }
     }
     if(alpha<0.99f) {sceGuDisable(GU_BLEND);sceGuAlphaFunc(GU_GREATER,0x7f,0xff);sceGuColor(0xffffffffu);}

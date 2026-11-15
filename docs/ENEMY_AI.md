@@ -126,6 +126,51 @@ zero (1,800 samples). Evidence: `enemy_grids_v3_batch_000_599.png`,
 under `analysis/testroom/`. Four stage-grid/edge tests pass. This also restores
 floor lookup for Dante in the tunnel; no `player.c` change was needed.
 
+### Posed bodies and independent boss actors
+
+Root distance alone missed the visible M1 overlap: a Pride's torso could lean
+into Dante while its feet remained 88 cm away. The posed bone-3 body centre
+now supplements the root cylinder, using the measured 48 cm body radius;
+the solver retains the 88 cm minimum root spacing. Both torso/Dante and
+torso/enemy intersections are logged and constrained. The M1 probe recorded
+108 torso reports (maximum **36.435 cm**) before this correction and **zero**
+after it, across 601 frames / 1,803 active-body samples. Inspected captures:
+`enemy_m1_torso_after_500.png` and `enemy_m1_torso_after_599.png`.
+
+- **Vanguards:** each enemy slot now owns its position, health, animation clock
+  and posed vertex storage. The shared global state had placed both Secret
+  Mission 8 Vanguards at exactly the same point and advanced one clock twice.
+  Their pair had **825 full-depth overlap reports** in the before fixture;
+  the after fixture has **zero** over 901 frames. Static textures and mesh
+  indices remain shared. The existing Vanguard body policy uses radius 50.
+- **Bishop:** a motionless idle skins the bind pose even in a reused slot.
+  Previously its missing `bishop-rest` motion could sample a null pointer
+  when that slot retained a different pose frame. The Goyle-to-Bishop batch
+  now completes; a new actor also receives a valid first pose.
+- **Geryon:** ground movement sweeps the existing horse/cart footprint against
+  the room, including neighbouring grid cells for its larger radii. A charge
+  or turn retains its previous clear pose if it would crush Dante against a
+  bridge end; the hurt reaction still runs. M18 / 417 changed from 28 wall
+  reports to zero; M12 / 228 changed from 15 Dante reports to zero. These
+  adapt the port's existing footprint, not the full native collision solver.
+- **Pride attack records:** OP6's value is an index, not a heavy-hit flag.
+  `*0x618c28 = 0x5a7600`: records 0 and 1 have damage 700/800, kind 0 and
+  reaction 350/400. Both now deliver kind 0 to Dante; the former index-1
+  heavy inference was incorrect. This was checked against the executable.
+
+Corpses retain wall/floor checks but are excluded from live body contacts.
+The test-only minion-clear command retires actors rather than leaving a
+brain alive behind a death flag. Leviathan's fixed organ hurt anchors are
+checked against scene bounds, since the wall-mounted organs extend beyond
+the walkable-floor envelope.
+
+Gigapede entry/exit contacts on its authored carapace path are retained as
+`expected_wall` records, with separate counters. Segment adjacency and rays
+along that carapace identify a scripted boundary crossing; other in-room
+contacts still fail. These records are not silently discarded or counted as
+zero mesh intersections. The collision audit continues to test proxy bodies,
+not weapons, cloth or exact triangle-to-triangle character meshes.
+
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
 none of it is in the repo.

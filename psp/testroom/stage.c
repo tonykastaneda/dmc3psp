@@ -362,10 +362,15 @@ int stage_collide(float *x, float *z, float y, float radius) {
     unsigned int k;
     if (!header) return 0;
     for (iteration = 0; iteration < 8; ++iteration) {
-        const Cell *cell = grid_cell(hits->wall_grid, *x, *z);
         const unsigned int *indices = grid_indices(hits->wall_grid);
         int pushed = 0;
-        if (!cell) break;
+        int gx,gz,cell_reach=radius>60 ? (int)ceilf((radius-60)/(float)header->grid_cell) : 0;
+        float bx=*x,bz=*z;
+        /* Wall indices have 60 cm padding. Larger boss bodies must inspect
+         * neighbouring cells rather than discovering a wall only at its face. */
+        for(gz=-cell_reach;gz<=cell_reach;++gz)for(gx=-cell_reach;gx<=cell_reach;++gx) {
+        const Cell *cell = grid_cell(hits->wall_grid,bx+gx*header->grid_cell,bz+gz*header->grid_cell);
+        if (!cell) continue;
         for (k = 0; k < cell->count; ++k) {
             const float *t = hit_tri(indices[cell->first + k]);
             for (h = 0; h < 3; ++h) {
@@ -404,6 +409,7 @@ int stage_collide(float *x, float *z, float y, float radius) {
                 pushed = moved = 1;
                 break;
             }
+        }
         }
         if (collide_boxes(x, z, y, radius)) pushed = moved = 1;
         if (!pushed) break;
