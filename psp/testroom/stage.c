@@ -49,6 +49,7 @@ void stage_set_group_pose(int tag,float px,float pz,float yaw,float raise) {
 }
 void stage_set_lift(float raise) { lift_raise = raise; }
 static StageInfo info;
+static StageInfo collision_info;
 static unsigned char *chunk_visible;   /* per chunk, this frame */
 static unsigned int chunk_total;
 
@@ -91,11 +92,25 @@ int stage_load(const char *path) {
     memcpy(info.min, header->min, sizeof(info.min));
     memcpy(info.max, header->max, sizeof(info.max));
     info.triangles = (int)(header->vertices / 3);
+    collision_info = info;
+    if (hits->walls + hits->floors) {
+        const float *t = (const float *)(blob + hits->offset);
+        unsigned int i, v;
+        int k;
+        for (k = 0; k < 3; ++k) collision_info.min[k] = collision_info.max[k] = t[k];
+        for (i = 0; i < hits->walls + hits->floors; ++i, t += 13)
+            for (v = 0; v < 3; ++v) for (k = 0; k < 3; ++k) {
+                float a = t[v*3+k];
+                if (a < collision_info.min[k]) collision_info.min[k] = a;
+                if (a > collision_info.max[k]) collision_info.max[k] = a;
+            }
+    }
     return 1;
 }
 
 int stage_loaded(void) { return header != 0; }
 const StageInfo *stage_info(void) { return &info; }
+const StageInfo *stage_collision_info(void) { return &collision_info; }
 
 static void bind_texture(const TexEntry *t) {
     unsigned int level;

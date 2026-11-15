@@ -273,6 +273,7 @@ static void arrows_clear(int i);
 static int giga_init(void);
 static unsigned int ai_random(void);
 static void giga_spawn(void);
+static void giga_clear(void);
 static void giga_part_update(float f, float px, float py, float pz);
 static void giga_hit(HitKind kind);
 static void giga_draw(void);
@@ -644,7 +645,7 @@ void enemy_clear_minions(void) {
 void enemy_set_count(int count, float x, float z) {
     int i;
     if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
-    if (count == 0) coffins_reset();
+    if (count == 0) { coffins_reset(); giga_clear(); }
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
@@ -1590,6 +1591,14 @@ void enemy_set_ai_only(int on) { ai_only = on; }
 
 static FILE *audit_file;
 static unsigned int audit_frames, audit_bodies, audit_violations;
+static int audit_mission = -1, audit_room = -1;
+static unsigned int audit_room_frames, audit_room_bodies, audit_room_violations;
+
+static void audit_room_summary(void) {
+    if (audit_file && audit_mission >= 0)
+        fprintf(audit_file,"# room_summary mission=%d room=%d frames=%u bodies=%u violations=%u\n",
+                audit_mission,audit_room,audit_room_frames,audit_room_bodies,audit_room_violations);
+}
 
 static int body_airborne(const Enemy *a) {
     if (a->kind == ENEMY_GOYLE || a->kind == ENEMY_FALLEN || a->kind == ENEMY_NEVAN) return 1;
@@ -1602,12 +1611,15 @@ void enemy_audit_start(const char *path) {
     if (audit_file) fclose(audit_file);
     audit_file = fopen(path, "w");
     audit_frames = audit_bodies = audit_violations = 0;
+    audit_mission = audit_room = -1;
+    audit_room_frames = audit_room_bodies = audit_room_violations = 0;
     if (audit_file) fprintf(audit_file, "mission,room,frame,slot,kind,other,violation,depth,x,y,z\n");
 }
 
 static void audit_violation(int mission, int room, int frame, int slot, int other, const char *what, float depth) {
     const Enemy *a = &enemies[slot];
     ++audit_violations;
+    ++audit_room_violations;
     fprintf(audit_file, "%d,%d,%d,%d,%d,%d,%s,%.3f,%.3f,%.3f,%.3f\n",
             mission, room, frame, slot, a->kind, other, what, depth, a->pos[0], a->pos[1], a->pos[2]);
 }
@@ -1629,15 +1641,22 @@ static float audit_boss_overlap(int kind, float x, float y, float z, float radiu
 void enemy_audit_frame(int mission, int room, int frame, float px, float py, float pz) {
     int i, j;
     if (!audit_file || !stage_loaded()) return;
+    if (mission != audit_mission || room != audit_room) {
+        audit_room_summary();
+        audit_mission = mission; audit_room = room;
+        audit_room_frames = audit_room_bodies = audit_room_violations = 0;
+    }
     ++audit_frames;
+    ++audit_room_frames;
     for (i = 0; i < ENEMY_MAX; ++i) {
         const Enemy *a = &enemies[i];
         float x, z, g, depth;
-        const StageInfo *s = stage_info();
+        const StageInfo *s = stage_collision_info();
         if (!a->active || (a->hidden && a->kind != ENEMY_GIGAPEDE)) continue;
         /* Segments draw through giga_draw, not the skinned actor's hidden flag. */
         if (a->kind == ENEMY_GIGAPEDE && giga_part_out(a->step)) continue;
         ++audit_bodies;
+        ++audit_room_bodies;
         /* Gigapede's authored path intentionally crosses walls; its in-room segments are tested below. */
         if (a->kind == ENEMY_GIGAPEDE && !stage_walkable_below(a->pos[0], a->pos[2])) continue;
         x = a->pos[0]; z = a->pos[2];
@@ -1647,7 +1666,9 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
         depth = fmaxf(fmaxf(s->min[0]-a->pos[0], a->pos[0]-s->max[0]),
                       fmaxf(s->min[2]-a->pos[2], a->pos[2]-s->max[2]));
         if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "bounds", depth);
-        if (floor_under(a->pos[0], a->pos[1], a->pos[2], &g)) {
+        if (a->kind == ENEMY_GIGAPEDE ?
+            stage_floor(a->pos[0],a->pos[1]+200,a->pos[2],0,&g) :
+            floor_under(a->pos[0], a->pos[1], a->pos[2], &g)) {
             if (g-a->pos[1] > 0.5f) audit_violation(mission, room, frame, i, -1, "below_floor", g-a->pos[1]);
             /* Only flag unsupported stationary ground actors; flying, launches and authored leaps are legal. */
             if (a->kind < ENEMY_KIND_COUNT && !body_airborne(a) && a->fall == 0 &&
@@ -1681,6 +1702,7 @@ void enemy_audit_frame(int mission, int room, int frame, float px, float py, flo
 
 void enemy_audit_finish(void) {
     if (!audit_file) return;
+    audit_room_summary();
     fprintf(audit_file, "# frames=%u bodies=%u violations=%u\n", audit_frames, audit_bodies, audit_violations);
     fclose(audit_file);
     audit_file = NULL;
@@ -1912,7 +1934,9 @@ static void body_move(Enemy *a, float x, float y, float z) {
     float dx = x-a->pos[0], dz = z-a->pos[2], dy = y-a->pos[1];
     float cx = a->pos[0], cz = a->pos[2], old_y = a->pos[1], ground;
     int grounded = !body_airborne(a) && fabsf(y-a->floor_y) < 0.5f;
+    float original[3], original_floor = a->floor_y;
     int steps = (int)(fmaxf(hypotf(dx, dz), fabsf(dy)) / 15.0f) + 1, s;
+    memcpy(original,a->pos,sizeof(original));
     /* Long placements (Sloth warp) have already selected a valid landing. */
     if (steps > 256) { cx = x; cz = z; dx = dz = 0; steps = 1; }
     for (s = 1; s <= steps; ++s) {
@@ -1920,6 +1944,11 @@ static void body_move(Enemy *a, float x, float y, float z) {
         float sy = old_y+dy*(float)s/steps;
         if (stage_loaded()) {
             body_wall(&nx, &nz, sy);
+            /* Arena wall footprints also constrain launches and flying actors.
+             * Otherwise a launch clears a low door barrier and lands trapped
+             * in its sealed pocket (Trial of Wisdom's north doorway). */
+            if (body_airborne(a) && sy > a->floor_y+5)
+                body_wall(&nx,&nz,a->floor_y);
             /* Open collision edges are often lower than a launched enemy.
              * Keep its footprint over the arena, even above those edge walls. */
             if (!floor_under(nx, fmaxf(old_y,y), nz, &ground) &&
@@ -1932,14 +1961,92 @@ static void body_move(Enemy *a, float x, float y, float z) {
         a->floor_y = ground;
         if (y < ground || grounded) a->pos[1] = ground;
     }
-    if (stage_loaded()) body_wall(&a->pos[0], &a->pos[2], a->pos[1]);
+    if (stage_loaded()) {
+        int k;
+        for (k = 0; k < 3; ++k) {
+            float before = a->pos[1];
+            body_wall(&a->pos[0], &a->pos[2], a->pos[1]);
+            if (body_airborne(a) && a->pos[1] > a->floor_y+5)
+                body_wall(&a->pos[0],&a->pos[2],a->floor_y);
+            if (floor_under(a->pos[0],a->pos[1],a->pos[2],&ground)) {
+                a->floor_y = ground;
+                if (a->pos[1] < ground || grounded) a->pos[1] = ground;
+            }
+            if (fabsf(a->pos[1]-before) < 0.01f) break;
+        }
+        /* A narrow intersection can defeat the bounded wall projector. Keep
+         * the last clear point instead of committing an unresolved contact. */
+        {
+            float tx = a->pos[0], tz = a->pos[2];
+            stage_collide(&tx,&tz,a->pos[1],ENEMY_RADIUS);
+            if (hypotf(tx-a->pos[0],tz-a->pos[2]) > 0.1f) {
+                tx = original[0]; tz = original[2];
+                stage_collide(&tx,&tz,original[1],ENEMY_RADIUS);
+                if (hypotf(tx-original[0],tz-original[2]) < 0.1f) {
+                    memcpy(a->pos,original,sizeof(original)); a->floor_y = original_floor;
+                }
+            }
+        }
+    }
+}
+
+static float body_overlap_score(const Enemy *a, float px, float py, float pz) {
+    float score = 0, depth;
+    int i;
+    if (fabsf(a->pos[1]-py) < 170) {
+        depth = ENEMY_RADIUS+PLAYER_RADIUS-hypotf(a->pos[0]-px,a->pos[2]-pz);
+        if (depth > 0) score += depth*depth;
+    }
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        const Enemy *b = &enemies[i];
+        if (b == a || !b->active || b->hidden || b->kind >= ENEMY_KIND_COUNT || fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
+        depth = 2*ENEMY_RADIUS-hypotf(a->pos[0]-b->pos[0],a->pos[2]-b->pos[2]);
+        if (depth > 0) score += depth*depth;
+    }
+    return score;
+}
+
+/* A radial push into a wall cannot separate a body pinned between that wall
+ * and another actor. Try nearby points on the contact circle, sweeping each
+ * candidate through the stage and accepting only a lower total penetration. */
+static void body_escape(Enemy *a, float px, float py, float pz) {
+    float cx = px, cz = pz, radius = ENEMY_RADIUS+PLAYER_RADIUS;
+    float worst = fabsf(a->pos[1]-py) < 170 ? radius-hypotf(a->pos[0]-px,a->pos[2]-pz) : 0;
+    float original[3], best[3], original_floor = a->floor_y, best_floor = a->floor_y;
+    float best_score = body_overlap_score(a,px,py,pz), best_move = 0, angle;
+    int i, k, ring;
+    if (best_score <= 0.25f) return;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        const Enemy *b = &enemies[i];
+        float depth;
+        if (b == a || !b->active || b->hidden || b->kind >= ENEMY_KIND_COUNT || fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
+        depth = 2*ENEMY_RADIUS-hypotf(a->pos[0]-b->pos[0],a->pos[2]-b->pos[2]);
+        if (depth > worst) { worst = depth; cx = b->pos[0]; cz = b->pos[2]; radius = 2*ENEMY_RADIUS; }
+    }
+    if (worst <= 0.5f) return;
+    memcpy(original,a->pos,sizeof(original)); memcpy(best,original,sizeof(best));
+    angle = atan2f(a->pos[0]-cx,a->pos[2]-cz);
+    for (ring = 0; ring < 4; ++ring) for (k = 0; k < 32; ++k) {
+        float turn = (float)((k+1)/2)*(PI/16)*(k&1 ? 1 : -1);
+        float score, moved;
+        memcpy(a->pos,original,sizeof(original)); a->floor_y = original_floor;
+        float contact_radius = radius+.02f+(float)(ring*ring*4);
+        body_move(a,cx+sinf(angle+turn)*contact_radius,original[1],cz+cosf(angle+turn)*contact_radius);
+        score = body_overlap_score(a,px,py,pz);
+        moved = hypotf(a->pos[0]-original[0],a->pos[2]-original[2]);
+        if (score < best_score-0.001f || (score <= best_score && moved < best_move)) {
+            best_score = score; best_move = moved; memcpy(best,a->pos,sizeof(best)); best_floor = a->floor_y;
+        }
+        if (best_score < 0.0001f) { ring = 4; break; }
+    }
+    memcpy(a->pos,best,sizeof(best)); a->floor_y = best_floor;
 }
 
 static void resolve_bodies(float px, float py, float pz) {
     int pass, i, j;
     /* Revisit contacts after every enemy has moved: the old one-sided pass
      * could undo a previous actor's separation, especially in mid-air. */
-    for (pass = 0; pass < 12; ++pass) {
+    for (pass = 0; pass < 24; ++pass) {
         int contacts = 0;
         for (i = 0; i < ENEMY_MAX; ++i) {
             Enemy *a = &enemies[i];
@@ -1955,6 +2062,12 @@ static void resolve_bodies(float px, float py, float pz) {
                 dx /= distance; dz /= distance;
                 body_move(a, a->pos[0]+dx*(depth*.5f+.01f), a->pos[1], a->pos[2]+dz*(depth*.5f+.01f));
                 body_move(b, b->pos[0]-dx*(depth*.5f+.01f), b->pos[1], b->pos[2]-dz*(depth*.5f+.01f));
+                /* Give the unblocked body the part its pinned neighbour could
+                 * not take, instead of repeatedly losing half the correction. */
+                dx = b->pos[0]-a->pos[0]; dz = b->pos[2]-a->pos[2]; distance = hypotf(dx,dz);
+                depth = 2*ENEMY_RADIUS-distance;
+                if (depth > 0.01f && distance > 0.001f)
+                    body_move(b,b->pos[0]+dx/distance*(depth+.01f),b->pos[1],b->pos[2]+dz/distance*(depth+.01f));
                 ++contacts;
             }
             if (fabsf(a->pos[1]-py) >= 170) continue;
@@ -1967,6 +2080,12 @@ static void resolve_bodies(float px, float py, float pz) {
             }
         }
         if (!contacts) break;
+        if (pass == 7 || pass == 15 || pass == 23) {
+            for (i = 0; i < ENEMY_MAX; ++i) {
+                Enemy *a = &enemies[i];
+                if (a->active && !a->hidden && a->kind < ENEMY_KIND_COUNT) body_escape(a,px,py,pz);
+            }
+        }
     }
 }
 
@@ -3401,6 +3520,7 @@ static struct {
     unsigned char fired[4];
     struct { float life, hit_wait; int part; } beam[GIGA_BEAMS];
 } giga;
+static void giga_clear(void) { giga.active = 0; giga.rider = -1; giga.ride_frames = 0; }
 static char giga_log_text[12288];
 static int giga_log_len, giga_ticks;
 static void giga_note(const char *what, int a, float b) {

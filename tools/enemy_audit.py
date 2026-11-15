@@ -32,7 +32,7 @@ def summarize(path):
         raise ValueError("audit footer missing: run did not finish")
     counts = Counter()
     depths = {}
-    for row in csv.DictReader(io.StringIO(data.split("#", 1)[0])):
+    for row in csv.DictReader(io.StringIO("\n".join(line for line in data.splitlines() if not line.startswith("#")))):
         counts[row["violation"]] += 1
         depths[row["violation"]] = max(depths.get(row["violation"], 0), float(row["depth"]))
     if sum(counts.values()) != int(match[3]):
