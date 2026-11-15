@@ -30,7 +30,21 @@ Implemented in `psp/testroom/player.c` (`locomotion_step`).
   gun or Ebony & Ivory (`+0x3ba1`), and sets `+0x28a6`. Back in neutral `FUN_0021d280`
   then enters the gun stance (`FUN_0021dba0`, states 10, 12, 13) instead of the
   states above. See "Gun stance" below.
-- **Not ported**: the body lean in `player+0x28ec`, row 1, 2-51, long idle. The
+- **Lean** (`FUN_00221d20`): `player+0x28ec`, copied to the model's rotation Z (`+0x88`) every frame by
+  `FUN_0021fe30`: 10 degrees into the turn still to make once it's 5 or more (scaled under that, none under 1),
+  moving 0.25 degrees a frame; any state change clears it. Ported (`Player.lean`, `sceGumRotateZ`).
+- **Edges** (`FUN_0021fe30` -> `FUN_0021f470`): on the ground he's pushed 10 cm down each frame and
+  `FUN_00242200(-20)` looks for floor; none within 30 cm below and he falls (`FUN_0021df00` column 4: state 9,
+  no speed, 1.5 cm/frame^2, motion 2:0x24). The port decides it after the frame's wall pushes (`player_settle`).
+- **Landing** (`FUN_00242200`, before the step in every air state): falling, and y + vy within 10 cm of the
+  floor, he's put on it without that frame's carry.
+- **Jump press**: the press frame only sets state 4 up; the turn to the stick (5 frames, `FUN_002e3010`) and the
+  crouch follow, and the rise starts 8 frames after the press (PCSX2, every jump capture).
+- **Comparison lag**: on the PS2 a press changes the state the frame after the key nearly always (now and then
+  two, from PCSX2's keyboard path); `PS2_INPUT_LAG=1 tools/ref_compare.py` compares from the press. At that lag
+  the run, stop, turnaround, jumps, Air Hike and air drift match to the centimetre; combat's scripted moves start a
+  frame late (the dash moves 10 frames after the press, 9 on the PS2).
+- **Not ported**: row 1, 2-51, long idle. The
   stop transition and its blend length weren't traced; the test room stops at
   once and blends over 10 frames. Its camera follow (rate and angle limit) is
   its own tuning, not taken from the game's camera code.

@@ -577,7 +577,9 @@ static int kind_max_health(int kind) {
 }
 static int mission_difficulty(void);
 static void enemy_died(int kind, float x, float y, float z) {
-    orbs_burst(x, y, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
+    /* FUN_00366f10: from the body's root + 70, with the floor at the root - 100: 170 cm over his feet. */
+
+    orbs_burst(x, y + 170.0f, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
 }
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
@@ -1207,6 +1209,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         ScePspFVector3 position = {player->x, player->y, player->z};
         sceGumTranslate(&position);
         sceGumRotateY(player->yaw + MODEL_YAW_OFFSET);
+        if (player->lean != 0.0f) sceGumRotateZ(player->lean);   /* the run's lean into a turn (player+0x88) */
     }
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
@@ -1787,6 +1790,8 @@ static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
 #define CMP_MAX_WALKS 64
 static struct { float x, z; int first, last; } cmp_walks[CMP_MAX_WALKS];
 static int cmp_walk_count;
+/* "spin degrees first last": the stick at full tilt, its direction turning that much a frame (wall probes). */
+static float cmp_spin_rate; static int cmp_spin_from, cmp_spin_to;
 static float cmp_px, cmp_pz, cmp_cam_yaw;   /* where he is and the camera's yaw, for walkto */
 static int cmp_event_count, cmp_frames;
 static int cmp_game_shots[256];   /* saved by the game itself: works on the PSP and sees only its own picture */
@@ -1855,7 +1860,7 @@ static unsigned int menu_script_pad(int frame) {
     for (i = 0; i < menu_key_count; ++i) if (frame >= menu_keys[i].frame && frame < menu_keys[i].frame + 3) held |= menu_keys[i].button;
     return held;
 }
-static struct { float x, y, z, yaw, dt, floor, cframe; short move, script, ground, room; } cmp_log[CMP_MAX_FRAMES];
+static struct { float x, y, z, yaw, dt, floor, cframe, pen; short move, script, ground, room, cross, outside; } cmp_log[CMP_MAX_FRAMES];
 static int cmp_realdt;   /* "realdt 1": the real clock, as in play, not a fixed step */
 static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": for a test, the mission begins in that room */
 static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
@@ -1943,6 +1948,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
+        else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
             if (sscanf(line + 7, "%f %f %d %d", &cmp_walks[cmp_walk_count].x, &cmp_walks[cmp_walk_count].z,
                        &cmp_walks[cmp_walk_count].first, &cmp_walks[cmp_walk_count].last) == 4) ++cmp_walk_count;
@@ -1962,6 +1968,10 @@ static void cmp_pad(int frame, PlayerInput *input) {
     int i;
     if(cmp_swing>0 && frame>=cmp_swing_from && frame<=cmp_swing_to && frame%cmp_swing==0) {input->melee=1;input->melee_held=1;}
     if (bench_fire && frame>=cmp_fire_from && frame % bench_fire == 0) { input->gun = 1; input->gun_held = 1; }
+    if (cmp_spin_rate != 0.0f && frame >= cmp_spin_from && frame <= cmp_spin_to) {
+        float a = (float)(frame - cmp_spin_from) * cmp_spin_rate * 0.0174533f;
+        input->stick_x = sinf(a); input->stick_y = cosf(a);
+    }
     for (i = 0; i < cmp_walk_count; ++i) {
         float wx = cmp_walks[i].x - cmp_px, wz = cmp_walks[i].z - cmp_pz, l = sqrtf(wx * wx + wz * wz);
         float s = sinf(cmp_cam_yaw), c = cosf(cmp_cam_yaw);
@@ -3988,6 +3998,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        player_settle(&player, stage_loaded() && !on_bridge(player.x, player.z, player.y));
         if (input.style >= 0) style_switched = 1;
         if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
             /* Dante's actual travel against the stick's on-screen direction. */
@@ -4205,6 +4216,24 @@ int main(int argc, char *argv[]) {
                     cmp_log[frames].floor = g;
                 }
                 cmp_log[frames].room = (short)(mission_mode && mission_room != ROOM_NONE ? atoi(rooms[mission_room].file + 5) : -1);
+                /* Wall probes: how far into a wall he still is after every push this frame, whether the way from
+                 * last frame's spot went through a wall (waist and chest height), and whether he's off the
+                 * collision's floor grid. */
+                cmp_log[frames].pen = 0.0f; cmp_log[frames].cross = 0; cmp_log[frames].outside = 0;
+                if (stage_loaded()) {
+                    float px = player.x, pz = player.z;
+                    if (stage_collide(&px, &pz, player.y, PLAYER_RADIUS - 2.0f)) cmp_log[frames].pen = sqrtf((px - player.x) * (px - player.x) + (pz - player.z) * (pz - player.z));
+                    if (frames > 0 && cmp_log[frames - 1].room == cmp_log[frames].room) {
+                        int h;
+                        for (h = 0; h < 2; ++h) {
+                            float lift = h ? 150.0f : 70.0f, t;
+                            float a[3] = {cmp_log[frames - 1].x, cmp_log[frames - 1].y + lift, cmp_log[frames - 1].z};
+                            float b[3] = {player.x, player.y + lift, player.z};
+                            if ((a[0] - b[0]) * (a[0] - b[0]) + (a[2] - b[2]) * (a[2] - b[2]) > 0.01f && stage_raycast(a, b, &t)) cmp_log[frames].cross |= 1 << h;
+                        }
+                    }
+                    cmp_log[frames].outside = (short)!stage_walkable_below(player.x, player.z);
+                }
             }
             if (frames >= cmp_frames) {
                 char path[320];
@@ -4231,8 +4260,9 @@ int main(int argc, char *argv[]) {
                 report = fopen(path, "w");
                 if (report) {
                     for (i = 0; i < cmp_frames && i < CMP_MAX_FRAMES; ++i)
-                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s %s %.4f %d %d %.1f %.1f\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw, combat_script_key(cmp_log[i].script),
-                                cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-", cmp_log[i].dt, cmp_log[i].ground, cmp_log[i].room, cmp_log[i].floor, cmp_log[i].cframe);
+                        fprintf(report, "%d %.3f %.3f %.3f %.4f %s %s %.4f %d %d %.1f %.1f %.2f %d %d\n", i, cmp_log[i].x, cmp_log[i].y, cmp_log[i].z, cmp_log[i].yaw, combat_script_key(cmp_log[i].script),
+                                cmp_log[i].move != MOVE_NONE ? combat_move_name(cmp_log[i].move) : "-", cmp_log[i].dt, cmp_log[i].ground, cmp_log[i].room, cmp_log[i].floor, cmp_log[i].cframe,
+                                cmp_log[i].pen, cmp_log[i].cross, cmp_log[i].outside);
                     fclose(report);
                 }
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");

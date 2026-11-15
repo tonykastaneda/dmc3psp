@@ -346,7 +346,7 @@ int stage_collide(float *x, float *z, float y, float radius) {
     int moved = 0, iteration, h;
     unsigned int k;
     if (!header) return 0;
-    for (iteration = 0; iteration < 3; ++iteration) {
+    for (iteration = 0; iteration < 8; ++iteration) {
         const Cell *cell = grid_cell(hits->wall_grid, *x, *z);
         const unsigned int *indices = grid_indices(hits->wall_grid);
         int pushed = 0;
@@ -354,22 +354,25 @@ int stage_collide(float *x, float *z, float y, float radius) {
         for (k = 0; k < cell->count; ++k) {
             const float *t = hit_tri(indices[cell->first + k]);
             for (h = 0; h < 3; ++h) {
-                float p[3] = {*x, y + heights[h], *z}, q[3], dx, dz, dy, dist2;
+                float p[3] = {*x, y + heights[h], *z}, q[3], dx, dz, dy, dist2, reach;
                 closest_on_triangle(p, t, t + 3, t + 6, q);
                 dx = p[0] - q[0]; dy = p[1] - q[1]; dz = p[2] - q[2];
                 if (dy * dy > radius * radius) continue;       /* not at this height */
                 dist2 = dx * dx + dz * dz;
-                if (dist2 >= radius * radius) continue;
+                /* A sphere: an edge dy above or below it reaches only sqrt(r^2 - dy^2) across. Pushing the full
+                 * radius there shoved him 39 cm sideways off the top of a block he'd just stepped off (M4). */
+                reach = sqrtf(radius * radius - dy * dy);
+                if (dist2 >= reach * reach) continue;
                 if (dist2 < 1e-4f) {                            /* centre on the wall: use its normal */
                     dx = t[9]; dz = t[11];
                     dist2 = dx * dx + dz * dz;
                     if (dist2 < 1e-6f) continue;
                     {
                         float l = sqrtf(dist2);
-                        *x += dx / l * radius; *z += dz / l * radius;
+                        *x += dx / l * reach; *z += dz / l * reach;
                     }
                 } else {
-                    float l = sqrtf(dist2), push = radius - l;
+                    float l = sqrtf(dist2), push = reach - l;
                     *x += dx / l * push; *z += dz / l * push;
                 }
                 pushed = moved = 1;
