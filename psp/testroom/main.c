@@ -3913,8 +3913,12 @@ int main(int argc, char *argv[]) {
                         /* "gotoroom frame -1": to the mission's goal item, and press O. */
                         const MissionInfo *gi = &missions[mission_choice.mission - 1];
                         room_set_cleared(mission_room);
-                        player.x = gi->goal[0]; player.y = gi->goal[1] + 10.0f; player.z = gi->goal[2];
-                        debug_pressed |= PSP_CTRL_CIRCLE;
+                        /* Only where the mission has a goal item in this room: elsewhere (M6's 127, M14's 008 end on
+                         * an area) it used to drop Dante at the origin, out of the level. */
+                        if (gi->goal_room == mission_room) {
+                            player.x = gi->goal[0]; player.y = gi->goal[1] + 10.0f; player.z = gi->goal[2];
+                            debug_pressed |= PSP_CTRL_CIRCLE;
+                        }
                     }
                     for (k = 0; k < rooms[mission_room].door_count; ++k) {
                         const RoomDoor *d = &rooms[mission_room].doors[k];
