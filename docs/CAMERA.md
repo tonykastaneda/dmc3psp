@@ -37,6 +37,9 @@ both on room entry: `FUN_002bc890` indexes the CAM zones, `FUN_002fe8f0`/`FUN_00
 | `cam_init x y z` | up to 8 "safe" eye points (see start-up below) | none |
 | `hitattr camhit` | that collision set blocks the camera | |
 
+The parser reads tokens, not lines: `;` is only a token it doesn't know, so a `commented'' `; cam_aov 57` after
+`cam_aov 64` still applies (room 111: the PS2's follow camera has FOV 57, 348 cm out, level). A set header must
+be its own token, so `;# SET 0 CONFIG` is skipped (room 110's real values are the next CONFIG's 10 deg, 500, 55).
 The parser starts every value at -1 and `FUN_0024e6a0` ignores negative ones, so `cam_rotx -5` (rooms
 130, 406) means the default 14.5. Target height above Dante's feet is 140 in every room (`+0xd0`).
 
