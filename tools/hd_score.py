@@ -64,11 +64,12 @@ def record_port(names):
 
 def curves(rows):
     """Travel and height at each normal-speed frame, from the first movement."""
-    start, y0 = None, rows[0]["y"]
+    # The ground: the highest of the first frames (the PS2 trace dips 10 cm now and then, never rises).
+    start, y0 = None, max(r["y"] for r in rows[:5])
     # Line up on takeoff if he leaves the ground, else on the first step. Small settling at the
-    # start of a recording isn't movement.
+    # start of a recording isn't movement, nor is a dip and its return.
     for a, b in zip(rows, rows[1:]):
-        if abs(b["y"] - a["y"]) > 3.0 and b["y"] > a["y"]:
+        if abs(b["y"] - a["y"]) > 3.0 and b["y"] > a["y"] and b["y"] > y0 + 3.0:
             start = a["f"]
             break
     if start is None:
