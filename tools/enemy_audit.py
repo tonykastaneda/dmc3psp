@@ -31,14 +31,18 @@ def summarize(path):
     if not match:
         raise ValueError("audit footer missing: run did not finish")
     counts = Counter()
+    expected = Counter()
     depths = {}
     for row in csv.DictReader(io.StringIO("\n".join(line for line in data.splitlines() if not line.startswith("#")))):
+        if row["violation"].startswith("expected_"):
+            expected[row["violation"]] += 1
+            continue
         counts[row["violation"]] += 1
         depths[row["violation"]] = max(depths.get(row["violation"], 0), float(row["depth"]))
     if sum(counts.values()) != int(match[3]):
         raise ValueError("audit row count differs from footer")
     return dict(frames=int(match[1]), bodies=int(match[2]), violations=int(match[3]),
-                counts=dict(counts), max_depth=depths)
+                counts=dict(counts), max_depth=depths, expected=dict(expected))
 
 
 def main():

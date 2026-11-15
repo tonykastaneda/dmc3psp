@@ -2,6 +2,9 @@
 #define DMC3_VANGUARD_H
 
 int vanguard_init(void);
+/* One independent actor state per enemy-manager slot; meshes/textures stay shared. */
+void vanguard_select(int slot);
+void vanguard_contact_position(const float pos[3], float floor_y);
 void vanguard_set_difficulty(int difficulty);
 void vanguard_spawn(float x, float y, float z);
 /* Returns an attack landing. alive becomes 0 after the death animation. */
