@@ -46,8 +46,8 @@ The parser starts every value at -1 and `FUN_0024e6a0` ignores negative ones, so
 camera's parameters (0x70 for types 0 and 3, 0x450 for type 1, 0x860 for type 2, none for 4 and 5), then
 `header[0x14]` areas of 0x50 bytes.
 
-Zone header: `[1]` camera type, `[2]` Dante's shadow type + 1 for the zone (0 = the room's `shadow` key; `FUN_002bd660` -> `FUN_002e1100`), `[6]` 1 = "battle" zone (only while
-Dante is in his combat stance, player `+0x28ae` and `+0x28a9`), `[0x14]` area count, `[0x15..0x34]` 16
+Zone header: `[1]` camera type, `[2]` Dante's shadow type + 1 for the zone (0 = the room's `shadow` key; `FUN_002bd660` -> `FUN_002e1100`), `[6]` 1 = flight zone (only during Air Raid,
+Nevan's Devil Trigger flight: player `+0x28ae` and `+0x28a9`, set from the weapon's table by `FUN_0025b420`), `[0x14]` area count, `[0x15..0x34]` 16
 transitions `{from zone, frames}`, `[0x35]` priority (lower wins), `[0x3c]` a sound/BGM group.
 
 Area: four corners `xyzw` (+0x00), height (+0x40). Dante's position is inside when his y is between
@@ -65,8 +65,7 @@ roll per point at +0x3c0, point count at +0x440.
 ## Choosing a camera (FUN_002bcbd0, every frame)
 
 1. The zone Dante was in last frame keeps the camera if he's still inside one of its areas.
-2. Otherwise, or against it, the other zones he's inside compete: a battle zone wins while he's in
-   combat stance; then the lowest priority number; ties go to the lower index. A zone of higher priority
+2. Otherwise, or against it, the other zones he's inside compete: a flight zone wins during Air Raid; then the lowest priority number; ties go to the lower index. A zone of higher priority
    than the kept one takes over only if he's inside its area shrunk toward its middle by 60 cm
    (`FUN_002bc990`: scale (sqrt(area) - 60) / sqrt(area)).
 3. Outside every zone the last camera stays.
@@ -159,5 +158,5 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 - The PSP has no L2/R2, so the follow camera's manual turn isn't there; SELECT is the camera reset.
 - Approximations: the spline projection is a search on each
   candidate segment, not the game's polynomial roots (same nearest point); the follow camera's lock-on
-  framing; the "battle" zones are never used (their condition, Dante's combat stance, isn't read; the PS2 kept room 002's normal rail with enemies alive); the stage collision the camera sweeps against is
+  framing; flight zones follow the port's Air Raid state; the stage collision the camera sweeps against is
   the port's whole HITS set, not just the `camhit` sets.
