@@ -135,6 +135,13 @@ SCRIPTS = {
     "roll": (200, [("r1", 10, 120), ("lright", 30, 70), ("cross", 40, 42)]),
     # First melee hits.
     "melee": (200, [("triangle", 20, 22), ("triangle", 45, 47), ("triangle", 70, 72)]),
+    # Rebellion's lock-on moves with the stick really forward / back ("behind" setup: the camera behind him).
+    # (r_st / r_ht from the HD scripts push the stick sideways here and give Combo I on both games.)
+    "stinger": (150, [("r1", 12, 140), ("lup", 30, 60), ("triangle", 40, 43)]),
+    "stinger_far": (170, [("enemy", 1400, 0), ("r1", 12, 160), ("lup", 30, 60), ("triangle", 40, 43)]),
+    "hightime": (150, [("r1", 12, 140), ("ldown", 30, 60), ("triangle", 40, 43)]),
+    "hightime_h": (170, [("r1", 12, 160), ("ldown", 30, 60), ("triangle", 40, 100)]),
+    "stinger_c": (200, [("r1", 12, 190), ("lup", 30, 60), ("triangle", 40, 43), ("triangle", 80, 83)]),
 }
 
 
@@ -173,9 +180,9 @@ for _style, _tag in ((1, "sm"), (2, "gs"), (3, "rg")):
 
 
 # Button presses reach the PS2's state machine 1 frame after the key (jump, Air Hike, Sky Star, the run's start:
-# state change on frame +1 in nearly every capture, +2 now and then from PCSX2's keyboard path). 2 lines the port's
-# moves up with the PS2 while combat starts its scripts a frame late; PS2_INPUT_LAG=1 compares against the press.
-PS2_INPUT_LAG = int(os.environ.get("PS2_INPUT_LAG", "2"))
+# state change on frame +1 in nearly every capture, +2 now and then from PCSX2's keyboard path). Combat starts its
+# scripts on the same frame as the PS2 since wt/pJ's STARTUP_FRAMES / SCRIPT_LAG change, so 1 is the default.
+PS2_INPUT_LAG = int(os.environ.get("PS2_INPUT_LAG", "1"))
 
 
 def write_port_script(name):

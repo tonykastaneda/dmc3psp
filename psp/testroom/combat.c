@@ -13,7 +13,6 @@
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
 #define STINGER_HOLD_SECONDS (3.0f / MOTION_FPS)  /* FUN_00264fe0, maxed: HD Collection traces */
-#define STINGER_HOLD_SPEED 16.0f                  /* cm/frame during it */
 #define HIGH_TIME_HOLD_FRAME 20.0f                /* TRI still down here: the rising version */
 #define MASH_GAP_SECONDS (13.0f / MOTION_FPS)     /* input patterns 16 / 40: gaps <= 13 frames */
 #define MASH_PRESSES 6                            /* ... more than 6 presses */
@@ -22,9 +21,12 @@
 #define SHORT_MASH_PRESSES 2
 #define MASH_KEEP_SECONDS 0.30f                   /* a press this recent keeps a mash loop going */
 #define DANCE_STAB_PLAYS 2   /* action 207's handler (0x267000) replays 3:52 twice, then 3:53 */
-#define BUFFER_SECONDS 0.05f                      /* the real game drops a press made before its gate opens */
 #define MAX_DASHES 3          /* FUN_00245f10: dashes in a row < 3 at the top style level */
-#define STARTUP_FRAMES 2.0f
+#define STARTUP_FRAMES 1.0f
+/* The script's waits and the motion's end are seen a frame after the frame they name (FUN_00255160 resumes a
+ * script once the motion has passed it). PS2, PS2_INPUT_LAG=1: the root moves from the frame after the request,
+ * gates and the end come a frame later than that clock. */
+#define SCRIPT_LAG 1.0f
 #define TRICKSTER_LEVEL 2     /* player+0x3c75, 0 = Lv1: the full moveset is Lv3 */
 #define SNAP_DASH 0.349f      /* 0xe39 = 20 deg: a dash this close to the target aims at it */
 #define SNAP_SKY_STAR 0.175f  /* 0x71c = 10 deg (Sky Star) */
@@ -49,6 +51,7 @@ enum { NEXT_END, NEXT_TIME, NEXT_FLAG1, NEXT_FLAG2, NEXT_LAND, NEXT_MASH, NEXT_C
 #define GUN_STANCE_AFTER_SHOT 10.0f /* weapon config +0x588 */
 #define GUN_STANCE_AUTO_AIM 50.0f  /* FUN_00246d40: a neutral-stick shot that found a target */
 #define GUN_FIRST_AIM_FRAMES 10.0f /* FUN_002688c0: the first shot from outside the stance */
+#define GUN_FIRST_AIM_FRAMES_SHOTGUN 9.0f /* FUN_0026be70: the shotgun's */
 
 static int gun_rows[5][6][5];      /* motion indices: idle, aim, shot, legs, legs aiming */
 
@@ -171,6 +174,9 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_HIT] = {H("3-00"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_HEAVY] = {H("3-02"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_AIR] = {H("3-04"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1, .air = 1, .air_v = {0.0f, 0.0f, 0.0f, -1.5f}},
+    [MOVE_HIT_ALT] = {H("3-15"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_BACK] = {H("3-01"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_HIT_HEAVY_BACK] = {H("3-03"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOPPELGANGER] = {H("2-58"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_LEFT] = {H("2-07"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
@@ -326,7 +332,7 @@ static void seek_events(Combat *c) {
     c->next_event = 0;
     if (c->script < 0) return;
     sd = &script_data[c->script];
-    while (c->next_event < sd->count && sd->events[c->next_event].frame < c->frame) ++c->next_event;
+    while (c->next_event < sd->count && sd->events[c->next_event].frame + SCRIPT_LAG < c->frame) ++c->next_event;
 }
 
 /* Starts a move. A new action resets the gates (each script opens its own);
@@ -465,11 +471,9 @@ static unsigned int read_inputs(Combat *c, const Player *player, const PlayerInp
         if (c->tri_held >= CHARGE_SECONDS) in |= 1u << IN_CHARGE_TRI;
         c->tri_held = 0.0f;
     }
-    /* Keep a press alive for a few frames so a tap just before a gate opens
-     * still counts (the game's pattern history plays this role). */
-    c->buffer_time -= dt;
-    if (in) { c->buffered = in; c->buffer_time = BUFFER_SECONDS; }
-    else if (c->buffer_time > 0.0f) in = c->buffered;
+    /* A press counts on its own frame only: the patterns' bits (+0x4a40, FUN_002532d0) and the plain presses
+     * (+0x4a14, FUN_00245f10) are this frame's; a gate that buffers (1) keeps it as pending instead. PS2: a TRI
+     * 3 frames before 13:9's gate 4 starts buffering gives no 4th Aerial Rave strike. */
     return in;
 }
 
@@ -573,7 +577,7 @@ static int walk_commands(Combat *c, const Player *player, const PlayerInput *inp
         const CommandData *cmd = &command_data[i];
         int pressed = (inputs >> cmd->input) & 1u, ok;
         if (!(cmd->posture & posture)) continue;
-        if (cmd->type == 3 && cmd->style != game_style(player->style)) continue;
+        if (cmd->style != 0xFF && cmd->style != game_style(player->style)) continue;
         if (cmd->weapon != 0xFF && cmd->weapon != player->melee_weapon && cmd->weapon != player->gun_weapon) continue;
         if (!pressed && c->pending != cmd->action) continue;
         if (action_move(cmd->action) == MOVE_NONE) continue;
@@ -619,7 +623,7 @@ static int run_events(Combat *c) {
     int hits = 0;
     if (c->script < 0) return 0;
     sd = &script_data[c->script];
-    while (c->next_event < sd->count && sd->events[c->next_event].frame <= c->frame) {
+    while (c->next_event < sd->count && sd->events[c->next_event].frame + SCRIPT_LAG <= c->frame) {
         const ScriptEvent *e = &sd->events[c->next_event++];
         if (e->kind == EV_GATE) c->gates[e->a & 0x0F] = e->b;
         else if (e->kind == EV_FLAG) c->flag = e->a;
@@ -811,19 +815,33 @@ static void update_gun_layers(Combat *c, Player *player, const PlayerInput *inpu
         else c->frame = motion_get(c->motion)->loop_start;
         c->next_event = 0;
         c->since_fire = 0.0f;
-        /* FUN_002688c0: the first shot turns to the target before firing; from
-         * outside the stance that takes at least 10 frames. */
+        /* FUN_002688c0 (Ebony & Ivory) / FUN_0026be70 (shotgun): the first shot turns to the target before
+         * firing; from outside the stance (state not 10-14) that takes at least 10 / 9 frames, target or
+         * not. The shot's own length counts from when it fires (PS2: a shot from a stand runs 22 frames,
+         * one in the stance 13). During the wait Ebony & Ivory hold the shot's first pose (FUN_002691b0
+         * requests the shot with the wait as its blend); the shotgun raises it with the aim, 9:4 on the
+         * PS2 (FUN_0026c350 column 0), then plays the shot. */
         c->shot_delay = 0.0f;
-        if (c->aim_target && c->shot_count == 1) {
-            float d = fabsf(wrap_pi(atan2f(player->target_x - player->x, player->target_z - player->z) - player->yaw));
-            c->shot_delay = d / GUN_AIM_TURN;
-            if (!c->was_stance && c->shot_delay < GUN_FIRST_AIM_FRAMES) c->shot_delay = GUN_FIRST_AIM_FRAMES;
-            if (c->shot_delay > 0.0f && c->shots_pending > 0) { --c->shots_pending; c->delayed_shot = 1; }
+        if (c->shot_count == 1) {
+            float least = gun_index(player) == 1 ? GUN_FIRST_AIM_FRAMES_SHOTGUN : GUN_FIRST_AIM_FRAMES;
+            if (c->aim_target)
+                c->shot_delay = fabsf(wrap_pi(atan2f(player->target_x - player->x, player->target_z - player->z) - player->yaw)) / GUN_AIM_TURN;
+            if (!c->was_stance && c->shot_delay < least) c->shot_delay = least;
+            if (c->shot_delay > 0.0f && c->shots_pending > 0) {
+                --c->shots_pending;
+                c->delayed_shot = 1;
+                if (gun_index(player) == 1) { c->motion = row[1]; c->frame = motion_get(c->motion)->loop_start; }
+            }
         }
-    }
-    if (c->delayed_shot) {
+    } else if (c->delayed_shot) {   /* counted down from the frame after the press, as the handler's phase 0 */
         c->shot_delay -= dt * MOTION_FPS;
-        if (c->shot_delay <= 0.0f) { c->delayed_shot = 0; ++c->shots_pending; c->since_fire = 0.0f; }
+        if (c->shot_delay <= 0.0f) {
+            const int *row = gun_rows[gun_index(player)][c->gun_row];
+            c->shots_pending += c->delayed_shot;
+            c->delayed_shot = 0;
+            c->since_fire = 0.0f;
+            if (c->motion != row[2]) { c->motion = row[2]; c->frame = motion_get(c->motion)->loop_start; c->next_event = 0; }
+        }
     } else {
         c->since_fire += dt * MOTION_FPS;
     }
@@ -960,6 +978,36 @@ static void start_handmade(Combat *c, Player *player, const PlayerInput *input) 
     }
 }
 
+/* FUN_00264fe0: Stinger's dash (3:15) from Rebellion's config (chunk 11): level 1 (action 7) +0x1c / +0x20,
+ * 8 frames over 200 cm; level 2 (action 8) +0x28 / +0x2c, 16 frames over 560 cm. It stops early within
+ * +0x34 = 130 cm of the target (one less than 200 cm above or below). */
+static float stinger_dash(const Combat *c, int frames) {
+    if (c->action == 7) return frames ? 8.0f : 200.0f;
+    return frames ? 16.0f : 560.0f;
+}
+
+static int stinger_dash_over(const Combat *c, const Player *player) {
+    /* +0x2870 counts down and the dash ends once it's below 0. */
+    if (c->phase_time * MOTION_FPS > stinger_dash(c, 1)) return 1;
+    if (player->has_target && fabsf(player->y - player->target_y) < 200.0f) {
+        float dx = player->target_x - player->x, dz = player->target_z - player->z;
+        if (dx * dx + dz * dz < 130.0f * 130.0f) return 1;
+    }
+    return 0;
+}
+
+/* Twosome Time with R1 goes the stick's way against his facing (FUN_0026b0d0, table 0x595550): back 18:2,
+ * left 18:3, right 18:1 (the generated actions 251 / 252 / 250); forward or neutral stays 18:0. */
+static MoveId twosome_move(const Player *player, const PlayerInput *input, MoveId first) {
+    float sy = player->yaw;
+    if (player->locked_on && stick_yaw(player, input, &sy)) {
+        float d = wrap_pi(sy - player->yaw);
+        if (fabsf(d) >= 2.356f) return action_move(251);
+        if (fabsf(d) > 0.785f) return action_move(d > 0.0f ? 252 : 250);
+    }
+    return first;
+}
+
 void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
     const Motion *m;
     const MoveDef *d;
@@ -1004,17 +1052,18 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             MoveId first = action_move(action);
             if (player->locked_on && player->has_target && moves[first].lock_move != MOVE_NONE && moves[first].lock_move)
                 first = moves[first].lock_move;
-            /* Twosome Time with R1 goes the stick's way against his facing (FUN_0026b0d0, table 0x595550): back
-             * 18:2, left 18:3, right 18:1 (the generated actions 251 / 252 / 250); forward or neutral stays 18:0. */
-            if (action == 134 && player->locked_on) {
-                float sy = player->yaw;
-                if (stick_yaw(player, input, &sy)) {
-                    float d = wrap_pi(sy - player->yaw);
-                    if (fabsf(d) >= 2.356f) first = action_move(251);
-                    else if (fabsf(d) > 0.785f) first = action_move(d > 0.0f ? 252 : 250);
+            if (action == 134) first = twosome_move(player, input, first);
+            {
+                int again = c->action == 134, in_stance = c->stance_active;
+                start_move(c, first, action);
+                /* FUN_0026b1d0: the first Twosome Time waits 10 frames from outside the gun stance, 3 in it,
+                 * before it fires; the shot's 13 frames count from there (PS2: 22 frames from a stand). */
+                if (action == 134 && !again && c->shots_pending >= moves[first].shot) {
+                    c->shots_pending -= moves[first].shot;
+                    c->delayed_shot = moves[first].shot;
+                    c->shot_delay = in_stance ? 3.0f : GUN_FIRST_AIM_FRAMES;
                 }
             }
-            start_move(c, first, action);
         }
     } else if (c->move == MOVE_NONE) {
         start_handmade(c, player, input);
@@ -1045,10 +1094,18 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         return;
     }
     if (d->layered) update_gun_layers(c, player, input, dt);
+    else if (c->delayed_shot && c->phase_time > 0.0f) {   /* Twosome Time's wait, from the frame after */
+        c->shot_delay -= dt * MOTION_FPS;
+        if (c->shot_delay <= 0.0f) { c->shots_pending += c->delayed_shot; c->delayed_shot = 0; }
+    }
     m = motion_get(c->motion);
     /* A new script starts counting STARTUP_FRAMES late, as on the PS2: its handler's state 0 requests the motion
      * and the script runs from the frame after (measured: the PS2's gates open two frames later than ours). */
-    if (c->phase_time >= STARTUP_FRAMES / MOTION_FPS) c->frame += dt * MOTION_FPS;
+    /* A first shot waiting to fire holds the shot's first pose (Ebony & Ivory, Twosome Time); the shotgun's
+     * aim plays on. */
+    if (c->phase_time >= STARTUP_FRAMES / MOTION_FPS &&
+        !(c->delayed_shot && (!d->layered || c->motion == gun_rows[gun_index(player)][c->gun_row][2])))
+        c->frame += dt * MOTION_FPS;
     c->phase_time += dt;
 
     /* Mash loops (Million Stab, Shredder, Crazy Dance) and held guards replay
@@ -1102,7 +1159,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
     {
         /* Moves the real game drives by speed, not by the motion (HD Collection traces). */
-        float speed = c->move == MOVE_STINGER_HOLD ? STINGER_HOLD_SPEED : 0.0f;
+        float speed = c->move == MOVE_STINGER_HOLD ? stinger_dash(c, 0) / stinger_dash(c, 1) : 0.0f;
         if (c->script >= 0) {
             const char *key = script_data[c->script].key;
             if (!strcmp(key, "7:31")) speed = 43.0f;       /* Beowulf's Straight */
@@ -1193,7 +1250,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
 
     /* Generated phases: what moves on to the next script. */
     if (d->next_on >= NEXT_FLAG1) {
-        int at_end = c->frame >= m->end_frame;
+        int at_end = c->frame >= m->end_frame + SCRIPT_LAG;
         int go = 0;
         float since = d->btn == BTN_TRI ? c->since_tri : d->btn == BTN_SQ ? c->since_sq : c->since_cir;
         int held = d->btn == BTN_TRI ? input->melee_held : d->btn == BTN_SQ ? input->gun_held : input->style_held;
@@ -1250,15 +1307,31 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         case NEXT_SHOT:
             /* FUN_002688c0: a press from `refire` frames on fires again, and the
              * shot ends `frames` frames in. */
-            c->phase_frames += dt * MOTION_FPS;
+            if (!c->delayed_shot) c->phase_frames += dt * MOTION_FPS;   /* counted from when it fires */
             /* (Not the press that started this shot: that's the frame count's first frame.) */
-            if (input->gun && c->phase_frames > 1.5f) c->shot_buffered = 1;
+            if (input->gun && c->phase_time * MOTION_FPS > 1.5f) c->shot_buffered = 1;
             if (c->shot_buffered && !c->delayed_shot && c->since_fire >= d->refire) { start_move(c, c->move, 0); return; }
             if (c->phase_frames >= d->frames) go = 1;
             break;
         case NEXT_TIMER:
         case NEXT_STANCE:
-            c->phase_frames += dt * MOTION_FPS;
+            if (!c->delayed_shot) c->phase_frames += dt * MOTION_FPS;
+            /* FUN_0026b1d0: a CIR press in Twosome Time fires again from 7 frames after the shot (+0x2856),
+             * an earlier one waits for then (+0x2858). */
+            if (c->action == 134 && player->on_ground && player->style == STYLE_GUNSLINGER) {
+                if (input->style_action && c->phase_time * MOTION_FPS > 1.5f) c->shot_buffered = 1;
+                if (c->shot_buffered && !c->delayed_shot && c->phase_frames >= 7.0f) {
+                    /* A new R1 sector (FUN_0026b0d0) turns first: 10 frames before that shot. */
+                    MoveId was = c->move, next = twosome_move(player, input, action_move(134));
+                    start_move(c, next, 0);
+                    if (next != was) {
+                        c->shots_pending -= moves[next].shot;
+                        c->delayed_shot = moves[next].shot;
+                        c->shot_delay = GUN_FIRST_AIM_FRAMES;
+                    }
+                    return;
+                }
+            }
             if (c->phase_frames >= d->frames) go = 1;
             else if (at_end) {
                 c->frame = m->loop_start;
@@ -1282,12 +1355,14 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
 
     /* Continuations within the action, or the end of the move. */
-    if (d->next != MOVE_NONE && d->next_on == 1 && c->phase_time >= STINGER_HOLD_SECONDS) {
+    if (c->move == MOVE_STINGER_HOLD) {
+        if (stinger_dash_over(c, player)) start_move(c, d->next, 0);
+    } else if (d->next != MOVE_NONE && d->next_on == 1 && c->phase_time >= STINGER_HOLD_SECONDS) {
         start_move(c, d->next, 0);
     } else if (c->air && d->flag_air) {
         /* Still flying: the pose holds until the floor. */
         if (c->frame > m->end_frame) c->frame = m->end_frame;
-    } else if (c->frame >= m->end_frame) {
+    } else if (c->frame >= m->end_frame + SCRIPT_LAG) {
         ++c->plays;
         if (c->move == MOVE_SM_DANCE_STAB && c->plays < DANCE_STAB_PLAYS) start_move(c, c->move, 0);
         else if (d->next != MOVE_NONE) start_move(c, d->next, 0);
@@ -1300,18 +1375,28 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
 }
 
 int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from_z, int heavy, float damage) {
-    if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR) return 1;
+    float to_attacker;
+    int front;
+    if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
+        c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK) return 1;
     /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
     if (damage < 0.0f) damage = heavy ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
     player->health -= damage;
     if (player->health < 1.0f) player->health = 1.0f;
-    player->yaw = atan2f(from_x - player->x, from_z - player->z);
+    /* FUN_002e96a0 (light) / FUN_002e98d0 (heavy): hit from within 90 degrees of his facing (FUN_002e2be0) he
+     * turns to the attacker and plays 1:0 or, half the time, 1:15 (heavy 1:2); from behind he turns away from it
+     * and plays 1:1 (heavy 1:3). */
+    to_attacker = atan2f(from_x - player->x, from_z - player->z);
+    front = fabsf(wrap_pi(to_attacker - player->yaw)) <= (float)M_PI * 0.5f;
+    player->yaw = front ? to_attacker : wrap_pi(to_attacker + (float)M_PI);
     player->air_kind = AIR_NONE;
     player->jump_motion = -1;
     c->air = 0;
     c->base_y = player->y;
-    start_move(c, !player->on_ground ? MOVE_HIT_AIR : heavy ? MOVE_HIT_HEAVY : MOVE_HIT, 0);
+    start_move(c, !player->on_ground ? MOVE_HIT_AIR
+                  : heavy ? (front ? MOVE_HIT_HEAVY : MOVE_HIT_HEAVY_BACK)
+                  : !front ? MOVE_HIT_BACK : (rand() % 10 < 5 ? MOVE_HIT_ALT : MOVE_HIT), 0);
     return 1;
 }
 int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy) {
@@ -1380,7 +1465,7 @@ int combat_selftest_inputs(int *total, int *first_failed_action) {
         p.gun_weapon = 5;
         if (cmd->weapon < 5) p.melee_weapon = cmd->weapon;
         else if (cmd->weapon < 10) p.gun_weapon = cmd->weapon;
-        if (cmd->type == 3) {
+        if (cmd->style != 0xFF) {
             static const Style styles[4] = {STYLE_SWORDMASTER, STYLE_GUNSLINGER, STYLE_TRICKSTER, STYLE_ROYALGUARD};
             p.style = styles[cmd->style & 3];
         }

@@ -69,7 +69,8 @@ looks the right way ("open" and, for R1, "behind"; the port copies it with spot 
 Taken from the PS2's code since (the guesses they replaced in brackets):
 - Trickster's dash script by style level, table 0x5911d0 (dash count); no pending press while the dash's gate
   only buffers; left and right lock-on dashes (swapped).
-- Scripts start counting two frames after a move begins (gates were two frames early).
+- Scripts start counting the frame after a move begins, and their waits and the motion's end are seen a frame after the
+  frame they name (measured with PS2_INPUT_LAG=1: root motion from the next frame, gates and ends a frame later).
 - Helm Breaker, `FUN_00264b90`: vy and gravity from the config (`pl000` chunk 11, `player+0x2844`) +0x60.. (a
   1800 cm/s slam). Aerial Rave `FUN_00268270..`, Agni & Rudra 5:17 `FUN_002737d0`, Nevan 6:15/6:34
   `FUN_00276ac0` (6:34 hovers until its flag), Rain Storm `FUN_0026b8b0`, Beowulf's dive kick `FUN_00267d20`
@@ -102,7 +103,8 @@ are the PS2's dispatch numbers (`FUN_002213e0`).
   can be cancelled into Sky Star at once.
 - **Air Trick**: after the warp, state 9: 4 forward losing 0.07, 8 up losing 1.
 - **Wall Hike** (state 31): stick into the wall. Ends with row 10 away from the wall.
-- **Rebellion**: Stinger's second level ends in 3:42, 3 frames of hold at 16 cm/frame. Held High
+- **Rebellion**: Stinger (FUN_00264fe0) dashes 3:15 for config +0x1c / +0x28 frames (8 / 16) over +0x20 / +0x2c cm (200 /
+  560), stopping within +0x34 = 130 cm of the target, then 3:16 (level 1) or 3:42 (level 2); PCSX2-checked. Held High
   Time goes to 3:13, 30 up losing 1.35. Shredder runs a fixed 60 frames.
 - **Aerial Rave**: sinks at 1.17 + 0.14 a frame, restarted by each strike.
 - **Guns**: Ebony & Ivory in the air 8:32, 11 up, losing 1.25, and each press after 13 frames 5.5 up
