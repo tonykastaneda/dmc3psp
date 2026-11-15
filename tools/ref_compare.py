@@ -139,6 +139,12 @@ SCRIPTS = {
     "airturn": (220, [("lup", 10, 70), ("cross", 40, 42), ("ldown", 71, 110)]),
     # Stick only after take-off from a stand.
     "airdrift": (180, [("cross", 20, 22), ("lup", 35, 60)]),
+    # Locomotion odds and ends: landing from an Air Hike with the stick held, a restart after a 3-frame release,
+    # the stick on a diagonal, a 6-frame tap (a walk that never runs).
+    "hikerun": (200, [("style0", 2, 3), ("lup", 6, 190), ("cross", 20, 22), ("cross", 50, 52)]),
+    "restart": (160, [("lup", 20, 60), ("lup", 64, 140)]),
+    "diag": (160, [("lup", 20, 120), ("lright", 20, 120)]),
+    "tap": (120, [("lup", 20, 25)]),
     # Lock-on strafe.
     "strafe": (240, [("r1", 10, 200), ("lright", 30, 150)]),
     # Roll: R1 + direction + cross.
