@@ -11,6 +11,7 @@
 #define TWO_PI_F 6.28318531f
 #define STRIDE_LENGTH 165.0f /* cm covered per full run cycle */
 #define STEP_HEIGHT 45.0f    /* curbs and steps Dante walks up without jumping */
+#define LEDGE_DROP 30.0f     /* FUN_0021f470: FUN_00242200(-20) lands within 10 cm, so floor up to 30 cm down holds him */
 
 float player_spawn[4] = {0.0f, 0.0f, -300.0f, 0.0f};
 float player_room_limit = ROOM_HALF_SIZE - PLAYER_RADIUS;
@@ -158,9 +159,12 @@ static void air_step(Player *player, const float stick[2], int held) {
     float limit = player_room_limit, k = player_step_scale;
     if (player->air_kind == AIR_JUMP) {
         if (player->jump_time < JUMP_CROUCH_FRAMES) {
-            /* FUN_002222c0: on the ground, turning to the stick's direction over 5 frames. */
-            float left = 5.0f - player->jump_time;
-            if (left > 0.0f && player->air_col != 2) player->yaw = wrap_angle(player->yaw + wrap_angle(player->air_yaw - player->yaw) / left);
+            /* FUN_002222c0: the press frame only sets the state up (step 0); from the next one he turns to
+             * the stick's direction over 5 frames (FUN_002e3010, a fifth of the turn a frame) while the
+             * crouch plays, until the motion's flag (+0x24d5) starts the arc. */
+            float left = 6.0f - player->jump_time;
+            if (player->jump_time >= 1.0f && left > 0.0f && player->air_col != 2)
+                player->yaw = wrap_angle(player->yaw + wrap_angle(player->air_yaw - player->yaw) / left);
             player->jump_time += k;
             if (player->jump_time >= JUMP_CROUCH_FRAMES) {
                 air_arc(player, 0);
@@ -219,6 +223,22 @@ static void air_step(Player *player, const float stick[2], int held) {
     player->y += player->air_vy * k;
     player->air_vy += player->air_g * k;
     if (player->air_vy < -70.0f) player->air_vy = -70.0f;
+}
+
+/* Rising into something overhead (a staircase's underside, a balcony): the PS2's body capsule meets it and he
+ * drops from there. The port had no ceiling at all, and a jump under M4's spiral stair went up through the steps. */
+#define HEAD_HEIGHT 185.0f
+static void head_check(Player *player, float before) {
+    float from[3], to[3], t;
+    if (player->y <= before || !stage_loaded()) return;
+    from[0] = to[0] = player->x; from[2] = to[2] = player->z;
+    from[1] = before + 100.0f;
+    to[1] = player->y + HEAD_HEIGHT;
+    if (stage_raycast(from, to, &t)) {
+        float top = from[1] + (to[1] - from[1]) * t - HEAD_HEIGHT;
+        player->y = top > before ? top : before;
+        if (player->air_vy > 0.0f) player->air_vy = 0.0f;
+    }
 }
 
 static void turn_toward(Player *player, float yaw, float max_turn) {
@@ -303,8 +323,10 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
         player->loco = LOCO_IDLE;
         player->running = 1;
         player->speed = 4.25f * MOTION_FPS * magnitude;  /* column 4 of the air table */
+        player->lean = 0.0f;
         return stick_yaw;
     }
+    if (player->loco != LOCO_MOVE) player->lean = 0.0f;   /* until the move state (FUN_00221ba0, FUN_0021e3c0 clear it) */
     if (player->loco == LOCO_IDLE) {
         /* Start: walk toward the direction held at this moment, turning to it
          * evenly over 8 frames. */
@@ -325,6 +347,14 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
             player->loco_timer = LOCO_RUN_HOLD_FRAMES;
         }
         return player->start_yaw;
+    }
+    {
+        /* FUN_00221d20: he leans into the turn still to make, 10 degrees once it's 5 or more (none under 1),
+         * the lean itself moving 0.25 degrees a frame. */
+        float d = wrap_angle(stick_yaw - player->yaw), ad = fabsf(d), goal = 0.0f, rate = 0.004363323f * frames;
+        if (ad >= 0.0174533f) goal = (d > 0.0f ? -1.0f : 1.0f) * fminf(ad, 0.0872665f) / 0.0872665f * 0.1745329f;
+        if (fabsf(player->lean - goal) < rate) player->lean = goal;
+        else player->lean += player->lean < goal ? rate : -rate;
     }
     turn_toward(player, stick_yaw, PLAYER_TURN_RATE * dt);
     if (!player->running) {
@@ -351,6 +381,38 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
         if (player->speed >= run) { player->speed = run; player->accel = 0.0f; }
     }
     return stick_yaw;
+}
+
+/* FUN_0021fe30 / FUN_0021f470, once the frame's moves and wall pushes are done: on the ground, with no floor within
+ * 30 cm below him, he falls (state 9 from FUN_0021df00: no speed, 1.5 cm/frame^2, the stick's drift). */
+void player_settle(Player *player, int walls) {
+    float ground;
+    if (!player->on_ground) return;
+    if (floor_at(player->x, player->y, player->z, &ground) && ground >= player->y - LEDGE_DROP) {
+        /* Up or down a slope the walls meet him at another height: push out again there. */
+        if (walls && fabsf(ground - player->y) > 1.0f) stage_collide(&player->x, &player->z, ground, PLAYER_RADIUS);
+        player->y = ground;
+    } else {
+        int m = motion_find("2-36");   /* 2:0x24 */
+        player->on_ground = 0;
+        player->vy = 0.0f;
+        if (!player->attacking && m >= 0) {
+            /* State 9 as FUN_0021df00 sets it up, run by the air steps (one a 60th, the landing check first). */
+            player->air_kind = AIR_NONE;
+            player->air_col = 4;
+            player->air_yaw = player->yaw;
+            player->air_speed = 0.0f;
+            player->air_drift = 4.25f;
+            player->air_vy = 0.0f;
+            player->air_g = -1.5f;
+            player->air_hold = 0.0f;
+            player->air_accum = 0.0f;
+            player->jump_time = JUMP_CROUCH_FRAMES;
+            player->jump_motion = m;
+            player->jump_frame = 0.0f;
+            player->speed = 0.0f;
+        }
+    }
 }
 
 void player_update(Player *player, FollowCamera *camera, const PlayerInput *input, float dt) {
@@ -435,6 +497,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         player->loco = LOCO_IDLE;
         player->running = 0;
         player->speed = 0.0f;
+        player->lean = 0.0f;
     }
 
     if (input->jump && player->on_ground && !player->attacking &&
@@ -508,8 +571,22 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
                 /* One real game step every 60th of a second, however long this frame was. */
                 player->air_accum += dt * MOTION_FPS / player_step_scale;
                 while (player->air_accum >= 1.0f) {
+                    float floor_y;
                     player->air_accum -= 1.0f;
-                    air_step(player, stick_world, input->jump_held);
+                    /* FUN_00242200, before the step in every air state (FUN_002224a0, FUN_00222700, FUN_00228950):
+                     * falling, and this step would take him to within 10 cm of the floor, he's put on it and lands
+                     * without moving this frame. PS2 (PCSX2 runjump): touchdown with no carry, 6.4 cm sooner. */
+                    if (player->air_vy < 0.0f && floor_at(player->x, player->y, player->z, &floor_y) &&
+                        player->y + player->air_vy * player_step_scale <= floor_y + 10.0f) {
+                        player->y = floor_y;
+                        player->air_accum = 0.0f;
+                        break;
+                    }
+                    {
+                        float before = player->y;
+                        air_step(player, stick_world, input->jump_held);
+                        head_check(player, before);
+                    }
                 }
                 player->vy = (player->y - prev_y) / (dt > 0.0f ? dt : 1.0f / 60.0f);
                 /* From where he started this frame: at 30 FPS a fast fall can pass well below the floor in one. */
@@ -533,9 +610,9 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         if (player->jump_motion >= 0 && !player->on_ground) {
             /* the motion owns the height this frame */
         } else if (player->on_ground) {
-            /* Follow the floor (curbs, slopes); walk off an edge -> fall. */
-            if (has_ground && ground >= player->y - STEP_HEIGHT) player->y = ground;
-            else { player->on_ground = 0; player->vy = 0.0f; }
+            /* Follow the floor (curbs, slopes). Whether he's walked off an edge is decided after the walls have
+             * pushed him back (player_settle): a run along a wall at a drop pokes past it here. */
+            if (has_ground && ground >= player->y - LEDGE_DROP) player->y = ground;
         }
         if (player->jump_motion >= 0 && !player->on_ground) {
             /* height comes from the jump motion: no gravity this frame */

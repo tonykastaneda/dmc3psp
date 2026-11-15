@@ -80,7 +80,7 @@ static struct {
     struct { int active, script, out, last; float frame, weight; } flinch[3];
     Shell shells[SHELL_MAX];
     int sphere_hold_fx, sphere_charge_fx, breath_fx;
-    int landed, landed_heavy;
+    int landed, landed_heavy, landed_kind;
     float landed_x, landed_z, landed_damage;
 } cb;
 
@@ -724,7 +724,9 @@ static void land_attack(const CerberusAttack *attack, const float at[3]) {
     cb.landed_z = at[2];
     cb.landed_damage = attack->damage;
     cb.landed_heavy = attack->kind == 2 || attack->kind == 4 || attack->kind == 5;
+    cb.landed_kind = attack->kind;
 }
+int cerberus_boss_attack_kind(void) { return cb.landed_kind; }
 int cerberus_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *damage) {
     if (!cb.landed) return 0;
     cb.landed = 0;

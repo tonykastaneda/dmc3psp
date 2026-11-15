@@ -644,7 +644,8 @@ Stand-ins and estimates:
 - **Encounters run from the game's scripts**, with Easy and Normal each using their own column.
 - **Enemy health** is the Pride's 6 light hits (chosen by eye), and the others in proportion to their parameter
   blocks' health. Vanguard uses his decoded 3000 base health. Dante's real damage isn't read.
-- **Dante can't die.** His health falls by the attack records' damage and stops at 1.
+- **Dante dies** in real play: at 0 health he's knocked down and stays down, and 150 frames later the mission starts
+  again (a stand-in for the Game Over / Continue screen). Test scenes keep him at 1 unless their script says `death 1`.
 - **Doors** open once a room's fight is over; while it's on, each door shows a red seal (a tinted board, as
   Mission 3's blue one is drawn), fading out when it's done. The game seals only the doors its script locks.
 - **Real-time cutscenes** aren't in, Mission 2's intro among them.

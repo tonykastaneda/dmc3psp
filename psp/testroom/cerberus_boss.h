@@ -22,6 +22,7 @@ void cerberus_boss_clamp_player(float *z);
 void cerberus_boss_push_out(float *x, float *z, float y, float r);
 /* One damage event, cleared by reading it. Damage is the original record's value. */
 int cerberus_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *damage);
+int cerberus_boss_attack_kind(void);   /* the last landed attack's record kind */
 void cerberus_boss_trace(const char *path);
 
 #endif

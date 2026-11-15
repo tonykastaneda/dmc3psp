@@ -153,6 +153,7 @@ static int landed;
 static float landed_x, landed_z;
 static int landed_heavy;
 static float landed_damage = -1.0f;
+static int landed_kind = -1;   /* the attack record's kind (+0x18), -1 unknown */
 static float attack_token;
 static int mortal;
 static int dummy_kind;
@@ -1715,7 +1716,10 @@ static void land_attack(int heavy) {
     landed_z = e->pos[2];
     landed_heavy = heavy;
     landed_damage = -1.0f;
+    landed_kind = -1;
 }
+
+int enemy_attack_kind(int heavy) { return landed_kind >= 0 ? landed_kind : heavy ? 1 : 0; }
 
 /* Bodies, for one on the ground: other grounded enemies shove it, and it stops at Dante. */
 static void keep_apart(float px, float py, float pz, float f) {
@@ -1784,6 +1788,7 @@ static void test_attack(float px, float py, float pz) {
                     const ArAttack *r = &ar_attacks[e->hit_type < 22 ? e->hit_type : 0];
                     land_attack(r->reaction >= 500.0f);
                     landed_damage = r->damage;
+                    landed_kind = r->kind;
                 } else land_attack(e->hit_type == 1);
                 return;
             }
@@ -1819,6 +1824,7 @@ static void update_one(float dt, float px, float py, float pz) {
         if (cerberus_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
             land_attack(heavy);
             landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+            landed_kind = cerberus_boss_attack_kind();
         }
         return;
     }
@@ -1875,6 +1881,7 @@ static void update_one(float dt, float px, float py, float pz) {
         if (vergil_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
             land_attack(heavy);
             landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+            landed_kind = vergil_boss_attack_kind();
         }
         return;
     }

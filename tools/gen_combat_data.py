@@ -269,7 +269,9 @@ def main():
                 after.append(int(tok[5:]))
         gates += [0xFF] * (5 - len(gates))
         after += [0] * (3 - len(after))
-        style = c["style"] if c["type"] == "3" else "0xff"
+        # FUN_00245f10 checks the style [0xd] for style moves and for any row with flag 0x800 (the charged
+        # shots, Gunslinger's).
+        style = c["style"] if c["type"] == "3" or int(c["flags"], 16) & 0x800 else "0xff"
         weapon = "0xff" if c["weapon"] == "-1" else c["weapon"]
         L.append(f"    {{{c['action']}, {c['type']}, {c['category']}, {style}, {weapon}, {c['flags']}, "
                  f"{POSTURE[c['posture']]}, {INPUTS[c['input_text']]}, {c['b_e']}, "
