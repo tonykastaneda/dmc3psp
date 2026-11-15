@@ -53,9 +53,11 @@ The smallest grounded enemy-enemy distance was **95.807 cm**; a preceding
 object census showed a Pride **88 cm** from Dante. Local evidence is
 `analysis/testroom/enemy_ps2_spacing.json`, `enemy_ps2_loaded.png` and
 `enemy_ps2_spacing.png`. The exclusive PCSX2 lock was released immediately.
-The disc's Seven Hells pack also gives its root terrain sphere as radius 50 at
-local y=50 (descriptor 0 in chunks 39/40). That sphere is a different proxy
-from the measured 48 cm body separation radius; this audit retains the latter.
+The disc's Seven Hells pack also gives its root kind-6 sphere as radius 50 at
+local y=50 (descriptor 0 in chunks 39/40). Kind-6 descriptors are hurt shapes;
+they do not establish the native terrain or push radius. This audit retains
+the measured 48 cm body separation radius rather than treating hurt data as
+a newly decoded contact shape.
 
 First correction: Sloth warps retain their original radius and first random
 heading, then try 31 other headings with floor, storey and wall clearance;
@@ -81,6 +83,28 @@ its segment renderer rather than the skinned actor's hidden flag. Direct-room
 tests can use `enemyaudit 2` / `--force-encounters` to bypass item/puzzle holds;
 normal play and `enemyaudit 1` keep those gates. `--eboot` pins a scene or batch
 to a saved executable for reproducible before/after captures.
+
+### Native collision grid coverage
+
+The stage grids formerly used only rendered floor bounds. In room 304 this
+made 752 of 905 native collision triangles unreachable by the runtime grids:
+the grid was 7 x 9 cells around (7600,4400), while the EST enemy spawns lie
+around x=3359..6325, z=1700..2600. Native floor exists at those spawn points
+(for example 291.379 at 4142,1739), but the lookup returned no floor.
+
+`prepare_stage.py` now sizes all three grids from rendered floor **and native
+walls/floors**, with wall-query clearance. If rendered floor is absent, native
+floor is retained before considering a synthetic deck. The build runs
+`tools/audit_stage_grids.py --repair` to regenerate truncated cached stages
+from the player's ISO. This repaired **74 / 143** local stages; all **143 / 143**
+now contain every native collision vertex. The generated assets remain local.
+
+PPSSPP room 304 changed from **1,520 missing-floor reports to zero** across
+600-frame captures; the new run checked 2,990 active-body samples. M1 stayed at
+zero (1,800 samples). Evidence: `enemy_grids_v3_batch_000_599.png`,
+`enemy_grids_v3_batch_000_1199.png`, and `enemy_stage_grids_before/after.json`
+under `analysis/testroom/`. Four stage-grid/edge tests pass. This also restores
+floor lookup for Dante in the tunnel; no `player.c` change was needed.
 
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
