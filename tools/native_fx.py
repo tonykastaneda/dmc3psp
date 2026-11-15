@@ -21,7 +21,7 @@ from prepare_skinned_model import array_lines, c_float, decode_textures, indexed
 from tim2 import decode_picture
 
 ORB_V = (45, 186, 187, 188, 189)
-ORB_E = (185,)
+ORB_E = (185, 235)   # E235: Wall Hike's kick off the wall (FUN_002fd0c0, same bank)
 CERBERUS_V = (
     115, 166, 171, 117, 89, 101, 97, 72, 48, 237, 90, 320, 321, 293, 180, 177, 178, 179, 181, 172, 173, 174,
     126, 691, 118, 150, 151, 78, 66,

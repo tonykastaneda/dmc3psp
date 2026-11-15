@@ -47,7 +47,7 @@
  * lock-on jumps all rise 8 frames after state 4 appears). */
 #define JUMP_CROUCH_FRAMES 8.0f
 #define AIR_HIKE_HOLD_FRAMES 7      /* hangs still while the kick plays, then rises */
-#define ENEMY_STEP_COOLDOWN 30.0f   /* frames; the real one is config +0x2dc, not read yet */
+#define ENEMY_STEP_COOLDOWN 20.0f   /* frames: config +0x2dc, 20 (read over PINE on the PS2, 2026-11-14) */
 #define JUMP_LAND_STOP_FRAMES 6.0f  /* landing with the stick held: stopped, then starts again */
 #define JUMP_LAND_FRAME 52.0f
 #define JUMP_END_FRAME 69.0f
@@ -140,6 +140,9 @@ typedef struct {
      * quickly and it eases back out, so an edge the line to him keeps grazing doesn't make it jump. */
     float free_x, free_z, clip;
     float lift;   /* raised over him when a wall is too close behind to stay in front of it */
+    float fov, roll;   /* vertical FOV and roll, radians (camera.c; 0 = not set: 60 degrees) */
+    float stick_yaw, stick_angle;  /* camera.c: the stick's reference held across a camera cut */
+    int stick_hold;
 } FollowCamera;
 
 typedef struct {
