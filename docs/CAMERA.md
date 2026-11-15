@@ -67,8 +67,8 @@ roll per point at +0x3c0, point count at +0x440.
 1. The zone Dante was in last frame keeps the camera if he's still inside one of its areas.
 2. Otherwise, or against it, the other zones he's inside compete: a battle zone wins while he's in
    combat stance; then the lowest priority number; ties go to the lower index. A zone of higher priority
-   than the kept one takes over only if he's inside its area by a margin (`FUN_002bc990`; the port uses
-   the plain area).
+   than the kept one takes over only if he's inside its area shrunk toward its middle by 60 cm
+   (`FUN_002bc990`: scale (sqrt(area) - 60) / sqrt(area)).
 3. Outside every zone the last camera stays.
 4. On a change, the new zone's transition list is searched for the old zone: if it's there with N frames,
    the old eye, target, FOV and roll are blended out over N frames as `f = (k/N)^2`, k = N-1 .. 0
@@ -157,7 +157,7 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
   FOV swell to 80 on Vergil's flag +0xbb4f, his other rooms (234 `FUN_0051d270`, else `FUN_0051d530`).
   The other bosses use the follow camera until theirs are ported.
 - The PSP has no L2/R2, so the follow camera's manual turn isn't there; SELECT is the camera reset.
-- Approximations: the margin test of step 2 above (plain areas); the spline projection is a search on each
+- Approximations: the spline projection is a search on each
   candidate segment, not the game's polynomial roots (same nearest point); the follow camera's lock-on
   framing; the "battle" zones are never used (their condition, Dante's combat stance, isn't read; the PS2 kept room 002's normal rail with enemies alive); the stage collision the camera sweeps against is
   the port's whole HITS set, not just the `camhit` sets.

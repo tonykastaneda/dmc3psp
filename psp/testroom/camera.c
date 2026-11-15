@@ -580,6 +580,26 @@ static int area_inside(const CamArea *a, const float p[3]) {
     }
     return !(pos && neg);
 }
+/* FUN_002bc990: the area shrunk toward its middle by about 60 cm (scale (sqrt(area) - 60) / sqrt(area)), the
+ * margin a zone needs to take over from the one in use. */
+static int zone_inside_margin(const CamZone *z, const float p[3]) {
+    int i, k;
+    for (i = 0; i < z->area_count; ++i) {
+        CamArea a = cam_areas[z->area_first + i];
+        float cx = 0.0f, cz = 0.0f, area = 0.0f, side, s;
+        for (k = 0; k < 4; ++k) {
+            cx += a.c[k][0] * 0.25f; cz += a.c[k][2] * 0.25f;
+            area += a.c[k][0] * a.c[(k + 1) & 3][2] - a.c[(k + 1) & 3][0] * a.c[k][2];
+        }
+        side = sqrtf(fabsf(area) * 0.5f);
+        if (side <= 60.0f) continue;
+        s = (side - 60.0f) / side;
+        for (k = 0; k < 4; ++k) { a.c[k][0] = cx + (a.c[k][0] - cx) * s; a.c[k][2] = cz + (a.c[k][2] - cz) * s; }
+        if (area_inside(&a, p)) return 1;
+    }
+    return 0;
+}
+
 static int zone_inside(const CamZone *z, const float p[3]) {
     int i;
     for (i = 0; i < z->area_count; ++i) if (area_inside(&cam_areas[z->area_first + i], p)) return 1;
@@ -601,7 +621,7 @@ static int choose_zone(const float p[3]) {
         } else if (z->pri == best) {
             if ((cur < 0 || !zs[cur].battle) && !kept && i <= cur) { cur = i; best = z->pri; }
         } else if (z->pri < best && (cur < 0 || !zs[cur].battle)) {
-            cur = i; best = z->pri;
+            if (best == 0x100 || zone_inside_margin(z, p)) { cur = i; best = z->pri; }
         }
     }
     return cur;
