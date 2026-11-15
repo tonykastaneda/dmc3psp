@@ -24,7 +24,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from moveset_phases import ACTIONS, WEAPON_NAMES
 
-SCRIPTS = ["18:4", "18:5", "18:6", "18:7",   # Twosome Time's other set (+0x3c6d = 1, table 0x595564)
+SCRIPTS = ["18:4", "18:5", "18:6", "18:7",
+           # Dante hit: flinches 1:0 / 1:15 / 1:1, heavy 1:2 / 1:3, getting up 1:7 / 1:9, recovery 1:6, landing 1:14
+           "1:0", "1:15", "1:1", "1:2", "1:3", "1:7", "1:9", "1:6", "1:14",   # Twosome Time's other set (+0x3c6d = 1, table 0x595564)
            "3:3", "3:4", "3:5", "3:6", "3:7", "3:8", "3:9", "3:10", "3:11",
            "3:14", "3:15", "3:16", "3:17", "3:19",
            "13:0", "13:19", "13:13", "13:12", "13:17",

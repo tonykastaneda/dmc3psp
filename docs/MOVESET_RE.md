@@ -86,7 +86,7 @@ had swapped the buttons (Triangle/Circle, Cross/Square): every state has the def
 one stands where the port puts its dummy, the rest far away (an enemy overhead still turns a jump into an Enemy
 Step). Dante's facing is the u16 at `+0x90`. The PS2's zone camera can't be moved, so scripts run where it
 looks the right way ("open" and, for R1, "behind"; the port copies it with spot / faceyaw / camyaw / camlock).
-`tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00).
+`tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00); **138 of 162** on 2026-11-14 18:40 with PS2_INPUT_LAG=1, the standing port dummy and the scorer's dip fix. The rest: the Beowulf saves' drift, the street runs (ramp, trace sampling), Air Trick's rise (the parked enemy's lock point), a jump pressed with the stick on the same frame (the PS2 drops it: `w_aa`), `melee_hit` (the PS2 enemy hits back), Royalguard's strafe between blocks.
 
 Taken from the PS2's code since (the guesses they replaced in brackets):
 - Trickster's dash script by style level, table 0x5911d0 (dash count); no pending press while the dash's gate
@@ -145,7 +145,11 @@ are the PS2's dispatch numbers (`FUN_002213e0`).
   them) aren't packed; 2-16 stands in.
 - **Port**: START opens a debug menu: game speed (Turbo is the default in play; test scenes run at normal
   speed), dummies 0 to 4, stand or attack, animation viewer. Attacking dummies are a stand-in, not the real AI,
-  with one coming in at a time. Dante's hit reactions have no damage, knockback or knockdown yet.
+  with one coming in at a time. Dante's reactions follow FUN_002e8d20 by the attack record's kind: flinches (1:0 / 1:15 / 1:1,
+  heavy 1:2 / 1:3) with their cancel gates, knockdown (1:4 / 1:5, getting up 1:7 / 1:9, quick recovery 1:6), the pop
+  (1:13 / 1:14), the hang (kind 7), and death in real play (docs/MOVESET.md). Low health changes none of his moves: the
+  locomotion handlers (FUN_002217a0, FUN_00221d20, FUN_00221ba0) don't read +0x2ad4. Not ported: hit stop (Dante's
+  attack hit records, chunk 7, aren't decoded; the enemy's comes from the record's +0x2c).
 - **Keyboard**: K cross, L circle, J square, I triangle, WASD stick, Space R1, E melee, Q gun, N Devil
   Trigger, M Start, Right Shift taunt. The pause menu holds Save Data; never send it blind keys.
 
@@ -278,6 +282,16 @@ Known to differ from the game (each one is still to do):
 
 `CPl000Shl00..10` (decomp names) are *shells* (projectiles), not move handlers.
 
+### Motion blending (found 2026-11-14, not ported yet)
+
+`FUN_002500d0`'s last two arguments are the blend mode and frames for the script's first motion (`FUN_00254e80` stores
+them at +0x4e / +0x50; `FUN_00255420` falls back to the script's op-1 bytes 2 / 3 when they're 0xff, and mode 0 forces 0
+frames). Of Dante's requests (0x246000-0x2ea700) 443 pass (0, 0): a hard cut; hit reactions pass mode 1 with 0 frames, also
+a cut. Blends: Combo I 3:3 from `FUN_002645b0` 5 frames, High Time 3:11 3, Prop 13:19 3, Shredder 13:12 / 13:13 3, Nevan's
+strums 6:5-6:10 / 6:33 10, Kalina Ann 21:0 10, taunts 2:0-2:3 5, Cerberus 14:2-14:6 5, Beowulf 7:x 3 or by charge phase,
+1:14 3. The port fades every move start over 6 frames (`FADE_SECONDS`). Several scripts get different blends by the
+handler's branch (Beowulf 7:24 / 7:25 / 7:27-7:29, 17:0 / 17:1 / 17:8 / 17:9, 19:0, 20:3, 6:4, 6:23, 3:32), so porting it
+means following each handler, not a table by script.
 ### Motion request
 
 `FUN_002500d0(float blend, this, bank, index, p5, p6, p7)`:
