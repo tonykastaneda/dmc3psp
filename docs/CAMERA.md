@@ -128,7 +128,8 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 
 ## Checked against the PS2
 
-`tools/ps2_camera.py` (PCSX2, Mission 3, Dante held at a spot) against the port's camera.c at the same spot:
+`tools/ps2_camera.py` (PCSX2, Mission 3, Dante held at a spot) against the port's camera.c at the same spot.
+`python tools/camera_check.py` re-runs these against camera.c on the host in a few seconds:
 
 | room, Dante | PS2 eye / target | port |
 |---|---|---|
