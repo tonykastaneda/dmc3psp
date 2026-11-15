@@ -2102,7 +2102,7 @@ static void body_escape(Enemy *a, float px, float py, float pz) {
     if (worst <= 0.5f) return;
     memcpy(original,a->pos,sizeof(original)); memcpy(best,original,sizeof(best));
     angle = atan2f(a->pos[0]-cx,a->pos[2]-cz);
-    for (ring = 0; ring < 4; ++ring) for (k = 0; k < 32; ++k) {
+    for (ring = 0; ring < 8; ++ring) for (k = 0; k < 32; ++k) {
         float turn = (float)((k+1)/2)*(PI/16)*(k&1 ? 1 : -1);
         float score, moved;
         memcpy(a->pos,original,sizeof(original)); a->floor_y = original_floor;
@@ -2113,7 +2113,7 @@ static void body_escape(Enemy *a, float px, float py, float pz) {
         if (score < best_score-0.001f || (score <= best_score && moved < best_move)) {
             best_score = score; best_move = moved; memcpy(best,a->pos,sizeof(best)); best_floor = a->floor_y;
         }
-        if (best_score < 0.0001f) { ring = 4; break; }
+        if (best_score < 0.0001f) { ring = 8; break; }
     }
     memcpy(a->pos,best,sizeof(best)); a->floor_y = best_floor;
 }
