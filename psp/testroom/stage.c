@@ -346,7 +346,7 @@ int stage_collide(float *x, float *z, float y, float radius) {
     int moved = 0, iteration, h;
     unsigned int k;
     if (!header) return 0;
-    for (iteration = 0; iteration < 3; ++iteration) {
+    for (iteration = 0; iteration < 8; ++iteration) {
         const Cell *cell = grid_cell(hits->wall_grid, *x, *z);
         const unsigned int *indices = grid_indices(hits->wall_grid);
         int pushed = 0;
