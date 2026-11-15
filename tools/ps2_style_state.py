@@ -27,7 +27,9 @@ def press(k, wait, hold=0.12):
     r.focus(); r.press(k, hold); time.sleep(wait)
 
 
-subprocess.run(['powershell', '-Command', 'Get-Process pcsx2-qt -ErrorAction SilentlyContinue | Stop-Process -Force'])
+# Never close a PCSX2 that someone else may be using (orchestration rule): stop if one is open.
+if subprocess.run(['powershell', '-Command', '(Get-Process pcsx2-qt -ErrorAction SilentlyContinue).Count'], capture_output=True, text=True).stdout.strip() not in ('', '0'):
+    sys.exit('a PCSX2 is already running; close yours (by its PID) first')
 time.sleep(2)
 r.start(); time.sleep(28)
 press('cross', 6)
