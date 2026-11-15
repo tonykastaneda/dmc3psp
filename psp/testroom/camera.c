@@ -392,6 +392,80 @@ static void fixed_frame(const CamZone *z, const Player *player) {
     out_roll = rl;
 }
 
+/* ---- Boss cameras (FUN_003204c0). Only Cerberus's (id 3, FUN_004fbdf0) is ported. ---- */
+static int boss_on;
+static float b_pitch, b_yaw, b_raise, b_goal[3];
+static const float cerberus_centre[3] = {2520.0f, 200.0f, 3000.0f};   /* 0x5e0730 */
+
+/* FUN_00321190: the eye d out from the target, turned by pitch then yaw (FUN_0042ebd0 on (0, 0, -d)). */
+static void boss_orbit(const float t[3], float d, float out[3]) {
+    out[0] = t[0] - d * cosf(b_pitch) * sinf(b_yaw);
+    out[1] = t[1] + d * sinf(b_pitch);
+    out[2] = t[2] - d * cosf(b_pitch) * cosf(b_yaw);
+}
+/* FUN_0042ec50: x/z and y each eased by their own factor. */
+static void boss_ease(float cur[3], const float goal[3], float fxz, float fy) {
+    cur[0] = cur[0] * fxz + goal[0] * (1.0f - fxz);
+    cur[2] = cur[2] * fxz + goal[2] * (1.0f - fxz);
+    cur[1] = cur[1] * fy + goal[1] * (1.0f - fy);
+}
+static void boss_target(const Player *player, float t[3]) {
+    t[0] = player->x; t[1] = player->y + 150.0f; t[2] = player->z;   /* FUN_00320a00 */
+}
+/* FUN_00320850: the first frame, 400 out and 3 degrees up, no easing. */
+static void boss_begin(const Player *player) {
+    float t[3];
+    boss_target(player, t);
+    b_pitch = 0.0523599f;
+    b_yaw = atan2f(t[0] - out_eye[0], t[2] - out_eye[2]) + 5.0f * DEG;
+    boss_orbit(t, 400.0f, out_eye);
+    sweep(t, out_eye);
+    copy3(out_target, t);
+    copy3(b_goal, out_eye);
+    b_raise = 0.0f;
+    out_fov = 50.0f * DEG;   /* +0x220 */
+    out_roll = 0.0f;
+    boss_on = 1;
+}
+static void boss_cerberus(const Player *player) {
+    float t[3], e[3], prev[3], dx, dz;
+    copy3(prev, b_goal);
+    boss_target(player, t);
+    if (!player->locked_on) {
+        b_pitch = 4.0f * DEG;
+        b_yaw = atan2f(cerberus_centre[0] - t[0], cerberus_centre[2] - t[2]);
+    } else {
+        /* Turned toward what he's locked on to, only when it's moved well off (15 degrees up/down, 35 round). */
+        float l[3] = {player->target_x, player->target_y - 50.0f, player->target_z + 300.0f}, h, np, ny;
+        if (l[1] < 50.0f) l[1] = 50.0f;
+        h = sqrtf((l[0] - t[0]) * (l[0] - t[0]) + (l[2] - t[2]) * (l[2] - t[2]));
+        np = atan2f(-(l[1] - t[1]), h);
+        ny = atan2f(l[0] - t[0], l[2] - t[2]);
+        if (fabsf(b_pitch - np) >= 0.2617994f) b_pitch = np;
+        if (fabsf(b_yaw - ny) >= 0.61086524f) b_yaw = ny;
+        if (b_pitch < -0.34906584f) b_pitch = -0.34906584f;
+        else if (b_pitch > 0.2617994f) b_pitch = 0.2617994f;
+    }
+    boss_orbit(t, 400.0f, e);
+    /* Blocked: the eye stops at the wall, and both rise by up to 20 (3 a frame). */
+    if (sweep(t, e)) { b_raise += 3.0f; if (b_raise > 20.0f) b_raise = 20.0f; }
+    else { b_raise -= 3.0f; if (b_raise < 0.0f) b_raise = 0.0f; }
+    t[1] += b_raise; e[1] += b_raise;
+    if (dist3(out_eye, t) > 800.0f) {
+        b_pitch = 4.0f * DEG;
+        b_yaw = atan2f(cerberus_centre[0] - t[0], cerberus_centre[2] - t[2]);
+    } else {
+        /* It doesn't come into the middle of the arena. */
+        dx = e[0] - cerberus_centre[0]; dz = e[2] - cerberus_centre[2];
+        if (dx * dx + dz * dz < 800.0f * 800.0f) copy3(e, prev);
+    }
+    copy3(b_goal, e);
+    boss_ease(out_eye, e, 0.9f, 0.9f);
+    boss_ease(out_target, t, 0.9f, 0.9f);
+    if (player->on_ground && out_eye[1] - player->y < 20.0f) out_eye[1] = player->y + 20.0f;
+    out_fov = 50.0f * DEG;
+}
+
 static int area_inside(const CamArea *a, const float p[3]) {
     int i, pos = 0, neg = 0;
     if (p[1] < a->c[0][1] || p[1] > a->c[0][1] + a->height) return 0;
@@ -432,6 +506,23 @@ static int choose_zone(const float p[3]) {
 static void frame(const Player *player, FollowCamera *camera, int reset_pressed) {
     float feet[3] = {player->x, player->y, player->z};
     int next = choose_zone(feet), cut = 0;
+    if (camera_boss == 3) {
+        if (!boss_on) boss_begin(player);
+        boss_cerberus(player);
+        zone = -1; fixed_on = 0; blend_n = 0;
+        camera->x = out_eye[0]; camera->y = out_eye[1]; camera->z = out_eye[2];
+        camera->tx = out_target[0]; camera->ty = out_target[1]; camera->tz = out_target[2];
+        camera->fov = out_fov; camera->roll = 0.0f;
+        camera->yaw = atan2f(camera->tx - camera->x, camera->tz - camera->z);
+        was_on_ground = player->on_ground;
+        return;
+    }
+    if (boss_on) {
+        /* The boss camera hands back (0x61ac1c = 0x80): the follow camera from where its eye is. */
+        boss_on = 0;
+        follow_place(player, atan2f(out_eye[0] - player->x, out_eye[2] - player->z));
+        f_frozen = 0;
+    }
     if (camera_boss) {
         /* The game hands a boss fight to that boss's own camera (FUN_003204c0, 0x61ac1c); until those are
          * ported, the follow camera, taken over from where the eye is. */

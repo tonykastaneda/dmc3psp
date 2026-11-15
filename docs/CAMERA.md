@@ -132,7 +132,11 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 - `camera.c` runs the same zone selection, Pan and Rail cameras, blends, and the follow camera's goals,
   steps, buttons and sphere collision, with the room's values. The PSP's screen is 16:9, the PS2's 4:3:
   the vertical FOV is the game's, so the PSP shows more at the sides.
-- Boss fights (a boss with health left) use the follow camera: the per-boss cameras above aren't ported.
+- Boss cameras: Cerberus's (id 3, `FUN_004fbdf0`) is ported: target 150 over Dante, eye 400 out at 4 degrees,
+  turned away from the arena centre (2520, 200, 3000; data 0x5e0730), or behind Dante toward his lock-on
+  target, re-aimed only past 15/35 degrees (pitch clamped -20..15); blocked, the eye stops at the wall and
+  both rise up to 20; it never comes within 800 of the centre; eased by 0.9 a frame (`FUN_0042ec50`);
+  FOV 50. The other bosses use the follow camera until theirs are ported.
 - The PSP has no L2/R2, so the follow camera's manual turn isn't there; SELECT is the camera reset.
 - Approximations: the margin test of step 2 above (plain areas); the spline projection is a search on each
   candidate segment, not the game's polynomial roots (same nearest point); the follow camera's lock-on
