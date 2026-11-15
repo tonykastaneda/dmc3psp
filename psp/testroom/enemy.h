@@ -83,6 +83,8 @@ void enemy_update(float dt, float px, float py, float pz);
 int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
 /* Original attack-record damage, or -1 for the generic 700/800 fallback. */
 float enemy_attack_damage(void);
+/* The landed attack's record kind (+0x18) where the enemy knows it, else 1 if heavy, 0 if not. */
+int enemy_attack_kind(int heavy);
 /* Boss arena constraints, if one is active. */
 void enemy_clamp_player(float *z);
 /* Draw with the view/projection set, inside an open display list. */

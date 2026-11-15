@@ -60,6 +60,8 @@ typedef enum {
     MOVE_DEVIL_ON,                                /* turning Devil Trigger on: 0:50 */
     MOVE_HIT, MOVE_HIT_HEAVY, MOVE_HIT_AIR,       /* Dante hit: 3-00, 3-02, 3-04 */
     MOVE_HIT_ALT, MOVE_HIT_BACK, MOVE_HIT_HEAVY_BACK, /* 3-15 (the front's other half), 3-01, 3-03 */
+    MOVE_DOWN, MOVE_DOWN_FAR,                     /* knockdown: 1:4 / 1:26 (3-04), 1:5 / 1:27 (3-05) */
+    MOVE_GET_UP, MOVE_GET_UP_FAR, MOVE_RECOVER,   /* 1:7 (3-07), 1:9 (3-09), quick recovery 1:6 (3-06) */
     MOVE_ROLL_LEFT, MOVE_ROLL_RIGHT, MOVE_BACKFLIP,
     /* Every other weapon: phases generated from tools/moveset_phases.py. */
     GEN_MOVE_IDS
@@ -136,6 +138,9 @@ typedef struct {
     int held_tri, held_sq, held_cir;
     float air_accum;
     int hover_done;        /* a hover phase's wait is over */
+    /* Knockdown (FUN_002e9a40): launch speeds, landed yet, a recovery press seen (+0x2868), the far set. */
+    float kd_vy, kd_g, kd_speed, dead_time;
+    int kd_landed, kd_press, kd_far;
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */
@@ -146,6 +151,13 @@ const char *combat_script_key(int script);
 /* An enemy's attack reached Dante, from this point. Returns 0 if he blocked it. */
 int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy);
 int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from_z, int heavy, float damage);
+/* The same with the attack record's kind (+0x18; FUN_002e8d20): 0 flinch, 1 heavy flinch, 2-5 knockdown
+ * (4 and up the far one), 7 launch; any hit in the air knocks him down. */
+int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage);
+/* Set by the game in missions (off in test scenes): health can reach 0, and he stays down. */
+extern int combat_dante_can_die;
+/* Frames he has lain dead, 0 while alive. */
+float combat_dead_frames(const Combat *c);
 void combat_update(Combat *combat, Player *player, const PlayerInput *input, float dt);
 const char *combat_move_name(MoveId move);
 /* Takes the shots fired since the last call; 0 if none. */

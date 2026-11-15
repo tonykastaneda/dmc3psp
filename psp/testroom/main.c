@@ -1779,6 +1779,8 @@ static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the
 /* "cmp": CMP_SCRIPT.TXT's inputs ("button first last" a line), Dante's position each frame
  * to CMP_OUT.TXT, to line up with the same script on the real game (tools/ref_compare.py). */
 static int focus_cmp;
+static int cmp_death;
+static int cmp_hit_frame = -1, cmp_hit_kind, cmp_hit_damage = 500;   /* "hitme f kind damage": hit Dante from 1 m ahead */
 #define CMP_MAX_EVENTS 64
 #define CMP_MAX_FRAMES 18000
 static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
@@ -1870,6 +1872,8 @@ static void cmp_load(void) {
         if (strncmp(line, "frames ", 7) == 0) cmp_frames = atoi(line + 7);
         else if (strncmp(line, "shot ", 5) == 0) { if (cmp_shot_count < 32) cmp_shots[cmp_shot_count++] = atoi(line + 5); }
         else if (strncmp(line, "enemy ", 6) == 0) cmp_enemy_distance = atoi(line + 6);
+        else if (strncmp(line, "hitme ", 6) == 0) sscanf(line + 6, "%d %d %d", &cmp_hit_frame, &cmp_hit_kind, &cmp_hit_damage);
+        else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "faceyaw ", 8) == 0) cmp_face_yaw = atoi(line + 8);
         else if (strncmp(line, "spot ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_spot_x, &cmp_spot_z);
@@ -3959,9 +3963,15 @@ int main(int argc, char *argv[]) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
                 if (combat_player_hit_damage(&combat, &player, from_x, from_z, 0, 1000.0f)) fx_hit_spark(chest);   /* 125's spikes: record 0 of 0x5bbb80 (1000, light) */
             }
+            /* Death only in real play (and scenes that ask for it): test scenes rely on him lasting. After he has
+             * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
+            combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
+            if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
+            if (focus_cmp && frames == cmp_hit_frame)
+                combat_player_hit_kind(&combat, &player, player.x + sinf(player.yaw) * 100.0f, player.z + cosf(player.yaw) * 100.0f, cmp_hit_kind, (float)cmp_hit_damage);
             if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit_damage(&combat, &player, from_x, from_z, heavy, enemy_attack_damage())) {
+                if (combat_player_hit_kind(&combat, &player, from_x, from_z, enemy_attack_kind(heavy), enemy_attack_damage())) {
                     fx_hit_spark(chest);
                     if(focus_cmp)vanguard_note("player_hurt",player.health);
                 } else {

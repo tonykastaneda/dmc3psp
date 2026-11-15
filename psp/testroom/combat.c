@@ -177,6 +177,11 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_HIT_ALT] = {H("3-15"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_BACK] = {H("3-01"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_HIT_HEAVY_BACK] = {H("3-03"), "HIT", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_DOWN] = {H("3-04"), "DOWN", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_DOWN_FAR] = {H("3-05"), "DOWN", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_GET_UP] = {H("3-07"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_GET_UP_FAR] = {H("3-09"), "GET UP", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_RECOVER] = {H("3-06"), "RECOVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_QUICKSILVER] = {S("25:0"), "QUICKSILVER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DOPPELGANGER] = {H("2-58"), "DOPPELGANGER", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_ROLL_LEFT] = {H("2-07"), "ROLL", MOVE_NONE, 0, 0, 0, 0, -1},
@@ -996,6 +1001,100 @@ static int stinger_dash_over(const Combat *c, const Player *player) {
     return 0;
 }
 
+/* ---- Knockdown (FUN_002e9a40), getting up (FUN_002ea540) and the quick recovery (FUN_002ea640) ----------
+ * Launch by the attack's kind from the player config (chunk 9, +0x283c): vertical speed and gravity per frame
+ * (FUN_002e3ef0) and the speed away from the attacker (FUN_002e3f50): kinds 0-2 +0x0 / +0x4 / +0x8, 3 +0xc..,
+ * 4 +0x18.., others +0x24..; on landing that speed is scaled by +0x38 (+0x20c.. for 3-5) and he slides on
+ * (FUN_002e35c0). Script 1:4 (kinds 0-3) / 1:5 (4 and up), window 0 byte 4 (+0x24d5) at motion frames: 1 holds
+ * the pose until the floor (12 / 41), 2 ends the recovery press window (13 / 43), 3 recovers if a face button
+ * was pressed before (or in Trickster; 20 / 50, script 1:6), 4 gets up (60 / 80, script 1:7 / 1:9). */
+static const float knock_launch[4][3] = {{10.4f, -1.2f, 10.0f}, {12.0f, -1.2f, 15.0f}, {10.4f, -0.8f, 6.4f}, {12.4f, -0.8f, 12.0f}};
+static const float knock_flags[2][4] = {{12.0f, 13.0f, 20.0f, 60.0f}, {41.0f, 43.0f, 50.0f, 80.0f}};
+#define KNOCK_LAND_SPEED 0.3f
+/* 1:7 / 1:9 / 1:6 open the cancel gates at these frames (window 1: gates 0, 5, 9, 10). */
+#define GET_UP_FREE 65.0f
+#define GET_UP_FAR_FREE 60.0f
+#define RECOVER_FREE 70.0f
+
+static void start_knockdown(Combat *c, Player *player, int kind) {
+    int set = kind <= 2 ? 0 : kind == 3 ? 1 : kind == 4 ? 2 : 3;
+    c->kd_far = set >= 2;
+    start_move(c, c->kd_far ? MOVE_DOWN_FAR : MOVE_DOWN, 0);
+    c->kd_vy = knock_launch[set][0];
+    c->kd_g = knock_launch[set][1];
+    c->kd_speed = knock_launch[set][2];
+    c->kd_landed = 0;
+    c->kd_press = player->style == STYLE_TRICKSTER;
+    c->air_accum = 0.0f;
+    c->dead_time = 0.0f;
+    player->on_ground = 0;
+    player->attacking = 1;
+}
+
+/* Returns 1 while it owns Dante this frame. */
+static int knockdown_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
+    const float *fl = knock_flags[c->kd_far];
+    const Motion *m = motion_get(c->motion);
+    float back = player->yaw + (float)M_PI, f = dt * MOTION_FPS;
+    int face = input->jump || input->melee || input->gun || input->style_action;
+    float free_at = c->move == MOVE_GET_UP ? GET_UP_FREE : c->move == MOVE_GET_UP_FAR ? GET_UP_FAR_FREE : RECOVER_FREE;
+    if (c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR || c->move == MOVE_RECOVER) {
+        /* From the gates' frame a move or the stick takes over; the rest plays out as a normal move. */
+        if (c->frame >= free_at && (face || stick_pushed(input))) { end_move(c, player); return 0; }
+        return 0;
+    }
+    if (c->move != MOVE_DOWN && c->move != MOVE_DOWN_FAR) return 0;
+    player->attacking = 1;
+    c->phase_time += dt;
+    if (!c->kd_landed) {
+        float floor_y = 0.0f, start_y = player->y, k = player_step_scale;
+        c->frame += f;
+        if (c->frame > fl[0]) c->frame = fl[0];
+        if (face) c->kd_press = 1;
+        player->on_ground = 0;
+        c->air_accum += f / k;
+        while (c->air_accum >= 1.0f) {   /* FUN_002e3a60, one game step at a time */
+            c->air_accum -= 1.0f;
+            player->x += sinf(back) * c->kd_speed * k;
+            player->z += cosf(back) * c->kd_speed * k;
+            player->y += c->kd_vy * k;
+            c->kd_vy += c->kd_g * k;
+            if (c->kd_vy < -70.0f) c->kd_vy = -70.0f;
+        }
+        if (player_floor_fn && !player_floor_fn(player->x, start_y, player->z, 45.0f, &floor_y)) floor_y = -1.0e9f;
+        if (player->y < -5000.0f) { end_move(c, player); return 1; }
+        if (c->kd_vy <= 0.0f && player->y <= floor_y) {
+            player->y = floor_y;
+            player->vy = 0.0f;
+            player->on_ground = 1;
+            c->kd_landed = 1;
+            c->kd_speed *= KNOCK_LAND_SPEED;
+        }
+        return 1;
+    }
+    {
+        float was = c->frame;
+        player->on_ground = 1;
+        c->frame += f;
+        if (c->frame < fl[3]) {   /* the slide along the floor (FUN_002e35c0) */
+            player->x += sinf(back) * c->kd_speed * f;
+            player->z += cosf(back) * c->kd_speed * f;
+        }
+        if (player->health <= 0.0f) {
+            /* Dead: no recovery and no getting up; he lies at the end of the motion. */
+            if (c->frame > m->end_frame) c->frame = m->end_frame;
+            c->dead_time += f;
+            return 1;
+        }
+        if (was < fl[2] && c->frame >= fl[2] && c->kd_press) { start_move(c, MOVE_RECOVER, 0); return 1; }
+        if (c->frame >= fl[3] || c->frame >= m->end_frame) {
+            start_move(c, c->kd_far ? MOVE_GET_UP_FAR : MOVE_GET_UP, 0);
+            return 1;
+        }
+    }
+    return 1;
+}
+
 /* Twosome Time with R1 goes the stick's way against his facing (FUN_0026b0d0, table 0x595550): back 18:2,
  * left 18:3, right 18:1 (the generated actions 251 / 252 / 250); forward or neutral stays 18:0. */
 static MoveId twosome_move(const Player *player, const PlayerInput *input, MoveId first) {
@@ -1022,6 +1121,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     if (c->fade_weight > 0.0f) c->fade_weight -= dt / FADE_SECONDS;
     if (c->fade_weight < 0.0f) c->fade_weight = 0.0f;
     if (c->sword_out > 0.0f) c->sword_out -= dt;
+    if (knockdown_update(c, player, input, dt)) return;
 
     /* Free cancels: gate 15 hands control back to movement, gate 8 to a jump. */
     if (c->move != MOVE_NONE && c->script >= 0) {
@@ -1374,35 +1474,52 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
 }
 
-int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from_z, int heavy, float damage) {
+int combat_dante_can_die;
+
+float combat_dead_frames(const Combat *c) { return c->dead_time; }
+
+/* FUN_002e8d20 picks the reaction class from the attack record's kind (+0x18): kind 0 flinches (class 1), 1 heavy
+ * flinch (2), 2-5 knockdown (3, 5), 6 class 6 (1:13 / 1:14, not ported: a heavy flinch here), 7 the launch (4);
+ * in the air every kind but 6 knocks him down, and so does a hit that takes his health to 0. */
+int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage) {
     float to_attacker;
-    int front;
+    int front, down;
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
-        c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK) return 1;
+        c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK ||
+        c->move == MOVE_DOWN || c->move == MOVE_DOWN_FAR || c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR ||
+        c->move == MOVE_RECOVER || player->health <= 0.0f) return 1;
     /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
-    if (damage < 0.0f) damage = heavy ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
+    if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
     player->health -= damage;
-    if (player->health < 1.0f) player->health = 1.0f;
-    /* FUN_002e96a0 (light) / FUN_002e98d0 (heavy): hit from within 90 degrees of his facing (FUN_002e2be0) he
-     * turns to the attacker and plays 1:0 or, half the time, 1:15 (heavy 1:2); from behind he turns away from it
-     * and plays 1:1 (heavy 1:3). */
+    if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
     to_attacker = atan2f(from_x - player->x, from_z - player->z);
     front = fabsf(wrap_pi(to_attacker - player->yaw)) <= (float)M_PI * 0.5f;
-    player->yaw = front ? to_attacker : wrap_pi(to_attacker + (float)M_PI);
     player->air_kind = AIR_NONE;
     player->jump_motion = -1;
     c->air = 0;
     c->base_y = player->y;
-    start_move(c, !player->on_ground ? MOVE_HIT_AIR
-                  : heavy ? (front ? MOVE_HIT_HEAVY : MOVE_HIT_HEAVY_BACK)
+    down = (kind >= 2 && kind <= 5) || kind == 7 || (!player->on_ground && kind != 6) || player->health <= 0.0f;
+    if (down) {
+        /* FUN_002e9a40 state 0: he faces the attacker and flies away from it. */
+        player->yaw = to_attacker;
+        start_knockdown(c, player, kind == 7 ? 0 : kind);
+        return 1;
+    }
+    /* FUN_002e96a0 (light) / FUN_002e98d0 (heavy): hit from within 90 degrees of his facing (FUN_002e2be0) he
+     * turns to the attacker and plays 1:0 or, half the time, 1:15 (heavy 1:2); from behind he turns away from it
+     * and plays 1:1 (heavy 1:3). */
+    player->yaw = front ? to_attacker : wrap_pi(to_attacker + (float)M_PI);
+    start_move(c, kind >= 1 ? (front ? MOVE_HIT_HEAVY : MOVE_HIT_HEAVY_BACK)
                   : !front ? MOVE_HIT_BACK : (rand() % 10 < 5 ? MOVE_HIT_ALT : MOVE_HIT), 0);
     return 1;
+}
+int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from_z, int heavy, float damage) {
+    return combat_player_hit_kind(c, player, from_x, from_z, heavy ? 1 : 0, damage);
 }
 int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int heavy) {
     return combat_player_hit_damage(c, player, from_x, from_z, heavy, -1.0f);
 }
-
 const char *combat_script_key(int script) {
     return script >= 0 ? script_data[script].key : "-";
 }
