@@ -127,6 +127,20 @@ uses that camera instead of the zones, and 0x61ac1c picks the boss's own camera 
 behind the target, 3 degrees up. When the boss camera is done it sets 0x61ac1c to 0x80, which makes
 CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 
+## Checked against the PS2
+
+`tools/ps2_camera.py` (PCSX2, Mission 3, Dante held at a spot) against the port's camera.c at the same spot:
+
+| room, Dante | PS2 eye / target | port |
+|---|---|---|
+| 002 (1700, 3500), rail zone 1 | 2573.1 300.4 3826.0 / 1700 +134 3500 | 2573.3 300.4 3826.7 / same |
+| 002 (2500, 4500), rail zone 0 | 2469.6 104.4 5070.4 / +180 | 2469.6 104.4 5070.4 / +180 |
+| 002 (2500, 2600), rail zone 0 | 2566.8 180.7 3133.9 | 2566.8 180.7 3133.9 |
+| 003 (2500, 2500), rail, FOV 60 | 2867.9 207.7 2106.7 | 2867.9 207.7 2106.7 |
+| 003 (2300, 1600), pan zone 5, FOV 55 | 2382.2 84.8 2053.7 / 2332 132 1752 | same |
+| 003 (2798, 2919), rail | 2786.7 196.2 2308.6 | 2786.8 196.2 2308.4 |
+| 001 street, follow | 443 out, 115 up from Dante + 140 | 445 out, 115 up |
+
 ## The port
 
 - `camera.c` runs the same zone selection, Pan and Rail cameras, blends, and the follow camera's goals,
@@ -145,5 +159,5 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 - The PSP has no L2/R2, so the follow camera's manual turn isn't there; SELECT is the camera reset.
 - Approximations: the margin test of step 2 above (plain areas); the spline projection is a search on each
   candidate segment, not the game's polynomial roots (same nearest point); the follow camera's lock-on
-  framing; "combat stance" is "enemies alive in the room"; the stage collision the camera sweeps against is
+  framing; the "battle" zones are never used (their condition, Dante's combat stance, isn't read; the PS2 kept room 002's normal rail with enemies alive); the stage collision the camera sweeps against is
   the port's whole HITS set, not just the `camhit` sets.

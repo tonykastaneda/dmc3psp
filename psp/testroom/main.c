@@ -3961,7 +3961,9 @@ int main(int argc, char *argv[]) {
         prev_z = player.z;
         {
             float was_x = sweep_x, was_z = sweep_z;
-            camera_battle = mission_mode && enemy_alive_count() > 0;   /* the rooms' battle cameras (camera.c) */
+            /* The rooms' "battle" zones need Dante's combat stance (player +0x28ae/+0x28a9), not read yet: on the PS2,
+             * M3's first room kept its normal rail with enemies alive, so they stay off. */
+            camera_battle = 0;
             {   /* The boss's own camera (camera.c): Cerberus's in 006 (id 3); others not ported yet (-1). */
                 float bh, bm, at[1][3];
                 const char *f = mission_room >= 0 ? rooms[mission_room].file : "";
