@@ -7,11 +7,13 @@ violations OR missing/incomplete evidence, never a silent pass.
 import argparse
 from collections import Counter
 import csv
+import hashlib
 import io
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -27,7 +29,7 @@ def encounters(header):
 
 def summarize(path):
     data = path.read_text()
-    match = re.search(r"# frames=(\d+) bodies=(\d+) violations=(\d+)", data)
+    match = re.search(r"# frames=(\d+) bodies=(\d+) violations=(\d+)(?: expected=(\d+))?", data)
     if not match:
         raise ValueError("audit footer missing: run did not finish")
     counts = Counter()
@@ -41,8 +43,15 @@ def summarize(path):
         depths[row["violation"]] = max(depths.get(row["violation"], 0), float(row["depth"]))
     if sum(counts.values()) != int(match[3]):
         raise ValueError("audit row count differs from footer")
-    return dict(frames=int(match[1]), bodies=int(match[2]), violations=int(match[3]),
-                counts=dict(counts), max_depth=depths, expected=dict(expected))
+    if match[4] is not None and sum(expected.values()) != int(match[4]):
+        raise ValueError("authored crossing row count differs from footer")
+    result = dict(frames=int(match[1]), bodies=int(match[2]), violations=int(match[3]),
+                  counts=dict(counts), max_depth=depths, expected=dict(expected))
+    progress = re.findall(r"script_at=(-?\d+) script_total=(-?\d+)", data)
+    if progress:
+        at, total = map(int, progress[-1])
+        result.update(script_at=at, script_total=total, script_complete=at >= total >= 0)
+    return result
 
 
 def main():
@@ -64,10 +73,21 @@ def main():
     out = ROOT / "analysis" / "testroom" / ("enemy_audit_" + args.label)
     out.mkdir(parents=True, exist_ok=True)
     cases = encounters((ROOT / "build/testroom/generated/rooms_runtime.h").read_text())
+    cases = [(m, r) for m, r in cases if (not args.mission or m in args.mission) and
+             (args.room is None or r == args.room)]
+    source = (args.eboot or ROOT / "build/testroom/EBOOT.PBP").resolve()
+    metadata = dict(eboot_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+                    frames=args.frames, stress=args.stress, force_encounters=args.force_encounters,
+                    lines=args.line, cases=cases)
+    meta_path = out / "metadata.json"
+    if args.resume and (not meta_path.exists() or
+                       json.loads(meta_path.read_text()) != json.loads(json.dumps(metadata))):
+        ap.error("resume needs matching executable and test metadata; use a new label")
+    meta_path.write_text(json.dumps(metadata, indent=2))
+    executable = out / "EBOOT.PBP"
+    shutil.copy2(source, executable)
     results = []
     for mission, room in cases:
-        if args.mission and mission not in args.mission or args.room is not None and room != args.room:
-            continue
         name = f"m{mission:02d}_r{room:03d}"
         dest = out / (name + ".csv")
         result = dict(mission=mission, room=room)
@@ -78,14 +98,13 @@ def main():
                 cmd = [sys.executable, str(ROOT / "tools/ppsspp_scene.py"),
                        "enemy_" + args.label + "_" + name, "--mission", str(mission),
                        "--room", str(room), "--frames", str(args.frames),
+                       "--eboot", str(executable),
                        "--shot", str(args.frames - 1), "--line", "enemyaudit " + ("2" if args.force_encounters else "1"),
                        "--line", "fastwaves 1"]
                 if args.stress:
                     cmd += ["--line", "enemystress 45"]
                 for line in args.line:
                     cmd += ["--line", line]
-                if args.eboot:
-                    cmd += ["--eboot", str(args.eboot.resolve())]
                 log = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
                 (out / (name + ".log")).write_text(log.stdout + log.stderr)
                 if log.returncode:
@@ -100,7 +119,7 @@ def main():
         results.append(result)
         (out / "results.json").write_text(json.dumps(results, indent=2))
         print(name, json.dumps(result), flush=True)
-    return int(any(r["status"] in ("FAIL", "ERROR") for r in results))
+    return int(any(r["status"] in ("FAIL", "ERROR", "EMPTY") for r in results))
 
 
 if __name__ == "__main__":

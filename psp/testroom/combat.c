@@ -320,6 +320,7 @@ void combat_reset(Combat *c) {
 
 static void end_move(Combat *c, Player *player) {
     c->last_move_for_end = c->move;
+    c->fade_seconds = FADE_SECONDS;   /* back to locomotion: player.c's own blends (not traced here) */
     c->fade_motion = c->motion;
     c->fade_frame = c->frame;
     c->fade_weight = 1.0f;
@@ -379,6 +380,10 @@ static void start_move(Combat *c, MoveId move, int action) {
     c->script = script_of[move];
     c->script_bank = c->script >= 0 ? atoi(script_data[c->script].key) : -1;
     c->place_state = 1;
+    /* The PS2's blend into this script (FUN_002500d0 -> FUN_00255420, tools/gen_combat_data.py start_blends): most
+     * of Dante's moves cut, some blend 3, 5 or 10 frames; scripts with no known request keep FADE_SECONDS. */
+    c->fade_seconds = c->script >= 0 && script_data[c->script].blend >= 0 ? script_data[c->script].blend / MOTION_FPS : FADE_SECONDS;
+    if (c->fade_seconds <= 0.0f) c->fade_weight = 0.0f;
     m = motion_get(c->motion);
     /* Scripts start at their op-1 frame, or the motion's own first frame. */
     c->frame = c->script >= 0 && script_data[c->script].start >= 0 ? (float)script_data[c->script].start
@@ -1256,7 +1261,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     c->held_sq = input->gun_held;
     c->held_cir = input->style_held;
 
-    if (c->fade_weight > 0.0f) c->fade_weight -= dt / FADE_SECONDS;
+    if (c->fade_weight > 0.0f) c->fade_weight -= c->fade_seconds > 0.0f ? dt / c->fade_seconds : 1.0f;
     if (c->fade_weight < 0.0f) c->fade_weight = 0.0f;
     if (c->sword_out > 0.0f) c->sword_out -= dt;
     if (knockdown_update(c, player, input, dt)) return;

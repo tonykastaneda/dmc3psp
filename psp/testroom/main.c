@@ -2336,8 +2336,8 @@ static int on_bridge(float x, float z, float y);
 static void push_from_bodies(float *x, float *z, float y);
 /* The frame's last word on where he stands: bodies push him, then the walls push him back, and the walls won, so
  * wedged between a wall and an enemy that can't give way (M6 room 126: a Pride pinned in the north doorway's pocket)
- * he stood up to 4.6 cm inside it. Bodies and walls take turns until neither moves him; if a body still overlaps him
- * he keeps the last spot that was clear of both, as solid bodies would leave him. */
+ * he stood up to 4.6 cm inside it. Bodies and walls take turns until neither moves him; if a body or a wall still
+ * overlaps him he keeps the last spot that was clear of both, as solid bodies would leave him. */
 static float settle_clear_x, settle_clear_z, settle_clear_y = -1.0e9f;
 static void settle_bodies_and_walls(Player *player) {
     int k;
@@ -2358,8 +2358,12 @@ static void settle_bodies_and_walls(Player *player) {
     }
     tx = player->x; tz = player->z;
     push_from_bodies(&tx, &tz, player->y);
+    /* A notch narrower than he is (between the ribs of M16 room 106's pillars, a corner of M14 room 237) has no spot
+     * clear of both its faces either: the passes swap between them and leave him 4-5 cm in one. Same answer. */
+    if (stage_loaded() && !on_bridge(player->x, player->z, player->y) && fabsf(tx - player->x) + fabsf(tz - player->z) <= 0.5f)
+        stage_collide(&tx, &tz, player->y, PLAYER_RADIUS - 1.0f);
     if (fabsf(tx - player->x) + fabsf(tz - player->z) > 0.5f) {
-        /* Still inside a body: back to the last clear spot, when it's this room's and near (not a warp). */
+        /* Still inside a body or a notch: back to the last clear spot, when it's this room's and near (not a warp). */
         float dx = player->x - settle_clear_x, dz = player->z - settle_clear_z;
         if (dx * dx + dz * dz < 150.0f * 150.0f && fabsf(player->y - settle_clear_y) < 100.0f) {
             player->x = settle_clear_x; player->z = settle_clear_z;
@@ -3265,6 +3269,10 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }
     if (!held) room_set_cleared(mission_room);
     if (!held && mission_choice.mission == 18) m18_cleared(room_number(mission_room));
+    /* A direct-room audit must finish its requested samples after the last
+     * wave dies, without entering the blocking Mission Clear menu or taking
+     * a scripted exit. Ordinary audit mode still exercises normal routes. */
+    if (focus_cmp && cmp_enemy_audit == 2) return 0;
     if (mission_choice.mission == 12) {
         int next = 0, start = 0;
         if (m12_room_done(room_number(mission_room), &next, &start)) {   /* mission12.c: the ride's end */
@@ -4113,9 +4121,13 @@ int main(int argc, char *argv[]) {
         player_settle(&player, stage_loaded() && !on_bridge(player.x, player.z, player.y));
         if (dummy_ready) settle_bodies_and_walls(&player);
         if (dummy_ready) enemy_finish_collisions(player.x, player.y, player.z);
-        if (focus_cmp && cmp_enemy_audit) enemy_audit_frame(mission_choice.mission,
-            mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
-            frames, player.x, player.y, player.z);
+        if (focus_cmp && cmp_enemy_audit) {
+            enemy_audit_frame(mission_choice.mission,
+                mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
+                frames, player.x, player.y, player.z);
+            if(mission_mode && mission_room != ROOM_NONE)
+                enemy_audit_script(script_at,missions[mission_choice.mission-1].scripts[mission_choice.difficulty&1][mission_room].count);
+        }
         if (input.style >= 0) style_switched = 1;
         if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
             /* Dante's actual travel against the stick's on-screen direction. */
