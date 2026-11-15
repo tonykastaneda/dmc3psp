@@ -140,6 +140,7 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 | 003 (2300, 1600), pan zone 5, FOV 55 | 2382.2 84.8 2053.7 / 2332 132 1752 | same |
 | 003 (2798, 2919), rail | 2786.7 196.2 2308.6 | 2786.8 196.2 2308.4 |
 | 001 street, follow | 443 out, 115 up from Dante + 140 | 445 out, 115 up |
+| 300 (1614, 3650), rail zone 13, roll 0.051 | 2140.5 137.7 3929.0 | 2140.6 137.7 3929.0 |
 
 ## The port
 
@@ -147,7 +148,9 @@ CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
   steps, buttons and sphere collision, with the room's values. The PSP's screen is 16:9, the PS2's 4:3:
   the vertical FOV is the game's, so the PSP shows more at the sides.
 - Roll (rail points' and pan cameras' +0x64, up to 10 degrees, mostly inside Leviathan) turns the view about
-  its axis (sceGumRotateZ before the look-at). Its direction isn't checked against the PS2 yet.
+  its axis (sceGumRotateZ before the look-at). Checked at Mission 8's start (room 300, rail zone 13, 3 degrees):
+  the PS2's eye 2140.5 137.7 3929.0 and the port's agree, and the picture leans the same way (the opposite sign
+  didn't).
 - Boss cameras: Cerberus's (id 3, `FUN_004fbdf0`) is ported: target 150 over Dante, eye 400 out at 4 degrees,
   turned away from the arena centre (2520, 200, 3000; data 0x5e0730), or behind Dante toward his lock-on
   target, re-aimed only past 15/35 degrees (pitch clamped -20..15); blocked, the eye stops at the wall and
