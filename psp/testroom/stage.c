@@ -372,7 +372,18 @@ int stage_collide(float *x, float *z, float y, float radius) {
                         *x += dx / l * reach; *z += dz / l * reach;
                     }
                 } else {
-                    float l = sqrtf(dist2), push = reach - l;
+                    float l = sqrtf(dist2), push = reach - l, d = sqrtf(dist2 + dy * dy);
+                    float nl = sqrtf(t[9] * t[9] + t[10] * t[10] + t[11] * t[11]);
+                    /* On a sloped face (the separation along its normal) a sideways step slides the contact along
+                     * the slope, so the edge's reach falls short and the passes only creep out (Leviathan's walls
+                     * left him 9 cm in). There the step that puts the face r away is (r - d) / sin(slope). */
+                    if (nl > 1e-6f && d > 1e-3f) {
+                        float c = fabsf(dx * t[9] + dy * t[10] + dz * t[11]) / (nl * d), sinp = l / d;
+                        if (c > 0.999f && sinp > 0.2f) {
+                            float face = (radius - d) / sinp;
+                            if (face > push) push = face < radius ? face : radius;
+                        }
+                    }
                     *x += dx / l * push; *z += dz / l * push;
                 }
                 pushed = moved = 1;
