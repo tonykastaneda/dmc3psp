@@ -25,6 +25,7 @@
 
 #include "model_runtime.h"
 #include "player.h"
+#include "camera.h"
 #include "skeleton.h"
 #include "motion.h"
 #include "coat.h"
@@ -1167,14 +1168,20 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGumLoadIdentity();
     /* Near/far chosen for 16-bit depth precision: on the stage the near
      * plane sits at 25 cm (camera is 3 m back) and far covers the backdrop. */
-    if (stage_loaded()) sceGumPerspective(60.0f, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
-    else sceGumPerspective(60.0f, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
+    {
+        /* The game's vertical FOV for this camera (camera.c; 55 degrees on the follow camera by default). */
+        float fov = camera->fov > 0.05f ? camera->fov * 57.29578f : 60.0f;
+        if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
+        else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
+    }
     sceGumMatrixMode(GU_VIEW);
     sceGumLoadIdentity();
     {
         ScePspFVector3 eye = {camera->x, camera->y, camera->z};
         ScePspFVector3 target = {camera->tx, camera->ty, camera->tz};
         ScePspFVector3 up = {0.0f, 1.0f, 0.0f};
+        /* The game's camera roll (rail points, pan cameras: FUN_00131990 turns the view about its axis). */
+        if (camera->roll != 0.0f) sceGumRotateZ(camera->roll);
         sceGumLookAt(&eye, &target, &up);
     }
     sceGumMatrixMode(GU_MODEL);
@@ -2146,6 +2153,9 @@ static void focus_hold(const char *name) {
 static void start_camera(const Player *player, FollowCamera *camera) {
     float best_yaw = camera->yaw, best_score = -1.0f, offset;
     if (!stage_loaded()) return;
+    /* The game's start-up placement for the room (camera.c). */
+    camera_start(player, camera);
+    if (camera->fov > 0.0f) return;
     for (offset = 0.0f; offset < 6.28f; offset += 0.3927f) {
         int side;
         for (side = -1; side <= 1; side += 2) {
@@ -2880,8 +2890,9 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     player->yaw = s[3] * 0.0174533f;
     player->on_ground = 1;
     coat_reset();
+    camera_room(rooms[room].file, start);
     start_camera(player, camera);
-    
+
 }
 
 /* Parts of the room that hurt on touch (room_hazards: 205's and 207's bladed pillars). Touching one hurts once
@@ -3337,6 +3348,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
     }
     player_floor_fn = stage_floor;
     camera_auto_follow = 1;
+    camera_room("ROOM_001.BIN", 0);   /* STAGE.BIN is st001 */
     combat_reset(&combat);
     player_reset(player, camera);
     enemy_set_mortal(0);
@@ -3968,6 +3980,18 @@ int main(int argc, char *argv[]) {
         prev_z = player.z;
         {
             float was_x = sweep_x, was_z = sweep_z;
+            /* The rooms' flight zones (CAM header [6]): Air Raid, Nevan's Devil Trigger flight (player +0x28ae and
+             * +0x28a9, docs/MOVESET_RE.md). */
+            camera_battle = player.air_kind == AIR_RAID;
+            {   /* The boss's own camera (camera.c): Cerberus's in 006 (id 3); others not ported yet (-1). */
+                float bh, bm, at[1][3];
+                const char *f = mission_room >= 0 ? rooms[mission_room].file : "";
+                camera_boss = mission_mode && enemy_boss_health(&bh, &bm) && bh > 0.0f
+                    ? (!strcmp(f, "ROOM_006.BIN") ? 3 : !strcmp(f, "ROOM_144.BIN") ? 9 : -1) : 0;
+                if (camera_boss > 0 && enemy_alive_positions(at, 1) > 0) {
+                    camera_boss_at[0] = at[0][0]; camera_boss_at[1] = at[0][1]; camera_boss_at[2] = at[0][2];
+                }
+            }
             player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame
              * covers more than his radius, and pushing out from the end alone lets him through a wall (Mission
