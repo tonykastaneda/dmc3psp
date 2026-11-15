@@ -44,7 +44,15 @@ Implemented in `psp/testroom/player.c` (`locomotion_step`).
   two, from PCSX2's keyboard path); `PS2_INPUT_LAG=1 tools/ref_compare.py` compares from the press. At that lag
   the run, stop, turnaround, jumps, Air Hike and air drift match to the centimetre; combat's scripted moves start a
   frame late (the dash moves 10 frames after the press, 9 on the PS2).
-- **Not ported**: row 1, 2-51, long idle. The
+- **Blends** (`FUN_00221ba0`, `FUN_00221d20`): the start goes into 2-01 over 3 frames, walk to run into 2-02 over 5.
+  The stop's caller wasn't found (FUN_0021d280 is entered with 0, 5, 9 or 10 elsewhere); the port blends 10.
+- **Idle** (`FUN_0021d280`, `FUN_002217a0`): in a fight (the stage's battle object, +0x20) the equipped melee
+  weapon's ready idle, script 3+w:0; out of one, 0:0, and after 600 frames of it the long idle 2-03. The run's hold
+  before running is 4 frames in both rows of the table (the word after each row).
+- **Landing** (`FUN_0021ddb0`): 0:31 (2-04 from 52) after a takeoff with the stick at rest, else 0:32 (2-05 from 52).
+- **Bank-0 scripts**: indices past 0x1d replay base motions from a frame: the falls 0:36 / 0:37 (2-04 / 2-05 from
+  50), Air Hike's rise 0:38 / 0:39 (2-04 / 2-05 from 7), the wall kick 0:40 (2-09 from 7), Enemy Step 0:33 (2-17).
+- **Not ported**: 2-51, Nevan's ready idle (s26-00 isn't packed), Swordmaster's 13:6. The
   stop transition and its blend length weren't traced; the test room stops at
   once and blends over 10 frames. Its camera follow (rate and angle limit) is
   its own tuning, not taken from the game's camera code.

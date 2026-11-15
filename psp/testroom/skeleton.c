@@ -168,6 +168,8 @@ void anim_reset(AnimState *anim) {
     }
 }
 
+static int battle_idle_motion(void);
+
 void anim_update(AnimState *anim, const Player *player, float dt) {
     const Motion *idle = motion_get(MOTION_IDLE), *walk = motion_get(MOTION_WALK), *run = motion_get(MOTION_RUN);
     int moving = player->speed > 1.0f;
@@ -194,7 +196,7 @@ void anim_update(AnimState *anim, const Player *player, float dt) {
      * starts the long idle 2-03 with no blend, until anything else happens. The game also waits on a global flag
      * (+8 of the stage object, not decoded). */
     if (!moving && player->on_ground && player->jump_motion < 0 && !player->attacking && !player->gun_stance &&
-        !player->locked_on && !player->devil) {
+        !player->locked_on && !player->devil && battle_idle_motion() < 0) {
         anim->idle_time += frames;
         if (!anim->long_idle && anim->idle_time >= 600.0f && motion_find("2-03") >= 0) {
             anim->long_idle = 1;
@@ -271,10 +273,24 @@ static void overlay_upper(MotionSample *upper, const MotionSample *legs) {
     }
 }
 
+int anim_battle_weapon = -1;
+
+/* FUN_0021d280: entering the idle during a fight he stands in the equipped weapon's ready idle (script 3+w:0, the
+ * weapon file's motion 0; PCSX2 shows 0x0300 in the street with its enemies alive); out of one, 0:0 (the plain
+ * idle, after +0x2870's 2 frames). Nevan's (s26-00) isn't packed: she keeps 2-00. Swordmaster's Rebellion variant
+ * (13:6) isn't picked. */
+static int battle_idle_motion(void) {
+    static int cached[5] = {-2, -2, -2, -2, -2};
+    static const char *names[5] = {"rb-00", "s24-00", "s25-00", "s26-00", "s27-00"};
+    if (anim_battle_weapon < 0 || anim_battle_weapon > 4) return -1;
+    if (cached[anim_battle_weapon] == -2) cached[anim_battle_weapon] = motion_find(names[anim_battle_weapon]);
+    return cached[anim_battle_weapon];
+}
+
 static void locomotion_sample(const AnimState *anim, const Combat *combat, MotionSample *out) {
     static MotionSample idle, walk, run, move;
     const MotionSample *moving;
-    int idle_motion = MOTION_IDLE;
+    int idle_motion = battle_idle_motion() >= 0 ? battle_idle_motion() : MOTION_IDLE;
     /* Standing with the sword still drawn: Rebellion's ready stance. */
     if (combat && combat->sword_out > 0.0f && combat_idle_motion() >= 0) idle_motion = combat_idle_motion();
     if (anim->long_idle && idle_motion == MOTION_IDLE) motion_sample(motion_get(motion_find("2-03")), anim->long_frame, &idle);

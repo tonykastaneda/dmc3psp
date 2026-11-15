@@ -2331,6 +2331,44 @@ static int bridge_up(void) {
     return mission_mode && mission_choice.mission == 5 && mission_room == room_112 && item_is(39, 2);
 }
 /* On it: the pit's edge walls (prepare_stage.py puts walls on open floor edges) don't stop him there. */
+static int on_bridge(float x, float z, float y);
+/* Everything with a body that shoves Dante (the enemies, and the missions' own pillars and eyes). */
+static void push_from_bodies(float *x, float *z, float y);
+/* The frame's last word on where he stands: bodies push him, then the walls push him back, and the walls won, so
+ * wedged between a wall and an enemy that can't give way (M6 room 126: a Pride pinned in the north doorway's pocket)
+ * he stood up to 4.6 cm inside it. Bodies and walls take turns until neither moves him; if a body still overlaps him
+ * he keeps the last spot that was clear of both, as solid bodies would leave him. */
+static float settle_clear_x, settle_clear_z, settle_clear_y = -1.0e9f;
+static void settle_bodies_and_walls(Player *player) {
+    int k;
+    float tx, tz;
+    for (k = 0; k < 4; ++k) {
+        float ox = player->x, oz = player->z;
+        push_from_bodies(&player->x, &player->z, player->y);
+        if (stage_loaded() && (player->x != ox || player->z != oz) && !on_bridge(player->x, player->z, player->y)) {
+            float mx = player->x - ox, mz = player->z - oz, cx = ox, cz = oz;
+            int steps = (int)(sqrtf(mx * mx + mz * mz) / 15.0f) + 1, s;
+            for (s = 1; s <= steps; ++s) {
+                cx += mx / (float)steps; cz += mz / (float)steps;
+                if (stage_collide(&cx, &cz, player->y, PLAYER_RADIUS)) player->wall_contact = 1;
+            }
+            player->x = cx; player->z = cz;
+        }
+        if (fabsf(player->x - ox) + fabsf(player->z - oz) < 0.01f) break;
+    }
+    tx = player->x; tz = player->z;
+    push_from_bodies(&tx, &tz, player->y);
+    if (fabsf(tx - player->x) + fabsf(tz - player->z) > 0.5f) {
+        /* Still inside a body: back to the last clear spot, when it's this room's and near (not a warp). */
+        float dx = player->x - settle_clear_x, dz = player->z - settle_clear_z;
+        if (dx * dx + dz * dz < 150.0f * 150.0f && fabsf(player->y - settle_clear_y) < 100.0f) {
+            player->x = settle_clear_x; player->z = settle_clear_z;
+        }
+    } else {
+        settle_clear_x = player->x; settle_clear_z = player->z; settle_clear_y = player->y;
+    }
+}
+
 static int on_bridge(float x, float z, float y) {
     /* Riding one of Mission 7's elevators down its shaft: the floors' edge walls round the shaft don't push him off. */
     if (lift_index >= 0 && room_lifts[lift_index].mission && lift_on && over_lift(&room_lifts[lift_index], x, z)) return 1;
@@ -3423,6 +3461,13 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     }
 }
 
+static void push_from_bodies(float *x, float *z, float y) {
+    enemy_push_out(x, z, y, PLAYER_RADIUS);
+    if (mission_mode && mission_choice.mission == 7) m7_push_out(x, z, y, PLAYER_RADIUS);
+    if (mission_mode && mission_choice.mission == 13) mission13_push_out(x, z, y, PLAYER_RADIUS);
+    if (mission_mode && mission_choice.mission == 8) mission8_push_out(x, z, y, PLAYER_RADIUS);
+}
+
 int main(int argc, char *argv[]) {
     Player player = {.melee_weapon = 0, .gun_weapon = 5};   /* player_reset keeps the weapons */
     FollowCamera camera;
@@ -4066,6 +4111,7 @@ int main(int argc, char *argv[]) {
             }
         }
         player_settle(&player, stage_loaded() && !on_bridge(player.x, player.z, player.y));
+        if (dummy_ready) settle_bodies_and_walls(&player);
         if (dummy_ready) enemy_finish_collisions(player.x, player.y, player.z);
         if (focus_cmp && cmp_enemy_audit) enemy_audit_frame(mission_choice.mission,
             mission_mode && mission_room != ROOM_NONE ? room_number(mission_room) : -1,
@@ -4094,6 +4140,7 @@ int main(int argc, char *argv[]) {
 
         skin_start = sceKernelGetSystemTimeLow();
         if (motions_loaded > 0) {
+            anim_battle_weapon = dummy_ready && enemy_alive_count() > 0 ? player.melee_weapon : -1;
             anim_update(&anim, &player, dt);
             anim_pose(&anim, &player, &combat, &pose, time);
         } else {
