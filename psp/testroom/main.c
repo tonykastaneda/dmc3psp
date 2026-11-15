@@ -1207,6 +1207,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         ScePspFVector3 position = {player->x, player->y, player->z};
         sceGumTranslate(&position);
         sceGumRotateY(player->yaw + MODEL_YAW_OFFSET);
+        if (player->lean != 0.0f) sceGumRotateZ(player->lean);   /* the run's lean into a turn (player+0x88) */
     }
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
@@ -3995,6 +3996,7 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+        player_settle(&player, stage_loaded() && !on_bridge(player.x, player.z, player.y));
         if (input.style >= 0) style_switched = 1;
         if (autotest && frames >= MOVE_TEST_START && frames < 2440 && !player.wall_contact && player.on_ground) {
             /* Dante's actual travel against the stick's on-screen direction. */
