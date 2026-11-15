@@ -37,6 +37,7 @@ static float f_cap_e = -1.0f, f_cap_t = -1.0f, lock_len = 400.0f;
 
 /* The zones. */
 static int zone = -1, zone_prev = -1, fixed_on;
+static int cam_zone = -1;   /* the zone whose camera is up: it stays when Dante is in no zone */
 static float out_eye[3], out_target[3], out_fov, out_roll;
 static float blend_eye[3], blend_target[3], blend_fov, blend_roll;
 static int blend_n, blend_k;
@@ -143,7 +144,7 @@ void camera_room(const char *room_file, int start) {
     fov_follow = room && room->aov > 0.0f ? room->aov * DEG : FOLLOW_FOV;
 }
 
-int camera_zone(void) { return fixed_on ? zone : -1; }
+int camera_zone(void) { return fixed_on ? cam_zone : -1; }
 
 /* FUN_0024e7d0: the follow camera placed at a bearing, the collision sweep starting from the room's nearest
  * safe point (cam_init; the default is (2500, 200, 2500)). */
@@ -169,7 +170,7 @@ static void follow_place(const Player *player, float bearing) {
 void camera_start(const Player *player, FollowCamera *camera) {
     float off = room && room_start >= 0 && room_start < room->start_count ? room->start_yaw[room_start] * DEG : 0.0f;
     follow_place(player, player->yaw + off);
-    zone = zone_prev = -1;
+    zone = zone_prev = cam_zone = -1;
     fixed_on = 0;
     blend_n = 0;
     frame_accum = 0.0f;
@@ -633,7 +634,7 @@ static void frame(const Player *player, FollowCamera *camera, int reset_pressed)
     if (camera_boss == 3 || camera_boss == 9) {
         if (!boss_on) boss_begin(player);
         if (camera_boss == 3) boss_cerberus(player); else boss_vergil(player);
-        zone = -1; fixed_on = 0; blend_n = 0;
+        zone = cam_zone = -1; fixed_on = 0; blend_n = 0;
         camera->x = out_eye[0]; camera->y = out_eye[1]; camera->z = out_eye[2];
         camera->tx = out_target[0]; camera->ty = out_target[1]; camera->tz = out_target[2];
         camera->fov = out_fov; camera->roll = 0.0f;
@@ -653,7 +654,7 @@ static void frame(const Player *player, FollowCamera *camera, int reset_pressed)
         if (fixed_on) follow_place(player, atan2f(out_eye[0] - player->x, out_eye[2] - player->z));
         if (fixed_on) f_frozen = 0;
         fixed_on = 0;
-        zone = -1;
+        zone = cam_zone = -1;
         next = -1;
         blend_n = 0;
     }
@@ -672,18 +673,21 @@ static void frame(const Player *player, FollowCamera *camera, int reset_pressed)
                     blend_fov = out_fov; blend_roll = out_roll;
                     break;
                 }
-            if (z->kind == 0 || z->kind == 1) { fixed_begin(z, player); fixed_on = 1; }
+            if (zone == cam_zone && zone_prev < 0) {
+                /* Back into the zone whose camera is still up (FUN_002bd310: 0x24a1 == 0x24a3): no new set-up. */
+            } else if (z->kind == 0 || z->kind == 1) { fixed_begin(z, player); fixed_on = 1; cam_zone = zone; }
             else {
                 /* Type 4 restarts the follow camera from where the eye is unless it came from another; 5 keeps it. */
                 if (z->kind == 4 && (zone_prev < 0 || zs[zone_prev].kind != 4) && fixed_on)
                     follow_place(player, atan2f(out_eye[0] - player->x, out_eye[2] - player->z));
                 fixed_on = 0;
+                cam_zone = zone;
             }
-            if (!blend_n) cut = 1;
+            if (!blend_n && !(zone == cam_zone && zone_prev < 0)) cut = 1;
         }
         /* Out of every zone: the last camera stays. */
     }
-    if (fixed_on) fixed_frame(&cam_zones[room->zone_first + zone], player);
+    if (fixed_on) fixed_frame(&cam_zones[room->zone_first + cam_zone], player);
     else {
         follow_frame(player, reset_pressed);
         copy3(out_eye, f_eye); copy3(out_target, f_target);
@@ -718,7 +722,7 @@ void camera_update(const Player *player, FollowCamera *camera, int reset_pressed
         f_target[0] = camera->tx; f_target[1] = camera->ty; f_target[2] = camera->tz;
         f_frozen = f_turning = 0;
         fixed_on = 0;
-        zone = -1;
+        zone = cam_zone = -1;
         blend_n = 0;
     }
     frame_accum += dt * 60.0f;

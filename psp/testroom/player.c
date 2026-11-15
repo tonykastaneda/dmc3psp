@@ -649,5 +649,6 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
 
 camera:
     /* The game's camera, room by room: camera.c (docs/CAMERA.md). */
-    camera_update(player, camera, input->snap_camera, dt);
+    /* One camera step a frame: main.c's Devil Trigger speed-up (dt * 1.1) is Dante's, not the camera's. */
+    camera_update(player, camera, input->snap_camera, player->devil ? dt / 1.1f : dt);
 }
