@@ -1537,6 +1537,96 @@ void enemy_trace_write(const char *path) {
 
 void enemy_set_ai_only(int on) { ai_only = on; }
 
+static FILE *audit_file;
+static unsigned int audit_frames, audit_bodies, audit_violations;
+
+void enemy_audit_start(const char *path) {
+    if (audit_file) fclose(audit_file);
+    audit_file = fopen(path, "w");
+    audit_frames = audit_bodies = audit_violations = 0;
+    if (audit_file) fprintf(audit_file, "mission,room,frame,slot,kind,other,violation,depth,x,y,z\n");
+}
+
+static void audit_violation(int mission, int room, int frame, int slot, int other, const char *what, float depth) {
+    const Enemy *a = &enemies[slot];
+    ++audit_violations;
+    fprintf(audit_file, "%d,%d,%d,%d,%d,%d,%s,%.3f,%.3f,%.3f,%.3f\n",
+            mission, room, frame, slot, a->kind, other, what, depth, a->pos[0], a->pos[1], a->pos[2]);
+}
+
+/* Query each authored boss push shape on a copy, so auditing never moves Dante. */
+static float audit_boss_overlap(int kind, float x, float y, float z, float radius) {
+    float cx = x, cz = z;
+    switch (kind) {
+    case ENEMY_CERBERUS: cerberus_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_VERGIL: vergil_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_GERYON: geryon_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_DOPPELGANGER: doppelganger_boss_push_out(&cx, &cz, y, radius); break;
+    case ENEMY_ARKHAM: arkham_boss_push_out(&cx, &cz, y, radius); break;
+    default: return -1;
+    }
+    return sqrtf((cx-x)*(cx-x)+(cz-z)*(cz-z));
+}
+
+void enemy_audit_frame(int mission, int room, int frame, float px, float py, float pz) {
+    int i, j;
+    if (!audit_file || !stage_loaded()) return;
+    ++audit_frames;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        const Enemy *a = &enemies[i];
+        float x, z, g, depth;
+        const StageInfo *s = stage_info();
+        if (!a->active || a->hidden) continue;
+        ++audit_bodies;
+        /* Gigapede's authored path intentionally crosses walls; its in-room segments are tested below. */
+        if (a->kind == ENEMY_GIGAPEDE && !stage_walkable_below(a->pos[0], a->pos[2])) continue;
+        x = a->pos[0]; z = a->pos[2];
+        stage_collide(&x, &z, a->pos[1], ENEMY_RADIUS);
+        depth = sqrtf((x-a->pos[0])*(x-a->pos[0]) + (z-a->pos[2])*(z-a->pos[2]));
+        if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "wall", depth);
+        depth = fmaxf(fmaxf(s->min[0]-a->pos[0], a->pos[0]-s->max[0]),
+                      fmaxf(s->min[2]-a->pos[2], a->pos[2]-s->max[2]));
+        if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "bounds", depth);
+        if (floor_under(a->pos[0], a->pos[1], a->pos[2], &g)) {
+            if (g-a->pos[1] > 0.5f) audit_violation(mission, room, frame, i, -1, "below_floor", g-a->pos[1]);
+            /* Only flag unsupported stationary ground actors; flying, launches and authored leaps are legal. */
+            if (a->kind < ENEMY_KIND_COUNT && a->kind != ENEMY_GOYLE && a->kind != ENEMY_FALLEN &&
+                a->kind != ENEMY_NEVAN && !a->air && a->fall == 0 && a->action != A_LEAP &&
+                a->pos[1]-g > 5.0f)
+                audit_violation(mission, room, frame, i, -1, "floating", a->pos[1]-g);
+        } else audit_violation(mission, room, frame, i, -1, "no_floor", 0);
+        /* Special bosses have posed push shapes rather than this ordinary cylinder. */
+        depth = audit_boss_overlap(a->kind, px, py, pz, PLAYER_RADIUS);
+        if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "dante", depth);
+        if (a->kind == ENEMY_GIGAPEDE || a->kind == ENEMY_LEVIATHAN) continue;
+        for (j = i+1; j < ENEMY_MAX; ++j) {
+            const Enemy *b = &enemies[j];
+            float dx = a->pos[0]-b->pos[0], dz = a->pos[2]-b->pos[2];
+            if (!b->active || b->hidden || b->kind == ENEMY_GIGAPEDE || b->kind == ENEMY_LEVIATHAN) continue;
+            depth = audit_boss_overlap(a->kind, b->pos[0], b->pos[1], b->pos[2], ENEMY_RADIUS);
+            if (depth < 0) depth = audit_boss_overlap(b->kind, a->pos[0], a->pos[1], a->pos[2], ENEMY_RADIUS);
+            if (depth < 0) {
+                if (fabsf(a->pos[1]-b->pos[1]) >= 170) continue;
+                depth = ENEMY_RADIUS*2-sqrtf(dx*dx+dz*dz);
+            }
+            if (depth > 0.5f) audit_violation(mission, room, frame, i, j, "enemy", depth);
+        }
+        if (audit_boss_overlap(a->kind, px, py, pz, PLAYER_RADIUS) < 0 && fabsf(py-a->pos[1]) < 170) {
+            float dx = px-a->pos[0], dz = pz-a->pos[2];
+            depth = ENEMY_RADIUS+PLAYER_RADIUS-sqrtf(dx*dx+dz*dz);
+            if (depth > 0.5f) audit_violation(mission, room, frame, i, -1, "dante", depth);
+        }
+    }
+    fflush(audit_file);
+}
+
+void enemy_audit_finish(void) {
+    if (!audit_file) return;
+    fprintf(audit_file, "# frames=%u bodies=%u violations=%u\n", audit_frames, audit_bodies, audit_violations);
+    fclose(audit_file);
+    audit_file = NULL;
+}
+
 static void land_attack(int heavy) {
     trace_row(heavy ? 2 : 1);
     landed = 1;

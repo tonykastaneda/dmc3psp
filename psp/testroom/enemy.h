@@ -71,6 +71,10 @@ void enemy_set_anim_auto(int on);
 /* For tests: log every change of plan or action. */
 void enemy_trace_start(void);
 void enemy_trace_write(const char *path);
+/* Scene-only collision audit; sample after Dante's body/wall pass. Never changes actors. */
+void enemy_audit_start(const char *path);
+void enemy_audit_frame(int mission, int room, int frame, float px, float py, float pz);
+void enemy_audit_finish(void);
 /* Run them without drawing them. */
 void enemy_set_ai_only(int on);
 /* For the PSP benchmark, to see what costs what. */

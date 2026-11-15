@@ -1,5 +1,52 @@
 # Enemy AI: the Seven Hells (the Hell Pride, CEm000 / CComEm000)
 
+## Collision audit (2026-11-14)
+
+`enemyaudit 1` in a scene writes `ENEMY_AUDIT.CSV` beside its EBOOT. Each
+violation records mission, room, scene frame, enemy slot/kind, other slot,
+category, depth in centimetres and feet position. The footer records checked
+frames, active bodies and violations. Sampling runs after Dante's existing body
+and wall pass. It is observational: it never corrects an actor. The 0.5 cm
+tolerance excludes floating-point contact noise.
+
+Run from a built worktree with its slot set:
+
+```
+$env:DMC3_SLOT='pM'
+python tools/enemy_audit.py --label baseline
+python tools/enemy_audit.py --label stress --stress
+```
+
+The runner discovers Normal encounter rooms from the generated mission scripts,
+including secret-room encounters once, and preserves CSVs, scene logs, screenshots
+and `results.json` under `analysis/testroom/enemy_audit_<label>/`. `--mission`,
+`--room`, `--frames` and `--resume` narrow or resume a run. Missing files, truncated
+captures and mismatched row counts fail. `EMPTY` explicitly means no enemy was
+observed; it does not certify a fight. Scenes accelerate timed spawn waits, but
+retain live-count gates. `enemystress 45` cycles heavy knockback, launch, juggle
+and slam hits through every active enemy every 45 frames, using normal hit handling.
+
+Wall checks query the loaded stage on a copy of the actor. Floor checks use the
+mission floor callback (including platforms). Bounds are the stage's XZ bounds;
+missing floor is checked separately. Airborne reactions, authored leaps and
+flying kinds may be above the floor. Ordinary body checks retain the port's
+measured 48 cm radius and 170 cm vertical overlap interval; these are not newly
+decoded per-kind native shapes. Special bosses use their own existing push
+queries against Dante and ordinary enemies. The Gigapede intentionally crosses
+arena walls on its authored path; offstage segments and hidden teleport phases
+are excluded. This checks the port's collision proxies, not rendered mesh overlap.
+
+Initial measurements before changing movement:
+
+| Mission / room | Frames | Violations | Maximum depth / finding |
+| --- | ---: | ---: | --- |
+| 1 / 000 | 600 + initial frame | 16 | Enemy 62.035 cm; Dante 16.413 cm |
+| 3 / 002 | 600 + initial frame | 0 | 2,995 body samples |
+| 3 / 004 | 600 + initial frame | 1,707 | Enemy 77.649 cm; outside bounds 513.081 cm; 866 missing-floor samples |
+
+These are baseline results, not a claim of zero clipping or complete mission
+coverage. Full regression results follow as fixes are verified.
+
 Ported from the PS2 executable (`SLUS_213.61`) and the enemy's own data. The code is in
 `psp/testroom/enemy.c`. `tools/gen_enemy_ai.py` reads the data off the player's disc at build time, so
 none of it is in the repo.
