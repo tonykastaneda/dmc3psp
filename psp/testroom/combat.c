@@ -9,6 +9,7 @@
 #include "enemy.h"
 #include "leviathan_boss.h"
 #include "stage.h"
+#include "nfx.h"
 
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
@@ -566,7 +567,9 @@ static int wall_ahead(const Player *player, float yaw, float degrees) {
 /* FUN_0024c280: the run along a wall. A ray along the stick from 100 cm up finds a wall within 100 cm that stands
  * near upright, the stick no more than 75 degrees off head-on (config +0xec); he turns along it, the side the stick
  * leans to: facing into the wall + 90 degrees is +0x3c6d 1 (23:9), - 90 is 0 (23:7). The ray pair's spread gives
- * the wall's direction; the game's check that it goes on 300 cm to the side (FUN_0024c570) isn't ported. */
+ * the wall's direction. FUN_0024c570 then wants the wall to go on 300 cm the way he'll run: four rays at the wall
+ * from 75, 150, 225 and 300 cm along it, all hitting (the loop of 4 over 300 / 4 and the raycasts are read from its
+ * MIPS; the rays' length, 120 cm, from the constant beside them, is an inference). */
 #define WALL_RUN_DEG 75.0f
 static float wrap_pi(float a);
 static int wall_side(const Player *player, float yaw, int *side, float *face) {
@@ -589,6 +592,12 @@ static int wall_side(const Player *player, float yaw, int *side, float *face) {
     into = atan2f(-nx, -nz);
     if (wrap_pi(into - yaw) < 0.0f) { *side = 1; *face = wrap_pi(into + (float)M_PI * 0.5f); }
     else { *side = 0; *face = wrap_pi(into - (float)M_PI * 0.5f); }
+    for (k = 1; k <= 4; ++k) {
+        float hit, along = 75.0f * (float)k;
+        float a[3] = {player->x + sinf(*face) * along, player->y + 100.0f, player->z + cosf(*face) * along};
+        float b[3] = {a[0] + sinf(into) * 120.0f, a[1], a[2] + cosf(into) * 120.0f};
+        if (!stage_raycast(a, b, &hit)) return 0;
+    }
     return 1;
 }
 
@@ -610,6 +619,16 @@ static int extra_check(const CommandData *cmd, const Player *player, const Playe
     if (cmd->check == 8) return 1;  /* FUN_0024b510 case 8: only Royal Release 194 needs more (the gauge) */
     h = command_min_height(cmd->check);
     return h >= 0.0f && height_above_floor(player) > h;
+}
+
+/* The next wall motion before this one has ended: they set his height from their root (base + root y), and the
+ * next one's root starts where this one's would have finished, so the base is moved to keep him where he is. */
+static void start_move(Combat *c, MoveId move, int action);
+static void wall_next_early(Combat *c, Player *player, MoveId next) {
+    float root[3];
+    start_move(c, next, 0);
+    motion_root(motion_get(c->motion), c->frame, root);
+    c->base_y = player->y - (root[1] > 0.0f ? root[1] : 0.0f);
 }
 
 static int is_trickster(MoveId move) { return move >= MOVE_TR_DASH && move <= MOVE_TR_WALL_KICK_R; }
@@ -1509,12 +1528,22 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         float to = player->yaw + (c->move == MOVE_TR_WALL_RUN_R ? -0.5f : 0.5f) * (float)M_PI, hit;
         float a[3] = {player->x, player->y + 100.0f, player->z};
         float b[3] = {a[0] + sinf(to) * 150.0f, a[1], a[2] + cosf(to) * 150.0f};
-        if (stage_loaded() && !stage_raycast(a, b, &hit)) { start_move(c, d->next, 0); return; }
+        if (stage_loaded() && !stage_raycast(a, b, &hit)) { wall_next_early(c, player, d->next); return; }
+    }
+    /* Straight up (state 1), the same check ahead of him (FUN_0024c880 with +0x3c6d 2): once the wall has ended
+     * under 100 cm up from his feet he goes to the flip at once, not on up past its top. The game also wants the
+     * hit within 20 degrees of head-on and 300 cm clear overhead; the reach, 100 cm, is the straight check's. */
+    if (c->move == MOVE_TR_WALL_HIKE && c->phase_time * MOTION_FPS > 2.0f) {
+        float a[3] = {player->x, player->y + 100.0f, player->z}, hit;
+        float b[3] = {a[0] + sinf(player->yaw) * 100.0f, a[1], a[2] + cosf(player->yaw) * 100.0f};
+        if (stage_loaded() && !stage_raycast(a, b, &hit)) { wall_next_early(c, player, d->next); return; }
     }
     if ((c->move == MOVE_TR_WALL_KICK_L || c->move == MOVE_TR_WALL_KICK_R) && c->phase_time * MOTION_FPS >= WALL_KICK_FLAG) {
         float away = player->yaw + (c->move == MOVE_TR_WALL_KICK_R ? 0.5f : -0.5f) * (float)M_PI;
+        float at[3] = {player->x + sinf(away) * 5.0f, player->y, player->z + cosf(away) * 5.0f};
         end_move(c, player);
         player_wall_kick(player, away);
+        nfx_spawn_e(NFX_STATIC, 235, at, away, 0);   /* FUN_002fd0c0: E235 5 cm out along the wall's normal */
         return;
     }
 
@@ -1533,7 +1562,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         else {
             int wall_kick = c->move == MOVE_TR_WALL_FLIP;
             end_move(c, player);
-            if (wall_kick) player_wall_kick(player, player->yaw + (float)M_PI);
+            if (wall_kick) {
+                float away = player->yaw + (float)M_PI, at[3] = {player->x + sinf(away) * 5.0f, player->y, player->z + cosf(away) * 5.0f};
+                player_wall_kick(player, away);
+                nfx_spawn_e(NFX_STATIC, 235, at, away, 0);   /* FUN_00227fb0 state 2: FUN_002fd0c0's E235 */
+            }
         }
     }
 }
