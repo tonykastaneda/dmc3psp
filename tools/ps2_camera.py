@@ -16,7 +16,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pcsx2_ref as r
 
-CTRL = 0xEC6EF0
+CTRL = 0xEC6EF0          # where it was on the M2 street; found again by its vtable
+CTRL_VTABLE = 0x604450
 DEFAULT_BUTTONS = [0x1000, 0x4000, 0x2000, 0x8000, 0x10, 0x40, 0x20, 0x80, 4, 1, 0x200, 8, 2, 0x400, 0x100]
 DANTE_VTABLE = 0x602650
 OUT = Path(__file__).resolve().parent.parent / "analysis" / "ref" / "cam"
@@ -57,22 +58,27 @@ def main():
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     # Never stop someone else's emulator: refuse if one is running (the caller holds orchestration/locks/pcsx2.lock).
-    if b"pcsx2-qt" in subprocess.run(["tasklist"], capture_output=True).stdout:
-        sys.exit("PCSX2 is already running; close your own instance first")
-    r.start(); time.sleep(28)
-    press("cross", 6)
-    for _ in range(3):
-        press("start", 5)
-    press("cross", 8); press("cross", 2); press("ldown", 1.5, 0.2); press("cross", 4)   # Load Game (give it time to appear), slot 2
-    press("lleft", 1.0, 0.2); press("cross", 2); press("lleft", 1.0, 0.2)     # save 1, "OK to load?" -> Yes
-    press("cross", 6); press("cross", 6)                          # load, then Mission Select
-    for _ in range(4):
-        press("lup", 0.4, 0.15)
-    for _ in range(20 - args.mission):
-        press("lleft", 0.35, 0.12)
-    press("cross", 14)                                            # Normal: the opening demo
-    press("start", 8)                                             # skip it
-    press("lleft", 1.5, 0.2); press("cross", 15)                        # Mission Start
+    # Mission 0: use the game already running (your own instance, in the room). Otherwise boot and go there; never
+    # stop someone else's emulator (the caller holds orchestration/locks/pcsx2.lock).
+    if args.mission:
+        if b"pcsx2-qt" in subprocess.run(["tasklist"], capture_output=True).stdout:
+            sys.exit("PCSX2 is already running; close your own instance first")
+        r.start(); time.sleep(28)
+        press("cross", 6)
+        for _ in range(3):
+            press("start", 5)
+        # Load: the game first reports slot 1 empty; then slot 2. The d-pad doesn't reach it here: the stick does.
+        press("cross", 8); press("cross", 2); press("ldown", 1.5, 0.2); press("cross", 4)
+        press("lleft", 1.0, 0.2); press("cross", 2); press("lleft", 1.0, 0.2)     # save 1, "OK to load?" -> Yes
+        press("cross", 6); press("cross", 6)                          # load, then Mission Select
+        for _ in range(4):
+            press("lup", 0.4, 0.15)
+        for _ in range(20 - args.mission):
+            press("lleft", 0.35, 0.12)
+        press("cross", 14)                                            # Normal: the opening demo
+        press("start", 8); press("start", 3)                          # skip it: Customize
+        press("lup", 1.0, 0.2); press("cross", 3)                     # its Exit
+        press("lleft", 1.5, 0.2); press("cross", 15)                  # Mission Start
     p = r.Pine()
     dante, t_end = 0, time.time() + 90
     while not dante and time.time() < t_end:
@@ -81,6 +87,11 @@ def main():
         if not dante:
             time.sleep(3)
     print("Dante object", hex(dante))
+    global CTRL
+    ctrls = find_words(p, [CTRL_VTABLE], 0x800000, 0x2000000)
+    if ctrls:
+        CTRL = ctrls[0]
+    print("CCameraCtrl", [hex(a) for a in ctrls])
     for i, v in enumerate(DEFAULT_BUTTONS):
         p.write16(0x6C37DA + 2 * i, v)
     import ps2_enemies
@@ -121,6 +132,7 @@ def main():
     parked = [a for a, _ in ps2_enemies.scan(p)]
     for n, spot in enumerate(args.spot):
         x, z = float(spot[0]), float(spot[1])
+        r.focus()   # PCSX2 pauses without focus
         t_end = time.perf_counter() + args.hold
         while time.perf_counter() < t_end:
             for i, a in enumerate(parked):
