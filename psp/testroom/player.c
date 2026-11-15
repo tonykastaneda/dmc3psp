@@ -396,9 +396,19 @@ static float locomotion_step(Player *player, float stick_yaw, float magnitude, f
 /* FUN_0021fe30 / FUN_0021f470, once the frame's moves and wall pushes are done: on the ground, with no floor within
  * 30 cm below him, he falls (state 9 from FUN_0021df00: no speed, 1.5 cm/frame^2, the stick's drift). */
 void player_settle(Player *player, int walls) {
-    float ground;
+    float ground, above;
+    int near;
     if (!player->on_ground) return;
-    if (floor_at(player->x, player->y, player->z, &ground) && ground >= player->y - LEDGE_DROP) {
+    /* FUN_00242200 looks for the floor from 130 cm over his feet. The port's floor test reaches 45 up, enough for a
+     * walk; a dash up a steep slope (M18 room 400's 58 degree bank, 34-60 cm a frame) outran it, left the slope
+     * over him, found nothing below and dropped him through the hill and out of the level. So before a fall the
+     * game's own reach is tried: a surface up to 130 cm over his feet takes him. */
+    near = floor_at(player->x, player->y, player->z, &ground) && ground >= player->y - LEDGE_DROP;
+    if (!near && floor_at(player->x, player->y + 130.0f - STEP_HEIGHT, player->z, &above) && above > player->y) {
+        ground = above;
+        near = 1;
+    }
+    if (near) {
         /* Up or down a slope the walls meet him at another height: push out again there. */
         if (walls && fabsf(ground - player->y) > 1.0f) stage_collide(&player->x, &player->z, ground, PLAYER_RADIUS);
         player->y = ground;
