@@ -577,7 +577,9 @@ static int kind_max_health(int kind) {
 }
 static int mission_difficulty(void);
 static void enemy_died(int kind, float x, float y, float z) {
-    orbs_burst(x, y, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
+    /* FUN_00366f10: from the body's root + 70, with the floor at the root - 100: 170 cm over his feet. */
+
+    orbs_burst(x, y + 170.0f, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
 }
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
