@@ -84,6 +84,8 @@ SCRIPTS = {
     "p_wallrun": (200, [("wall", 0, 0), ("style0", 2, 3), ("lup", 6, 120), ("lleft", 40, 120), ("cross", 26, 28), ("circle", 56, 58)]),
     "a_wall": (340, [("lup", 6, 330), ("cross", 180, 186), ("circle", 215, 221)]),
     "a_trick": (170, [("r1", 6, 160), ("lup", 20, 60), ("circle", 40, 46), ("enemy", 900, 0)]),
+    # The same 20 m off: both games clamp the warp to 500 across, whatever the port's dummy does meanwhile.
+    "a_trick_far": (170, [("r1", 6, 160), ("lup", 20, 60), ("circle", 40, 46), ("enemy", 2000, 0)]),
     "a_jump": (110, [("cross", 6, 12)]),
     "a_jumpheld": (130, [("cross", 6, 72)]),
     "a_hike": (140, [("cross", 6, 12), ("cross", 41, 47)]),
@@ -211,7 +213,9 @@ def write_port_script(name):
     options = ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps")
     events = [(b, a, c) if b in options or b.startswith("style") else (b, a + PS2_INPUT_LAG, c + PS2_INPUT_LAG)
               for b, a, c in events]
-    text = f"frames {frames}\nspot {int(s['x'])} {int(s['z'])}\nfaceyaw {s['face']}\ncamyaw {s['cam']}\ncamlock 1\n" +"".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
+    # The PS2 run parks its enemy where the port puts the dummy (record_ps2); the port's dummy stands still to match
+    # ("attack 0", PLAN_STAND) instead of walking in, which moved the lock-on target of Stinger and Air Trick.
+    text = f"frames {frames}\nspot {int(s['x'])} {int(s['z'])}\nfaceyaw {s['face']}\ncamyaw {s['cam']}\ncamlock 1\nattack 0\n" +"".join(f"{b} {a}\n" if b in ("shot", "enemy", "melee", "gun", "camyaw", "turbo", "fps") else f"{b} {a} {c}\n" for b, a, c in events)
     (GAME_DIR / "CMP_SCRIPT.TXT").write_text(text, encoding="ascii")
 
 
