@@ -96,6 +96,8 @@ SCRIPTS = {
     "qs": (160, [("style4", 5, 6), ("r1", 18, 26), ("circle", 20, 22), ("shot", 30, 0), ("shot", 70, 0), ("shot", 110, 0)]),
     "dg": (300, [("style5", 5, 6), ("r1", 18, 26), ("circle", 20, 22), ("ldown", 180, 250), ("shot", 170, 0), ("shot", 205, 0), ("shot", 235, 0), ("shot", 260, 0)]),
     "taunt": (200, [("select", 20, 22)]),
+    # Devil Trigger on (L1 on both), a run in it and a swing.
+    "dt": (160, [("l1", 20, 22), ("ldown", 70, 110), ("triangle", 125, 127)]),
     "devil": (130, [("devil", 20, 21), ("shot", 22, 0), ("shot", 40, 0), ("ldown", 45, 75), ("triangle", 85, 87), ("shot", 72, 0), ("shot", 96, 0)]),
     # Trickster: dash, Sky Star (the air dash). Royalguard: block.
     "fxdash": (120, [("style0", 2, 3), ("lup", 10, 100), ("circle", 40, 42),
@@ -207,6 +209,9 @@ def write_port_script(name):
     frames, events = SCRIPTS[name]
     # Option lines: ("shot", frame, 0), ("enemy", cm, 0), ("melee", n, 0), ("gun", n, 0).
     events, s = prepared(events)
+    # Devil Trigger is L1 on the PS2; on the PSP L cycles weapons, and the port's harness takes "l3" (a "devil"
+    # line is its option to keep Devil Trigger on the whole scene).
+    events = [("l3" if b == "l1" else b, a, c) for b, a, c in events]
     # The PS2's keys arrive PS2_INPUT_LAG frames after they're pressed (PCSX2's keyboard path; measured from the
     # first movement of single presses): the port gets them that much later too, so both games see each press
     # at the same point of a move.
