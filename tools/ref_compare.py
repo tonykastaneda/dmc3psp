@@ -155,6 +155,8 @@ SCRIPTS = {
     "roll": (200, [("r1", 10, 120), ("lright", 30, 70), ("cross", 40, 42)]),
     # First melee hits.
     "melee": (200, [("triangle", 20, 22), ("triangle", 45, 47), ("triangle", 70, 72)]),
+    # The same, hitting an enemy 1.6 m ahead: any hit stop shows as a later follow-up than "melee".
+    "melee_hit": (200, [("enemy", 160, 0), ("triangle", 20, 22), ("triangle", 45, 47), ("triangle", 70, 72)]),
     # Rebellion's lock-on moves with the stick really forward / back ("behind" setup: the camera behind him).
     # (r_st / r_ht from the HD scripts push the stick sideways here and give Combo I on both games.)
     "stinger": (150, [("r1", 12, 140), ("lup", 30, 60), ("triangle", 40, 43)]),
