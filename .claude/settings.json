@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python tools/protect_credit.py",
+            "command": "python -c \"import runpy,subprocess;r=subprocess.check_output(['git','rev-parse','--show-toplevel'],text=True).strip();runpy.run_path(r+'/tools/protect_credit.py',run_name='__main__')\"",
             "timeout": 15
           }
         ]
