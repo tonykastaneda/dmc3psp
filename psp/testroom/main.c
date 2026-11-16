@@ -74,6 +74,7 @@ int testroom_frame;
 #include "devil_runtime.h"
 #include "mission6.h"
 #include "needles.h"
+#include "messages.h"
 #include "mission11.h"
 #include "mission14.h"
 #include "mission18.h"
@@ -1045,6 +1046,61 @@ static void door_prompt_draw(void) {
     draw_text(SCR_WIDTH / 2 - 28, SCR_HEIGHT - 40, "O  ENTER");
 }
 
+/* The event scripts' message box (messages.c): a dark band across the bottom of the screen, as the game's
+ * <PS 35 416> on its 640x448 picture, the text in the menus' font; coloured words where the text colours them. */
+static void msg_box_draw(void) {
+    char lines[MSG_LINES][MSG_LINE_CHARS];
+    int n = msg_page(lines), i;
+    float height = 15.0f, widest = 0.0f, top;
+    typedef struct { unsigned int color; float x, y, z; } BoxVertex;
+    BoxVertex *v;
+    if (n <= 0) return;
+    for (i = 0; i < n; ++i) {
+        char plain[MSG_LINE_CHARS];
+        int a = 0, b = 0;
+        while (lines[i][a]) { if (lines[i][a] == 1 && lines[i][a + 1] && lines[i][a + 2] && lines[i][a + 3]) a += 4; else if (lines[i][a] == 1) ++a; else if (lines[i][a] == 2) ++a; else plain[b++] = lines[i][a++]; }
+        plain[b] = 0;
+        if (menu_font_width(height, plain) > widest) widest = menu_font_width(height, plain);
+    }
+    if (widest > 440.0f) height *= 440.0f / widest;
+    top = SCR_HEIGHT - 16.0f - (float)n * (height + 5.0f) - 12.0f;
+    v = sceGuGetMemory(sizeof(BoxVertex) * 2);
+    v[0] = (BoxVertex){0xb0000000u, 12.0f, top, 0.0f};
+    v[1] = (BoxVertex){0xb0000000u, SCR_WIDTH - 12.0f, SCR_HEIGHT - 10.0f, 0.0f};
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, 0, v);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_ALPHA_TEST);
+    for (i = 0; i < n; ++i) {
+        /* Each run of one colour on its own. */
+        const char *p = lines[i];
+        float x = 26.0f, y = top + 8.0f + (float)i * (height + 5.0f);
+        unsigned int color = 0xffffffffu;
+        while (*p) {
+            char run[MSG_LINE_CHARS];
+            int k = 0;
+            if (*p == 1 && p[1] && p[2] && p[3]) {
+                unsigned int r = (unsigned int)(p[1] - 1) * 2u, g = (unsigned int)(p[2] - 1) * 2u, b = (unsigned int)(p[3] - 1) * 2u;
+                r = r > 255u ? 255u : r; g = g > 255u ? 255u : g; b = b > 255u ? 255u : b;
+                color = 0xff000000u | b << 16 | g << 8 | r;
+                p += 4; continue;
+            }
+            if (*p == 2) { color = 0xffffffffu; ++p; continue; }
+            if (*p == 1) { ++p; continue; }   /* a cut-off colour code */
+            while (*p && *p != 1 && *p != 2) run[k++] = *p++;
+            run[k] = 0;
+            menu_font_draw(x, y, height, run, color);
+            x += menu_font_width(height, run);
+        }
+    }
+    sceGuDisable(GU_BLEND);
+    sceGuEnable(GU_DEPTH_TEST);
+}
+
 /* A weapon or style just picked up: its name, for a few seconds (as Mission 6's Essences). */
 static const char *pickup_caption;
 static float pickup_caption_time;
@@ -1070,6 +1126,7 @@ static void caption_draw(void) {
         menu_font_draw(SCR_WIDTH / 2 - menu_font_width(22.0f, clock) * 0.5f, 10, 22.0f, clock, urgent ? 0xff3030ffu : 0xffffffffu);
         sceGuDisable(GU_BLEND);
     }
+    msg_box_draw();
     if (!text) return;
     sceGuDisable(GU_DEPTH_TEST);
     sceGuDisable(GU_LIGHTING);
@@ -2333,6 +2390,7 @@ static void items_reset(int mission) {
     for (i = 0; i < cmp_item_count; ++i) if (cmp_item[i][0] >= 0 && cmp_item[i][0] < ITEM_ID_MAX) item_state[cmp_item[i][0]] = (unsigned char)cmp_item[i][1];
 }
 static int item_is(int id, int state) { return id >= 0 && id < ITEM_ID_MAX && item_state[id] == state; }
+static int msg_item_got(int id) { return item_is(id, 1); }   /* messages.c asks */
 /* Inside an EVE area: its four corners (either winding), and from its floor up its height (FUN_001c1510). */
 static int item_area_inside(const RoomItemUse *u, float x, float y, float z) {
     int k, pos = 0, neg = 0;
@@ -2961,6 +3019,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     if (mission_mode && mission_choice.mission == 6 && m6_enter(room_number(room))) script_at = 0;   /* mission6.c */
     /* The spike traps (needles.c): Mission 6's 125 until its Essence is taken, Mission 17's 131 once a mission (its
      * flag 1), Secret Mission 11's 610 each time it's entered. */
+    msg_enter(mission_mode ? mission_choice.mission : 0, room_number(room));
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
@@ -3295,6 +3354,11 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (examine) { float at[3] = {player->x, player->y + 100.0f, player->z}; item_state[u->item] = 2; item_opens_apply(); fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE; }
         }
     }
+    {
+        /* The event scripts' messages (messages.c): examine texts and the like, in their text box. */
+        MsgEnv env = {player->x, player->y, player->z, (pressed & PSP_CTRL_CIRCLE) != 0, enemy_alive_count(), msg_item_got};
+        if (msg_update(dt, pressed, &env)) pressed &= ~(PSP_CTRL_CIRCLE | PSP_CTRL_CROSS);
+    }
     if (info->goal_room == mission_room && room_is_cleared(info->goal_after) && done && enemy_alive_count() == 0) {
         /* The mission's item: walk up to it and press O. */
         float gx = player->x - info->goal[0], gz = player->z - info->goal[2];
@@ -3528,6 +3592,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     if (choice->mission == 18) m18_reset();
     sm_reset();
     needles_enter(-1, 1);   /* every spike trap may run again */
+    msg_reset();            /* and every message block */
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
@@ -4128,6 +4193,7 @@ int main(int argc, char *argv[]) {
                     camera_boss_at[0] = at[0][0]; camera_boss_at[1] = at[0][1]; camera_boss_at[2] = at[0][2];
                 }
             }
+            if (mission_mode && msg_busy()) { memset(&input, 0, sizeof(input)); input.style = -1; }   /* reading a message */
             player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame
              * covers more than his radius, and pushing out from the end alone lets him through a wall (Mission
@@ -4491,6 +4557,7 @@ int main(int argc, char *argv[]) {
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
                     { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }
+                    { char ml[128]; msg_status(ml, sizeof ml); fprintf(report, "%s\n", ml); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);
