@@ -173,6 +173,18 @@ extern int (*player_floor_fn)(float x, float y, float z, float step, float *out)
  * the camera swings behind Dante's direction of travel while he runs. */
 extern int camera_auto_follow;
 
+/* What Dante owns: bit w for weapon w (0-4 melee, 5-9 guns), bit OWN_STYLE_BIT + s for style s. Weapons and styles
+ * he doesn't own are skipped when switching and can't be picked. Everything by default (the test street, the Debug
+ * Room); a mission sets what he'd have by then in the real game (player_own_mission). */
+#define OWN_STYLE_BIT 10
+#define OWN_EVERYTHING ((1u << (OWN_STYLE_BIT + STYLE_COUNT)) - 1u)
+extern unsigned int player_owned;
+int player_owns_weapon(int weapon);
+int player_owns_style(int style);
+void player_own_mission(int mission);   /* what he has at the start of mission 1-20 */
+/* A game item that is a weapon or a style (23 Cerberus ... 35 Doppelganger): its name, and it's his from now on.
+ * 0 for any other item. */
+const char *player_own_item(int item);
 void player_reset(Player *player, FollowCamera *camera);
 void player_set_capacity(Player *player, int blue_orbs, int purple_orbs);
 void player_gain_dt(Player *player, float runes);

@@ -2,7 +2,7 @@
  *
  * 122 Mute Goddess' Chamber: the statue (gimmick 300) takes the Essences by O in its area 0, one at a time
  *     (counter 5). The second blasts the rubble (STAY 100 and its walls) off the door to 127; the third reveals
- *     Artemis (item 30, which the port doesn't have as a gun yet).
+ *     Artemis (item 30): a glow on the stand that gives the gun when taken (main.c, player.c).
  * 123 Chamber of 3 Trials: nothing scripted.
  * 126 Trial of Wisdom: through the doorways in the order 3, 1, 2 (counters 0 and 1); each one leads back into the
  *     room. A wrong one locks all four doors and starts group 0; once it's beaten only door 0 (to 123) opens. Right
@@ -259,7 +259,7 @@ int m6_update(float dt, unsigned int pressed, float x, float y, float z, int on_
                         stage_hide_group(RUBBLE_TAG);
                         fx_explosion(at);
                         say("THE WAY IS OPEN");
-                    } else if (n == 3) say("ARTEMIS");
+                    }   /* n == 3: Artemis shows on the stand (main.c's key items take it, player.c gives it) */
                 }
             }
         }
@@ -401,6 +401,10 @@ void m6_status(char *out, int size) {
              room_now, got, placed, wisdom_step, wisdom_door, skill_taken, warrior_done, barrier_on,
              sw[0].charge, sw[0].flames, sw[0].lit, sw[0].lit_left, sw[1].charge, sw[1].flames, sw[1].lit, sw[1].lit_left);
 }
+
+void m6_test_got(unsigned int bits) { got = bits & 7u; }
+
+int m6_artemis_shown(void) { return room_now == 122 && placed == 7u; }
 
 const char *m6_caption(float *alpha) {
     if (!caption || caption_time <= 0.0f) return 0;

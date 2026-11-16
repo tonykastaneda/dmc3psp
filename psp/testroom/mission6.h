@@ -18,7 +18,9 @@ int m6_hazard(float *from_x, float *from_z);   /* the spike trap caught him this
 /* A melee hit's frame: the crest switches. heavy: 2 for a heavy hit. */
 void m6_hit(float x, float y, float z, float yaw, float reach, int heavy);
 void m6_draw(void);                     /* world space, no texture or lighting */
-const char *m6_caption(float *alpha);   /* a line to show, or 0 */
+const char *m6_caption(float *alpha);
+int m6_artemis_shown(void);
+void m6_test_got(unsigned int bits);    /* a test starts holding these Essences (bits: 40, 41, 42) */             /* the third Essence is set: Artemis lies on the statue's stand */   /* a line to show, or 0 */
 void m6_status(char *out, int size);    /* for tests */
 
 #endif

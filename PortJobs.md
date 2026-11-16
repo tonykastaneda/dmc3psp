@@ -18,9 +18,9 @@ What's still missing or stood in for, from `docs/GAME_FLOW.md`. Tick each one of
 ## Set pieces missing
 
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform
-- [ ] Mission 3: the Shotgun pickup isn't in
-- [ ] Mission 6: Artemis isn't given as a working gun from the statue
-- [ ] Mission 12: Quicksilver isn't given
+- [x] Mission 3: the Shotgun pickup isn't in
+- [x] Mission 6: Artemis isn't given as a working gun from the statue
+- [x] Mission 12: Quicksilver isn't given
 - [ ] Mission 16: the swinging-sphere traps aren't in
 - [ ] Mission 17: the spikes (131) aren't in
 - [ ] Mission 19: the mirrors aren't in

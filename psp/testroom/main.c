@@ -714,8 +714,8 @@ static void draw_weapon_wheel(const Player *player) {
             /* Grow outward from the ring: left of it on the left, right on the right. */
             float x = WHEEL_CX + s * WHEEL_LABEL_RADIUS + (s > 0.3f ? 0.0f : s < -0.3f ? -w : -w * 0.5f);
             float y = WHEEL_CY - c * WHEEL_LABEL_RADIUS - 4.0f - (c > 0.8f ? 6.0f : 0.0f);
-            sceGuColor(pass ? (i == player->melee_weapon ? 0xff60a0ffu : 0xffffffffu) : 0xff000000u);
-            draw_text((int)x + shadow, (int)y + shadow, name);
+            sceGuColor(pass ? (i == player->melee_weapon ? 0xff60a0ffu : player_owns_weapon(i) ? 0xffffffffu : 0xff505050u) : 0xff000000u);
+            draw_text((int)x + shadow, (int)y + shadow, player_owns_weapon(i) ? name : "---");
         }
         {
             const char *gun = player_weapon_name(player->gun_weapon);
@@ -733,7 +733,8 @@ static void apply_weapon_wheel(PlayerInput *input, Player *player) {
     if (input->stick_x * input->stick_x + input->stick_y * input->stick_y > 0.25f) {
         float span = 6.2831853f / WHEEL_SLOTS;
         int slot = (int)floorf(atan2f(input->stick_x, input->stick_y) / span + 0.5f);
-        player->melee_weapon = (slot + WHEEL_SLOTS) % WHEEL_SLOTS;
+        slot = (slot + WHEEL_SLOTS) % WHEEL_SLOTS;
+        if (player_owns_weapon(slot)) player->melee_weapon = slot;   /* one he hasn't got can't be picked */
     }
     input->stick_x = input->stick_y = 0.0f;
     input->melee = input->melee_held = input->style_action = input->style_held = 0;
@@ -1039,11 +1040,18 @@ static void door_prompt_draw(void) {
     draw_text(SCR_WIDTH / 2 - 28, SCR_HEIGHT - 40, "O  ENTER");
 }
 
-/* Mission 6's line of text (an item's name), in the middle of the screen. */
+/* A weapon or style just picked up: its name, for a few seconds (as Mission 6's Essences). */
+static const char *pickup_caption;
+static float pickup_caption_time;
+/* A line of text (an item's name), in the middle of the screen. */
 static void caption_draw(void) {
     float alpha;
     const char *text = sm_caption(&alpha);
     if (!text) text = m6_caption(&alpha);
+    if (!text && pickup_caption && pickup_caption_time > 0.0f) {
+        text = pickup_caption;
+        alpha = pickup_caption_time > 0.5f ? 1.0f : pickup_caption_time * 2.0f;
+    }
     unsigned int a = (unsigned int)(alpha * 255.0f) << 24;
     if (!text || !menu_loaded()) return;
     sceGuDisable(GU_DEPTH_TEST);
@@ -1845,7 +1853,7 @@ static void bench_add(unsigned int gap, unsigned int update, unsigned int skin) 
     b->draw += perf_draw_us;
     b->gpu += perf_gpu_us;
 }
-static int cmp_melee = -1, cmp_gun = -1, cmp_lineup;
+static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 /* "mkey button frame" and "mshot frame" drive and picture the menus, for tests. */
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
@@ -1976,6 +1984,8 @@ static void cmp_load(void) {
                 cmp_audit_rooms[n].mission >= 1 && cmp_audit_rooms[n].mission <= MISSION_COUNT) ++cmp_audit_room_count;
         }
         else if (strncmp(line, "melee ", 6) == 0) cmp_melee = atoi(line + 6);
+        else if (strncmp(line, "ownall ", 7) == 0) cmp_ownall = atoi(line + 7);
+        else if (strncmp(line, "m6got ", 6) == 0) cmp_m6_got = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
@@ -2027,6 +2037,9 @@ static void cmp_pad(int frame, PlayerInput *input) {
         else if (!strcmp(b, "menu_down") && pressed) debug_pressed |= PSP_CTRL_DOWN;
         else if (!strcmp(b, "menu_right") && pressed) debug_pressed |= PSP_CTRL_RIGHT;
         else if (!strcmp(b, "select")) input->taunt = pressed;
+        else if (!strcmp(b, "lmelee")) input->next_melee = pressed;   /* L tapped: the next melee weapon */
+        else if (!strcmp(b, "lgun")) input->next_gun = pressed;       /* L + square: the next gun */
+        else if (!strcmp(b, "wheel")) input->weapon_wheel = 1;        /* L held */
         else if (!strcmp(b, "cross")) { input->jump = pressed; input->jump_held = 1; }
         else if (!strcmp(b, "triangle")) { input->melee = pressed; input->melee_held = 1; }
         else if (!strcmp(b, "square")) { input->gun = pressed; input->gun_held = 1; }
@@ -2311,6 +2324,7 @@ static int key_item_shown(const RoomKeyItem *k) {
     if(k->mission==13 && k->item==51 && !mission13_open())return 0;
     return k->mission == mission_choice.mission && k->room == mission_room && item_is(k->item, 0)
         && (k->mission != 7 || m7_item_shown(k->item))
+        && (k->mission != 6 || m6_artemis_shown())
         && (k->after < 0 || item_is(k->after, 2));
 }
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
@@ -3224,13 +3238,19 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             return 0;
         }
     }
+    if (pickup_caption_time > 0.0f) pickup_caption_time -= dt;
     for (i = 0; done && enemy_alive_count() == 0 && i < ROOM_KEY_ITEM_COUNT; ++i) {
         /* A key item: O by it (CItemKey's 200 cm) takes it. */
         const RoomKeyItem *k = &room_key_items[i];
         float kx = player->x - k->x, kz = player->z - k->z;
         if (!key_item_shown(k) || kx * kx + kz * kz > 200.0f * 200.0f || fabsf(player->y - k->y) > 300.0f) continue;
         door_prompt_time = 1.0f;
-        if (pressed & PSP_CTRL_CIRCLE) { float at[3] = {k->x, k->y, k->z}; item_state[k->item] = 1; fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE; }
+        if (pressed & PSP_CTRL_CIRCLE) {
+            float at[3] = {k->x, k->y, k->z};
+            const char *name = player_own_item(k->item);   /* a weapon or a style: his from now on */
+            item_state[k->item] = 1; fx_hit_spark(at); pressed &= ~PSP_CTRL_CIRCLE;
+            if (name) { pickup_caption = name; pickup_caption_time = 3.0f; }
+        }
     }
     {
         /* Where one's used: examine inside its area while holding it. One examine uses every item held for that
@@ -3295,7 +3315,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
         return 0; /* The timed ending, not the arena's dummy exit, clears M20. */
     }
-    if (info->clear_room == mission_room && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
+    if (info->clear_room == mission_room && (mission_choice.mission != 12 || !item_is(34, 0)) && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
@@ -3386,6 +3406,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
     game_turbo = choice->turbo;
     mission_mode = 0;
     mission_room = ROOM_NONE;
+    player_owned = OWN_EVERYTHING;   /* the Debug Room keeps everything */
     lift_index = -1;
     pad_on = 0;
     from_menu = 1;
@@ -3428,6 +3449,16 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     game_turbo = choice->turbo;
     player_floor_fn = mission_floor;
     combat_reset(&combat);
+    /* What he'd own by this mission in the real game. A test can add to it: "ownall 1", an "item" that's a weapon
+     * or a style, or the weapon it starts with ("melee", "gun"). */
+    player_own_mission(choice->mission);
+    if (cmp_ownall) player_owned = OWN_EVERYTHING;
+    {
+        int c;
+        for (c = 0; c < cmp_item_count; ++c) if (cmp_item[c][1] >= 1) player_own_item(cmp_item[c][0]);
+        if (focus_cmp && cmp_melee >= 0 && cmp_melee < 5) player_owned |= 1u << cmp_melee;
+        if (focus_cmp && cmp_gun >= 5 && cmp_gun < 10) player_owned |= 1u << cmp_gun;
+    }
     player_reset(player, camera);
     dummy_attacks = 1;
     if(focus_cmp) {
@@ -3448,13 +3479,14 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
         }
     }
     items_reset(choice->mission);
+    pickup_caption_time = 0.0f;
     mission10_reset();
     mission13_reset(choice->difficulty);
     m20_ending_frames=0;m20_boss_defeated=0;
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
-    if (choice->mission == 6) m6_reset(choice->difficulty);
+    if (choice->mission == 6) { m6_reset(choice->difficulty); if (cmp_m6_got) m6_test_got((unsigned)cmp_m6_got); }
     if (choice->mission == 7) m7_reset();
     if (choice->mission == 15) m15_reset();
     if (choice->mission == 17) m17_reset();
@@ -4425,6 +4457,7 @@ int main(int argc, char *argv[]) {
                 if (report) {
                     fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log());
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
+                    fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

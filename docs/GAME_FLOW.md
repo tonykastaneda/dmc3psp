@@ -86,7 +86,7 @@ the room numbers are matched to them through the event scripts.
 | --- | --- | --- |
 | 002 | 66 Slum Avenue | Groups 2 (2 Enigmas on the ledges), 1, 0, then 3 (Prides, a Lust and a Wrath) |
 | 009 | (off the street) | Group 2 |
-| 003 | Bullseye | No fight. Sword hits charge the crest switch behind the dart machines and open the blue seal to Love Planet. The Shotgun pickup isn't in |
+| 003 | Bullseye | No fight. Sword hits charge the crest switch behind the dart machines and open the blue seal to Love Planet. The Shotgun (item 29, blocks 4 and 5: give_item 29, gimmick 300 off) lies as a glow at STAY 300's place (2168, 183, 1624), by the seal; O takes it, its name shows and it's in the gun ring from then on |
 | 004 | Love Planet | Doors sealed; groups 1 then 0: Hell Sloths and Prides |
 | 005 | 13th Avenue | No fight |
 | 006 | Ice Guardian's Chamber | Cerberus (EST 43, class 25 = `CEm025`, `psp/testroom/cerberus_boss.c`, `docs/CERBERUS_SPEC.md`), with a boss bar. His death opens the door to 100, which ends the mission |
@@ -196,7 +196,9 @@ is placed (`STORY_WALLS` in `gen_rooms.py`). Stand-ins and estimates:
   reading. Where 124's switches and corridor wall stand depends on the pillars' joint 1, which isn't read.
   The pillars don't rise.
 - **Essences** are glows, picked up with O (as Mission 4's board), with their name shown. **Artemis** (item 30)
-  isn't a gun in the port yet; the statue only shows its name. Messages, cameras and demos 15/321 aren't in.
+  shows as a glow on the statue's stand (STAY 200, "the laser and its stand", at the middle of its area 0) once the
+  third Essence is set; O takes it and it's a working gun from then on (see "What Dante owns"). Messages, cameras
+  and demos 15/321 aren't in.
 
 ### Mission 7: "A chance meeting"
 
@@ -376,7 +378,9 @@ above, start to Mission Clear.
   are on the wagon, which has no collision in 239) [approximation].
 - 240's wagon is a box door into 216 (EXTRA_DOORS).
 - 201's bridge isn't turned by item 50; door 3 is walked to as it stands [approximation].
-- 228: Geryon both phases; at 80% Dante is put at start 2. No cutscenes; Quicksilver isn't given.
+- 228: Geryon both phases; at 80% Dante is put at start 2. No cutscenes. The script gives Quicksilver (item 34) by
+  itself after demo 34; the port lays it as a glow at start 2 (where the fight below goes on) and holds Mission
+  Clear until it's taken [approximation]. Taken, the style is his (L + up).
 
 ### Mission 14: "Drive!"
 
@@ -491,7 +495,7 @@ route above, start to Mission Clear.
 - 131's red pod throws Dante to its door (the Mission 7 catapults' code).
 - 143's area 0 takes Dante to 139; area 1 is the goal (walk up the slope to it and press O) once 139 is cleared.
 - The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
-- No cutscenes; demo 48's item 35 isn't given.
+- No cutscenes; demo 48's item 35 isn't given in the mission itself: Doppelganger is owned from Mission 18 on.
 
 ### Mission 18: "Invading hell"
 
@@ -566,6 +570,30 @@ Rooms 4xx are GDATA 736 + 4 x (n - 400).
 - The Abyss aren't ported: Prides stand in, and die to the sword (405's mirrors aren't in). 404's hourglass isn't in.
 - 421 runs one Arkham through both rounds (`arkham_boss.c`); Vergil doesn't join.
 - No cutscenes.
+
+### What Dante owns
+
+`psp/testroom/player.c` (`player_own_mission`, `player_own_item`): a melee weapon, gun or style he doesn't own is
+skipped by L and L + square, can't be picked on the weapon wheel (its name shows as `---`), and its d-pad press
+does nothing. Each mission starts with what he'd have by then, from where the event scripts give each one
+(`give_item`; `tools/event_dump.py`). The Debug Room and the test street keep everything.
+
+| Item | What | Where it's given | Owned from |
+| --- | --- | --- | --- |
+| - | Rebellion, Ebony & Ivory; Trickster, Swordmaster, Gunslinger, Royalguard | Dante's from the start: no script gives them, and the four basic styles are chosen at the briefing or a Divinity Statue | Mission 1 |
+| 29 | Shotgun | Mission 3, 003 Bullseye | picked up in Mission 3 |
+| 23 | Cerberus | Mission 3, 006, as he falls | Mission 4 |
+| 24 | Agni & Rudra | Mission 5, 121, as they fall | Mission 6 |
+| 30 | Artemis | Mission 6, 122, the third Essence | picked up in Mission 6 |
+| 31 | Spiral | Mission 9, 206 Subterranean Lake (Mission 10 offers it again) | Mission 10 (the port's 206 doesn't lay it) |
+| 26 | Nevan | Mission 9, 210, as she falls | Mission 10 |
+| 34 | Quicksilver | Mission 12, 228, after Geryon | picked up in Mission 12 |
+| 27 | Beowulf | Mission 14, 237, where the mission starts | Mission 14 (given on arrival) |
+| 33 | Kalina Ann | Mission 16, 119, from Lady | Mission 17 |
+| 35 | Doppelganger | Mission 17, 139, after him | Mission 18 |
+
+Beowulf is beaten in Mission 11, but EventTbl11 gives nothing; EventTbl14 gives item 27 in 237. A test scene can add
+to what's owned: `ownall 1`, an `item n 1` that's one of these, or its `melee`/`gun`.
 
 ### Secret Missions
 

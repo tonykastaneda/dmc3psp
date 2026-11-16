@@ -232,6 +232,14 @@ ITEM_OPENS += [(10, "206", 48, [101])]
 ITEM_GATES += [(10, "201", "211", 49)]
 # Mission 13: item 51 from the crystal puzzle, used at 232's seal.
 KEY_ITEMS += [(13,51,"233",-1)]
+# Weapons and a style picked up (player.c own_items gives them; docs/GAME_FLOW.md "What Dante owns"). None has an ITM
+# record, so each lies at a place given here. Mission 3: the Shotgun, 003's STAY 300 (2168, 183, 1624), behind the
+# blue seal (EventTbl03 room 3 blocks 4 and 5: give_item 29, gimmick 300 off). Mission 6: Artemis on the statue's
+# stand in 122 (STAY 200, "the laser and its stand"; its area 0's middle), shown once the third Essence is set
+# (mission6.c). Mission 12: Quicksilver in 228; the script gives it straight after Geryon (wait 30, give_item 34),
+# the port lays it at start 2, where the fight below the bridge goes on, and holds Mission Clear until it's taken.
+KEY_ITEMS += [(3, 29, "003", -1, (2168.0, 183.0, 1624.0)), (6, 30, "122", -1, (2551.0, 400.0, 2505.0)),
+              (12, 34, "228", -1, (1437.8, 0.0, 2004.2))]
 ITEM_USES += [(13,51,"232",0)]
 ITEM_GATES += [(13,"232","234",51)]
 ITEM_OPENS += [(13,"232",51,[100])]
@@ -611,8 +619,8 @@ def main():
     lines.append("/* A key item lying in a room (its ITM record), shown once item `after` is used (-1: always). */")
     lines.append("typedef struct { short mission, item, room, after; float x, y, z; } RoomKeyItem;")
     cells = []
-    for m, item, r, after in KEY_ITEMS:
-        x, y, z = rooms[r]["items"][item]
+    for m, item, r, after, *at in KEY_ITEMS:
+        x, y, z = at[0] if at else rooms[r]["items"][item]
         cells.append(f"{{{m},{item},{index[r]},{after},{x:.1f}f,{y:.1f}f,{z:.1f}f}}")
     lines.append(f"#define ROOM_KEY_ITEM_COUNT {len(cells)}")
     lines.append("static const RoomKeyItem room_key_items[] = {" + (",".join(cells) or "{0}") + "};")

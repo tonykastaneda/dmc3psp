@@ -52,6 +52,58 @@ const char *player_weapon_name(int weapon) {
     return weapon >= 0 && weapon < 10 ? names[weapon] : "?";
 }
 
+unsigned int player_owned = OWN_EVERYTHING;
+int player_owns_weapon(int weapon) { return weapon >= 0 && weapon < 10 && (player_owned >> weapon & 1); }
+int player_owns_style(int style) { return style >= 0 && style < STYLE_COUNT && (player_owned >> (OWN_STYLE_BIT + style) & 1); }
+
+/* The game's item ids for weapons and styles, from the event scripts' give_item (docs/GAME_FLOW.md "What Dante
+ * owns"): what each is in the port's numbering (0-9 weapons, OWN_STYLE_BIT + style), and the mission it's got in. */
+static const struct { unsigned char item, bit, mission; } own_items[] = {
+    {23, 1, 3},                                  /* Cerberus: 006, as Cerberus falls */
+    {29, 6, 3},                                  /* Shotgun: 003, Bullseye */
+    {24, 2, 5},                                  /* Agni & Rudra: 121, as they fall */
+    {30, 7, 6},                                  /* Artemis: 122, the Mute Goddess, after the third Essence */
+    {31, 8, 9},                                  /* Spiral: 206, Subterranean Lake */
+    {26, 3, 9},                                  /* Nevan: 210, as she falls */
+    {34, OWN_STYLE_BIT + STYLE_QUICKSILVER, 12}, /* Quicksilver: 228, after Geryon */
+    {27, 4, 14},                                 /* Beowulf: 237, where Mission 14 starts */
+    {33, 9, 16},                                 /* Kalina Ann: 119, from Lady */
+    {35, OWN_STYLE_BIT + STYLE_DOPPELGANGER, 17} /* Doppelganger: 139, after him */
+};
+#define OWN_ITEM_COUNT ((int)(sizeof own_items / sizeof own_items[0]))
+
+void player_own_mission(int mission) {
+    int i;
+    /* From the start: Rebellion, Ebony & Ivory and the four styles chosen at a Divinity Statue or the briefing. */
+    player_owned = 1u << 0 | 1u << 5;
+    for (i = STYLE_TRICKSTER; i <= STYLE_ROYALGUARD; ++i) player_owned |= 1u << (OWN_STYLE_BIT + i);
+    for (i = 0; i < OWN_ITEM_COUNT; ++i) {
+        /* Got in an earlier mission; Beowulf is given on arrival in 237, so Mission 14 starts with him. */
+        if (own_items[i].mission < mission || (own_items[i].item == 27 && mission == 14)) player_owned |= 1u << own_items[i].bit;
+    }
+}
+
+const char *player_own_item(int item) {
+    int i;
+    for (i = 0; i < OWN_ITEM_COUNT; ++i) {
+        if (own_items[i].item != item) continue;
+        player_owned |= 1u << own_items[i].bit;
+        return own_items[i].bit >= OWN_STYLE_BIT ? player_style_name((Style)(own_items[i].bit - OWN_STYLE_BIT))
+                                                 : player_weapon_name(own_items[i].bit);
+    }
+    return 0;
+}
+
+/* The next weapon he owns after `from` in its ring (melee 0-4 or guns 5-9); `from` itself if there's no other. */
+static int next_owned(int from) {
+    int base = from < 5 ? 0 : 5, k;
+    for (k = 1; k <= 5; ++k) {
+        int w = base + (from - base + k) % 5;
+        if (player_owns_weapon(w)) return w;
+    }
+    return from;
+}
+
 const char *player_action_name(Action action) {
     switch (action) {
     case ACTION_MELEE: return "MELEE (no weapon yet)";
@@ -107,6 +159,8 @@ void player_reset(Player *player, FollowCamera *camera) {
     player->on_ground = 1;
     player->style = STYLE_TRICKSTER;
     if (player->gun_weapon < 5) player->gun_weapon = 5;
+    if (!player_owns_weapon(player->melee_weapon)) player->melee_weapon = 0;
+    if (!player_owns_weapon(player->gun_weapon)) player->gun_weapon = 5;
     memset(camera, 0, sizeof(*camera));
     camera->yaw = camera->target_yaw = player->yaw;
     camera_goal(player, camera, &camera->x, &camera->y, &camera->z);
@@ -488,7 +542,7 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
 
     player->locked_on = input->lock_on;
     player->weapon_wheel = input->weapon_wheel;
-    if (input->style >= 0 && input->style < STYLE_COUNT) {
+    if (input->style >= 0 && input->style < STYLE_COUNT && player_owns_style(input->style)) {
         player->style = (Style)input->style;
         set_action(player, ACTION_STYLE_SWITCH);
     }
@@ -500,8 +554,8 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
             player->devil = player->quicksilver = player->doppelganger = 0;
         }
     }
-    if (input->next_melee) player->melee_weapon = (player->melee_weapon + 1) % 5;
-    if (input->next_gun) player->gun_weapon = 5 + (player->gun_weapon - 5 + 1) % 5;
+    if (input->next_melee) player->melee_weapon = next_owned(player->melee_weapon);
+    if (input->next_gun) player->gun_weapon = next_owned(player->gun_weapon);
 
     /* SELECT: swing the camera behind Dante's current facing. */
     if (input->snap_camera) {
