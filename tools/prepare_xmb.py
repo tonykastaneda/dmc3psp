@@ -2,14 +2,17 @@
 """The XMB's pictures for the EBOOT: ICON0.PNG (144x80, the game list's icon) and PIC1.PNG (480x272, the
 background while it's chosen).
 
-ICON0 is the DMC3 logo from the player's disc (the title screen's, GDATA slot 2820 chunk 15) on black. PIC1 is
+ICON0 uses the optional local Portable logo, falling back to the player's disc logo (GDATA slot 2820 chunk 15),
+on black. PIC1 is
 a picture of the player's own choosing (--background, by default .tools/xmb/PIC1_source.jpg, which isn't in the
-repo), cropped to the PSP's shape around a point that keeps its subject in frame, and shrunk.
+repo), cropped to the PSP's shape around a point that keeps its subject in frame, and shrunk. The optional
+Portable logo is composited in its open left side, without changing the background crop.
 """
 import argparse
 from pathlib import Path
 
 from PIL import Image
+from portable_branding import DEFAULT_LOGO, fit_logo, load_logo
 
 from dmc3_image import AfsArchive, Iso9660
 import prepare_menu as M
@@ -34,7 +37,7 @@ def icon(art):
     canvas = Image.new("RGB", (ICON_W, ICON_H), (0, 0, 0))
     scale = min((ICON_W - 8) / art.width, (ICON_H - 8) / art.height)
     piece = art.resize((max(1, round(art.width * scale)), max(1, round(art.height * scale))), Image.Resampling.LANCZOS)
-    canvas.paste(piece, ((ICON_W - piece.width) // 2, (ICON_H - piece.height) // 2))
+    canvas.paste(piece, ((ICON_W - piece.width) // 2, (ICON_H - piece.height) // 2), piece.getchannel("A") if piece.mode == "RGBA" else None)
     return canvas
 
 
@@ -58,12 +61,18 @@ def main():
     ap.add_argument("--background", type=Path, default=ROOT / ".tools" / "xmb" / "PIC1_source.jpg")
     ap.add_argument("--focus", type=float, default=0.5, help="how far across the picture its subject is, 0-1")
     ap.add_argument("--top", type=float, default=0.0, help="where the crop starts down the picture, 0-1")
+    ap.add_argument("--logo", type=Path, default=DEFAULT_LOGO, help="optional local transparent Portable logo")
     args = ap.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    icon(logo(args.iso)).save(args.output / "ICON0.PNG", optimize=True)
-    print(f"ICON0.PNG: {ICON_W}x{ICON_H}, the disc's logo")
+    portable = load_logo(args.logo)
+    icon(portable if portable is not None else logo(args.iso)).save(args.output / "ICON0.PNG", optimize=True)
+    print(f"ICON0.PNG: {ICON_W}x{ICON_H}, {'Portable' if portable is not None else 'disc'} logo")
     if args.background.exists():
-        background(args.background, args.focus, args.top).save(args.output / "PIC1.PNG", optimize=True)
+        picture = background(args.background, args.focus, args.top).convert("RGBA")
+        if portable is not None:
+            piece = fit_logo(portable, 244, 132)
+            picture.alpha_composite(piece, (12, (PIC_H - piece.height) // 2))
+        picture.convert("RGB").save(args.output / "PIC1.PNG", optimize=True)
         print(f"PIC1.PNG: {PIC_W}x{PIC_H} from {args.background.name}")
     else:
         print(f"no {args.background}: no PIC1.PNG")

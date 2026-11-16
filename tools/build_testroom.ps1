@@ -136,7 +136,18 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $GeryonHeader) -or
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_geryon.py"), $Iso.FullName, "--output", $Generated)
 }
 
-if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "ICON0.PNG"))) {
+$PortableLogo = Join-Path $Root ".tools\branding\dmc3_portable.png"
+$BrandingStamp = Join-Path $Build "branding-source.txt"
+$BrandingKey = if (Test-Path -LiteralPath $PortableLogo) { (Get-FileHash -LiteralPath $PortableLogo -Algorithm SHA256).Hash } else { "disc" }
+$BrandingChanged = -not (Test-Path -LiteralPath $BrandingStamp)
+if (-not $BrandingChanged) { $BrandingChanged = (Get-Content -LiteralPath $BrandingStamp -Raw).Trim() -ne $BrandingKey }
+$XmbStale = -not (Test-Path -LiteralPath (Join-Path $Build "ICON0.PNG")) -or -not (Test-Path -LiteralPath (Join-Path $Build "PIC1.PNG"))
+if (-not $XmbStale) {
+    foreach ($ArtSource in @("tools\prepare_xmb.py", "tools\portable_branding.py")) {
+        if ((Get-Item (Join-Path $Root $ArtSource)).LastWriteTime -gt (Get-Item (Join-Path $Build "ICON0.PNG")).LastWriteTime) { $XmbStale = $true }
+    }
+}
+if ($Regenerate -or $BrandingChanged -or $XmbStale) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_xmb.py"), $Iso.FullName, "--output", $Build, "--focus", "0.6", "--top", "0.02")
@@ -169,11 +180,18 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $Mission8Header) -or
 }
 
 $MenuBin = Join-Path $Build "MENU.BIN"
-if ($Regenerate -or -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))) {
+$MenuStale = -not (Test-Path -LiteralPath $MenuBin) -or -not (Test-Path -LiteralPath (Join-Path $Generated "menu_runtime.h"))
+if (-not $MenuStale) {
+    foreach ($ArtSource in @("tools\prepare_menu.py", "tools\portable_branding.py")) {
+        if ((Get-Item (Join-Path $Root $ArtSource)).LastWriteTime -gt (Get-Item $MenuBin).LastWriteTime) { $MenuStale = $true }
+    }
+}
+if ($Regenerate -or $BrandingChanged -or $MenuStale) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
     Invoke-Native $Python @((Join-Path $Root "tools\prepare_menu.py"), $Iso.FullName, "--output", $MenuBin, "--header", (Join-Path $Generated "menu_runtime.h"))
 }
+Set-Content -LiteralPath $BrandingStamp -Value $BrandingKey -Encoding ascii
 
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "hud_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1

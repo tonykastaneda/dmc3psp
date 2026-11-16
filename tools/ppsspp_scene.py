@@ -118,6 +118,12 @@ def main():
             img.save(frames_dir / f"{k:05d}.png")
             k += 1
         f.unlink()
+    # Menu captures are named separately by menu_test_shot ("mshot frame").
+    for f in GAME.glob("MENU_*.BMP"):
+        out = OUT / f"{args.name}_{f.stem.lower()}.png"
+        Image.open(f).convert("RGB").save(out)
+        print(out)
+        f.unlink()
     if args.video and k:
         mp4 = OUT / f"{args.name}.mp4"
         subprocess.run([str(FFMPEG), "-y", "-v", "error", "-framerate", "30", "-i", str(frames_dir / "%05d.png"),

@@ -27,6 +27,7 @@ from dmc3_image import AfsArchive, Iso9660
 from mod_ps2 import parse_mod
 from mod_skeleton import parse_skeleton, parse_skin, strip_faces
 from tim2 import decode_picture
+from portable_branding import DEFAULT_LOGO, load_logo, title_logo
 
 IMAGE_W, IMAGE_H = 512, 272
 ART_W, ART_H = 480, 272   # the whole screen
@@ -426,7 +427,9 @@ def main():
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--header", type=Path, required=True)
     ap.add_argument("--dump", action="store_true")
+    ap.add_argument("--logo", type=Path, default=DEFAULT_LOGO, help="optional local transparent Portable logo")
     args = ap.parse_args()
+    portable = load_logo(args.logo)
     with Iso9660(args.iso) as iso:
         afs = AfsArchive(iso, "GDATA.AFS")
         read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
@@ -439,7 +442,14 @@ def main():
         if layers == "all":
             IMAGES[n] = (name, [(rest[0], *layer[1:]) for layer in whole_screen(slots[rest[0]])])
 
-    images = [bake(slots, layers, (255, 255, 255, 255) if name in WHITE_IMAGES else (0, 0, 0, 255)) for name, layers in IMAGES]
+    images = []
+    for name, layers in IMAGES:
+        if name == "IMG_TITLE" and portable is not None:
+            # Omit just the old logo quad; retain the original options band.
+            layers = [(slot, chunk, after, placement, {**overrides, 0: None})
+                      for slot, chunk, after, placement, overrides in layers]
+        image = bake(slots, layers, (255, 255, 255, 255) if name in WHITE_IMAGES else (0, 0, 0, 255))
+        images.append(title_logo(image, portable) if name == "IMG_TITLE" and portable is not None else image)
     for name, (left, top, right, bottom), shift in HEADING_PATCHES:
         image = images[[n for n, _ in IMAGES].index(name)]
         image.paste(image.crop((left + shift, top, right + shift, bottom)), (left, top))
