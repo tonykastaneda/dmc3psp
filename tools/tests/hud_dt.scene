@@ -1,0 +1,9 @@
+frames 310
+enemy 100
+l3 10 10
+r1 210 310
+square 210 310
+psp_shot 20
+psp_shot 60
+psp_shot 195
+psp_shot 300

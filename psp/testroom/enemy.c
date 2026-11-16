@@ -799,44 +799,44 @@ const char *enemy_boss_name(void) {
 }
 int enemy_boss_health(float *health, float *maximum) {
     int lv;
-    for(lv=0;lv<ENEMY_MAX;++lv) if(enemies[lv].active && enemies[lv].kind==ENEMY_LEVIATHAN) {
+    for(lv=0;lv<ENEMY_MAX;++lv) if(enemies[lv].active && enemies[lv].plan!=P_DEATH && enemies[lv].kind==ENEMY_LEVIATHAN) {
         *health=leviathan_boss_health();*maximum=leviathan_boss_max_health();return 1;
     }
     int i;
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VANGUARD) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_VANGUARD) {
         vanguard_select(i);*health=vanguard_health();*maximum=vanguard_max_health();return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_CERBERUS) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_CERBERUS && !cerberus_boss_dying()) {
         *health=cerberus_boss_health();*maximum=cerberus_boss_max_health();return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_VERGIL) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_VERGIL) {
         *health=vergil_boss_health();*maximum=vergil_boss_max_health();return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GERYON) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_GERYON) {
         *health=geryon_boss_health();*maximum=geryon_boss_max_health();return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_DOPPELGANGER) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_DOPPELGANGER) {
         *health=doppelganger_boss_health();*maximum=doppelganger_boss_max_health();return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_ARKHAM) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_ARKHAM) {
         *health=arkham_boss_health();*maximum=arkham_boss_max_health();return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && (enemies[i].kind==ENEMY_AGNI || enemies[i].kind==ENEMY_RUDRA) && enemies[i].plan!=P_DEATH) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && (enemies[i].kind==ENEMY_AGNI || enemies[i].kind==ENEMY_RUDRA)) {
         *health=ar_health_total(maximum);return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_JESTER && enemies[i].plan!=P_DEATH) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_JESTER) {
         *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_LADY && enemies[i].plan!=P_DEATH) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_LADY) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * LADY_MAX / 250;return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_BEOWULF && enemies[i].plan!=P_DEATH) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_BEOWULF) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * BEOWULF_MAX / 250;return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_NEVAN && enemies[i].plan!=P_DEATH) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_NEVAN) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * NEVAN_MAX / 250;return 1;
     }
-    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].kind==ENEMY_GIGAPEDE) {
+    for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_GIGAPEDE) {
         *health=enemy_giga_health();*maximum=enemy_giga_max_health();return 1;
     }
     return 0;

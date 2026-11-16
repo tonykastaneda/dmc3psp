@@ -32,7 +32,7 @@ extern void *menu_draw_buffer;        /* the buffer being drawn: main's, kept in
 extern void *menu_draw_buffer;        /* the buffer being drawn: main's, kept in step across menu frames */
 
 /* The Divinity Statue's shop: the game's Customize screens. What's bought is kept here; for now it
- * doesn't change Dante (his whole moveset stays unlocked for testing). */
+ * updates HP/DT capacity; the whole moveset stays unlocked for testing. */
 #define SHOP_ITEMS 8   /* Vital Star S, Vital Star L, Devil Star, Holy Water, Blue Orb, Purple Orb, Gold Orb, Yellow Orb */
 typedef struct {
     int red_orbs;

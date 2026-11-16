@@ -79,9 +79,12 @@ enum { AIR_NONE, AIR_JUMP, AIR_HIKE, AIR_STEP, AIR_RAID };
 
 /* Dante's health on the maxed save the reference runs use. */
 #define PLAYER_HEALTH_MAX 20000.0f
+#define PLAYER_HEALTH_BASE 10000.0f
 
 typedef struct {
     float health;
+    float health_max;  /* capacity after Blue Orbs */
+    float dt_energy, dt_max; /* rune units, 3 initially and up to 10 */
     float x, y, z;     /* y is height above the floor */
     float vy;
     int on_ground;
@@ -171,6 +174,8 @@ extern int (*player_floor_fn)(float x, float y, float z, float step, float *out)
 extern int camera_auto_follow;
 
 void player_reset(Player *player, FollowCamera *camera);
+void player_set_capacity(Player *player, int blue_orbs, int purple_orbs);
+void player_gain_dt(Player *player, float runes);
 void player_wall_kick(Player *player, float away_yaw);
 /* The fall after a move that ends in the air (motion 0:36, then a landing stop): per 60 fps frame. */
 void player_fall_from_move(Player *player, float vy, float g, float speed);

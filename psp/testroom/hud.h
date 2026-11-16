@@ -8,6 +8,8 @@
 
 /* Inside the display list. reticle_x / y: screen position, scale from hud_reticle_scale. */
 void hud_draw(const Player *player);
+/* NULL name / nonpositive health hides the gauge. No enemy-specific dependency. */
+void hud_draw_boss(const char *name, float health, float maximum);
 void hud_draw_reticle(float x, float y, float scale);
 /* FUN_0035b610: full size within 300 cm of the camera, half beyond 1000 cm. */
 float hud_reticle_scale(float distance);

@@ -1,5 +1,6 @@
 #include "hud.h"
-#include "enemy.h"
+#include "menu.h"
+#include <string.h>
 
 #include <pspgu.h>
 #include <pspkernel.h>
@@ -8,21 +9,15 @@
 
 #define SCR_W 480.0f
 #define SCR_H 272.0f
-/* The meshes are in PS2 screen units (640 x 448 at 4:3). A uniform scale keeps the
- * art's proportions on the PSP's wider screen; side elements then move out to the
- * screen edges by the margin that leaves. */
+/* Reticle geometry retains the PS2 scale. Cockpit parts are anchored directly
+ * in PSP pixels so the 16:9 side margins are usable. */
 #define HUD_SCALE (SCR_H / 448.0f)
-#define HUD_MARGIN ((SCR_W - 640.0f * HUD_SCALE) * 0.5f)
 
 #define EMBLEM_SIZE 18.0f
-#define BAR_LEFT 26.0f
-#define BAR_TOP 8.0f
+#define BAR_LEFT 46.0f
+#define BAR_TOP 13.0f
 #define BAR_WIDTH 150.0f
-#define BAR_HEIGHT 6.0f
-#define DEVIL_WIDTH 100.0f
-#define DEVIL_HEIGHT 3.0f
-#define DEVIL_SEGMENTS 10
-#define TAIL_PER_SECOND 0.25f
+#define BAR_HEIGHT 7.0f
 #define WEAPON_SIZE 40.0f
 #define WEAPON_SHOW_SECONDS 2.0f
 #define WEAPON_FADE_SECONDS 0.5f
@@ -62,6 +57,103 @@ static void draw_fitted(int mesh, float x, float y, float size) {
     }
     scale = size / (x1 - x0 > y1 - y0 ? x1 - x0 : y1 - y0);
     draw_mesh(mesh, x + size * 0.5f - (x0 + x1) * 0.5f * scale, y + size * 0.5f + (y0 + y1) * 0.5f * scale, scale);
+}
+
+/* Remap a cockpit part into PSP pixels. GU memory is the frame's display-list
+ * arena, never a heap allocation. The frame and runes retain the disc UVs. */
+static void art_box(int mesh, int part, float x, float y, float w, float h) {
+    const HudMesh *m = &hud_meshes[mesh];
+    const HudTexture *t = &hud_textures[m->texture];
+    unsigned int first = part < 0 ? 0 : m->parts[part].first;
+    unsigned int count = part < 0 ? m->vert_count : m->parts[part].count;
+    float x0=1e9f, x1=-1e9f, y0=1e9f, y1=-1e9f;
+    unsigned int i;
+    HudDrawVertex *v = sceGuGetMemory(sizeof(*v)*count);
+    for(i=first;i<first+count;++i) {
+        const HudVertex *a=&m->verts[i];
+        if(a->x<x0)x0=a->x;
+        if(a->x>x1)x1=a->x;
+        if(a->y<y0)y0=a->y;
+        if(a->y>y1)y1=a->y;
+    }
+    for(i=0;i<count;++i) {
+        const HudVertex *a=&m->verts[first+i];
+        v[i].u=a->u*t->width; v[i].v=a->v*t->height;
+        if(mesh==HUD_BAR_FRAME) {
+            float q=a->x-x0, span=x1-x0;
+            /* Keep the two end ornaments at 22px as the middle grows. */
+            if(q<50.771f) v[i].x=x+q/50.771f*22;
+            else if(q>span-56.533f) v[i].x=x+w-22+(q-span+56.533f)/56.533f*22;
+            else v[i].x=x+22+(q-50.771f)/(span-107.304f)*(w-44);
+        } else v[i].x=x+(a->x-x0)/(x1-x0)*w;
+        v[i].y=y+(y1-a->y)/(y1-y0)*h; v[i].z=0;
+    }
+    sceGuTexImage(0,t->width,t->height,t->width,t->rgba);
+    sceGuDrawArray(GU_TRIANGLES,GU_TEXTURE_32BITF|GU_VERTEX_32BITF|GU_TRANSFORM_2D,count,0,v);
+}
+
+static float fraction(float hp, float maximum) {
+    float f=maximum>0 ? hp/maximum : 0;
+    return f<0?0:f>1?1:f;
+}
+
+typedef struct { float value, previous, hold; } DamageTrail;
+static float trail_step(DamageTrail *t, float hp, float dt) {
+    if(hp<t->previous) t->hold=0.35f;
+    if(hp>t->value) t->value=hp;
+    if(t->hold>0) t->hold-=dt;
+    else if(t->value>hp) { t->value-=dt*0.65f; if(t->value<hp)t->value=hp; }
+    t->previous=hp;
+    return t->value;
+}
+
+typedef struct { float u,v; unsigned int color; float x,y,z; } RuneVertex;
+
+/* One textured draw for the entire rune row, including partial fill. Each
+ * source part is a textured quad; cache its four UV bounds once. */
+static void draw_runes(const Player *p) {
+    static float uv[10][4];
+    static int ready;
+    const HudMesh *m=&hud_meshes[HUD_GEMS];
+    const HudTexture *t=&hud_textures[m->texture];
+    RuneVertex *v=sceGuGetMemory(sizeof(*v)*120);
+    int k, n=0, count=(int)p->dt_max;
+    if(count<0)count=0;
+    if(count>10)count=10;
+    if(!ready) {
+        for(k=0;k<10;++k) {
+            unsigned int j;
+            uv[k][0]=uv[k][2]=1e9f; uv[k][1]=uv[k][3]=-1e9f;
+            for(j=0;j<m->parts[k+1].count;++j) {
+                const HudVertex *a=&m->verts[m->parts[k+1].first+j];
+                if(a->u<uv[k][0])uv[k][0]=a->u;
+                if(a->u>uv[k][1])uv[k][1]=a->u;
+                if(a->v<uv[k][2])uv[k][2]=a->v;
+                if(a->v>uv[k][3])uv[k][3]=a->v;
+            }
+        }
+        ready=1;
+    }
+    for(k=0;k<count;++k) {
+        float fill=fraction(p->dt_energy-k,1), x=BAR_LEFT-2+k*13;
+        int half;
+        for(half=0;half<2;++half) {
+            float left=half?fill:0, right=half?1:fill;
+            unsigned int color=half?0xff403840u:p->devil?0xffffb8ffu:0xffff70d0u;
+            static const int corner[6][2]={{0,0},{1,0},{0,1},{0,1},{1,0},{1,1}};
+            int j;
+            if(right<=left)continue;
+            for(j=0;j<6;++j) {
+                float q=corner[j][0]?right:left;
+                v[n].u=(uv[k][0]+(uv[k][1]-uv[k][0])*q)*t->width;
+                v[n].v=uv[k][corner[j][1]?3:2]*t->height;
+                v[n].color=color; v[n].x=x+q*12;
+                v[n].y=28+corner[j][1]*13; v[n].z=0; ++n;
+            }
+        }
+    }
+    sceGuTexImage(0,t->width,t->height,t->width,t->rgba);
+    sceGuDrawArray(GU_TRIANGLES,GU_TEXTURE_32BITF|GU_COLOR_8888|GU_VERTEX_32BITF|GU_TRANSFORM_2D,n,0,v);
 }
 
 typedef struct { unsigned int color; float x, y, z; } BarVertex;
@@ -109,13 +201,13 @@ void hud_draw(const Player *player) {
     };
     static const int melee[5] = {HUD_MELEE_REBELLION, HUD_MELEE_CERBERUS, HUD_MELEE_AGNI, HUD_MELEE_NEVAN, HUD_MELEE_BEOWULF};
     static const int guns[5] = {HUD_GUN_EBONY_IVORY, HUD_GUN_SHOTGUN, HUD_GUN_ARTEMIS, HUD_GUN_SPIRAL, HUD_GUN_KALINA};
-    /* Sized for a small screen, after Monster Hunter's: a slim bar in the corner, nothing else until
-     * it matters. Weapon icons show when switched, then fade. */
+    /* Weapon icons show when switched, then fade. */
     static int last_melee = -1, last_gun = -1;
-    static float melee_time, gun_time, tail = 1.0f;
+    static float melee_time, gun_time;
+    static DamageTrail trail = {1,1,0};
     static unsigned int last_us;
     unsigned int now = sceKernelGetSystemTimeLow();
-    float dt = (float)(now - last_us) / 1000000.0f, health = player->health / PLAYER_HEALTH_MAX;
+    float dt = (float)(now - last_us) / 1000000.0f, health = fraction(player->health, player->health_max), width = BAR_WIDTH * player->health_max / PLAYER_HEALTH_MAX, tail;
     last_us = now;
     if (dt > 0.1f) dt = 0.1f;
     if (health < 0.0f) health = 0.0f;
@@ -127,38 +219,17 @@ void hud_draw(const Player *player) {
         if (last_gun >= 0) gun_time = WEAPON_SHOW_SECONDS;
         last_gun = player->gun_weapon;
     }
-    /* The red tail shows what the last hits took, then catches up. */
-    if (tail < health) tail = health;
-    else if (tail > health) { tail -= TAIL_PER_SECOND * dt; if (tail < health) tail = health; }
+    tail = trail_step(&trail, health, dt);
 
     begin();
-    draw_fitted(emblems[player->style], BAR_LEFT - EMBLEM_SIZE - 3.0f, BAR_TOP - 3.0f, EMBLEM_SIZE);
+    draw_fitted(emblems[player->style], 7.0f, 8.0f, EMBLEM_SIZE);
     sceGuDisable(GU_TEXTURE_2D);
-    rect(BAR_LEFT - 1.0f, BAR_TOP - 1.0f, BAR_LEFT + BAR_WIDTH + 1.0f, BAR_TOP + BAR_HEIGHT + 1.0f, 0xc0000000u, 0xc0000000u);
-    rect(BAR_LEFT, BAR_TOP, BAR_LEFT + BAR_WIDTH, BAR_TOP + BAR_HEIGHT, 0xc0201808u, 0xc0100c04u);
-    rect(BAR_LEFT, BAR_TOP, BAR_LEFT + BAR_WIDTH * tail, BAR_TOP + BAR_HEIGHT, 0xff3030e0u, 0xff1818a0u);
-    rect(BAR_LEFT, BAR_TOP, BAR_LEFT + BAR_WIDTH * health, BAR_TOP + BAR_HEIGHT, 0xff60e878u, 0xff208838u);
-    {
-        float boss_hp,boss_max;
-        if(enemy_boss_health(&boss_hp,&boss_max)) {
-            float fraction=boss_max>0?boss_hp/boss_max:0;
-            if(fraction<0)fraction=0;
-            if(fraction>1)fraction=1;
-            rect(89,257,391,266,0xe0000000u,0xe0000000u);
-            rect(90,258,390,265,0xff201820u,0xff100810u);
-            rect(90,258,90+300*fraction,265,0xff7050e8u,0xff302080u);
-        }
-    }
-    {
-        /* Devil Trigger: a thin row of segments under the bar. */
-        float top = BAR_TOP + BAR_HEIGHT + 2.0f, each = (DEVIL_WIDTH - (DEVIL_SEGMENTS - 1)) / DEVIL_SEGMENTS;
-        int k;
-        rect(BAR_LEFT - 1.0f, top - 1.0f, BAR_LEFT + DEVIL_WIDTH + 1.0f, top + DEVIL_HEIGHT + 1.0f, 0xc0000000u, 0xc0000000u);
-        for (k = 0; k < DEVIL_SEGMENTS; ++k) {
-            float x = BAR_LEFT + (each + 1.0f) * (float)k;
-            rect(x, top, x + each, top + DEVIL_HEIGHT, player->devil ? 0xffff90d0u : 0xffe050a0u, 0xff901860u);
-        }
-    }
+    rect(BAR_LEFT, BAR_TOP, BAR_LEFT+width, BAR_TOP+BAR_HEIGHT, 0xff201018u, 0xff100810u);
+    rect(BAR_LEFT, BAR_TOP, BAR_LEFT+width*tail, BAR_TOP+BAR_HEIGHT, 0xff80a8f0u, 0xff305090u);
+    rect(BAR_LEFT, BAR_TOP, BAR_LEFT+width*health, BAR_TOP+BAR_HEIGHT, 0xff6868f8u, 0xff151580u);
+    sceGuEnable(GU_TEXTURE_2D);
+    art_box(HUD_BAR_FRAME,-1,BAR_LEFT-22,BAR_TOP-5,width+44,18);
+    draw_runes(player);
     sceGuEnable(GU_TEXTURE_2D);
     if (gun_time > 0.0f) {
         float a = gun_time < WEAPON_FADE_SECONDS ? gun_time / WEAPON_FADE_SECONDS : 1.0f;
@@ -173,6 +244,36 @@ void hud_draw(const Player *player) {
         melee_time -= dt;
     }
     sceGuColor(0xffffffffu);
+    end();
+}
+
+void hud_draw_boss(const char *name, float health, float maximum) {
+    static char last_name[64];
+    static DamageTrail trail;
+    static unsigned int last_us;
+    unsigned int now=sceKernelGetSystemTimeLow();
+    float dt=(float)(now-last_us)/1000000.0f, hp=fraction(health,maximum), tail;
+    last_us=now;
+    if(!name || health<=0 || maximum<=0) { last_name[0]=0; return; }
+    if(dt>0.1f)dt=0.1f;
+    if(strcmp(last_name,name)) {
+        strncpy(last_name,name,sizeof(last_name)-1); last_name[sizeof(last_name)-1]=0;
+        trail.value=trail.previous=hp; trail.hold=0;
+    }
+    tail=trail_step(&trail,hp,dt);
+    begin();
+    sceGuDisable(GU_TEXTURE_2D);
+    rect(69,253,411,260,0xff201018u,0xff100810u);
+    rect(69,253,69+342*tail,260,0xff80a8f0u,0xff305090u);
+    rect(69,253,69+342*hp,260,0xff6060e8u,0xff181880u);
+    sceGuEnable(GU_TEXTURE_2D);
+    art_box(HUD_BAR_FRAME,-1,47,248,386,19);
+    if(menu_loaded()) {
+        float size=14, width=menu_font_width(size,name);
+        if(width>340)size*=340/width;
+        menu_font_draw((SCR_W-menu_font_width(size,name))*0.5f+1,233, size,name,0xff000000u);
+        menu_font_draw((SCR_W-menu_font_width(size,name))*0.5f,232, size,name,0xffddddeeu);
+    }
     end();
 }
 

@@ -96,6 +96,12 @@ def main():
             print(f"--- {extra}\n" + (GAME / extra).read_text()[:1500])
     shots = sorted(GAME.glob("SHOT_*.BMP"), key=lambda p: int(p.stem.split("_")[1]))
     stills = set(args.shot)
+    # Scripted stills are requested from the game just like --shot stills;
+    # retain them too, instead of deleting their BMPs without exporting a PNG.
+    for line in lines:
+        fields = line.split()
+        if len(fields) == 2 and fields[0] == "psp_shot":
+            stills.add(int(fields[1]))
     frames_dir = OUT / f"{args.name}_frames"
     if args.video:
         shutil.rmtree(frames_dir, ignore_errors=True)

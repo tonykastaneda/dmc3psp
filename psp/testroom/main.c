@@ -1314,16 +1314,16 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
 
     if (!anim.viewer) {
         hud_draw(player);
+        {
+            float hp, maximum;
+            if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);
+            else hud_draw_boss(NULL, 0, 0);
+        }
         if (mission_mode && menu_loaded()) {
             /* The Red Orbs held, top right: brighter for a moment when one's collected. */
             char text[24];
             float since = orbs_since_collected(), k = since < 2.0f ? 1.0f : since < 3.0f ? 3.0f - since : 0.0f;
             unsigned int alpha = (unsigned int)(150.0f + 105.0f * k);
-            float boss_hp,boss_max;
-            if(enemy_boss_health(&boss_hp,&boss_max)) {
-                const char *name=enemy_boss_name();
-                menu_font_draw((SCR_WIDTH-menu_font_width(16.0f,name))*0.5f,237.0f,16.0f,name,0xffddddffu);
-            }
             snprintf(text, sizeof(text), "%d", shop_state.red_orbs);
             menu_font_draw(SCR_WIDTH - 10 - menu_font_width(20.0f, text), 24.0f, 20.0f, text, alpha << 24 | 0x3c3cffu);
             sceGuDisable(GU_BLEND);
@@ -1887,6 +1887,13 @@ static void cmp_load(void) {
         if (strncmp(line, "frames ", 7) == 0) cmp_frames = atoi(line + 7);
         else if (strncmp(line, "shot ", 5) == 0) { if (cmp_shot_count < 32) cmp_shots[cmp_shot_count++] = atoi(line + 5); }
         else if (strncmp(line, "enemy ", 6) == 0) cmp_enemy_distance = atoi(line + 6);
+        else if (strncmp(line, "capacity ", 9) == 0) {
+            int blue=0, purple=0;
+            if(sscanf(line+9,"%d %d",&blue,&purple)==2) {
+                shop_state.bought[4]=(unsigned char)(blue<0?0:blue>10?10:blue);
+                shop_state.bought[5]=(unsigned char)(purple<0?0:purple>7?7:purple);
+            }
+        }
         else if (strncmp(line, "hitme ", 6) == 0) sscanf(line + 6, "%d %d %d", &cmp_hit_frame, &cmp_hit_kind, &cmp_hit_damage);
         else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
@@ -3990,6 +3997,14 @@ int main(int argc, char *argv[]) {
         } else {
             player.enemy_close = 0;
         }
+        player_set_capacity(&player, shop_state.bought[4] + shop_state.blue_fragments / 4, shop_state.bought[5]);
+        {
+            static int last_melee_hits, last_gun_hits;
+            int melee_hits = combat.hits_dealt, gun_hits = bullets_hits();
+            if (melee_hits > last_melee_hits) player_gain_dt(&player, (melee_hits - last_melee_hits) * 0.18f);
+            if (gun_hits > last_gun_hits) player_gain_dt(&player, (gun_hits - last_gun_hits) * 0.025f);
+            last_melee_hits = melee_hits; last_gun_hits = gun_hits;
+        }
         apply_weapon_wheel(&input, &player);
         /* Where he was before anything moved him this frame: combat (Trickster's dash, Stinger) and the
          * stick both move him, and the walls are swept from here. */
@@ -4409,6 +4424,7 @@ int main(int argc, char *argv[]) {
                 report = fopen(path, "w");
                 if (report) {
                     fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log());
+                    fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

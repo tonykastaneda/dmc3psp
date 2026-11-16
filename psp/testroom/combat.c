@@ -1080,14 +1080,14 @@ static void start_handmade(Combat *c, Player *player, const PlayerInput *input) 
     int guard = input->style_action && player->style == STYLE_ROYALGUARD;
     if (input->taunt && player->on_ground) {
         start_move(c, MOVE_TAUNT, 0);
-    } else if (input->devil && !player->devil && player->on_ground) {
+    } else if (input->devil && !player->devil && player->dt_energy >= 3.0f && player->on_ground) {
         start_move(c, MOVE_DEVIL_ON, 0);
     } else if (input->style_action && input->lock_on && player->on_ground && player->style == STYLE_QUICKSILVER) {
         /* R1 + CIR. Only turning it on has a motion (HD Collection). */
-        player->quicksilver = !player->quicksilver;
+        if (player->quicksilver || player->dt_energy >= 3.0f) player->quicksilver = !player->quicksilver;
         if (player->quicksilver) start_move(c, MOVE_QUICKSILVER, 0);
     } else if (input->style_action && input->lock_on && player->on_ground && player->style == STYLE_DOPPELGANGER) {
-        player->doppelganger = !player->doppelganger;
+        if (player->doppelganger || player->dt_energy >= 3.0f) player->doppelganger = !player->doppelganger;
         if (player->doppelganger) start_move(c, MOVE_DOPPELGANGER, 0);
     } else if (input->jump && player->locked_on && player->on_ground) {
         float fx = sinf(player->camera_yaw), fz = cosf(player->camera_yaw);

@@ -70,10 +70,33 @@ static void set_action(Player *player, Action action) {
     player->action_timer = 1.2f;
 }
 
+/* Blue Orbs add 1000 HP; Purple Orbs add one rune. Purchases refill their gauge. */
+void player_set_capacity(Player *p, int blue, int purple) {
+    float hp, dt;
+    if (blue < 0) blue = 0;
+    if (blue > 10) blue = 10;
+    if (purple < 0) purple = 0;
+    if (purple > 7) purple = 7;
+    hp = PLAYER_HEALTH_BASE + 1000.0f * blue;
+    dt = 3.0f + purple;
+    if (hp > p->health_max) p->health = hp;
+    if (dt > p->dt_max) p->dt_energy = dt;
+    p->health_max = hp; p->dt_max = dt;
+    if (p->health > hp) p->health = hp;
+    if (p->dt_energy > dt) p->dt_energy = dt;
+}
+
+void player_gain_dt(Player *p, float runes) {
+    if (p->devil || p->quicksilver || p->doppelganger || runes <= 0) return;
+    p->dt_energy = fminf(p->dt_max, p->dt_energy + runes);
+}
+
 void player_reset(Player *player, FollowCamera *camera) {
     int melee = player->melee_weapon, gun = player->gun_weapon;
     memset(player, 0, sizeof(*player));
-    player->health = PLAYER_HEALTH_MAX;
+    player->health = PLAYER_HEALTH_BASE;
+    player->health_max = PLAYER_HEALTH_BASE;
+    player->dt_energy = player->dt_max = 3.0f;
     player->melee_weapon = melee;
     player->gun_weapon = gun;
     player->jump_motion = -1;
@@ -469,7 +492,14 @@ void player_update(Player *player, FollowCamera *camera, const PlayerInput *inpu
         player->style = (Style)input->style;
         set_action(player, ACTION_STYLE_SWITCH);
     }
-    if (input->devil) player->devil = !player->devil;
+    if (input->devil && (player->devil || player->dt_energy >= 3.0f)) player->devil = !player->devil;
+    if (player->devil || player->quicksilver || player->doppelganger) {
+        player->dt_energy -= dt; /* one rune per second; tuning shared by all DT consumers */
+        if (player->dt_energy <= 0.0f) {
+            player->dt_energy = 0.0f;
+            player->devil = player->quicksilver = player->doppelganger = 0;
+        }
+    }
     if (input->next_melee) player->melee_weapon = (player->melee_weapon + 1) % 5;
     if (input->next_gun) player->gun_weapon = 5 + (player->gun_weapon - 5 + 1) % 5;
 
