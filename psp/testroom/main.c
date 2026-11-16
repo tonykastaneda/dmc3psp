@@ -1053,7 +1053,19 @@ static void caption_draw(void) {
         alpha = pickup_caption_time > 0.5f ? 1.0f : pickup_caption_time * 2.0f;
     }
     unsigned int a = (unsigned int)(alpha * 255.0f) << 24;
-    if (!text || !menu_loaded()) return;
+    char clock[32];
+    int urgent = 0;
+    if (!menu_loaded()) return;
+    if (sm_clock_text(clock, sizeof clock, &urgent)) {
+        /* A Secret Mission's countdown, under the cockpit at the top of the screen, red in its last 10 seconds. */
+        sceGuDisable(GU_DEPTH_TEST);
+        sceGuDisable(GU_LIGHTING);
+        sceGuEnable(GU_ALPHA_TEST);
+        sceGuEnable(GU_TEXTURE_2D);
+        menu_font_draw(SCR_WIDTH / 2 - menu_font_width(22.0f, clock) * 0.5f, 10, 22.0f, clock, urgent ? 0xff3030ffu : 0xffffffffu);
+        sceGuDisable(GU_BLEND);
+    }
+    if (!text) return;
     sceGuDisable(GU_DEPTH_TEST);
     sceGuDisable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);

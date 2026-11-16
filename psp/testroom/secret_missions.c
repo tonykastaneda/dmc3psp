@@ -12,7 +12,8 @@
  *   3  602  stay in the air for 20 seconds (in all: the port adds up his time off the ground)
  *   4  603  ride the elevator to the top; it holds while a wave is on it (113's riding lift)
  *   5  604  break every prop in the room within 40 seconds
- *   6  605  collect every red orb (the room's 45 item records): most float over the drops, reached with Air Raid
+ *   6  605  collect every red orb (the room's 45 item records) within 60 seconds [the limit is an estimate]: most
+ *           float over the drops, reached with Air Raid
  *   7  606  reach the far end (the room's area 1, where the Blue Orb Fragment lies) within 30 seconds
  *           [the route is about 160 m, round the corner at (6118, 5668) and down the ramp: in Devil Trigger, at
  *           the PS2's 731 cm/s, it clears in about 28.6 s. Riding an enemy, the guide's quicker way, isn't in]
@@ -41,13 +42,18 @@ typedef struct {
     float limit;                 /* seconds, 0: none */
     float goal[4];               /* R_REACH: x0, x1, z0, z1 of the goal area */
 } SecretMission;
+/* Secret Mission 6's time limit [ESTIMATE]: the mission screen says "in time" without a number, and no limit was found
+ * in the executable (no per-mission table, and none of the 40 s / 30 s / 20 s constants of the other timed missions
+ * sits beside a candidate) or in st605's data. 60 s leaves room for the two Air Raid flights. Secret Mission 5's 40 s
+ * and 7's 30 s are the mission screens' own. */
+#define SM6_LIMIT 60.0f
 static const SecretMission secrets[12] = {
     {5, {5447.0f, 450.0f, 2861.0f}, R_KILL, 0.0f, {0}},
     {113, {2879.0f, -80.0f, 1556.0f}, R_KILL_CLEAN, 0.0f, {0}},
     {127, {3021.0f, 645.0f, 1220.0f}, R_AIR, 0.0f, {0}},
     {300, {5272.0f, 21.0f, -141.0f}, R_LIFT, 0.0f, {0}},
     {209, {1993.0f, 2141.0f, 2776.0f}, R_BREAK, 40.0f, {0}},
-    {206, {10221.0f, 3000.0f, 7087.0f}, R_ORBS, 0.0f, {0}},
+    {206, {10221.0f, 3000.0f, 7087.0f}, R_ORBS, SM6_LIMIT, {0}},
     {212, {2428.0f, 811.0f, 3133.0f}, R_REACH, 30.0f, {11221.0f, 11570.0f, 7001.0f, 7350.0f}},
     {230, {3645.0f, 580.0f, 3529.0f}, R_KILL, 0.0f, {0}},
     {233, {2911.0f, 401.0f, 1220.0f}, R_WAGONS, 0.0f, {0}},
@@ -125,7 +131,7 @@ static void crystal_start(void) {
 /* ---- Secret Mission 6's red orbs: every item record in 605 (tools/gen_rooms.py write_secret_orbs), most of them in
  * the air over the drop, where only Air Raid reaches (player.c). CItemOrb's update (FUN_002f2fa0) sets an orb
  * homing once it's within 300 cm of his position (+0x50, his feet), flying to him at up to 50 cm a frame, and
- * takes it within 50: here, within 300 cm it's his. The time limit isn't decoded: none is applied. */
+ * takes it within 50: here, within 300 cm it's his. The time limit is an estimate (SM6_LIMIT). */
 static unsigned char orb_taken[SECRET_ORB_COUNT];
 static int orbs_left;
 static void orbs_start(void) { int k; for (k = 0; k < SECRET_ORB_COUNT; ++k) orb_taken[k] = 0; orbs_left = SECRET_ORB_COUNT; }
@@ -286,14 +292,22 @@ int sm_update(float dt, const SmView *v, int *prompt, int *go_room, int *go_star
             ending = 2; end_wait = END_WAIT; say("MISSION FAILED", END_WAIT);
             return 0;
         }
-        if (s->limit > 0.0f || s->rule == R_AIR) {
-            /* The clock (or the time in the air), as a line. */
-            float shown = s->rule == R_AIR ? air : s->limit - clock_;
-            snprintf(caption_buf, sizeof caption_buf, s->rule == R_AIR ? "AIR %d.%d / 20" : "TIME %d.%d", (int)shown, (int)(shown * 10.0f) % 10);
-            caption = caption_buf; caption_time = 0.2f;
-        }
     }
     return 0;
+}
+
+/* The countdown (or the time in the air) while a timed one is played: drawn by main at the top of the screen. */
+int sm_clock_text(char *out, int size, int *urgent) {
+    const SecretMission *s;
+    float shown;
+    if (current < 0 || room_seen != 600 + current) return 0;
+    s = &secrets[current];
+    if (!(s->limit > 0.0f || s->rule == R_AIR)) return 0;
+    shown = s->rule == R_AIR ? air : s->limit - clock_;
+    if (shown < 0.0f) shown = 0.0f;
+    snprintf(out, size, s->rule == R_AIR ? "AIR %d.%d / 20" : "TIME %d.%d", (int)shown, (int)(shown * 10.0f) % 10);
+    *urgent = s->rule != R_AIR && shown < 10.0f;
+    return 1;
 }
 
 const char *sm_caption(float *alpha) {

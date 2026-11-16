@@ -27,8 +27,8 @@ What's still missing or stood in for, from `docs/GAME_FLOW.md`. Tick each one of
 - [ ] Mission 19: the hourglass isn't in
 - [ ] Secret Mission 11: the spikes aren't in
 - [ ] Secret Mission 12: the moving blocks aren't in
-- [ ] Secret Mission 5: the timer isn't decoded
-- [ ] Secret Mission 6: the timer isn't decoded
+- [x] Secret Mission 5: the timer isn't decoded
+- [x] Secret Mission 6: the timer isn't decoded (now 60 s, an estimate: the real limit wasn't found)
 - [ ] Messages and cameras: the script's camera moves and on-screen messages are mostly skipped
 
 ## Also discussed
