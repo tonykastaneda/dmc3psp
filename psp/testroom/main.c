@@ -75,6 +75,7 @@ int testroom_frame;
 #include "mission6.h"
 #include "needles.h"
 #include "messages.h"
+#include "blocks.h"
 #include "mission11.h"
 #include "mission14.h"
 #include "mission18.h"
@@ -2490,6 +2491,10 @@ static int mission_floor(float x, float y, float z, float step, float *out) {
     if(mission_mode && mission_choice.mission==10) {
         float h;if(mission10_floor(x,y,z,step,&h)&&(!found || h>*out)){*out=h;found=1;}
     }
+    {
+        float h;   /* Secret Mission 12's blocks (blocks.c) */
+        if (blocks_floor(x, y, z, step, &h) && (!found || h > *out)) { *out = h; found = 1; }
+    }
     if (l && over_lift(l, x, z) && lift_y <= y + step + LIFT_STEP && (!found || lift_y > *out)) { *out = lift_y; found = 1; }
     if (pad_on && (x - pad[0]) * (x - pad[0]) + (z - pad[2]) * (z - pad[2]) < PAD_RADIUS * PAD_RADIUS && pad[1] <= y + step + LIFT_STEP
         && (!found || pad[1] > *out)) { *out = pad[1]; found = 1; }
@@ -3020,6 +3025,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     /* The spike traps (needles.c): Mission 6's 125 until its Essence is taken, Mission 17's 131 once a mission (its
      * flag 1), Secret Mission 11's 610 each time it's entered. */
     msg_enter(mission_mode ? mission_choice.mission : 0, room_number(room));
+    blocks_enter(mission_mode ? room_number(room) : -1);   /* 611's moving blocks */
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
@@ -3185,6 +3191,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         if (prompt) door_prompt_time = 1.0f;
     }   /* 008's area 0: demo 326 */
     needles_update(dt, player->x, player->y, player->z, player->on_ground);
+    blocks_update(dt, &player->x, &player->y, &player->z, player->on_ground);
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
@@ -4558,6 +4565,7 @@ int main(int argc, char *argv[]) {
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
                     { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }
                     { char ml[128]; msg_status(ml, sizeof ml); fprintf(report, "%s\n", ml); }
+                    { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

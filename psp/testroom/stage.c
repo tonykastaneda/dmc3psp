@@ -42,10 +42,18 @@ static unsigned char group_hidden[256];   /* by breakable number */
 void stage_hide_group(int number) { if (number > 0 && number < 256) group_hidden[number] = 1; }
 #define LIFT_TAG 254   /* tools/gimmicks.py: a lift's batches */
 static float lift_raise;
-static struct {float x,z,yaw,raise;int active;} group_pose[256];
+static struct {float x,z,yaw,raise;int active;float pivot[3],move[3],turn[3];} group_pose[256];
 void stage_set_group_pose(int tag,float px,float pz,float yaw,float raise) {
     if(tag<=0 || tag>=256)return;
     group_pose[tag].x=px;group_pose[tag].z=pz;group_pose[tag].yaw=yaw;group_pose[tag].raise=raise;group_pose[tag].active=1;
+}
+/* A full pose (Secret Mission 12's blocks, blocks.c): moved by move, turned by turn (Rz * Ry * Rx, as the SCM's
+ * nodes) about pivot. */
+void stage_set_group_motion(int tag, const float pivot[3], const float move[3], const float turn[3]) {
+    int k;
+    if (tag <= 0 || tag >= 256) return;
+    for (k = 0; k < 3; ++k) { group_pose[tag].pivot[k] = pivot[k]; group_pose[tag].move[k] = move[k]; group_pose[tag].turn[k] = turn[k]; }
+    group_pose[tag].active = 2;
 }
 void stage_set_lift(float raise) { lift_raise = raise; }
 static StageInfo info;
@@ -204,7 +212,15 @@ void stage_draw(void) {
         if (lift) {
             ScePspFVector3 up = {0.0f, lift_raise, 0.0f};
             sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity();
-            if(posed) {
+            if (posed && group_pose[b->pad[0]].active == 2) {
+                int tag = b->pad[0];
+                ScePspFVector3 at = {group_pose[tag].pivot[0] + group_pose[tag].move[0], group_pose[tag].pivot[1] + group_pose[tag].move[1],
+                                     group_pose[tag].pivot[2] + group_pose[tag].move[2]};
+                ScePspFVector3 back = {-group_pose[tag].pivot[0], -group_pose[tag].pivot[1], -group_pose[tag].pivot[2]};
+                sceGumTranslate(&at);
+                sceGumRotateZ(group_pose[tag].turn[2]); sceGumRotateY(group_pose[tag].turn[1]); sceGumRotateX(group_pose[tag].turn[0]);
+                sceGumTranslate(&back);
+            } else if(posed) {
                 int tag=b->pad[0];ScePspFVector3 p={group_pose[tag].x,group_pose[tag].raise,group_pose[tag].z};
                 sceGumTranslate(&p);sceGumRotateY(group_pose[tag].yaw);
                 p.x=-p.x;p.y=0;p.z=-p.z;sceGumTranslate(&p);

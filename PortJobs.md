@@ -11,7 +11,7 @@
 - [ ] Mission 16: the swinging-sphere traps aren't in
 - [ ] Mission 19: the mirrors aren't in
 - [ ] Mission 19: the hourglass isn't in
-- [ ] Secret Mission 12: the moving blocks aren't in
+- [x] Secret Mission 12: the moving blocks run their own motions from the room's data and carry Dante; their sides don't stop him (stand-in), and the motion's start when he enters is the port's
 - [x] Messages: the event scripts' message blocks run with the game's text in a box (text from the disc at build time, kept local); flags the missions keep in C aren't linked, so a few flag-gated texts don't show or show late (docs/EVENT_SCRIPTS.md)
 - [ ] Cameras: the script's camera moves are mostly skipped (the messages half of this job is done)
 - [ ] Bloody Palace: rooms 422-449, the floor flow, boss floors, the Mission Select row and a floor counter

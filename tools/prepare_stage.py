@@ -527,7 +527,21 @@ def main() -> None:
     # A room with a lift also gets its lift and the lift's switch drawn from their own models (the lift tagged so
     # the runtime can raise it); other switches (Mission 3's crest switch) are drawn by the runtime.
     extra = ("LIFT", "SWITCH") if re.search(r"# SET\s+\d+\s+LIFT", game_text) else ()
+    # Secret Mission 12's blocks (st611): its DUMMY blocks are drawn too, and the moving ones tagged 160 + their set
+    # number for the runtime to pose (gen_rooms.py block_sets, psp/testroom/blocks.c).
+    block_tags = {}
+    if args.slot == 954:
+        import gen_rooms
+        extra = ("DUMMY",)
+        for bs, motion in gen_rooms.block_sets(game_text.replace("\r", ""), stage[5]):
+            block_tags[bs["number"]] = gen_rooms.BLOCK_TAG + bs["number"] if motion else 0
     for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra, static_efm=680 <= args.slot <= 732) if len(stage) > 5 else []):
+        if args.slot == 954 and s["kind"] in ("STAY", "DUMMY"):
+            if s["box"] is None or s["model"] is None or s["model"] > 32:
+                if s["kind"] == "DUMMY":
+                    continue
+            elif block_tags.get(s["number"]):
+                numbers[s["index"]] = block_tags[s["number"]]
         # M10's two rotating bridge arms and the lake's rising bridge.
         if args.slot == 516 and s["kind"] == "STAY" and s["number"] in (1,2):
             numbers[s["index"]] = 239 + s["number"]

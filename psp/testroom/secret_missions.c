@@ -20,7 +20,7 @@
  *   8  607  beat every enemy (5 Arachnes, 2 Hell Vanguards)
  *  10  609  light the end crystal: the beam puzzle below, from the game's own code and layouts
  *  11  610  reach the far end (area 2) [the spike trap, CStageSetNeedle, isn't in]
- *  12  611  reach area 0 [its moving blocks aren't in: the room's own floor]
+ *  12  611  reach area 0, over the moving blocks (blocks.c)
  *   9  608  let no enemy escape: the wagons below, a stand-in for CStageSetTruck
  * The award, a Blue Orb Fragment, is only named: the port has no Devil Trigger gauge to lengthen yet. */
 #include <math.h>
