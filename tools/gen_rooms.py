@@ -390,6 +390,51 @@ def write_blocks(iso_path, out):
     out.write_text("\n".join(lines))
 
 
+# Mission 19's hourglass in 404 (st404, sets 100-103): its parts by model, each tagged HOURGLASS_TAG + model by
+# prepare_stage.py so psp/testroom/mission19.c can pose them. Set 102 (the sand of the turned glass) has no motion
+# and is kept hidden; the turn itself isn't played.
+HOURGLASS_ROOM, HOURGLASS_TAG = "404", 170
+HOURGLASS_MODELS = (0, 1, 3, 6, 7, 8, 18, 19, 20)
+
+
+def write_hourglass(iso_path, out):
+    """st404's hourglass parts for mission19.c: each one's motion 0 from the room's PNST (gimmicks.set_motion_bones).
+    Bone 1 turns the whole part (the frame and sand spin, the sphere rolls) about its place; bone 2, the sand's own,
+    moves and scales it about its place. Turns and moves are changes from frame 0, scales ratios to it."""
+    with Iso9660(iso_path) as iso:
+        afs = AfsArchive(iso, "GDATA.AFS")
+        slot = SLOTS[HOURGLASS_ROOM]
+        stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
+    rows, chans, keys = [], [], []
+    for model in HOURGLASS_MODELS:
+        bones = gimmicks.set_motion_bones(stage[5], model) or {}
+        p1 = bones[1][0] if 1 in bones else (0.0, 0.0, 0.0)
+        p2 = bones[2][0] if 2 in bones else p1
+        first = len(chans)
+        for bone, wanted in ((1, (3, 4, 5)), (2, (0, 1, 2, 6, 7, 8))):
+            if bone not in bones or (bone == 2 and model == 3):
+                continue
+            for axis, ks in bones[bone][1]:
+                if axis not in wanted or len(ks) < 2:
+                    continue
+                v0 = ks[0][1]
+                vals = [(f, (v / v0 if abs(v0) > 1e-6 else v) if axis >= 6 else v - v0) for f, v in ks]
+                chans.append(f"{{{axis},{len(keys)},{len(vals)}}}")
+                keys += [f"{{{f},{v:.4f}f}}" for f, v in vals]
+        rows.append(f"{{{model},{HOURGLASS_TAG + model},{first},{len(chans) - first},{1 if not bones else 0},"
+                    f"{{{p1[0]:.1f}f,{p1[1]:.1f}f,{p1[2]:.1f}f}},{{{p2[0]:.1f}f,{p2[1]:.1f}f,{p2[2]:.1f}f}}}}")
+    lines = ["/* Generated from the player's disc by tools/gen_rooms.py (write_hourglass): Mission 19's hourglass. */",
+             "typedef struct { short frame; float value; } HourglassKey;",
+             "typedef struct { short axis, first, count; } HourglassChannel;   /* 0-2 move, 3-5 turn, 6-8 scale */",
+             "typedef struct { short model, tag, first, count, hidden; float pivot[3], pivot2[3]; } HourglassPart;",
+             f"#define HOURGLASS_PART_COUNT {len(rows)}", f"#define HOURGLASS_CHANNEL_COUNT {len(chans)}",
+             f"#define HOURGLASS_KEY_COUNT {len(keys)}",
+             "static const HourglassPart hourglass_parts[HOURGLASS_PART_COUNT] = {" + ",\n".join(rows) + "};",
+             "static const HourglassChannel hourglass_channels[HOURGLASS_CHANNEL_COUNT] = {" + ",".join(chans) + "};",
+             "static const HourglassKey hourglass_keys[HOURGLASS_KEY_COUNT] = {" + ",".join(keys) + "};", ""]
+    out.write_text("\n".join(lines))
+
+
 def write_crystals(iso_path, out):
     """CStageSetCrystal's eight layouts (the light-beam puzzles: Mission 9's 203, Secret Mission 10's 609), read from
     the player's SLUS_213.61: the pointers at 0x5bef40, each to up to 24 records {type, dir, x, y} (shorts; type 0
@@ -832,6 +877,7 @@ def main():
     write_crystals(args.iso, args.header.parent / "crystal_runtime.h")
     write_secret_orbs(args.iso, args.header.parent / "secret_orbs_runtime.h")
     write_blocks(args.iso, args.header.parent / "blocks_runtime.h")
+    write_hourglass(args.iso, args.header.parent / "hourglass_runtime.h")
 
 
 if __name__ == "__main__":

@@ -303,3 +303,59 @@ def set_motion(pnst, model):
     if bone is None or bone >= nodes:
         return None
     return world(bone), world(mesh), channels, mot["end_frame"]
+
+
+def set_motion_bones(pnst, model, index=0):
+    """A prop's motion `index` by bone: {bone: (place, [(axis, [(frame, value)])])}, axis 0-2 move x/y/z, 3-5 turn
+    x/y/z, 6-8 scale x/y/z, values as stored (not changes). A bone's records come translations, then rotations,
+    then scales (st404's sand: mask 0x87 holds a drop of y, then the three scales; see set_motion). Hermite
+    channels are resampled every 8 frames. None if there's no such motion."""
+    from mot_ps2 import parse_mot, hermite
+    if pnst[:4] != b"PNST":
+        return None
+    count = struct.unpack_from("<I", pnst, 4)[0]
+    offsets = struct.unpack_from(f"<{count}I", pnst, 8)
+    if 10 * model + 1 >= count or not offsets[10 * model] or not offsets[10 * model + 1]:
+        return None
+    present = sorted(o for o in offsets if o) + [len(pnst)]
+    end = lambda o: min(x for x in present if x > o)
+    scm = pnst[offsets[10 * model]:end(offsets[10 * model])]
+    pac = pnst[offsets[10 * model + 1]:end(offsets[10 * model + 1])]
+    if scm[:4] != b"SCM " or pac[:4] != b"PAC\0":
+        return None
+    n = struct.unpack_from("<I", pac, 4)[0]
+    entries = struct.unpack_from(f"<{n}I", pac, 8)
+    if index >= n or pac[entries[index] + 4:entries[index] + 8] != b"MOT\0":
+        return None
+    mot = parse_mot(pac[entries[index]:])
+    nodes = scm[0x11]
+    block = struct.unpack_from("<I", scm, 0x1C)[0]
+    tables = struct.unpack_from("<4I", scm, block)
+    hier = scm[block + tables[0]:block + tables[0] + nodes]
+    remap = scm[block + tables[1]:block + tables[1] + nodes]
+    local = [struct.unpack_from("<3f", scm, block + tables[3] + r * 32) for r in range(nodes)]
+    parent = [-1] * nodes
+    for node in range(nodes):
+        parent[remap[node]] = -1 if hier[node] == 0xFF else hier[node]
+    def world(r, depth=0):
+        if parent[r] < 0 or depth > nodes:
+            return local[r]
+        b = world(parent[r], depth + 1)
+        return tuple(b[k] + local[r][k] for k in range(3))
+    out = {}
+    by_bone = {}
+    for c in mot["channels"]:
+        by_bone.setdefault(c["bone"], []).append(c)
+    for b, chans in by_bone.items():
+        bits = [c["channel"] for c in chans]
+        order = [x for x in bits if 6 <= x <= 8] + [x for x in bits if 3 <= x <= 5] + [x for x in bits if x <= 2]
+        axes = []
+        for c, bit in zip(chans, order):
+            axis = bit - 6 if bit >= 6 else (bit if bit >= 3 else bit + 6)
+            keys = c["keys"]
+            if c["kind"] in (1, 3):
+                last = int(keys[-1][0])
+                keys = [(f, hermite(keys, f)) for f in list(range(int(keys[0][0]), last, 8)) + [last]]
+            axes.append((axis, [(int(k[0]), k[1]) for k in keys]))
+        out[b] = (world(b) if b < nodes else (0.0, 0.0, 0.0), axes)
+    return out

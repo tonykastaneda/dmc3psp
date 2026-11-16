@@ -572,7 +572,15 @@ Rooms 4xx are GDATA 736 + 4 x (n - 400).
 **In the port** (`tools/gen_rooms.py` Mission 19, `psp/testroom/mission19.c`, `docs/ARKHAM_SPEC.md`): 406 -> 405 ->
 404 (take the Samsara) -> 405 (set it at the statue, area 0) -> 408 -> 421, Arkham, to Mission Clear.
 - With the Samsara, 404's door goes straight back to 405's start 0 (the walk back through 403 and 406 is skipped).
-- The Abyss aren't ported: Prides stand in, and die to the sword (405's mirrors aren't in). 404's hourglass isn't in.
+- The Abyss aren't ported: Prides stand in, and die to the sword (405's mirrors aren't in).
+- 404's hourglass (`psp/testroom/mission19.c`): EventTbl19 starts a 5400-frame timer (op 7f [5400, 1], 90 s) as he
+  comes in before the Samsara is taken; when it runs out (switch 0x22) the glass turns, group 1 (3 Abyss) and group 0
+  (5) are spawned and the timer starts again; clearing the room stops it. The parts play their own motions from the
+  room's model pack (`tools/gen_rooms.py` `write_hourglass`): the frame and sand turn, the sphere rolls, and the sand
+  drains over the same 5400 frames. The port's: the timer shows as a countdown at the top of the screen; on running
+  out the Abyss still standing are taken away and group 0 runs again (group 1's three aren't added); each part turns
+  as one piece (the rings' and the sphere's inner hoops' own bones aren't played); the turn of the glass (motion 2,
+  set 102's sand) isn't played. Shots: `analysis/testroom/m19_hourglass_120.png`, `_2700`, `_5300`, `_5560`.
 - 421 runs one Arkham through both rounds (`arkham_boss.c`); Vergil doesn't join.
 - No cutscenes.
 

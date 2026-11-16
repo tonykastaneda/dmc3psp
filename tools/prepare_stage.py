@@ -536,6 +536,10 @@ def main() -> None:
         for bs, motion in gen_rooms.block_sets(game_text.replace("\r", ""), stage[5]):
             block_tags[bs["number"]] = gen_rooms.BLOCK_TAG + bs["number"] if motion else 0
     for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra, static_efm=680 <= args.slot <= 732) if len(stage) > 5 else []):
+        if args.slot == 752 and s["kind"] == "STAY" and s["number"] in (100, 101, 102, 103):
+            import gen_rooms   # Mission 19's hourglass parts, posed by psp/testroom/mission19.c
+            if s["model"] in gen_rooms.HOURGLASS_MODELS:
+                numbers[s["index"]] = gen_rooms.HOURGLASS_TAG + s["model"]
         if args.slot == 954 and s["kind"] in ("STAY", "DUMMY"):
             if s["box"] is None or s["model"] is None or s["model"] > 32:
                 if s["kind"] == "DUMMY":

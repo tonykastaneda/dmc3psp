@@ -1118,7 +1118,7 @@ static void caption_draw(void) {
     char clock[32];
     int urgent = 0;
     if (!menu_loaded()) return;
-    if (sm_clock_text(clock, sizeof clock, &urgent)) {
+    if (sm_clock_text(clock, sizeof clock, &urgent) || (mission_mode && m19_clock_text(clock, sizeof clock))) {
         /* A Secret Mission's countdown, under the cockpit at the top of the screen, red in its last 10 seconds. */
         sceGuDisable(GU_DEPTH_TEST);
         sceGuDisable(GU_LIGHTING);
@@ -3026,6 +3026,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
      * flag 1), Secret Mission 11's 610 each time it's entered. */
     msg_enter(mission_mode ? mission_choice.mission : 0, room_number(room));
     blocks_enter(mission_mode ? room_number(room) : -1);   /* 611's moving blocks */
+    m19_enter(mission_mode && mission_choice.mission == 19 ? room_number(room) : -1, room_is_cleared(room) || item_state[57] != 0);   /* 404's hourglass */
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
@@ -3192,6 +3193,12 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }   /* 008's area 0: demo 326 */
     needles_update(dt, player->x, player->y, player->z, player->on_ground);
     blocks_update(dt, &player->x, &player->y, &player->z, player->on_ground);
+    if (mission_mode && mission_choice.mission == 19 && m19_update(dt, room_is_cleared(mission_room))) {
+        /* 404's sand ran out: the Abyss come back (mission19.c). */
+        enemy_trim(0);
+        script_at = 0;
+        return 0;   /* this frame's "done" was worked out before: not cleared */
+    }
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
@@ -4566,6 +4573,7 @@ int main(int argc, char *argv[]) {
                     { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }
                     { char ml[128]; msg_status(ml, sizeof ml); fprintf(report, "%s\n", ml); }
                     { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
+                    { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

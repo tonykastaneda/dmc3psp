@@ -35,6 +35,9 @@ void stage_set_lift(float raise);
 void stage_set_group_pose(int tag,float px,float pz,float yaw,float raise);
 /* A full pose about pivot: moved by move, turned by turn (radians, Rz * Ry * Rx). Loading resets it. */
 void stage_set_group_motion(int tag, const float pivot[3], const float move[3], const float turn[3]);
+/* The same, then scaled by scale about pivot2 first (the sand in Mission 19's hourglass). */
+void stage_set_group_motion_scaled(int tag, const float pivot[3], const float move[3], const float turn[3],
+                                   const float pivot2[3], const float scale[3]);
 void stage_clear_boxes(void);
 void stage_add_box(float x, float y, float z, float hx, float hy, float hz, float yaw, int tag);
 /* Push a vertical capsule (feet at y, height ~180) out of the stage's

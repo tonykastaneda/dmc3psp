@@ -42,7 +42,7 @@ static unsigned char group_hidden[256];   /* by breakable number */
 void stage_hide_group(int number) { if (number > 0 && number < 256) group_hidden[number] = 1; }
 #define LIFT_TAG 254   /* tools/gimmicks.py: a lift's batches */
 static float lift_raise;
-static struct {float x,z,yaw,raise;int active;float pivot[3],move[3],turn[3];} group_pose[256];
+static struct {float x,z,yaw,raise;int active;float pivot[3],move[3],turn[3],pivot2[3],scale[3];} group_pose[256];
 void stage_set_group_pose(int tag,float px,float pz,float yaw,float raise) {
     if(tag<=0 || tag>=256)return;
     group_pose[tag].x=px;group_pose[tag].z=pz;group_pose[tag].yaw=yaw;group_pose[tag].raise=raise;group_pose[tag].active=1;
@@ -53,7 +53,15 @@ void stage_set_group_motion(int tag, const float pivot[3], const float move[3], 
     int k;
     if (tag <= 0 || tag >= 256) return;
     for (k = 0; k < 3; ++k) { group_pose[tag].pivot[k] = pivot[k]; group_pose[tag].move[k] = move[k]; group_pose[tag].turn[k] = turn[k]; }
+    for (k = 0; k < 3; ++k) { group_pose[tag].pivot2[k] = pivot[k]; group_pose[tag].scale[k] = 1.0f; }
     group_pose[tag].active = 2;
+}
+void stage_set_group_motion_scaled(int tag, const float pivot[3], const float move[3], const float turn[3],
+                                   const float pivot2[3], const float scale[3]) {
+    int k;
+    stage_set_group_motion(tag, pivot, move, turn);
+    if (tag <= 0 || tag >= 256) return;
+    for (k = 0; k < 3; ++k) { group_pose[tag].pivot2[k] = pivot2[k]; group_pose[tag].scale[k] = scale[k]; }
 }
 void stage_set_lift(float raise) { lift_raise = raise; }
 static StageInfo info;
@@ -220,6 +228,13 @@ void stage_draw(void) {
                 sceGumTranslate(&at);
                 sceGumRotateZ(group_pose[tag].turn[2]); sceGumRotateY(group_pose[tag].turn[1]); sceGumRotateX(group_pose[tag].turn[0]);
                 sceGumTranslate(&back);
+                if (group_pose[tag].scale[0] != 1.0f || group_pose[tag].scale[1] != 1.0f || group_pose[tag].scale[2] != 1.0f) {
+                    /* then scaled about its second pivot (Mission 19's sand) */
+                    ScePspFVector3 p2 = {group_pose[tag].pivot2[0], group_pose[tag].pivot2[1], group_pose[tag].pivot2[2]};
+                    ScePspFVector3 n2 = {-p2.x, -p2.y, -p2.z};
+                    ScePspFVector3 sc = {group_pose[tag].scale[0], group_pose[tag].scale[1], group_pose[tag].scale[2]};
+                    sceGumTranslate(&p2); sceGumScale(&sc); sceGumTranslate(&n2);
+                }
             } else if(posed) {
                 int tag=b->pad[0];ScePspFVector3 p={group_pose[tag].x,group_pose[tag].raise,group_pose[tag].z};
                 sceGumTranslate(&p);sceGumRotateY(group_pose[tag].yaw);
