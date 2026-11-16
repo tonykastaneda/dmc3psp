@@ -276,6 +276,10 @@ static void draw_title(int cursor) {
     }
 }
 
+/* Each difficulty keeps its own mission number, as on the HD Collection: the arrows change only the row the
+ * cursor is on. Kept across visits to the menu. */
+static int row_mission[2];
+
 /* Easy and Normal only, for now. Row 0's arrows and digit sit one row-height above row 1's. */
 static void draw_missions(const MenuChoice *c, int row) {
     /* The HD Collection's Mission Select, every row where the disc lays it out (bar, label): Easy and Normal
@@ -308,7 +312,7 @@ static void draw_missions(const MenuChoice *c, int row) {
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2, BRIGHT, 0.0f, 0.0f, 0);
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2 + 1, BRIGHT, 0.0f, 0.0f, 1);
         }
-        draw_quad_offset(GROUP_MISSION_NUMBERS, c->mission - 1, color, 0.0f, -row_height * (float)i, 0);
+        draw_quad_offset(GROUP_MISSION_NUMBERS, (i < 2 ? row_mission[i] : c->mission) - 1, color, 0.0f, -row_height * (float)i, 0);
     }
     layout_spread = SPREAD;
     layout_dx = 0.0f;
@@ -335,6 +339,11 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
     int frame = 0, title_cursor = TITLE_NEW, row = c->difficulty & 1, fade = FADE_FRAMES, leaving = 0, briefing_cursor = 0;
     Screen next = screen;
     if (c->mission < 1 || c->mission > MENU_MISSIONS || !(mission_mask & (1u << (c->mission-1)))) c->mission = 1;
+    {
+        int k;
+        for (k = 0; k < 2; ++k)
+            if (row_mission[k] < 1 || row_mission[k] > MENU_MISSIONS || !(mission_mask & (1u << (row_mission[k]-1)))) row_mission[k] = c->mission;
+    }
     sceCtrlSetSamplingCycle(0);
     sceCtrlSetSamplingMode(PSP_CTRL_MODE_ANALOG);
     while (screen != SCREEN_DONE) {
@@ -356,7 +365,7 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 if (pressed & PSP_CTRL_RIGHT) title_cursor = title_cursor == TITLE_LOAD ? TITLE_NEW : TITLE_LOAD;
                 if (pressed & (PSP_CTRL_CROSS | PSP_CTRL_START)) {
                     /* No saves yet: both lead to Mission Select. New Game starts at the first mission. */
-                    if (title_cursor == TITLE_NEW) c->mission = 1;
+                    if (title_cursor == TITLE_NEW) c->mission = row_mission[0] = row_mission[1] = 1;
                     next = SCREEN_MISSIONS;
                     leaving = 1;
                 }
@@ -365,10 +374,10 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 if (pressed & PSP_CTRL_UP) row = (row + SELECT_ROWS - 1) % SELECT_ROWS;
                 if (pressed & PSP_CTRL_DOWN) row = (row + 1) % SELECT_ROWS;
                 if ((pressed & PSP_CTRL_CROSS) && row == ROW_DEBUG) { c->mission = MENU_DEBUG_ROOM; next = SCREEN_DONE; leaving = 1; break; }
-                if (pressed & PSP_CTRL_LEFT) c->mission = next_mission(c->mission,-1);
-                if (pressed & PSP_CTRL_RIGHT) c->mission = next_mission(c->mission,1);
+                if (row < 2 && (pressed & PSP_CTRL_LEFT)) row_mission[row] = next_mission(row_mission[row],-1);
+                if (row < 2 && (pressed & PSP_CTRL_RIGHT)) row_mission[row] = next_mission(row_mission[row],1);
                 if (pressed & PSP_CTRL_SQUARE) c->turbo = !c->turbo;
-                if (pressed & PSP_CTRL_CROSS) { c->difficulty = row; next = SCREEN_BRIEFING; leaving = 1; }
+                if (pressed & PSP_CTRL_CROSS) { c->difficulty = row; c->mission = row_mission[row]; next = SCREEN_BRIEFING; leaving = 1; }
                 if (pressed & PSP_CTRL_CIRCLE) { next = SCREEN_TITLE; leaving = 1; }
                 break;
             case SCREEN_BRIEFING:
