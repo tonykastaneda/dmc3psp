@@ -86,3 +86,23 @@ placed is the port's choice:
 - The GS blend mode per element.
 - The 16-byte texture references.
 - E2's shockwave.
+
+## Shadows and the rooms' lighting
+
+- **The rooms' baked lighting is their vertex colours**, and the port already draws with it: every stage vertex
+  carries the PS2 mesh's RGB (SCM `colors`, `tools/scm_ps2.py`), written by `tools/prepare_stage.py` (times
+  `STAGE_BRIGHTNESS`, 1.25) and modulated with the texture in `stage.c`. Sampled rooms span the whole range
+  (st000 median 29, st200 median 83 and 0-255, st300 median 67), so corners and creases are already dark in the
+  game's own data. No ambient occlusion is faked on top.
+- **Soft floor shadows** (`fx_draw_shadows`, `fx.c`): Dante's disc (42 cm, alpha 170, gone 5 m up) and now one
+  under every enemy and boss (`enemy_draw_shadows`, `enemy.c`), sized per kind (Cerberus 3.3 m, Geryon 2.6 m,
+  Arachne 1.5 m, Beowulf 1.2 m, the Hell Vanguard 75 cm, most others about 46 cm; fitted by eye, estimates) and
+  fading with height over 5 m plus twice the radius. None under the Gigapede (on the walls) or the Leviathan
+  (Dante's inside it). The game's own shadow records (SHW, the zone's shadow type) aren't decoded.
+- How they're drawn: one untextured draw for all of them (8-sided disc, solid to half the radius, then a ramp to
+  nothing, in the vertex colours), on the **drawn** floor (`stage_shown_floor`: the mesh's floor triangles can sit
+  centimetres above the collision floor) with a depth bias of 96, a little over the decals' 64. Before this, Dante's
+  textured disc 3 cm over the collision floor lost the depth test to the street's grime layers and never showed.
+- Cost (PPSSPP, test street, 12 Hell Prides on screen, real clock, 60 s): 54.22 FPS average and 347 missed
+  frames before and after, identical; the display-list build went from 7337 to 7690 microseconds a frame.
+  Shots: `analysis/testroom/shadow_bench_after_400.png`, `shadow_vergil_150.png`, `shadow_cerberus_380.png`.

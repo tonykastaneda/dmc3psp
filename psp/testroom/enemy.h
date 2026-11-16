@@ -96,6 +96,8 @@ int enemy_attack_kind(int heavy);
 void enemy_clamp_player(float *z);
 /* Draw with the view/projection set, inside an open display list. */
 void enemy_draw(void);
+/* Their soft floor shadows, after the stage and before the characters. */
+void enemy_draw_shadows(void);
 int enemy_active(void);
 void enemy_position(float out[3]);   /* feet */
 float enemy_height(void);            /* feet height above its floor (air time) */

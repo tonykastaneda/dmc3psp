@@ -510,11 +510,9 @@ int stage_walkable_below(float x, float z) {
     return cell && cell->count > 0;
 }
 
+static int shown_floor(float x, float y, float z, float step, float *out);
 int stage_floor(float x, float y, float z, float step, float *out) {
-    const float *tris;
-    const Cell *cells;
-    const unsigned int *indices;
-    int cx, cz, found = 0;
+    int found = 0;
     unsigned int k;
     float best = -1.0e30f;
     if (!header) return 0;
@@ -538,6 +536,18 @@ int stage_floor(float x, float y, float z, float step, float *out) {
         }
         if (found) { *out = best; return 1; }
     }
+    return shown_floor(x, y, z, step, out);
+}
+
+/* The drawn floor's own triangles (the grid prepare_stage.py builds from the room's mesh): what's seen, which can
+ * sit some centimetres off the collision. */
+static int shown_floor(float x, float y, float z, float step, float *out) {
+    const float *tris;
+    const Cell *cells;
+    const unsigned int *indices;
+    int cx, cz, found = 0;
+    unsigned int k;
+    float best = -1.0e30f;
     cx = (int)((x - header->grid_x0) / (float)header->grid_cell);
     cz = (int)((z - header->grid_z0) / (float)header->grid_cell);
     if (cx < 0 || cz < 0 || cx >= (int)header->grid_w || cz >= (int)header->grid_h) return 0;
@@ -560,4 +570,11 @@ int stage_floor(float x, float y, float z, float step, float *out) {
     }
     if (found) *out = best;
     return found;
+}
+
+int stage_shown_floor(float x, float y, float z, float *out) {
+    float g;
+    if (!header || !shown_floor(x, y + 60.0f, z, 0.0f, &g) || g < y - 60.0f) return 0;
+    *out = g;
+    return 1;
 }

@@ -15,4 +15,4 @@
 - [ ] Messages and cameras: the script's camera moves and on-screen messages are mostly skipped
 - [ ] Bloody Palace: rooms 422-449, the floor flow, boss floors, the Mission Select row and a floor counter
 - [ ] Real-time cutscenes: none play yet (Mission 2's intro, the Vergil scenes and others); the biggest job left
-- [ ] Shadow pass: a pass over shadows (Dante has the game's soft blob shadow under him; check enemies, bosses and props) and a faked ambient occlusion (AO)
+- [x] Shadow pass: every enemy and boss has Dante's soft floor shadow, sized per kind (sizes are estimates), fading with height; Dante's own now shows (it was hidden under the floor's decals). No faked AO: the rooms carry the game's baked lighting in their vertex colours, which the port already uses. Props have none; the game's own shadow records (SHW) aren't decoded

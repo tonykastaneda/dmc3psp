@@ -16,6 +16,8 @@ void fx_draw(const float eye[3]);
 
 /* A soft dark disc on the floor. Before the characters, in the display list. */
 void fx_draw_shadow(float x, float y, float z, float radius, unsigned int alpha);
+/* Many at once, one draw: n records of {x, y, z, radius, alpha 0-255}. */
+void fx_draw_shadows(const float *records, int n);
 
 void fx_screen_tint(unsigned int color);   /* a flat wash over the whole picture */
 void fx_screen_negative(void);

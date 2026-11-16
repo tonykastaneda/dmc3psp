@@ -2438,6 +2438,58 @@ void enemy_draw(void) {
     e = selected;
 }
 
+/* The soft floor shadow Dante has (fx_draw_shadow), under every enemy and boss: sized to each, fading as it rises
+ * (gone 5 m up, more for the big ones). Not under the Gigapede (it crawls the walls and ceiling) or the Leviathan
+ * (Dante's inside it). The sizes are the port's, fitted by eye to the models' footprints [estimates]. */
+static float shadow_radius(int kind) {
+    switch (kind) {
+    case ENEMY_ARACHNE: return 150.0f;
+    case ENEMY_BEOWULF: return 120.0f;
+    case ENEMY_AGNI: case ENEMY_RUDRA: return 60.0f;
+    case ENEMY_WRATH: case ENEMY_FALLEN: return 60.0f;
+    case ENEMY_PAWN: case ENEMY_BISHOP: case ENEMY_DULLAHAN: case ENEMY_ENIGMA: case ENEMY_GREED: return 52.0f;
+    case ENEMY_LADY: return 38.0f;
+    case ENEMY_VANGUARD: return 75.0f;
+    case ENEMY_CERBERUS: return 330.0f;
+    case ENEMY_GERYON: return 260.0f;
+    case ENEMY_ARKHAM: return 90.0f;
+    case ENEMY_VERGIL: case ENEMY_DOPPELGANGER: return 42.0f;
+    default: return 46.0f;
+    }
+}
+#define SHADOW_MAX 48
+void enemy_draw_shadows(void) {
+    float s[SHADOW_MAX][5], p[3], g;
+    int i, n = 0;
+    if (ai_only) return;
+    for (i = 0; i < ENEMY_MAX && n < SHADOW_MAX; ++i) {
+        const Enemy *a = &enemies[i];
+        float r, h, k;
+        if (!a->active || a->hidden) continue;
+        switch (a->kind) {
+        case ENEMY_GIGAPEDE: case ENEMY_LEVIATHAN: continue;
+        case ENEMY_CERBERUS: if (cerberus_boss_dying()) continue; cerberus_boss_root_position(p); break;
+        case ENEMY_VERGIL: if (vergil_boss_hidden()) continue; vergil_boss_position(p); break;
+        case ENEMY_GERYON: if (geryon_boss_hidden()) continue; geryon_boss_position(p); break;
+        case ENEMY_DOPPELGANGER: if (doppelganger_boss_hidden()) continue; doppelganger_boss_position(p); break;
+        case ENEMY_ARKHAM: if (arkham_boss_hidden()) continue; arkham_boss_position(p); break;
+        case ENEMY_VANGUARD: vanguard_select(i); if (vanguard_hidden()) continue;   /* its slot keeps its feet */
+            p[0] = a->pos[0]; p[1] = a->pos[1]; p[2] = a->pos[2]; break;
+        default: p[0] = a->pos[0]; p[1] = a->pos[1]; p[2] = a->pos[2]; break;
+        }
+        if (!floor_under(p[0], p[1] - 140.0f, p[2], &g)) continue;
+        { float shown; if (stage_shown_floor(p[0], g, p[2], &shown)) g = shown; }   /* on what's drawn */
+        r = shadow_radius(a->kind);
+        h = p[1] - g;
+        k = 1.0f - h / (500.0f + 2.0f * r);
+        if (h < -30.0f || k <= 0.0f) continue;
+        if (k > 1.0f) k = 1.0f;
+        s[n][0] = p[0]; s[n][1] = g; s[n][2] = p[2]; s[n][3] = r; s[n][4] = 170.0f * k;
+        ++n;
+    }
+    fx_draw_shadows(&s[0][0], n);
+}
+
 /* ---- The Enigma (CEm013): the archer on the walls (build/hdref/enemy_specs.md, rank 0). It never walks:
  * it turns in place to face Dante, and each of its three pairs of bow arms (bones 5-15, 16-26, 27-37) has
  * its own cooldown. When one runs out and the attack token is free (the same 3 seconds as the Seven Hells'),

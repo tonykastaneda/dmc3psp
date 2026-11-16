@@ -1230,9 +1230,12 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         float floor_y;
         if (stage_loaded() && stage_floor(player->x, player->y + 60.0f, player->z, 0.0f, &floor_y)) {
             float h = player->y - floor_y, k = 1.0f - h / 500.0f;
+            float shown;
+            if (stage_shown_floor(player->x, floor_y, player->z, &shown)) floor_y = shown;   /* on what's drawn */
             if (k > 0.0f) fx_draw_shadow(player->x, floor_y, player->z, 42.0f, (unsigned int)(170.0f * k));
         }
     }
+        enemy_draw_shadows();   /* every enemy and boss gets the same soft shadow */
         sceGuDisable(GU_TEXTURE_2D);
     } else {
         sceGuDepthMask(GU_TRUE);

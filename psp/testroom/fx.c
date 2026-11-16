@@ -437,42 +437,66 @@ void fx_draw(const float eye[3]) {
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);
 }
 
-void fx_draw_shadow(float x, float y, float z, float radius, unsigned int alpha) {
-    FxVertex *v = sceGuGetMemory(sizeof(FxVertex) * 6);
-    float c[4][3] = {{x - radius, y + 3.0f, z - radius}, {x + radius, y + 3.0f, z - radius},
-                     {x - radius, y + 3.0f, z + radius}, {x + radius, y + 3.0f, z + radius}};
-    static unsigned int disc[32 * 32] __attribute__((aligned(16)));
-    if (!disc[16 * 32 + 16]) {
-        /* A soft round alpha ramp, black. */
-        int px, py;
-        for (py = 0; py < 32; ++py)
-            for (px = 0; px < 32; ++px) {
-                float dx = ((float)px + 0.5f - 16.0f) / 16.0f, dy = ((float)py + 0.5f - 16.0f) / 16.0f;
-                float d = 1.0f - sqrtf(dx * dx + dy * dy);
-                disc[py * 32 + px] = (unsigned int)(255.0f * (d < 0.0f ? 0.0f : d > 0.5f ? 1.0f : d * 2.0f)) << 24;
-            }
-        sceKernelDcacheWritebackInvalidateAll();
+/* Soft dark discs on the floor, all in one draw: n records of {x, y, z, radius, alpha 0-255}. Untextured: a solid
+ * middle out to half the radius, then a ramp to nothing at the rim, in the vertex colours (the textured disc drew as
+ * nothing in PPSSPP, and this needs no texture bound). 17 vertices and 24 triangles each. Drawn with a depth bias a
+ * little over the stage's decals' (stage.c DECAL_DEPTH_OFFSET 64): the floors' grime layers are pushed toward the
+ * camera by that much, which hid a disc 3 cm over the floor (Dante's own shadow never showed). */
+#define SHADOW_SIDES 8
+typedef struct { unsigned int color; float x, y, z; } ShadowVertex;
+void fx_draw_shadows(const float *s, int n) {
+    static float ring[SHADOW_SIDES][2];
+    static unsigned short pattern[SHADOW_SIDES * 9];
+    ShadowVertex *v;
+    unsigned short *idx;
+    int i, k, per = 1 + 2 * SHADOW_SIDES;
+    if (n <= 0) return;
+    if (!pattern[1]) {
+        int o = 0;
+        for (k = 0; k < SHADOW_SIDES; ++k) {
+            int j = (k + 1) % SHADOW_SIDES;
+            ring[k][0] = cosf(6.2831853f * k / SHADOW_SIDES); ring[k][1] = sinf(6.2831853f * k / SHADOW_SIDES);
+            /* the middle (0), the inner ring (1..), the rim (1 + SIDES..) */
+            pattern[o++] = 0; pattern[o++] = 1 + k; pattern[o++] = 1 + j;
+            pattern[o++] = 1 + k; pattern[o++] = 1 + SHADOW_SIDES + k; pattern[o++] = 1 + SHADOW_SIDES + j;
+            pattern[o++] = 1 + k; pattern[o++] = 1 + SHADOW_SIDES + j; pattern[o++] = 1 + j;
+        }
     }
-    put_quad(v, c, 0.0f, 0.0f, 1.0f, 1.0f, alpha << 24 | 0xffffffu);
+    v = sceGuGetMemory(sizeof(ShadowVertex) * per * n);
+    idx = sceGuGetMemory(sizeof(unsigned short) * SHADOW_SIDES * 9 * n);
+    for (i = 0; i < n; ++i, s += 5) {
+        ShadowVertex *o = v + per * i;
+        float x = s[0], y = s[1] + 3.0f, z = s[2], r = s[3];
+        unsigned int dark = (unsigned int)s[4] << 24;
+        o[0] = (ShadowVertex){dark, x, y, z};
+        for (k = 0; k < SHADOW_SIDES; ++k) {
+            o[1 + k] = (ShadowVertex){dark, x + ring[k][0] * r * 0.5f, y, z + ring[k][1] * r * 0.5f};
+            o[1 + SHADOW_SIDES + k] = (ShadowVertex){0u, x + ring[k][0] * r, y, z + ring[k][1] * r};
+        }
+        for (k = 0; k < SHADOW_SIDES * 9; ++k) idx[SHADOW_SIDES * 9 * i + k] = (unsigned short)(per * i + pattern[k]);
+    }
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGuDepthMask(GU_TRUE);
     sceGuEnable(GU_BLEND);
     sceGuDisable(GU_ALPHA_TEST);
     sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuShadeModel(GU_SMOOTH);
     sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
-    sceGuEnable(GU_TEXTURE_2D);
-    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
-    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
-    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
-    sceGuColor(0xffffffff);
-    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
-    sceGuTexImage(0, 32, 32, 32, disc);
-    sceGuTexFlush();
-    sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, 6, 0, v);
+    sceGuDepthOffset(96);
+    sceGumDrawArray(GU_TRIANGLES, GU_INDEX_16BIT | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                    SHADOW_SIDES * 9 * n, idx, v);
+    sceGuDepthOffset(0);
     sceGuDisable(GU_BLEND);
     sceGuDepthMask(GU_FALSE);
     sceGuEnable(GU_ALPHA_TEST);
+    sceGuEnable(GU_TEXTURE_2D);
+}
+
+void fx_draw_shadow(float x, float y, float z, float radius, unsigned int alpha) {
+    float s[5] = {x, y, z, radius, (float)alpha};
+    fx_draw_shadows(s, 1);
 }
 
 void fx_screen_tint(unsigned int color) {

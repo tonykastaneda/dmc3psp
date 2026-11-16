@@ -21,6 +21,8 @@ int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
  * leaves *out untouched if there is no floor below. */
 int stage_floor(float x, float y, float z, float step, float *out);
+/* The drawn floor within 60 cm of y (a collision floor's height): where a shadow goes. 0 if none. */
+int stage_shown_floor(float x, float y, float z, float *out);
 /* Whether the game's collision has walkable floor near (x, z) (a grid cell with floor triangles): what's
  * outside it is in the walls. */
 int stage_walkable_below(float x, float z);
