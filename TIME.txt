@@ -1370,3 +1370,35 @@
 [2026-11-16 12:11:18.710 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,161,931 bytes)
 [2026-11-16 12:12:12.205 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,161,979 bytes)
 [2026-11-16 12:18:40.163 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,161,883 bytes)
+[2026-11-16 13:48:29.101 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,161,883 bytes)
+[2026-11-16 13:49:01.391 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,435 bytes)
+[2026-11-16 13:54:41.703 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,435 bytes)
+[2026-11-16 13:55:56.203 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,515 bytes)
+[2026-11-16 13:57:51.709 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,451 bytes)
+[2026-11-16 14:00:03.953 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,467 bytes)
+[2026-11-16 14:02:25.504 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,323 bytes)
+[2026-11-16 14:04:17.548 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,339 bytes)
+[2026-11-16 14:06:16.480 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,275 bytes)
+[2026-11-16 14:08:18.652 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,275 bytes)
+[2026-11-16 14:10:21.214 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,275 bytes)
+[2026-11-16 14:12:23.966 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,339 bytes)
+[2026-11-16 14:14:19.810 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,291 bytes)
+[2026-11-16 14:16:38.501 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,547 bytes)
+[2026-11-16 14:18:45.069 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,163,547 bytes)
+[2026-11-16 14:31:16.227 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,185,355 bytes)
+[2026-11-16 14:37:06.448 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,185,403 bytes)
+[2026-11-16 14:49:04.283 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,231,019 bytes)
+[2026-11-16 14:55:50.425 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,309,915 bytes)
+[2026-11-16 14:59:08.577 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 00394920,00395a40,00395ac0,00396160,00396fd0,00397100,00397120,003973e0,00397380,003973d0,004ede50,004ef1a0,004ef250,004ef7b0,004f0840,004f0930,004f09d0,004f0c60 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-16 14:59:23.840 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-16 14:59:45.405 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 00396320,00396360,003964d0,00396640,003968f0,00396970,004ef8a0 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-16 14:59:53.495 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-16 15:00:22.919 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 00396740,00396600,00395a40 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-16 15:00:30.132 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-16 15:01:49.592 -08:00] RUN Ghidra: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra DMC3 -process SLUS_213.61 -noanalysis -scriptPath C:\Users\tonyk\Documents\GitHub\dmc3psp\tools\ghidra -postScript ExportDmc3Inventory.java C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export 004f0130,004efc10,004efe40,004f0100,004ef990 -log C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export.log
+[2026-11-16 15:01:57.367 -08:00] Ghidra inventory/decompilation export completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\analysis\ghidra\export
+[2026-11-16 15:04:12.438 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,315,851 bytes)
+[2026-11-16 15:06:48.728 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,315,915 bytes)
+[2026-11-16 15:09:54.934 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,315,915 bytes)
+[2026-11-16 15:11:09.637 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,316,075 bytes)
+[2026-11-16 15:13:25.604 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (25,315,995 bytes)
