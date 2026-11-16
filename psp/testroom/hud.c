@@ -13,9 +13,17 @@
  * in PSP pixels so the 16:9 side margins are usable. */
 #define HUD_SCALE (SCR_H / 448.0f)
 
-#define EMBLEM_SIZE 18.0f
-#define BAR_LEFT 46.0f
-#define BAR_TOP 13.0f
+/* Laid out from the PS2's own cockpit (PCSX2, 16:9 output mapped 1:1 onto 480x272), moved into the corner:
+ * the style emblem is the big ring at the far left, the gauge and the DT runes run out of it to the right. */
+#define EMBLEM_SIZE 44.0f
+#define EMBLEM_X 3.0f
+#define EMBLEM_Y (-4.0f)
+#define BAR_LEFT 56.0f
+#define BAR_FILL_LEFT (BAR_LEFT - 8.0f) /* the frame's left ornament ends here: the fill starts flush against it */
+#define BAR_TOP 9.0f
+#define RUNE_TOP (BAR_TOP + 11.0f) /* the DT runes tuck right under the frame */
+#define RUNE_SIZE 13.0f
+#define RUNE_PITCH 14.0f
 #define BAR_WIDTH 150.0f
 #define BAR_HEIGHT 7.0f
 #define WEAPON_SIZE 40.0f
@@ -135,7 +143,7 @@ static void draw_runes(const Player *p) {
         ready=1;
     }
     for(k=0;k<count;++k) {
-        float fill=fraction(p->dt_energy-k,1), x=BAR_LEFT-2+k*13;
+        float fill=fraction(p->dt_energy-k,1), x=BAR_FILL_LEFT+2+k*RUNE_PITCH;
         int half;
         for(half=0;half<2;++half) {
             float left=half?fill:0, right=half?1:fill;
@@ -147,8 +155,8 @@ static void draw_runes(const Player *p) {
                 float q=corner[j][0]?right:left;
                 v[n].u=(uv[k][0]+(uv[k][1]-uv[k][0])*q)*t->width;
                 v[n].v=uv[k][corner[j][1]?3:2]*t->height;
-                v[n].color=color; v[n].x=x+q*12;
-                v[n].y=28+corner[j][1]*13; v[n].z=0; ++n;
+                v[n].color=color; v[n].x=x+q*RUNE_SIZE;
+                v[n].y=RUNE_TOP+corner[j][1]*RUNE_SIZE; v[n].z=0; ++n;
             }
         }
     }
@@ -222,13 +230,19 @@ void hud_draw(const Player *player) {
     tail = trail_step(&trail, health, dt);
 
     begin();
-    draw_fitted(emblems[player->style], 7.0f, 8.0f, EMBLEM_SIZE);
     sceGuDisable(GU_TEXTURE_2D);
-    rect(BAR_LEFT, BAR_TOP, BAR_LEFT+width, BAR_TOP+BAR_HEIGHT, 0xff201018u, 0xff100810u);
-    rect(BAR_LEFT, BAR_TOP, BAR_LEFT+width*tail, BAR_TOP+BAR_HEIGHT, 0xff80a8f0u, 0xff305090u);
-    rect(BAR_LEFT, BAR_TOP, BAR_LEFT+width*health, BAR_TOP+BAR_HEIGHT, 0xff6868f8u, 0xff151580u);
+    {
+        /* Vitality is green and anchored at the style emblem on the left: it empties toward the emblem, and
+         * what he has lost shows dark red behind it (as on the PS2). The damage just taken lingers brighter. */
+        float x0 = BAR_FILL_LEFT, span = BAR_LEFT + width - BAR_FILL_LEFT;
+        rect(x0, BAR_TOP, x0+span, BAR_TOP+BAR_HEIGHT, 0xff141470u, 0xff080834u);
+        rect(x0, BAR_TOP, x0+span*tail, BAR_TOP+BAR_HEIGHT, 0xff3838d8u, 0xff181870u);
+        rect(x0, BAR_TOP, x0+span*health, BAR_TOP+BAR_HEIGHT, 0xff60f078u, 0xff107018u);
+    }
     sceGuEnable(GU_TEXTURE_2D);
     art_box(HUD_BAR_FRAME,-1,BAR_LEFT-22,BAR_TOP-5,width+44,18);
+    /* The current style's emblem sits in the frame's left ornament, part of the gauge. */
+    draw_fitted(emblems[player->style], EMBLEM_X, EMBLEM_Y, EMBLEM_SIZE);
     draw_runes(player);
     sceGuEnable(GU_TEXTURE_2D);
     if (gun_time > 0.0f) {
@@ -264,8 +278,9 @@ void hud_draw_boss(const char *name, float health, float maximum) {
     begin();
     sceGuDisable(GU_TEXTURE_2D);
     rect(69,253,411,260,0xff201018u,0xff100810u);
-    rect(69,253,69+342*tail,260,0xff80a8f0u,0xff305090u);
-    rect(69,253,69+342*hp,260,0xff6060e8u,0xff181880u);
+    /* Orange, emptying toward the left end; the damage just dealt lingers as a dim chunk. */
+    rect(69,253,69+342*tail,260,0xff2c5888u,0xff102438u);
+    rect(69,253,69+342*hp,260,0xff30b0ffu,0xff0850c8u);
     sceGuEnable(GU_TEXTURE_2D);
     art_box(HUD_BAR_FRAME,-1,47,248,386,19);
     if(menu_loaded()) {
