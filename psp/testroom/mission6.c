@@ -63,21 +63,7 @@ static Switch sw[2];
 static const float sw_place[2][4] = {{3288.0f, 140.0f, 2500.0f, -90.0f}, {1512.0f, 140.0f, 2500.0f, 90.0f}};
 static int barrier_on;
 
-/* ---- 125's spike trap (CStageSetNeedle, set 100). Its code isn't decoded: a stand-in from the walkthrough. Rows
- * of spikes come at Dante down the corridor (toward +x, the way back) in batches: from the left wall (step right),
- * the right wall (step left), the floor (jump) or the ceiling (stay on the ground). Area 0 (x 9035-9235) starts
- * them, area 1 (x 1310-1610) stops them. Speed and spacing are estimates. A spike hurts as attack record 0 of table
- * 0x5bbb80 (1000, reaction 0: light), which the needles' caps take (FUN_003e0600, reached from the set's 003df400). */
-#define NEEDLE_MAX 8
-#define NEEDLE_MID 2500.0f       /* the corridor's middle (its door, start and Essence) */
-#define NEEDLE_HALF 450.0f       /* its half width (area 0's) */
-#define NEEDLE_SPEED 700.0f
-#define NEEDLE_EVERY 1.6f
-typedef struct { float x, floor; int kind, on, hit; } Needle;
-static Needle needles[NEEDLE_MAX];
-static int needles_on, needles_done, needle_seq, hazard;
-static float needle_clock, hazard_x, hazard_z;
-static const unsigned char needle_pattern[7] = {0, 1, 2, 0, 3, 1, 2};
+/* ---- 125's spike trap: needles.c (shared with Mission 17's 131 and Secret Mission 11's 610). */
 
 static float lit_time(void) { return difficulty <= 1 ? 2400.0f : difficulty == 2 ? 1800.0f : 1200.0f; }
 
@@ -93,7 +79,6 @@ void m6_reset(int d) {
     caption = 0; caption_time = 0.0f;
     barrier_on = 0;
     memset(sw, 0, sizeof sw);
-    needles_done = 0;
 }
 
 static void barrier(int on) {
@@ -105,9 +90,6 @@ int m6_enter(int room) {
     int restart = 0, i;
     room_now = room;
     barrier(0);
-    needles_on = 0; needle_clock = 0.0f; hazard = 0;
-    memset(needles, 0, sizeof needles);
-    if (room == 125 && !(got >> ESS_TECHNIQUE & 1)) needles_done = 0;   /* block 1 again: flag 32 is clear */
     if (room == 122 && placed >= 2) stage_hide_group(RUBBLE_TAG);
     if (room == 126) {
         /* Counter 1 from the doorway taken (only when coming from 126 itself), then counter 0 = counter 1. */
@@ -173,40 +155,8 @@ static int item_shown(int e) {
     return 1;
 }
 
-static void needles_update(float dt, float x, float y, float z, int on_ground) {
-    int i;
-    if (!needles_on && !needles_done && x > 9035.0f && x < 9235.0f && fabsf(z - NEEDLE_MID) < NEEDLE_HALF) needles_on = 1;
-    if (needles_on && x > 1310.0f && x < 1610.0f) { needles_on = 0; needles_done = 1; }
-    if (needles_on && (needle_clock -= dt) <= 0.0f) {
-        needle_clock = NEEDLE_EVERY;
-        for (i = 0; i < NEEDLE_MAX; ++i) if (!needles[i].on) break;
-        if (i < NEEDLE_MAX) {
-            Needle *n = &needles[i];
-            float f;
-            n->on = 1; n->hit = 0;
-            n->x = fmaxf(x - 1800.0f, 1610.0f);
-            n->kind = needle_pattern[needle_seq++ % 7];
-            n->floor = stage_floor(n->x, y + 200.0f, NEEDLE_MID, 400.0f, &f) ? f : y;
-        }
-    }
-    for (i = 0; i < NEEDLE_MAX; ++i) {
-        Needle *n = &needles[i];
-        int caught;
-        if (!n->on) continue;
-        n->x += NEEDLE_SPEED * dt;
-        if (n->x > x + 1500.0f || n->x > 9300.0f || (!needles_on && n->x > x + 200.0f)) { n->on = 0; continue; }
-        if (n->hit || fabsf(n->x - x) > 40.0f) continue;
-        caught = n->kind == 0 ? z < NEEDLE_MID : n->kind == 1 ? z >= NEEDLE_MID : n->kind == 2 ? on_ground : !on_ground;
-        if (caught) { n->hit = 1; hazard = 1; hazard_x = n->x - 200.0f; hazard_z = z; }
-    }
-}
-
-int m6_hazard(float *from_x, float *from_z) {
-    if (!hazard) return 0;
-    hazard = 0;
-    *from_x = hazard_x; *from_z = hazard_z;
-    return 1;
-}
+/* 125's trap may run again until its Essence is taken (block 1: flag 32 is clear). main.c passes this to needles.c. */
+int m6_skill_rearm(void) { return !(got >> ESS_TECHNIQUE & 1); }
 
 static void switches_update(float frames) {
     int i;
@@ -264,7 +214,6 @@ int m6_update(float dt, unsigned int pressed, float x, float y, float z, int on_
             }
         }
     }
-    if (room_now == 125) needles_update(dt, x, y, z, on_ground);
     if (room_now == 124 && !warrior_done) {
         int both;
         switches_update(frames);
@@ -362,20 +311,6 @@ void m6_draw(void) {
             float at[3] = {core[0] + (float)((int)(r & 63) - 32), core[1] - 20.0f, core[2] + (float)((int)(r >> 8 & 63) - 32)};
             float up[3] = {0.0f, 50.0f + (float)(r >> 16 & 31), 0.0f};
             fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
-        }
-    }
-    for (i = 0; room_now == 125 && i < NEEDLE_MAX; ++i) {
-        /* A row of spikes: a slab from one wall to the middle, low across the floor, or high across the ceiling. */
-        const Needle *n = &needles[i];
-        int k;
-        if (!n->on) continue;
-        for (k = 0; k < 9; ++k) {
-            float zz = NEEDLE_MID - NEEDLE_HALF + (k + 0.5f) * (NEEDLE_HALF * 2.0f / 9.0f), y0 = n->floor, y1 = n->floor + 320.0f;
-            if (n->kind == 0 && zz >= NEEDLE_MID) continue;
-            if (n->kind == 1 && zz < NEEDLE_MID) continue;
-            if (n->kind == 2) y1 = n->floor + 70.0f;
-            if (n->kind == 3) { y0 = n->floor + 230.0f; y1 = n->floor + 420.0f; }
-            box(n->x, y0, y1, zz, 7.0f, 10.0f, 0.0f, 0xffa0a8b0u, 0xff505860u);
         }
     }
     if (room_now == 124 && !warrior_done) {

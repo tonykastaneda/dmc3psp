@@ -22,10 +22,10 @@ What's still missing or stood in for, from `docs/GAME_FLOW.md`. Tick each one of
 - [x] Mission 6: Artemis isn't given as a working gun from the statue
 - [x] Mission 12: Quicksilver isn't given
 - [ ] Mission 16: the swinging-sphere traps aren't in
-- [ ] Mission 17: the spikes (131) aren't in
+- [x] Mission 17: the spikes (131) aren't in (now Mission 6's stand-in; the real CStageSetNeedle code isn't decoded)
 - [ ] Mission 19: the mirrors aren't in
 - [ ] Mission 19: the hourglass isn't in
-- [ ] Secret Mission 11: the spikes aren't in
+- [x] Secret Mission 11: the spikes aren't in (now Mission 6's stand-in; the real CStageSetNeedle code isn't decoded)
 - [ ] Secret Mission 12: the moving blocks aren't in
 - [x] Secret Mission 5: the timer isn't decoded
 - [x] Secret Mission 6: the timer isn't decoded (now 60 s, an estimate: the real limit wasn't found)

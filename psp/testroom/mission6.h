@@ -14,7 +14,7 @@ int m6_door_shut(int room, int door);   /* locked by the script */
 int m6_script_held(int room);           /* the room's fight isn't to start (yet) */
 /* Each frame. prompt: set to 1 when O does something here. Returns 1 when the mission's over. */
 int m6_update(float dt, unsigned int pressed, float x, float y, float z, int on_ground, int fight_on, int *prompt);
-int m6_hazard(float *from_x, float *from_z);   /* the spike trap caught him this frame */
+int m6_skill_rearm(void);                /* 125's spike trap (needles.c) may run again */
 /* A melee hit's frame: the crest switches. heavy: 2 for a heavy hit. */
 void m6_hit(float x, float y, float z, float yaw, float reach, int heavy);
 void m6_draw(void);                     /* world space, no texture or lighting */

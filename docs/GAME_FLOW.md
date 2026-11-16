@@ -190,8 +190,8 @@ a wall shuts the corridor during the fight. 122's rubble (STAY 100) and its wall
 is placed (`STORY_WALLS` in `gen_rooms.py`). Stand-ins and estimates:
 
 - **125's spike trap** (`CStageSetNeedle`) isn't decoded. Rows of spikes come down the corridor from the left
-  wall, the right wall, the floor or the ceiling, from the walkthrough's description; their speed, spacing and
-  700 damage are estimates.
+  wall, the right wall, the floor or the ceiling, from the walkthrough's description; their speed and spacing
+  are estimates. The trap lives in `psp/testroom/needles.c`, shared with Mission 17's 131 and Secret Mission 11.
 - **The barrier's effect** (each enemy's vfunc +0x114, through a sub-object) isn't decoded: "no damage" is the walkthrough's
   reading. Where 124's switches and corridor wall stand depends on the pillars' joint 1, which isn't read.
   The pillars don't rise.
@@ -481,7 +481,7 @@ Pitch-Black Void -> 141 Skull Spire -> 138 Moonlight Mile -> 143 Dark-pact Chamb
 | Room | What runs |
 | --- | --- |
 | 132 | Doors 0 and 1 locked, group 0: 3 Dullahans; cleared, flag 0 |
-| 131 | Areas 0-2 drive the spikes (gimmick 100) |
+| 131 | Areas 0-2 drive the spikes (gimmick 100): area 0, by the door from 132, starts them (gimmick_cmd0c, with a camera); area 1 runs gimmick_cmd10 100 1 and sets flag 1; area 2 turns them off, as entering the room does |
 | 141 | Doors locked, group 0: 4 Abyss (EST 24, class 6, em006); cleared, flag 3 |
 | 143 | Counter 0 is 0: area 0 plays demo 47 -> 139 start 0. Counter 0 is 1: area 1 -> Mission Clear |
 | 139 | Counter 0: group 0, the Doppelganger (EST 52); beaten, demo 48 -> 139 start 1, counter 0 to 1, item 35 (the Doppelganger style) unless Vergil; door 0 (the middle) back to 143 start 2 |
@@ -494,7 +494,12 @@ route above, start to Mission Clear.
 - 128's God-cubes (STAY sets) aren't moved: the door from 133 brings Dante in at start 2, by door 2 [approximation].
 - 131's red pod throws Dante to its door (the Mission 7 catapults' code).
 - 143's area 0 takes Dante to 139; area 1 is the goal (walk up the slope to it and press O) once 139 is cleared.
-- The Abyss aren't ported: Prides stand in. 131's spikes (NEEDLE 100) aren't in.
+- The Abyss aren't ported: Prides stand in.
+- 131's spikes (NEEDLE 100, type 1) are Mission 6's stand-in (`psp/testroom/needles.c`): the set's code
+  (FUN_003df400 and after, about 4 KB driving the needles' own models and motions) isn't decoded. The rows start at
+  area 0 (x 185-1160, and its doorway) and stop at area 1 (x 8348-8648), once a mission (flag 1); they come down the
+  corridor (z 2491 +- 600) toward Dante as he walks toward the red pod, each from one wall, the floor or the ceiling,
+  1,000 damage a hit. Speed and spacing are Mission 6's estimates.
 - No cutscenes; demo 48's item 35 isn't given in the mission itself: Doppelganger is owned from Mission 18 on.
 
 ### Mission 18: "Invading hell"
@@ -623,7 +628,7 @@ port). The award, a Blue Orb Fragment, is only named.
 | 8 | 607 | Beat every enemy | 5 Arachnes, 2 Hell Vanguards |
 | 9 | 608 | Let no enemy escape the wagons | Dante's cart and the enemies' track from the room's TRUCK set (100: em_base 10000, 1325, 11625; its hit box). The timetable is CStageSetTruck's code, not decoded: the port runs the walkthrough's eight wagons (Wraths, with a Pride or a Lust on some), one at a time, 35 m ahead to 35 m behind at 2.5 m a second [estimate]. Any rider left when its wagon leaves fails it; all eight emptied clears it. The cart's cage (walls 0x18260001) stops Dante, not his shots: the port can't tell those walls apart, so in 608 shots pass every wall. Wagons are glows |
 | 10 | 609 | Solve the crystal puzzle | CStageSetCrystal, decoded: one of layouts 2-7 at random (the set's "no 2"), read from the game's executable at build time (`tools/gen_rooms.py` `write_crystals`). The beam leaves the start crystal on its heading, cell by cell on a 20 x 20 grid of 2 m cells; relays turn it, the cover stops it, the end crystal clears the mission. Melee smashes relays and the cover; striking crest switch 100 puts every crystal back. Crystals are glows, the beam a line |
-| 11 | 610 | Avoid the spikes and reach the Blue Orb | Its area 2; the spikes (NEEDLE) aren't in |
+| 11 | 610 | Avoid the spikes and reach the Blue Orb | Its area 2. The spikes (NEEDLE 100, type 2) are Mission 6's stand-in, as in 131, the same room (`psp/testroom/needles.c`): no script runs them, so they start as Dante comes in and stop at area 1; restarted each time the mission's entered. The real set's code isn't decoded |
 | 12 | 611 | Reach the Blue Orb Fragment | Its area 0; the moving blocks aren't in |
 
 ## Regression sweep (2026-11-14, master 98e84b6 with Missions 1-20)

@@ -73,6 +73,7 @@ int testroom_frame;
 #include "beowulf_groups.h"
 #include "devil_runtime.h"
 #include "mission6.h"
+#include "needles.h"
 #include "mission11.h"
 #include "mission14.h"
 #include "mission18.h"
@@ -516,6 +517,9 @@ static void draw_text(int x, int y, const char *text) {
     TextVertex *v;
     int i;
     if (count <= 0) return;
+    /* Its own texture mode: the menus' font (menu.c, drawn first for the Red Orb count) leaves 8-bit swizzled set,
+     * which read this 32-bit font as nothing (the Options screen's and the weapon wheel's text didn't show). */
+    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
     v = sceGuGetMemory(sizeof(TextVertex) * 2 * count);
     for (i = 0; i < count; ++i) {
         unsigned char c = (unsigned char)text[i];
@@ -2812,6 +2816,7 @@ static void mission_gimmicks_draw(void) {
     seal_draw();
     fight_seals_draw();
     if (mission_choice.mission == 6) m6_draw();
+    needles_draw();   /* 125, 131 and 610's spike traps */
     if (mission_choice.mission == 7) m7_draw();
     if (mission_choice.mission == 11) m11_draw();
     if (mission_choice.mission == 14) m14_draw();
@@ -2951,6 +2956,10 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
     script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
     if (mission_mode && mission_choice.mission == 6 && m6_enter(room_number(room))) script_at = 0;   /* mission6.c */
+    /* The spike traps (needles.c): Mission 6's 125 until its Essence is taken, Mission 17's 131 once a mission (its
+     * flag 1), Secret Mission 11's 610 each time it's entered. */
+    needles_enter(mission_mode ? room_number(room) : -1,
+                  mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
     if (mission_mode && mission_choice.mission == 15) m15_enter(room_number(room));   /* mission15.c */
     if (mission_mode && mission_choice.mission == 11) m11_enter(room_number(room));
@@ -3113,6 +3122,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
         if (prompt) door_prompt_time = 1.0f;
     }   /* 008's area 0: demo 326 */
+    needles_update(dt, player->x, player->y, player->z, player->on_ground);
     if (m6) {
         int prompt = 0;
         if (m6_update(dt, pressed, player->x, player->y, player->z, player->on_ground, !done || enemy_alive_count() > 0, &prompt)) return 1;
@@ -3514,6 +3524,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     geryon_boss_start_on_ground(0);   /* Mission 18 turns it on in 417 only */
     if (choice->mission == 18) m18_reset();
     sm_reset();
+    needles_enter(-1, 1);   /* every spike trap may run again */
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
@@ -4148,7 +4159,7 @@ int main(int argc, char *argv[]) {
                 orbs_update(dt, player.x, player.y, player.z);
                 bench_ai_us = sceKernelGetSystemTimeLow() - ai_start;
             }
-            if (mission_mode && mission_choice.mission == 6 && m6_hazard(&from_x, &from_z)) {
+            if (mission_mode && needles_hazard(&from_x, &from_z)) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
                 if (combat_player_hit_damage(&combat, &player, from_x, from_z, 0, 1000.0f)) fx_hit_spark(chest);   /* 125's spikes: record 0 of 0x5bbb80 (1000, light) */
             }
@@ -4476,6 +4487,7 @@ int main(int argc, char *argv[]) {
                     fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log());
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
+                    { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);
