@@ -76,6 +76,7 @@ int testroom_frame;
 #include "needles.h"
 #include "messages.h"
 #include "blocks.h"
+#include "spheres.h"
 #include "mission11.h"
 #include "mission14.h"
 #include "mission18.h"
@@ -2406,6 +2407,8 @@ static int item_area_inside(const RoomItemUse *u, float x, float y, float z) {
 /* The key items lying in this room that can be taken now. */
 static int key_item_shown(const RoomKeyItem *k) {
     if(k->mission==13 && k->item==51 && !mission13_open())return 0;
+    /* Mission 16's items aren't held back by the spheres yet (spheres_solved): the solve isn't proven reachable with the
+     * port's estimated gravity and damage, and a held item would stop the mission. */
     return k->mission == mission_choice.mission && k->room == mission_room && item_is(k->item, 0)
         && (k->mission != 7 || m7_item_shown(k->item))
         && (k->mission != 6 || m6_artemis_shown())
@@ -2725,6 +2728,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if(mission_choice.mission==13)mission13_hit(player->x,player->y,player->z,player->yaw,reach,kind);
     switch_hit(player, reach, kind);
     sm_hit(player->x, player->y, player->z, player->yaw, reach);
+    if (mission_choice.mission == 16) spheres_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 14) m14_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 11) m11_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
@@ -2883,6 +2887,7 @@ static void mission_gimmicks_draw(void) {
     fight_seals_draw();
     if (mission_choice.mission == 6) m6_draw();
     needles_draw();   /* 125, 131 and 610's spike traps */
+    spheres_draw();   /* Mission 16's hanging spheres */
     if (mission_choice.mission == 7) m7_draw();
     if (mission_choice.mission == 11) m11_draw();
     if (mission_choice.mission == 14) m14_draw();
@@ -3026,6 +3031,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
      * flag 1), Secret Mission 11's 610 each time it's entered. */
     msg_enter(mission_mode ? mission_choice.mission : 0, room_number(room));
     blocks_enter(mission_mode ? room_number(room) : -1);   /* 611's moving blocks */
+    spheres_enter(mission_mode && mission_choice.mission == 16 ? room_number(room) : -1);   /* 109's and 146's spheres */
     m19_enter(mission_mode && mission_choice.mission == 19 ? room_number(room) : -1, room_is_cleared(room) || item_state[57] != 0);   /* 404's hourglass */
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
@@ -3193,6 +3199,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }   /* 008's area 0: demo 326 */
     needles_update(dt, player->x, player->y, player->z, player->on_ground);
     blocks_update(dt, &player->x, &player->y, &player->z, player->on_ground);
+    spheres_update(dt);
     if (mission_mode && mission_choice.mission == 19 && m19_update(dt, room_is_cleared(mission_room))) {
         /* 404's sand ran out: the Abyss come back (mission19.c). */
         enemy_trim(0);
@@ -3607,6 +3614,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     sm_reset();
     needles_enter(-1, 1);   /* every spike trap may run again */
     msg_reset();            /* and every message block */
+    spheres_reset();
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
@@ -4574,6 +4582,7 @@ int main(int argc, char *argv[]) {
                     { char ml[128]; msg_status(ml, sizeof ml); fprintf(report, "%s\n", ml); }
                     { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
+                    { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

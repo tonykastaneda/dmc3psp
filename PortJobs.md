@@ -8,7 +8,7 @@
 - [ ] Arachne: no web shot or spiderlings; health is an estimate
 - [ ] Arkham: one fight runs both rounds, and Vergil doesn't join
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform
-- [ ] Mission 16: the swinging-sphere traps aren't in
+- [x] Mission 16: 146's shelled sphere and 109's pair swing, lower on their switches, wear and knock as decoded; stand-ins: plain spheres, gravity and damage estimates, and the items aren't held back by them yet (finishing them wasn't shown in PPSSPP)
 - [ ] Mission 19: the mirrors aren't in
 - [x] Mission 19: the hourglass runs the script's 90-second timer and the room's own sand and spin motions, and the Abyss come back when it runs out; stand-ins: a countdown for its HUD, group 0 respawned in place of groups 1 and 0, the glass's turn not played
 - [x] Secret Mission 12: the moving blocks run their own motions from the room's data and carry Dante; their sides don't stop him (stand-in), and the motion's start when he enters is the port's

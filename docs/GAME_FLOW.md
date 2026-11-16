@@ -462,8 +462,19 @@ EST 31 Enigma, EST 32 Blood-goyle, EST 55 class 37 (em034, pack 25: Lady).
 In the port: the route plays from 106 to Mission Clear in PPSSPP. Stand-ins and estimates:
 
 - The Golden Sun and the Onyx Moonshard (items 56, 55) use the generic key-item tables (`KEY_ITEMS`, `ITEM_HOLDS`, `ITEM_USES`,
-  `ITEM_GATES` in `gen_rooms.py`); the puzzles that free them (109's crest switches and hanging sphere, 146's
-  swinging spheres) aren't in, so the items lie open.
+  `ITEM_GATES` in `gen_rooms.py`) and still lie open: the spheres' puzzles run but don't hold them back yet.
+- **The hanging spheres** (`psp/testroom/spheres.c`), decoded from the SE executable: CStageSetHang (146, set 150:
+  one ball, chain 2500, raised 500 when up, mass 10, down for 1500 frames) and CStageSetHang2 (109, set 150: two
+  balls 1000 apart, chain 1100, raised 600, mass 7, down 3000 frames). Each swings on its chain (moved by its
+  velocity, held to the chain's length with 1.2 times its outward speed taken off, kept at 0.998 a frame); striking
+  its switch lowers it (anchor down 20 a frame, then a push of 3), and when its time's up it rises (10 a frame) and
+  the switch must be struck again. A sword hit pushes a lowered ball away by damage / mass. 146's ball has a shell
+  of 1200 that wears in steps at 1000, 800, 600, 400 and 200 and breaks below 0 (EventTbl16's flag 35, opening the
+  gates to the Onyx Moonshard); 109's two are done when both are down and touch. The port's: plain spheres of 200 cm
+  (their EFM meshes' width) and posts for the switches, gravity of 1 cm a frame squared, damage 42 / 84, 109's
+  switch 100 for the ball at z 3050 and 101 for the other [estimates]. Not finished in PPSSPP (109's balls came to
+  450 cm of the 400 that's a touch; 146's shell wore while a standing Dante lost the swinging ball), so the items
+  aren't held back by them. Shots: `analysis/testroom/m16_spheres_146_200.png`, `_700`, `m16_spheres_109b_400.png`.
 - **Lady** (em034, GDATA 138, pack 25) has her own model and motions (`lady_boss.c`): she keeps her distance, strafes
   and shoots, lobs grenades that beep and burst, fires Kalina Ann's rocket, and escapes backwards with her repel
   gun when Dante's close. Motions are read from their root paths; timings, damage and health are estimates; her
