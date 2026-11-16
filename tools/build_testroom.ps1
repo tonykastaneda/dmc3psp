@@ -33,6 +33,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $CrossBin "psp-gcc.exe"))) {
 $env:PATH = "$CrossBin;$env:PATH"
 New-Item -ItemType Directory -Force -Path $Build, $Objects, $Generated | Out-Null
 
+# DO NOT REMOVE: the owner's credit must be intact and on the Options screen, or the build stops (CLAUDE.md / AGENTS.md).
+Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\check_credit.py"))
+
 $Header = Join-Path $Generated "model_runtime.h"
 if ($Regenerate -or -not (Test-Path -LiteralPath $Header)) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1

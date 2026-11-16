@@ -77,6 +77,7 @@ int testroom_frame;
 #include "mission14.h"
 #include "mission18.h"
 #include "secret_missions.h"
+#include "credit.h"   /* DO NOT REMOVE: the owner's credit on the Options screen */
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
 PSP_MAIN_THREAD_ATTR(THREAD_ATTR_USER | THREAD_ATTR_VFPU);
@@ -1128,6 +1129,11 @@ static void draw_debug_menu(int viewer) {
     }
     sceGuColor(0xffa0a0a0u);
     draw_text(x, y + 16 + DEBUG_ITEMS * 12 + 8, "X change  O close");
+    /* DO NOT REMOVE, EDIT OR MOVE: the owner's credit (psp/testroom/credit.h, CLAUDE.md / AGENTS.md). */
+    sceGuColor(0xff909090u);
+    draw_text(8, SCR_HEIGHT - 26, CREDIT_LINE_1);
+    draw_text(8, SCR_HEIGHT - 14, CREDIT_LINE_2);
+    /* End of the protected credit. */
     sceGuColor(0xffffffffu);
 }
 
