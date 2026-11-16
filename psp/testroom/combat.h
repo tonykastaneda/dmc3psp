@@ -139,6 +139,7 @@ typedef struct {
     int charge_looped;     /* the charge motion has played through (player+0x2856) */
     int sq_mash, cir_short_mash;
     float since_sq, sq_held, cir_held;
+    float sq_last_hold;   /* seconds SQ was held before its last release (Artemis: a charge skips the aim) */
     float warp_time, warp_step[3];  /* Air Trick warp (FUN_00226550 state 1-2) */
     int held_tri, held_sq, held_cir;
     float air_accum;

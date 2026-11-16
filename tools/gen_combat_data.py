@@ -376,6 +376,10 @@ def main():
             f.append(f".keep_min = {fl(p.keep[0])}, .keep_speed = {fl(p.keep[1])}")
         if p.until_h:
             f.append(f".until_height = {fl(p.until_h)}")
+            if p.until_falling:
+                f.append(".until_falling = 1")
+        if p.pattern_from:
+            f.append(f".pattern_from = {fl(p.pattern_from)}")
         if p.mash:
             f.append(f".mash_gap = {fl(p.mash[0])}, .mash_presses = {p.mash[1]}")
         if m["moving"] >= 0:

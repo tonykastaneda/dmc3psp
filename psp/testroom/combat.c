@@ -96,6 +96,11 @@ typedef struct {
      * move starts keeps keep_speed forward, else he stops (keep_min 0 = air_v as it is). */
     float keep_min, keep_speed;
     float until_height;    /* falling this close to the floor or closer ends the phase (Rain Storm: 150) */
+    int until_falling;     /* ...and only while going down (FUN_0026da00: +0x64 < 0) */
+    float pattern_from;    /* NEXT_PATTERN: frames before the pattern is first tested */
+    /* (Designated initializers only from here: the hand-made moves above fill the first fields by position.) */
+    int land_finish;       /* on landing the motion plays on to its end on the ground (Helm Breaker, FUN_00264b90
+                            * step 3 -> FUN_0021d280 at the motion's end) instead of the jump's landing */
     float mash_gap;        /* NEXT_PATTERN: held while btn has more than mash_presses presses, gaps <= mash_gap */
     int mash_presses;
     MoveId moving_move;    /* the next phase instead when the jump had the stick (0 / MOVE_NONE = none) */
@@ -125,7 +130,8 @@ static const MoveDef moves[MOVE_COUNT] = {
      * start, then at the flip (script window +0x24d5 = 1) +0x74/+0x78, capped at -70 (FUN_002e2560). That's
      * the variant under 500 cm above the floor (+0x6c); 3:40 / 3:41 with +0x7c.. / +0x84.. above aren't in. */
     [MOVE_HELM_BREAKER] = {S("3:10"), "HELM BREAKER", MOVE_NONE, 0, 0, 0, 260, HIT_SLAM,
-                           .air = 1, .air_v = {0.0f, 0.0f, -2.0f, -0.5f}, .flag_air = 1, .flag_v = {0.0f, 0.0f, -27.5f, -2.5f}},
+                           .air = 1, .air_v = {0.0f, 0.0f, -2.0f, -0.5f}, .flag_air = 1, .flag_v = {0.0f, 0.0f, -27.5f, -2.5f},
+                           .land_finish = 1},
     [MOVE_ROUND_TRIP] = {S("3:17"), "ROUND TRIP", MOVE_ROUND_TRIP_CATCH, 0, 0, 0, 500, HIT_LIGHT},
     [MOVE_ROUND_TRIP_CATCH] = {S("3:19"), "ROUND TRIP", MOVE_NONE, 0, 0, 0, 500, HIT_LIGHT},
     [MOVE_SM_SWORD_PIERCE] = {S("13:0"), "SWORD PIERCE", MOVE_NONE, 0, 0, 0, 600, HIT_HEAVY},
@@ -348,7 +354,14 @@ static void end_move(Combat *c, Player *player) {
     if (c->air && !player->on_ground) {
         player->vy = c->air_v[2] * MOTION_FPS;
         /* Rain Storm's end (FUN_0026b8b0 step 3 -> FUN_0021df00 type 8): the fall state, then a landing stop. */
-        if (was_action == 135) player_fall_from_move(player, c->air_v[2]);
+        /* Any generated air move whose motion ends before the floor does the same: the handlers call
+         * FUN_0021df00(+0x64, -1.5, p, 8) on FUN_002506b0's motion end (Nevan 16:7 / 16:8, Agni 15:4..,
+         * Beowulf 17:6, Cerberus 14:8, Rain Storm...): stopped, no stick drift, -1.5, then the landing. The port
+         * used to hand him to the jump's fall, which steers with the stick (PCSX2 mo_smnev_rj: 4.25 cm/frame). */
+        if (was_action != 145 && c->last_move_for_end >= MOVE_G_0) player_fall_from_move(player, c->air_v[2], -1.5f, 0.0f);
+        /* The shotgun's air Gunslinger move (FUN_0026da00 step 1 -> 2): motion 0:36 and the same arc carries on,
+         * its gravity and forward drift unchanged, until the landing (FUN_0021ddb0). */
+        if (was_action == 145) player_fall_from_move(player, c->air_v[2], c->air_v[3], c->air_v[0]);
     }
     c->air = 0;
     /* Shots hand over to the stance; anything else leaves the legs to it too. */
@@ -375,6 +388,12 @@ static void start_move(Combat *c, MoveId move, int action) {
     if (moves[move].next_on == NEXT_CHARGE && moves[move].tiers[0] != MOVE_NONE) {
         int down = moves[move].btn == BTN_TRI ? c->held_tri : moves[move].btn == BTN_SQ ? c->held_sq : c->held_cir;
         if (!down) move = moves[move].tiers[0];
+    }
+    /* Artemis (actions 150/152): after a charge the aim pose 10:3 has been on all along (the gun stance), so the
+     * release fires 10:4 at once; only a tap shows 10:3 first (PCSX2 mo_arh_*: 10:4 a frame after the release). */
+    if ((action == 150 || action == 152) && moves[move].script && !strcmp(moves[move].script, "10:3") &&
+        moves[move].next != MOVE_NONE && c->sq_last_hold * MOTION_FPS >= 4.0f) {
+        move = moves[move].next;
     }
     if (move != c->move || action) c->plays = 0;
     /* Blend from what's on screen: the last move, the gun stance, or plain locomotion. */
@@ -494,6 +513,7 @@ static unsigned int read_inputs(Combat *c, const Player *player, const PlayerInp
     else {
         if (c->sq_held > 0.0f) in |= 1u << IN_RELEASE_SQ;
         if (c->sq_held >= CHARGE_SECONDS) in |= 1u << IN_CHARGE_SQ;
+        if (c->sq_held > 0.0f) c->sq_last_hold = c->sq_held;
         c->sq_held = 0.0f;
     }
     if (input->style_held) c->cir_held += dt;
@@ -850,7 +870,10 @@ static void gun_walk(Combat *c, Player *player, const PlayerInput *input, float 
 
 /* With no move playing: is the stance on, and what do the arms do? */
 static void gun_stance_step(Combat *c, Player *player, const PlayerInput *input, float dt) {
-    int on = player->on_ground && (input->lock_on || c->stance_timer > 0.0f);
+    /* Artemis held (charging, action 150 fires on release): the PS2 walks him in the gun stance the whole time,
+     * 3.5 cm/frame with its 10:3 / 10:6 rows, where the port used to let him run on (PCSX2, mo_arh_*). */
+    int on = player->on_ground && (input->lock_on || c->stance_timer > 0.0f ||
+                                   (player->gun_weapon == 7 && input->gun_held));
     int was = c->stance_active;
     if (c->stance_timer > 0.0f) c->stance_timer -= dt * MOTION_FPS;
     if (!on) {
@@ -1351,7 +1374,17 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     d = &moves[c->move];
     player->attacking = 1;
     player->free_fall = d->physics == 1;
-    if (player->free_fall && player->on_ground && c->phase_time > 2.0f / MOTION_FPS) { end_move(c, player); return; }
+    if (player->free_fall && player->on_ground && c->phase_time > 2.0f / MOTION_FPS) {
+        /* The air block landing with CIR still held goes straight into the ground block, stopped, until the
+         * release (PCSX2 mo_rgh_rj: 24:5, then 24:0 at the touch-down and 24:31 on release). */
+        if (c->move == MOVE_RG_AIR_BLOCK && input->style_held) {
+            player->speed = 0.0f;
+            start_move(c, MOVE_RG_BLOCK, 0);
+            return;
+        }
+        end_move(c, player);
+        return;
+    }
     /* FUN_00224850 marks the release 24:31 interruptible (+0x2898 0x40000): on the PS2 the stick takes over at
      * once (24:31 one frame, then the strafe) and a CIR press blocks again (rg_lfm). */
     if (c->move == MOVE_RG_END) {   /* from the frame after the release */
@@ -1514,6 +1547,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             player->vy = 0.0f;
             player->on_ground = 1;
             c->air = 0;
+            if (d->land_finish) return;   /* the move carries on, on the ground, to its motion's end */
             if (d->next == MOVE_NONE) {
                 /* State 8: the jump's landing frames, stopped. */
                 int land = motion_find("2-04");
@@ -1634,7 +1668,9 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             int presses = c->cir_short_mash;
             float gap = c->since_cir_short * MOTION_FPS;
             c->phase_frames += dt * MOTION_FPS;
-            if (presses <= d->mash_presses || gap > d->mash_gap || c->phase_frames > d->frames) go = 1;
+            /* FUN_0026da00 tests nothing for its first pattern_from frames (+0x2870 = cfg+0x168). */
+            if (c->phase_frames >= d->pattern_from &&
+                (presses <= d->mash_presses || gap > d->mash_gap || c->phase_frames > d->frames)) go = 1;
             else if (at_end) {
                 c->frame = m->loop_start;
                 motion_root(m, c->frame, c->last_root);
@@ -1644,7 +1680,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
         }
         default: break;
         }
-        if (d->until_height > 0.0f && height_above_floor(player) <= d->until_height) go = 1;
+        if (d->until_height > 0.0f && height_above_floor(player) <= d->until_height && (!d->until_falling || c->air_v[2] < 0.0f)) go = 1;
         if (go) {
             MoveId next = d->moving_move && d->moving_move != MOVE_NONE && c->jump_moving ? d->moving_move : d->next;
             if (next != MOVE_NONE) start_move(c, next, 0);

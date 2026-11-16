@@ -50,6 +50,8 @@ class P:
     # `speed` forward when he was already moving at `min` or more, else stops him.
     keep: tuple = ()
     until_h: float = 0.0        # the phase also ends once falling at this height above the floor or less
+    until_falling: bool = False # until_h only while going down
+    pattern_from: float = 0.0   # adv "pattern": frames before the pattern is first tested
     mash: tuple = ()            # adv="pattern": (gap, presses) kind-8 input pattern, held each frame; `frames` at most
     moving: Optional[tuple] = None  # (script, speed): the next phase instead, for a jump with the stick (+0x2904 != 4)
     speed: float = -1.0         # forward speed set as the phase starts (vy and gravity kept)
@@ -87,7 +89,7 @@ ACTIONS = {
     37: [P("4:27"), P("4:29", adv="mash", loop="4:31"), P("4:26")],
     38: [P("4:19", adv="end", flag_air=vy_air(0x54c)), P("4:30", adv="land"), P("4:24", start=61.0)],
     39: [P("4:19", adv="end", flag_air=vy_air(0x54c)), P("4:25", adv="land"), P("4:24", start=61.0)],
-    40: [P("4:11", adv="land", air=wcfg_air(0x3c8, 0x3d0))],
+    40: [P("4:11", adv="land", air=wcfg_air(0x3c8, 0x3d0), flag_g=-1.5)],   # FUN_002718b0: gravity -1.5 at the flag
     41: [P("4:22"), P("4:23")],
     42: [P("14:0", adv="mash", loop="14:10", loop_start=19.0, btn="CIR"), P("14:1")],
     43: [P("14:7", adv="mash", loop="14:11", loop_start=19.0, btn="CIR", air=wcfg_air(0x3e8, 0x3f0)), P("14:8", adv="land")],
@@ -107,9 +109,9 @@ ACTIONS = {
     64: [P("5:11", adv="mash", loop="5:30", loop_start=201.0), P("5:26")],
     65: single("15:0"), 66: single("15:1"),
     67: [P("15:2"), P("15:3")],
-    68: [P("15:4", adv="land", air=wcfg_air(0x388, 0x390))],
-    69: [P("15:5", adv="land", air=wcfg_air(0x39c, 0x3a4))],
-    70: [P("15:6", adv="land", air=wcfg_air(0x3b0, 0x3b8)), P("15:7")],
+    68: [P("15:4", adv="land", air=wcfg_air(0x388, 0x390), flag_g=-1.5, stop_below=2.0)],
+    69: [P("15:5", adv="land", air=wcfg_air(0x39c, 0x3a4), flag_g=-1.5, stop_below=2.0)],
+    70: [P("15:6", adv="land", air=wcfg_air(0x3b0, 0x3b8), stop_below=2.0), P("15:7")],
     71: [P("15:8", adv="mash", loop="15:10", loop_start=68.0, btn="CIR"), P("15:9")],
     # Nevan (every ground move ends in the guitar stance, action 99)
     80: [P("6:3")] + NEVAN_END,
@@ -126,8 +128,10 @@ ACTIONS = {
     # point, 19 frames (held, it loops up to config +0x5c0 = 4 times).
     88: [P("6:15", adv="timer", frames=19.0, air=wcfg_air(0x43c, 0x444)), P("6:34", adv="land", hover=True, flag_g=-1.5)],
     89: [P("16:0"), ] + NEVAN_END,
-    90: [P("16:7", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3))],
-    91: [P("16:8", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3))],
+    # FUN_00277050 / FUN_002771d0: stopped, a slow sink (vy cfg+0x494 -0.25, gravity +0x498 -0.04), then -1.5
+    # from the script's flag (+0x74 = 0xbfc00000) to the floor.
+    90: [P("16:7", adv="land", air=vy_air(0x494), flag_g=-1.5)],
+    91: [P("16:8", adv="land", air=vy_air(0x4a8), flag_g=-1.5)],
     92: [P("16:3"), P("16:21", start=31.0), P("16:4")] + NEVAN_END,
     93: [P("16:5")] + NEVAN_END,
     94: [P("16:9", adv="mash", loop="16:22", loop_start=51.0, btn="CIR"), P("16:10")] + NEVAN_END,
@@ -152,7 +156,7 @@ ACTIONS = {
     124: charge("17:1", "17:9", 108.0, "17:10", "17:11", 28.0),
     125: [P("17:2", adv="land", flag_air=wcfg_air(0x2a8, 0x2a0)), P("17:1", start=29.0)],
     126: [P("17:4", adv="mash", loop="17:4", btn="CIR", air=wcfg_air(0x4c8, 0x4c0)), P("17:5", adv="land")],
-    127: [P("17:6", adv="land", air=wcfg_air(0x2c4, 0x2bc))],
+    127: [P("17:6", adv="land", air=wcfg_air(0x2c4, 0x2bc), flag_g=-1.5, stop_below=2.0)],   # FUN_0027d530: gravity -1.5 at the flag, under 2 forward stops
     128: [P("17:3"), P("17:7", adv="land", air=vy_air(0x2b0))],
     # Guns. FUN_002688c0 (FUN_0021e620 with param_4 = 1: the upper body only). The
     # shot column is 3 of the table in combat_data.h. player+0x299f counts the shots:
@@ -187,8 +191,17 @@ ACTIONS = {
     # FUN_0026d040: forward config +0x138 = 1.75 when already moving 3 or more.
     142: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1, keep=(3.0, 1.75))],
     143: [P("9:39", adv="land", air=("raw", 0.0, 0.0, 13.0, -1.25), shot=1, keep=(3.0, 1.75))],
-    144: [P("19:0", shot=1)],
-    145: [P("19:1", adv="land", air=("raw", 0.0, 0.0, 0.0, -0.3), shot=1)],
+    # Fireworks (FUN_0026d6b0): 19:0 over and over, a shot at once and every 11 frames (cfg+0x69c, top level);
+    # input pattern 43 is first tested after 60 frames (cfg+0x158) and ends it once it fails (the next pattern
+    # 40 frames on, cfg+0x160, can't match).
+    144: [P("19:0", adv="pattern", btn="CIR", mash=(9.0, 3), pattern_from=60.0, frames=100.0, auto=11.0,
+            auto_first=0.01)],
+    # The air one (FUN_0026da00): a hop, vy 12 / -0.95 (cfg+0x180/0x184), 1.5 forward when he was moving 3 or
+    # more (cfg+0x17c, else stopped), a shot at once and every 11 frames (cfg+0x69c at the top level). Ends falling
+    # at 50 cm over the floor (cfg+0x178), or once input pattern 43 fails after 60 frames (cfg+0x168, the next
+    # pattern 60 later can't match), into the fall (0:36) on the same arc, then the landing.
+    145: [P("19:1", adv="pattern", btn="CIR", mash=(9.0, 3), pattern_from=60.0, frames=120.0, until_h=50.0,
+            until_falling=True, air=("vy", 0x180, 0x184), keep=(3.0, 1.5), auto=11.0, auto_first=0.01)],
     146: [P("19:2"), P("19:3", adv="timer", frames=20.0, shot=1), P("19:4")],
     147: [P("19:5", adv="mash", loop="19:5", btn="CIR", shot=1)],
     # Artemis

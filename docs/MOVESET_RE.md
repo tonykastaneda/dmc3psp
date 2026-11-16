@@ -88,6 +88,38 @@ Step). Dante's facing is the u16 at `+0x90`. The PS2's zone camera can't be move
 looks the right way ("open" and, for R1, "behind"; the port copies it with spot / faceyaw / camyaw / camlock).
 `tools/ps2_score.py` compares every script: **98 of 146** match frame for frame (05:00); **138 of 162** on 2026-11-14 18:40 with PS2_INPUT_LAG=1, the standing port dummy and the scorer's dip fix. The rest: the Beowulf saves' drift, the street runs (ramp, trace sampling), Air Trick's rise (the parked enemy's lock point), a jump pressed with the stick on the same frame (the PS2 drops it: `w_aa`), `melee_hit` (the PS2 enemy hits back), Royalguard's strafe between blocks. Re-captured 19:10: ``w_d``, ``fxdash``, ``d_l`` pass (bad old captures); ``w_r`` / ``w_l`` repeat: the port runs 27 degrees off the PS2's heading (yaw -2.58 against -2.11 in ``w_r``): the PS2's zone camera turns during the run and the port's test camera is locked (``camlock 1``), so the stick maps differently and he meets a different wall; not a collision difference.
 
+**Momentum check (2026-11-15)**: `tools/momentum.py` runs every move from every situation he can start it in,
+on both games, and scores the motion frame by frame, not only where he ends up. The 46 moves are each melee
+weapon tapped and mashed, each gun tapped and held, the Trickster dash, Royalguard, and the Swordmaster and
+Gunslinger moves per weapon. The 9 situations are standing, running, run then let go, a run's first frames,
+standing jump, running jump, running jump with the stick let go, steering sideways, and on landing. On top of
+those there are 40 stick-only scripts (taps of 2 to 30 frames, reversals, sidesteps, jump drift). Each script
+is scored on:
+- speed, vertical speed and position along the path;
+- facing;
+- the frame movement starts, the frame he stops and the frames in the air;
+- the combat motions in order.
+
+Scoring filters out the PS2's 10 cm ground dips and its zone camera. Recordings where the PS2's run-up went
+wrong are marked "suspect" so they aren't counted against the port. **229 of 418** were within the limits
+first; **305 of 418** after the fixes:
+- a move whose motion ends in the air falls with the PS2's `FUN_0021df00` (0:36, no drift, landing stop);
+- Helm Breaker plays its motion to the end on the ground;
+- Shotgun Gunslinger's 19:0 / 19:1 test their input pattern from 60 frames on, and 19:1 ends 50 cm over the floor
+  only while falling;
+- the Swordmaster air moves (16:7/8, 15:x, 17:6, 4:11) fall at -1.5 with their stop speeds;
+- Artemis's held charge stays in its stance;
+- Royalguard's air block landing goes on into a ground block while R1 is held;
+- a held Square skips the tap of a charge move.
+
+What's still off:
+- steering and sidesteps: the PS2's zone camera turns while he runs;
+- running jumps into air moves (vy and travel);
+- Swordmaster Cerberus's first 27 cm step;
+- the Trickster dash chain, by about 3 frames (within the input lag).
+
+The worst are listed first in `analysis/ref/momentum/report.md`.
+
 Taken from the PS2's code since (the guesses they replaced in brackets):
 - Trickster's dash script by style level, table 0x5911d0 (dash count); no pending press while the dash's gate
   only buffers; left and right lock-on dashes (swapped).
