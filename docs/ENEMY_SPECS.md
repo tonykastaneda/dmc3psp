@@ -1057,12 +1057,23 @@ bank (groups 0, 1, 3 used), [11] / [12] caps and shapes. Code: new `002d7e60`, c
   (15), 19 (20), 27 (25), 18 (20), 15 (20); else 2 (20), 15 (50), 27 (30).
 - **Phase** (+0x38d0) steps up when his health fraction is under `0x619718`[phase]: 0.73, 0.47; action 0x16 plays.
 
+- **Movement** (gp 0x620170): 1 (`002daa00`) turns 1274 a frame (`0x619680`) and lasts at least 300 (`0x619674`);
+  the walk (11, `002dab50`) turns 1274 and, with Dante within 550 and 100 degrees (`0x5b8c64`), goes to 0x18, else
+  stops after 300; the run (2, `002dade0`) turns 637 (`0x619688`) for 30 frames (`0x619690`), then 218 (`0x619698`),
+  and after 180 (`0x619694`) or with Dante beyond 3000 (`0x5b8cb4`) stops (3) at its next stride's event (or 4, his
+  charge, with Dante behind and under 3 strides, `0x5b8cc4`). Idle (0) fills +0x168 at 2 / 3 / 4 a frame by phase
+  (`0x5b88c8`) while the gate at +0x130 is shut.
+- **Stagger** (8, `002dbb00`): when done, `0x619670`[phase]: 0, 1, 1.
+- **Volley** (15, `002dcf00`): event 1 lets `0x5b8650`[rank] + 1 feathers go (7), the next event 1 `0x5b8660`[rank]
+  + 1 (3) (the feather actor `0040cef0`, not read); event 4 a wind pushing Dante away 4.7 a frame for 190 frames
+  (gp-0x6a48, gp-0x6a40); effect 0xc1 on event 3.
+
 **In the port** (`enemy.c`, "Beowulf"): his scripts, caps and records run on the shared script runner
 (`tools/prepare_beowulf.py`; group g script n is entry 16 g + n), so his motions, hit windows and damage are the
-game's; the choice, phases and roar above. Stand-ins: his idle before choosing (40 frames), when a run or walk stops,
-turn rates, the stagger after 12 heavy hits (action 8), the volley's feathers (action 15: one on each of its script's
-events, record 12's 300, flying straight at 25 cm a frame), and the movement handlers' own tables (`0x5b8c64`,
-`0x5b8cb4`-`0x5b8d00`, `0x5b8660`, not read): he moves by his motions' root travel.
+game's; the choice, phases, roar, the movement rules, stagger's end and the volley's counts and wind above.
+Stand-ins: his idle before choosing (40 frames: the gate at +0x130 isn't read), what sets off the stagger (12 heavy
+hits), the feathers' flight (straight at 25 cm a frame, record 12's 300), the run's stop at once rather than at a
+stride's event, and his charge (4) from the run isn't taken.
 
 ---
 

@@ -216,6 +216,7 @@ static unsigned int anim_last_time;
 static M3 world_rot[MAX_BONES];
 static float world_pos[MAX_BONES][3];
 static void scrolls_update(float frames);
+static float enemy_wind[2];   /* pushes Dante this frame (enemy_push_out) */
 
 static void m_identity(M3 *m) { memset(m, 0, sizeof(*m)); m->m[0][0] = m->m[1][1] = m->m[2][2] = 1.0f; }
 static void m_mul(M3 *o, const M3 *a, const M3 *b) {
@@ -1629,6 +1630,9 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
 void enemy_push_out(float *x, float *z, float y, float r) {
     Enemy *selected = e;
     int i;
+    /* A wind on Dante this frame (Beowulf's volley), applied with the bodies' shoves so it meets the walls too. */
+    *x += enemy_wind[0]; *z += enemy_wind[1];
+    enemy_wind[0] = enemy_wind[1] = 0.0f;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (enemies[i].kind == ENEMY_VANGUARD) vanguard_select(i);
         if (enemies[i].kind == ENEMY_GIGAPEDE) continue;
@@ -4879,6 +4883,10 @@ static const float bw_phase_at[2] = {0.73f, 0.47f};
 #define BW_FEATHERS 12
 static struct { int on; float pos[3], vel[3], life; } bw_feathers[BW_FEATHERS];
 static int bw_phase, bw_last, bw_gauge;
+static float bw_wind;
+#define BW_TURN_FAST (1274.0f / 65536.0f * 6.2831853f)   /* 0x619680 */
+#define BW_TURN_MID (637.0f / 65536.0f * 6.2831853f)     /* 0x619688 */
+#define BW_TURN_SLOW (218.0f / 65536.0f * 6.2831853f)    /* 0x619698 */
 
 static int bw_init(void) {
     int i, found = 0;
@@ -5002,20 +5010,52 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
     }
     switch (a) {
     case 0: case 1:
-        goyle_turn_to(px, pz, 0.04f, f);
+        /* 1 (FUN_002daa00) turns to him at 0x619680 (1274 a frame) and lasts at least 300 frames (0x619674). */
+        if (a == 1) {
+            goyle_turn_to(px, pz, BW_TURN_FAST, f);
+            if (e->done && e->timer >= 300.0f) { bw_go(BW_IDLE); return; }
+        } else goyle_turn_to(px, pz, 0.04f, f);
         if (e->wake > 40.0f) { int next = bw_choose(d, rel); if (next != BW_IDLE) { bw_last = next; bw_go(next); return; } e->wake = 0.0f; }
         break;
-    case BW_RUN: case BW_WALK: case 0x17:
-        goyle_turn_to(px, pz, a == BW_RUN ? 0.05f : 0.04f, f);
+    case BW_WALK:
+        /* FUN_002dab50: turning 1274 a frame; Dante within 550 and 100 degrees of his facing (0x5b8c64) takes him into
+         * 0x18, else after 300 frames (0x619674) he stops. */
+        goyle_turn_to(px, pz, BW_TURN_FAST, f);
         move_local(root[0], 0.0f, root[2]);
-        if ((a == BW_WALK ? d < 550.0f && fabsf(rel) < 60.0f : d < 300.0f) || e->timer > 240.0f) { bw_go(BW_IDLE); return; }
+        if (d < 550.0f && fabsf(rel) < 100.0f) { bw_go(0x18); return; }
+        if (e->timer > 300.0f) { bw_go(BW_IDLE); return; }
+        break;
+    case BW_RUN:
+        /* FUN_002dade0: turning 637 a frame (0x619688) for 30 frames (0x619690), then 218 (0x619698); after 180
+         * (0x619694), or Dante beyond 3000 (0x5b8cb4), it stops (3) [at its next stride's event in the game]. */
+        goyle_turn_to(px, pz, e->timer < 30.0f ? BW_TURN_MID : BW_TURN_SLOW, f);
+        move_local(root[0], 0.0f, root[2]);
+        if (e->timer > 210.0f || d > 3000.0f) { bw_go(3); return; }
+        break;
+    case 0x17:
+        goyle_turn_to(px, pz, BW_TURN_MID, f);
+        move_local(root[0], 0.0f, root[2]);
+        if (d < 300.0f || e->timer > 240.0f) { bw_go(BW_IDLE); return; }
         break;
     default:
         if (e->timer < 20.0f) goyle_turn_to(px, pz, 0.06f, f);
         move_local(root[0], 0.0f, root[2]);
-        if (a == 15 && script_event) bw_feather(px, py, pz);   /* the volley: a feather on each of its events */
+        if (a == 15 && script_event) {
+            /* FUN_002dcf00: its first event lets 0x5b8650's + 1 feathers go (7 at rank 0), its next 0x5b8660's + 1
+             * (3); its event 4 a wind that pushes Dante away 4.7 a frame for 190 frames. */
+            int k, n = script_event == 2 ? (e->step ? 3 : 7) : 0;   /* the runner keeps an event's id + 1 */
+            if (script_event == 2) e->step = 1;
+            for (k = 0; k < n; ++k) bw_feather(px, py, pz);
+            if (script_event == 5) bw_wind = 190.0f;
+        }
+        if (a == BW_STAGGER && e->done) { bw_go(bw_phase ? 1 : BW_IDLE); return; }   /* 0x619670[phase]: 0, 1, 1 */
         if (e->done) { bw_go(BW_IDLE); return; }
         break;
+    }
+    if (bw_wind > 0.0f) {
+        float l = d > 1.0f ? d : 1.0f;
+        bw_wind -= f;
+        enemy_wind[0] += dx / l * 4.7f * f; enemy_wind[1] += dz / l * 4.7f * f;
     }
     keep_apart(px, py, pz, f);
     if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);

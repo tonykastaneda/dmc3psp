@@ -6,7 +6,7 @@
 - [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns and knockbacks are the game's; not yet: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects
 - [ ] Nevan: her patterns, moves, movement (with its slowing), teleports (their steps, fades and places), motions, bats, reels, hair and dress (cloth chains, texture scrolls), action 24's strikes, 25's lightning balls (pillars and bars) and 29 / 38's floor lightning are the game's (docs/ENEMY_SPECS.md G); not yet: 23's circling bats, the kiss's hold
 - [ ] Arachne: no web shot or spiderlings (where they come from: docs/ENEMY_SPECS.md H); its health, 1400, is the game's
-- [ ] Beowulf: his scripts, attacks, damage, choices and phases are the game's (docs/ENEMY_SPECS.md I); not yet: his movement handlers' tables, the feather volley's flight, his stagger rule
+- [ ] Beowulf: his scripts, attacks, damage, choices, phases, walk / run / turn rules, stagger's end and the volley's counts and wind are the game's (docs/ENEMY_SPECS.md I); not yet: the feathers' flight, what sets off his stagger, the attack gate
 - [ ] Lady: her gun modes, ranges, turn rate, magazine, bursts, motions, damage, waypoint rings, walk, mode 0x28, mode 0x1a, specials 0x1b / 0x1c and line of sight are the game's (docs/ENEMY_SPECS.md J); not yet: her grapple escape (0x1d, decoded, not ported) and the special gate's timing
 - [ ] Arkham: one fight runs both rounds, and Vergil doesn't join
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform
