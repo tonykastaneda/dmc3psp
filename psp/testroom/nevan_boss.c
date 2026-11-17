@@ -129,16 +129,20 @@ static void next_move(NevanBrain *b, float d, float (*unit)(void)) {
     if (m == END_MOVE || b->pattern_at >= 16) { b->pattern = -1; m = 0; }
     b->move = m;
     act(b, move_action[m]);
-    if (b->action >= 4 && b->action <= 6) b->side = unit() < 0.5f;   /* +0x4e1f: a random bit (FUN_003b4d80) */
+    if ((b->action >= 4 && b->action <= 6) || b->action == 23) b->side = unit() < 0.5f;   /* +0x4e1f: a random bit (FUN_003b4d80) */
 }
 
-static void release_bats(NevanBrain *b) {
+/* Action 23 (FUN_003ba470): 3 / 5 / 8 of the bats about her (0x5bc8e0, rank 0), 20 / 15 / 12 frames apart (0x5bc930). */
+static const unsigned char swarm_count[3] = {3, 5, 8};
+static const float swarm_gap[3] = {20.0f, 15.0f, 12.0f};
+
+static void release_bats_n(NevanBrain *b, int count, float gap) {
     int i, n = 0;
-    for (i = 0; i < NEVAN_BATS && n < bat_count[b->phase]; ++i) {
+    for (i = 0; i < NEVAN_BATS && n < count; ++i) {
         NevanBat *t = &b->bats[i];
         if (t->on) continue;
         t->on = 1;
-        t->wait = 8.0f * (float)n;
+        t->wait = gap * (float)n;
         t->life = 360.0f;
         t->speed = 0.0f;
         t->pos[0] = b->pos[0] + sinf(b->yaw) * 150.0f;
@@ -148,6 +152,8 @@ static void release_bats(NevanBrain *b) {
         ++n;
     }
 }
+
+static void release_bats(NevanBrain *b) { release_bats_n(b, bat_count[b->phase], 8.0f); }
 
 static void bats_update(NevanBrain *b, float f, float px, float py, float pz, int attacks) {
     int i;
@@ -416,7 +422,9 @@ static void attack_event(NevanBrain *b, float px, float py, float pz, int attack
     (void)attacks;
     switch (b->action) {
     case 22: release_bats(b); break;
-    case 23: release_bats(b); break;   /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him [as bats] */
+    /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him, each to a random one of 0x5bc7d0's offsets; her
+     * swarm (+0x4db0) isn't ported, so they're let out as action 22's bats are. */
+    case 23: release_bats_n(b, swarm_count[b->phase], swarm_gap[b->phase]); break;
     case 24: strikes_start(b); break;   /* FUN_003b7300 → FUN_0045d720 */
     case 25: {   /* script event 4 (0x61acf8 = 3): her balls go (FUN_00469050 → state 1) */
         int i;
@@ -579,6 +587,26 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
     case 10: case 11: case 12: case 13: case 14: case 21:
         if (b->done) { b->pattern = -1; next_move(b, d, unit); }
         break;
+    case 23: {
+        /* FUN_003b7180: she circles him as in action 4 (FUN_003b4e30) through the motion, sending the bats at its
+         * event; when the motion's done she slows for 40 frames and moves on. */
+        int slowing = b->step == 2 || d < 200.0f;
+        float step, dir;
+        turn_to(b, px, pz);
+        if (!slowing) {
+            b->speed += move_rate[4] * f;
+            if (b->speed > move_top[4]) b->speed = move_top[4];
+            step = b->speed * b->speed;
+        } else { b->speed *= powf(0.98f, f); step = b->speed; }
+        dir = b->yaw + (b->side ? -1.5707963f : 1.5707963f);
+        b->pos[0] += sinf(dir) * step * f; b->pos[2] += cosf(dir) * step * f;
+        keep_on_stage(b);
+        if (b->step < 2) {
+            if (s->event >= 0 && b->step == 0 && b->frame >= (float)s->event) { b->step = 1; attack_event(b, px, py, pz, attacks); }
+            if (b->done) { b->step = 2; b->brake = 40.0f; }
+        } else if ((b->brake -= f) < 0.0f) next_move(b, d, unit);
+        break;
+    }
     default:
         if (b->frame < 20.0f) turn_to(b, px, pz);
         if (s->event >= 0 && !b->step && b->frame >= (float)s->event) { b->step = 1; attack_event(b, px, py, pz, attacks); }
