@@ -1106,7 +1106,8 @@ dispatch `00444c90` (+0x47c0: modes 0-0x17 her walk `00445210`, 0x18 `004455d0`,
 
 **In the port** (`psp/testroom/lady_boss.c`): the modes above at rank 0, each action's own motion, her turn rate,
 magazine and burst count, and her records' damage; her waypoints, walk, 0x28, 0x1a, the special picker, 0x1b and
-0x1c, and her line of sight (a stage ray), as decoded above. Stand-ins: what mode 0x1a does (here a grenade or Kalina Ann by
-turns), her escape (0x1d), where 0x28 takes her (she keeps 500-800 from him; her waypoints aren't read), her line of
-sight (always clear), shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun
-500, grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.
+0x1c, and her line of sight (a stage ray), as decoded above. Stand-ins: her escape (0x1d: still a leap back with a
+grenade, not the grapple and ledges), the special gate (every 600 frames [estimate]), what 0x1b and 0x1c fire (a
+rocket on 0x56, a grenade each 0x72 [inferred]), 0x5c's motion (its slot, [6] 9, is empty: the gun's draw), her run's
+speed [estimate], shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun 500,
+grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.
