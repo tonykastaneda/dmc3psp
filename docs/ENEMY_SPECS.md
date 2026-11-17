@@ -939,10 +939,20 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
     (`0045dd70`: shape 2, (0, 100, 0) radius 200, record 6; effect 0x1ce, sound 0x1a), live 20.
   - 25 (`003b7460`): one of three layouts at random, `00468580`'s class (`00468860` places them from `0x5cd210`-
     `0x5cd290`): two at a time (`0x5bc910`: 1 / 2 / 3), two and three by turns (`0x5bc900`), or 3 / 3 / 5 together
-    (`0x5bc8f0`), each set `0x5bc960`'s 50 / 45 / 40 frames after the last; not decoded further.
+    (`0x5bc8f0`), each set `0x5bc960`'s 50 / 45 / 40 frames after the last. Each ball (`00468860`): on his bearing
+    from her, at a side offset (bar halves -400 / +400 (`0x5cd280`); pillars `0x5cd210` 0, ±250, ±500, `0x5cd240`
+    0, ±250, `0x5cd260` ±125), first to 100 ahead at her height plus its own (bars `0x5cd290` 50 / 300 / 100 / 200
+    by turns from a random one, pillars 400), then to 2600 ahead at his floor plus the same. State 0 (`00469050`)
+    gathers to the first point (`00469340`: speed +2 a frame to 10, moving its square past 1, at most the top) until
+    her script's event 4 (`0x61acf8` = 3) or she leaves 25; state 1 (`004691d0`) waits its delay, then flies to the
+    second (+1 to 20) for at most 300 frames. Live all along (`00469790`, record 7, 500): a pillar (shape 6, (0,
+    -300, 0), 600 high, radius 30) or, on the first half of a bar, shape 4 (800, radius 30) [read as the bar
+    between the halves].
+  - Hit shapes, by their use [inferred]: 2 a capsule up from a point, 3 a box (centre, half sizes), 4 a bar
+    (length, radius), 6 a vertical pillar (centre, height, radius; Cerberus's landed icicle is one).
   - 29 / 38 (`003b7bd0` / `003b8d70`, as the action starts): `0043df80`'s class at her chest, effect 0x175 at his
     feet. `0043e250`, only while she's in 29 or 38: 50 frames charging (effect 0x16c), then (`0043e5d0`, record 1)
-    shape 6 about her chest ((0, -200, 0), 800, 100) for 50, then that and a world box at (2300, 50, 2300) of half
+    shape 6 about her chest ((0, -200, 0), 800 high, radius 100: a pillar through her) for 50, then that and a world box at (2300, 50, 2300) of half
     sizes (1700, 50, 2200), the room's whole floor up to 100, for `0x5c9370`'s 30 / 30 / 30 frames, with a camera
     shake (0x38, 0x39); each stage hurts once. Event 5 calls `003ba660` (not read).
 - **Hair, dress, sleeves** (`003b26a0`; model objects +0x880 body [1], +0xe80 [4], +0x1480 [5], +0x1a80 [6], their bone
@@ -968,7 +978,7 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
 
 **In the port** (`psp/testroom/nevan_boss.c`): the patterns, moves, phases, movement, teleports, scripts' motions
 and event frames, bats and reels above, at rank 0, with the movement, teleports, 24's strikes and 29 / 38's floor
-lightning exactly as above (her fades blend). Stand-ins: 25's bolts (one on Dante's spot, 500), 23's circling bats
+lightning and 25's balls as above (her fades blend). Stand-ins: 23's circling bats
 (let out as the bats are; `003ba470` keeps the bats' count), the shapes of Shl03-05 beyond their numbers, the kiss's
 hold, the teleport's material steps (not shown), 29 / 38's event, a wall ray on the 7 / 8 teleports (she keeps to
 the stage instead); the bats are drawn as glows. Her hair, dress and sleeves are the

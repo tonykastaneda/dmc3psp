@@ -21,8 +21,8 @@
  *   whole floor 30, record 1, only while she's in the action); 30 Shl03, 300 cm about her for the rest of the action
  *   (800); 32 Shl04, 70 cm on his spot after 50 frames, live 30 (500); 33-35 Shl05, the kiss, 200 cm about her lips
  *   for 5 frames (800).
- * Stand-ins: 25's bolts (FUN_00468580's class: three random layouts, their places not decoded; one on his spot, 500),
- * 29 / 38's event (FUN_003ba660), the kiss's hold, 23's circling bats (let out as the bats are), and the shapes of
+ * 25 (FUN_003b7460) its lightning balls (FUN_00468580's class, orbs_start): pillars or bars sweeping at him.
+ * Stand-ins: 29 / 38's event (FUN_003ba660), the kiss's hold, 23's circling bats (let out as the bats are), and the shapes of
  * Shl03-05 beyond those numbers. */
 #include <math.h>
 #include "nevan_boss.h"
@@ -76,6 +76,7 @@ static void act(NevanBrain *b, int a) {
     /* 29 and 38 make their floor lightning as they start (FUN_003b7bd0 / FUN_003b8d70, state 0); it charges 50 frames
      * (FUN_0043e1c0) and lives only while she's in them (FUN_0043e250). */
     if (a == 29 || a == 38) { b->field = 0; b->field_wait = 50.0f; b->field_done = 0; }
+    if (a == 25) b->orbs_pending = 1;   /* FUN_003b7460, state 0 */
     b->action = a;
     b->want = scripts[a].motion;
     b->restart = 1;
@@ -94,6 +95,7 @@ void nevan_spawn(NevanBrain *b, int health) {
     b->pattern = -1;
     for (i = 0; i < 6; ++i) b->shells[i].on = 0;
     for (i = 0; i < 4; ++i) b->strikes[i].on = 0;
+    for (i = 0; i < 12; ++i) b->orbs[i].on = 0;
     b->field = -1;
     b->home[0] = b->pos[0]; b->home[1] = b->pos[1]; b->home[2] = b->pos[2];
     for (i = 0; i < NEVAN_BATS; ++i) b->bats[i].on = 0;
@@ -208,7 +210,7 @@ static void shell(NevanBrain *b, const float at[3], float fuse, float active, fl
 static const unsigned char strike_count[3] = {1, 1, 2};
 #define STRIKE_RADIUS 200.0f     /* FUN_0045dd70: shape 2, (0, 100, 0) up from the mark, radius 200 */
 #define STRIKE_DAMAGE 1500.0f    /* record 6 */
-#define FIELD_RADIUS 800.0f      /* FUN_0043e5d0: shape 6 about her chest, (0, -200, 0), 800 across, 100 high */
+#define FIELD_RADIUS 100.0f      /* FUN_0043e5d0: shape 6 (a pillar) about her chest, (0, -200, 0), 800 high, radius 100 */
 #define FIELD_DAMAGE 1500.0f     /* record 1 */
 static const float field_floor_time[3] = {30.0f, 30.0f, 30.0f};   /* 0x5c9370, rank 0 by phase */
 
@@ -259,10 +261,128 @@ static void strikes_update(NevanBrain *b, float f, float px, float py, float pz,
     }
 }
 
-/* FUN_0043e250: the ring about her (stage 1, 50 frames), then the ring and the room's whole floor (stage 2: a box
- * at (2300, 50, 2300), 1700 x 50 x 2200 each way, world space), each stage hurting once. Dante is clear in the air. */
+/* Action 25's balls (FUN_003b7460 makes them, FUN_00468580's class runs them). Its layouts, one at random:
+ * 0x5bc910 sets of a bar (two halves 800 apart, mode 1) at 50 / 300 / 100 / 200 up by turns from a random one;
+ * 0x5bc900 sets of pillars (mode 0), three (0, +-250) and two (+-125) by turns; or 0x5bc8f0's pillars at once (0,
+ * +-250, +-500). Sets are 0x5bc960's frames apart. Rank 0 by phase. */
+static const unsigned char bar_sets[3] = {1, 2, 3}, pillar_sets[3] = {1, 2, 3}, pillar_row[3] = {3, 3, 5};
+static const float orb_gap[3] = {50.0f, 45.0f, 40.0f};
+static const float row_side[5] = {0.0f, 250.0f, -250.0f, 500.0f, -500.0f};     /* 0x5cd210 */
+static const float three_side[3] = {0.0f, 250.0f, -250.0f};                    /* 0x5cd240 */
+static const float two_side[2] = {125.0f, -125.0f};                            /* 0x5cd260 */
+static const float bar_height[4] = {50.0f, 300.0f, 100.0f, 200.0f};            /* 0x5cd290 */
+#define ORB_DAMAGE 500.0f        /* record 7 */
+#define ORB_RADIUS 30.0f         /* FUN_00469790: the pillar (shape 6) 600 high, the bar (shape 4) 800 long */
+
+static int orb_make(NevanBrain *b, int mode, float side, float height, float wait, float px, float pz) {
+    int i;
+    float yaw = atan2f(px - b->pos[0], pz - b->pos[2]), s = sinf(yaw), c = cosf(yaw);
+    for (i = 0; i < 12; ++i) {
+        if (b->orbs[i].on) continue;
+        b->orbs[i].on = 1; b->orbs[i].mode = mode; b->orbs[i].state = 0; b->orbs[i].partner = -1; b->orbs[i].done = 0;
+        b->orbs[i].pos[0] = b->pos[0]; b->orbs[i].pos[1] = b->pos[1]; b->orbs[i].pos[2] = b->pos[2];
+        /* FUN_00468860: by her, 100 ahead on his bearing; then 2600 ahead, at his height (+0x2924) plus its own. */
+        b->orbs[i].at[0] = b->pos[0] + c * side + s * 100.0f;
+        b->orbs[i].at[1] = b->pos[1] + height;
+        b->orbs[i].at[2] = b->pos[2] - s * side + c * 100.0f;
+        b->orbs[i].to[0] = b->pos[0] + c * side + s * 2600.0f;
+        b->orbs[i].to[1] = height;   /* + Dante's floor, filled in by the caller */
+        b->orbs[i].to[2] = b->pos[2] - s * side + c * 2600.0f;
+        b->orbs[i].speed = 0.0f; b->orbs[i].wait = wait; b->orbs[i].life = 120.0f;
+        return i;
+    }
+    return -1;
+}
+
+static void orbs_start(NevanBrain *b, float px, float py, float pz, float (*unit)(void)) {
+    int k, n, i, j;
+    float wait = 0.0f;
+    if (unit() < 0.5f) {
+        int h = (int)(unit() * 4.0f) & 3;
+        for (n = 0; n < bar_sets[b->phase]; ++n, wait += orb_gap[b->phase], h = (h + 1) & 3) {
+            i = orb_make(b, 1, -400.0f, bar_height[h], wait, px, pz);
+            j = orb_make(b, 1, 400.0f, bar_height[h], wait, px, pz);
+            if (i >= 0) { b->orbs[i].to[1] += py; b->orbs[i].partner = j; }
+            if (j >= 0) b->orbs[j].to[1] += py;
+        }
+    } else if (unit() < 0.5f) {
+        for (n = 0; n < pillar_sets[b->phase]; ++n, wait += orb_gap[b->phase])
+            for (k = 0; k < (n & 1 ? 2 : 3); ++k)
+                if ((i = orb_make(b, 0, n & 1 ? two_side[k] : three_side[k], 400.0f, wait, px, pz)) >= 0) b->orbs[i].to[1] += py;
+    } else {
+        for (k = 0; k < pillar_row[b->phase]; ++k)
+            if ((i = orb_make(b, 0, row_side[k], 400.0f, 0.0f, px, pz)) >= 0) b->orbs[i].to[1] += py;
+    }
+}
+
+/* FUN_00469340: toward its point, speed rising (0x5cd2c0: 2, then 1, a frame) to a top (0x5cd2a0: 10, then 20),
+ * moving the speed's square past 1, no more than the top a frame. 1 when there. */
+static int orb_toward(float pos[3], const float to[3], float *speed, float rate, float top, float f) {
+    float d[3] = {to[0] - pos[0], to[1] - pos[1], to[2] - pos[2]}, l = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]), step;
+    if (l < 10.0f) return 1;
+    *speed += rate * f;
+    if (*speed > top) *speed = top;
+    step = *speed > 1.0f ? *speed * *speed : *speed;
+    if (step > top) step = top;
+    step *= f;
+    if (step > l) step = l;
+    pos[0] += d[0] / l * step; pos[1] += d[1] / l * step; pos[2] += d[2] / l * step;
+    return 0;
+}
+
+/* FUN_00469050 (state 0, by her, live, until her script's event 4 or she leaves 25) and FUN_004691d0 (state 1:
+ * its wait, then 300 frames to its point), hurting all along: a pillar from it down 600 (mode 0), or the bar
+ * between a pair (mode 1). */
+static void orbs_update(NevanBrain *b, float f, float px, float py, float pz, int attacks) {
+    int i;
+    for (i = 0; i < 12; ++i) {
+        float dx, dz, mid = py + 100.0f;
+        int hit = 0;
+        if (!b->orbs[i].on) continue;
+        if (b->orbs[i].state == 0) {
+            orb_toward(b->orbs[i].pos, b->orbs[i].at, &b->orbs[i].speed, 2.0f, 10.0f, f);
+            if (b->action != 25) b->orbs[i].state = 1;
+        } else if ((b->orbs[i].wait -= f) < 0.0f) {
+            if (b->orbs[i].state == 1) { b->orbs[i].state = 2; b->orbs[i].life = 300.0f; b->orbs[i].speed = 0.0f; }
+            if (orb_toward(b->orbs[i].pos, b->orbs[i].to, &b->orbs[i].speed, 1.0f, 20.0f, f) || (b->orbs[i].life -= f) < 0.0f) {
+                b->orbs[i].on = 0;
+                continue;
+            }
+        }
+        if (b->orbs[i].mode == 0) {
+            dx = px - b->orbs[i].pos[0]; dz = pz - b->orbs[i].pos[2];
+            hit = dx * dx + dz * dz < (ORB_RADIUS + 60.0f) * (ORB_RADIUS + 60.0f) && py < b->orbs[i].pos[1] &&
+                  py + 180.0f > b->orbs[i].pos[1] - 600.0f;
+            {
+                float at[3] = {b->orbs[i].pos[0], b->orbs[i].pos[1] - (float)(i & 3) * 100.0f, b->orbs[i].pos[2]}, v[3] = {0.0f, -200.0f, 0.0f};
+                fx_mote(at, v, 40.0f, 10.0f, 0.12f, 0xffff80c0u);
+            }
+        } else if (b->orbs[i].partner >= 0 && b->orbs[b->orbs[i].partner].on) {
+            const float *a = b->orbs[i].pos, *e = b->orbs[b->orbs[i].partner].pos;
+            float ab[3] = {e[0] - a[0], e[1] - a[1], e[2] - a[2]}, len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+            float t = len2 > 0.0f ? ((px - a[0]) * ab[0] + (mid - a[1]) * ab[1] + (pz - a[2]) * ab[2]) / len2 : 0.0f, q[3], r;
+            int k;
+            if (t < 0.0f) t = 0.0f;
+            if (t > 1.0f) t = 1.0f;
+            q[0] = a[0] + ab[0] * t - px; q[1] = a[1] + ab[1] * t - mid; q[2] = a[2] + ab[2] * t - pz;
+            r = ORB_RADIUS + 60.0f;
+            /* Dante as a column (his feet to 180 up) against the bar. */
+            if (q[1] > -80.0f && q[1] < 80.0f) q[1] = 0.0f;
+            hit = q[0] * q[0] + q[1] * q[1] + q[2] * q[2] < r * r;
+            for (k = 0; k < 4; ++k) {
+                float u = (float)(k + 1) / 5.0f, at[3] = {a[0] + ab[0] * u, a[1] + ab[1] * u, a[2] + ab[2] * u}, v[3] = {0.0f, 0.0f, 0.0f};
+                fx_mote(at, v, 50.0f, 20.0f, 0.08f, 0xffff80c0u);
+            }
+        }
+        if (hit && attacks && !b->orbs[i].done) { b->orbs[i].done = 1; b->land = 2; b->land_damage = ORB_DAMAGE; }
+    }
+}
+
+/* FUN_0043e250: stage 1 (50 frames) the column through her (shape 6 about her chest: (0, -200, 0), 800 high,
+ * radius 100), stage 2 that and the room's whole floor (a box at (2300, 50, 2300), 1700 x 50 x 2200 each way, world
+ * space) for 30; each stage hurts once. Dante is clear of the floor in the air. */
 static void field_update(NevanBrain *b, float f, float px, float py, float pz, int attacks, float (*unit)(void)) {
-    float dx = px - b->pos[0], dz = pz - b->pos[2];
+    float dx = px - b->pos[0], dz = pz - b->pos[2], chest = b->pos[1] + 124.0f;
     int hit = 0, k;
     if (b->field < 0 || b->field >= 3) return;
     if (b->action != 29 && b->action != 38) { b->field = -1; return; }
@@ -271,13 +391,13 @@ static void field_update(NevanBrain *b, float f, float px, float py, float pz, i
         if (b->field_wait < 0.0f) { b->field = 1; b->field_wait = 50.0f; b->field_done = 0; }
         return;
     }
-    if (dx * dx + dz * dz < FIELD_RADIUS * FIELD_RADIUS && py < b->pos[1] + 24.0f) hit = 1;
+    if (dx * dx + dz * dz < (FIELD_RADIUS + 60.0f) * (FIELD_RADIUS + 60.0f) && py < chest + 200.0f && py + 180.0f > chest - 600.0f) hit = 1;
     if (b->field == 2 && px > 600.0f && px < 4000.0f && pz > 100.0f && pz < 4500.0f && py < 100.0f) hit = 1;
     if (hit && attacks && !b->field_done) { b->field_done = 1; b->land = 2; b->land_damage = FIELD_DAMAGE; }
     /* The sparks: about her, and, in stage 2, over the floor around him. */
     for (k = 0; k < 3; ++k) {
         float a = unit() * 6.2831853f, r = unit() * FIELD_RADIUS, v[3] = {0.0f, 40.0f, 0.0f};
-        float at[3] = {b->pos[0] + sinf(a) * r, b->pos[1] + 5.0f, b->pos[2] + cosf(a) * r};
+        float at[3] = {b->pos[0] + sinf(a) * r, b->pos[1] + unit() * 200.0f, b->pos[2] + cosf(a) * r};
         fx_mote(at, v, 40.0f, 8.0f, 0.15f, 0xffff80c0u);
         if (b->field == 2) {
             float near[3] = {px + (unit() - 0.5f) * 1200.0f, 5.0f, pz + (unit() - 0.5f) * 1200.0f};
@@ -298,10 +418,11 @@ static void attack_event(NevanBrain *b, float px, float py, float pz, int attack
     case 22: release_bats(b); break;
     case 23: release_bats(b); break;   /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him [as bats] */
     case 24: strikes_start(b); break;   /* FUN_003b7300 → FUN_0045d720 */
-    /* 25 (FUN_003b7460): one of three layouts of FUN_00468580's bolts, chosen at random, counts by phase (0x5bc8f0 /
-     * 0x5bc900 / 0x5bc910), each 0x5bc960's frames after the last; their places (0x5cd210-0x5cd290) aren't decoded:
-     * a bolt on his spot, record 7's 500 [stand-in]. */
-    case 25: shell(b, his, 50.0f, 10.0f, 150.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;
+    case 25: {   /* script event 4 (0x61acf8 = 3): her balls go (FUN_00469050 → state 1) */
+        int i;
+        for (i = 0; i < 12; ++i) if (b->orbs[i].on && b->orbs[i].state == 0) b->orbs[i].state = 1;
+        break;
+    }
     /* 29 and 38: their floor lightning started with the action (field_update); the event (5) calls FUN_003ba660,
      * not decoded. */
     case 30: shell(b, mine, 0.0f, 57.0f, 300.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz); break;      /* Shl03, record 3: to 134 */
@@ -365,6 +486,8 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
     shells_update(b, f, px, py, pz, attacks);
     strikes_update(b, f, px, py, pz, attacks);
     field_update(b, f, px, py, pz, attacks, unit);
+    if (b->orbs_pending) { b->orbs_pending = 0; orbs_start(b, px, py, pz, unit); }
+    orbs_update(b, f, px, py, pz, attacks);
     if (a == 21 && b->health <= 0) {
         if (b->timer > 200.0f) { b->remove = 1; }
         return;
@@ -474,6 +597,7 @@ int nevan_hit(NevanBrain *b, int kind, float fx, float fz, int mortal) {
             int i;
             for (i = 0; i < NEVAN_BATS; ++i) b->bats[i].on = 0;
             for (i = 0; i < 4; ++i) b->strikes[i].on = 0;
+            for (i = 0; i < 12; ++i) b->orbs[i].on = 0;
             b->health = 0;
             act(b, 21);
             return 1;

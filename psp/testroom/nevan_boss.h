@@ -33,6 +33,10 @@ typedef struct {
      * ring and the whole floor, 3 spent) and time; whether this stage has hurt him. */
     int field, field_done;
     float field_wait;
+    /* Action 25's balls (FUN_00468580's class): a pillar (mode 0) or half a bar (mode 1, partner = the other half),
+     * gathering by her (state 0) until released, then after `wait` flying to `to` (state 1, `life` frames). */
+    struct { int on, mode, state, partner, done; float pos[3], at[3], to[3], speed, wait, life; } orbs[12];
+    int orbs_pending;            /* 25 has started: make its balls this frame */
 } NevanBrain;
 
 void nevan_spawn(NevanBrain *b, int health);
