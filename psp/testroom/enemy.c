@@ -3774,6 +3774,77 @@ static void ar_go(int s) {
     ar_phase_start(in);
 }
 
+/* State 64, the pair's opening (FUN_003ab250; its steps are the game's +5 values). From the pedestals: a turn
+ * (script 26), take-off (2), the rise (3) and the air (4) at him, speeding up 3 a frame to 16 (FUN_003b0090's
+ * +0x78 / +0x2e08) for up to 420 frames or until within 100; a turn (26); script 0 while he waits (300 frames at
+ * most) for his brother to reach the same wait; 60 frames × his place in the pair (+0x2ee0: Agni 0, Rudra 1 is an
+ * inference); then the second leap (2, 3, 4) for 300 frames, which within 350 lands (91 + swords, FUN_003a3e30) and
+ * within 1000 turns into state 65; 20 frames on, slowing 0.75 a frame, and when the landing's done, idle. */
+#define AR_OPENING 64
+static void ar_play(int n) { e->wake = 0.0f; script_play(n); }
+static void ar_opening(float f, float px, float pz, float d, const float *root, Enemy *bro, int set) {
+    const float A = 2.0f * PI / 65536.0f;
+    int s = e->step;
+    if ((s >= 0xc && s <= 0xd) || (s >= 0x34 && s <= 0x36)) { e->vel[0] += 3.0f * f; if (e->vel[0] > 16.0f) e->vel[0] = 16.0f; }
+    else if (s == 0x37) { e->vel[0] -= 0.75f * f; if (e->vel[0] < 0.0f) e->vel[0] = 0.0f; }
+    move_local(root[0], 0.0f, root[2] + e->vel[0] * f);
+    switch (s) {
+    case 0:
+        if (d <= 100.0f) { e->step = 0x16; break; }   /* near him: no first leap */
+        /* fall through */
+    case 1: case 2:
+        goyle_turn_to(px, pz, 0x888 * A, f);
+        if (e->done) { ar_play(2); e->step = 0xb; }
+        break;
+    case 0xb:
+        if (e->done) { ar_play(3); e->step = 0xc; }
+        break;
+    case 0xc:
+        goyle_turn_to(px, pz, 0x800 * A, f);
+        if (e->done) { ar_play(4); e->vel[1] = 420.0f; e->step = 0xd; }
+        break;
+    case 0xd:
+        goyle_turn_to(px, pz, 0x800 * A, f);
+        if ((e->vel[1] -= f) <= 0.0f || d <= 100.0f) { e->vel[0] = 0.0f; ar_play(26); e->step = 0x16; }
+        break;
+    case 0x16:
+        goyle_turn_to(px, pz, 0x888 * A, f);
+        if (e->done) { ar_play(0); e->vel[1] = 300.0f; e->step = 0x1f; }
+        break;
+    case 0x1f:
+        goyle_turn_to(px, pz, 0x100 * A, f);
+        if ((e->vel[1] -= f) <= 0.0f || !bro) { ar_go(AR_IDLE); break; }
+        if ((bro->action == AR_OPENING && bro->step > 0x1d) || (bro->action != AR_OPENING && bro->action != AR_STATUE_STATE)) {
+            e->vel[1] = 60.0f * (e->kind == ENEMY_AGNI ? 0.0f : 1.0f);
+            e->step = 0x29;
+        }
+        break;
+    case 0x29:
+        goyle_turn_to(px, pz, 0x100 * A, f);
+        if ((e->vel[1] -= f) <= 0.0f) { ar_play(2); e->step = 0x33; }
+        break;
+    case 0x33:
+        if (e->done) { ar_play(3); e->step = 0x34; }
+        break;
+    case 0x34:
+        goyle_turn_to(px, pz, 0x800 * A, f);
+        if (e->done) { ar_play(4); e->vel[1] = 300.0f; e->step = 0x35; }
+        break;
+    case 0x35:
+        goyle_turn_to(px, pz, 0x800 * A, f);
+        if ((e->vel[1] -= f) <= 0.0f || d <= 350.0f) { ar_play(91 + set); e->step = 0x36; }
+        else if (d <= 1000.0f) ar_go(65);
+        break;
+    case 0x36:
+        if (e->wake >= 20.0f) e->step = 0x37;
+        break;
+    default:
+        if (e->done) ar_go(AR_IDLE);
+        break;
+    }
+    if (e->action == AR_OPENING && e->step != s) giga_note(e->kind == ENEMY_AGNI ? "agni_open" : "rudra_open", e->step, d);
+}
+
 static void ar_statue(int which) {
     e->plan = P_WATCH;
     e->action = AR_STATUE_STATE;
@@ -3818,7 +3889,7 @@ static void ar_update(float f, float px, float py, float pz) {
             fx_dust(at); fx_explosion(at);
             ar_brain_reset(b, e->kind == ENEMY_AGNI ? 0 : 1);
             ar_formation_time = 0.0f;
-            ar_go(AR_IDLE);
+            ar_go(AR_OPENING);   /* +0x2de7: the pair's opening first (FUN_003aedd0) */
         }
         return;
     }
@@ -3827,6 +3898,11 @@ static void ar_update(float f, float px, float py, float pz) {
     e->timer += f;
     if (e->plan == P_DEATH) {
         if (e->done && e->timer > 200.0f) e->active = 0;
+        return;
+    }
+    if (e->action == AR_OPENING) {
+        ar_opening(f, px, pz, d, root, bro, b->set);
+        keep_apart(px, py, pz, f);
         return;
     }
     /* The survivor takes up his brother's sword (+0x2f40 = 2). */

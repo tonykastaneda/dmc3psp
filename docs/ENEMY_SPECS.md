@@ -845,8 +845,9 @@ his side line turns him (state 0, `FUN_003af2c0`), then the reaction to Dante's 
 Agni hops back (21), Rudra guards (23), the survivor never; a blow in the guard's first phase is turned (22, 24:
 a hit), after which he counters at once from the second attack table. A blow that throws (`FUN_003a2ab0` /
 `FUN_003a2c00`, vtable +0xe4 / +0xe0) knocks him back, 37 struck from in front, 38 from behind (which of Dante's
-hits are those is inferred: the port's heavy, slam and launch). Not yet: the pair's openings and team moves (63,
-64), the hops (16-21) beyond their scripts, the guard stances the scripts set (`FUN_003a1a50` turns hits while one
+hits are those is inferred: the port's heavy, slam and launch). The pair's opening (64, below) is the game's
+(`ar_opening`; Rudra going 60 frames after Agni reads +0x2ee0 as their place in the pair, an inference). Not yet:
+the pedestal climb (63) and team moves, the hops (16-21) beyond their scripts, the guard stances the scripts set (`FUN_003a1a50` turns hits while one
 is up), the game's own effects (the slam's fire and wind bursts 0x311 / 0x312 and the charged blades' 0x24c / 0x24d are stand-ins: the port's burst, hurting within 300 cm as attack record 12 [estimate], and motes), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
 Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.
 They start as statues (ar71/ar72) and wake within 900 cm, when struck, or after 600 frames (the game plays a
