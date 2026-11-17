@@ -4,7 +4,7 @@
 - [ ] The Abyss: its own body, scythe, scripts, caps and health (1500) run on the Hells' machinery (Missions 17, 19); not yet: its own decision table (it decides with the Pride's), docs/ENEMY_SPECS.md H
 - [ ] Jester: his attacks, throws, defence and stun meter are the game's; not yet: his second set of moves (later encounters and the health threshold), his idle actions, the throws' effects, a bullet's stun value (estimate)
 - [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns and knockbacks are the game's; not yet: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects
-- [ ] Nevan: her patterns, moves, movement, teleports, motions, bats and reels are the game's (docs/ENEMY_SPECS.md G); not yet: what her other attacks' events make (lightning, the kiss: stand-in bolts and a sweep)
+- [ ] Nevan: her patterns, moves, movement (with its slowing), teleports (their steps, fades and places), motions, bats, reels, hair and dress (cloth chains, texture scrolls), action 24's strikes and 29 / 38's floor lightning are the game's (docs/ENEMY_SPECS.md G); not yet: action 25's bolt layouts, 23's circling bats, the kiss's hold
 - [ ] Arachne: no web shot or spiderlings (where they come from: docs/ENEMY_SPECS.md H); its health, 1400, is the game's
 - [ ] Beowulf: his scripts, attacks, damage, choices and phases are the game's (docs/ENEMY_SPECS.md I); not yet: his movement handlers' tables, the feather volley's flight, his stagger rule
 - [ ] Lady: her gun modes, ranges, turn rate, magazine, bursts, motions and damage are the game's (docs/ENEMY_SPECS.md J); not yet: mode 0x1a (grenade / Kalina Ann stand-in), her escape, her waypoints and line of sight

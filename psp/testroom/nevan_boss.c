@@ -14,14 +14,16 @@
  *   360 frames; an 80 cm sphere, attack record 0x5bc3d0: 300 damage (FUN_00418a50 / FUN_00418bf0 / FUN_00418f50).
  * - Her hits (FUN_003bb150, FUN_003bbcf0): a light one makes her reel (10 or 11), a heavy one 12 (14 if reeling
  *   from 13-15), one that throws knocks her down (21); not while teleporting or in 33 / 34.
- * - Her other attacks' events make her shells (CEm028Shl01, Shl03-Shl07, hit records 0x5bc3d0 by FUN_002949c0's
- *   index): 24 Shl06, a 200 cm ball from her hand at him, 20 a frame rising to 40 (1500); 25 Shl07 on his spot (500
- *   [record inferred]); 29 / 38 Shl01, from her hand to the spot it marks under him (1500); 30 Shl03, 300 cm about
- *   her for the rest of the action (800); 32 Shl04, 70 cm on his spot after 50 frames, live 30 (500); 33-35 Shl05,
- *   the kiss, 200 cm about her lips for 5 frames (800).
- * Stand-ins: the shells' flight and shapes beyond those numbers (Shl01's 800 / 2200 aren't placed; it strikes his spot
- * after 30 frames, 150 cm), the kiss's hold, 23's circling bats (let out as the bats are), where move 9 takes her
- * (back to where she came in). */
+ * - Her other attacks make shells (hit records 0x5bc3d0, 0x40 apart, damage at +4: 300, 1500, 1000, 800, 500, 800,
+ *   1500, 500; FUN_002949c0 picks one): 24 (FUN_003b7300) 1 / 1 / 2 strikes 30 frames apart (FUN_0045d720's class:
+ *   his spot marked 40 frames, then live 20, radius 200, record 6); 29 / 38 (FUN_003b7bd0 / FUN_003b8d70) the floor
+ *   lightning (FUN_0043df80's class: 50 frames charging, the ring of 800 about her 50, then the ring and the room's
+ *   whole floor 30, record 1, only while she's in the action); 30 Shl03, 300 cm about her for the rest of the action
+ *   (800); 32 Shl04, 70 cm on his spot after 50 frames, live 30 (500); 33-35 Shl05, the kiss, 200 cm about her lips
+ *   for 5 frames (800).
+ * Stand-ins: 25's bolts (FUN_00468580's class: three random layouts, their places not decoded; one on his spot, 500),
+ * 29 / 38's event (FUN_003ba660), the kiss's hold, 23's circling bats (let out as the bats are), and the shapes of
+ * Shl03-05 beyond those numbers. */
 #include <math.h>
 #include "nevan_boss.h"
 #include "fx.h"
@@ -71,6 +73,9 @@ static const unsigned char bat_count[3] = {2, 3, 4};
 int nevan_loops(int motion) { return motion == M0 || motion == M16 || motion == M44 || motion == M50; }
 
 static void act(NevanBrain *b, int a) {
+    /* 29 and 38 make their floor lightning as they start (FUN_003b7bd0 / FUN_003b8d70, state 0); it charges 50 frames
+     * (FUN_0043e1c0) and lives only while she's in them (FUN_0043e250). */
+    if (a == 29 || a == 38) { b->field = 0; b->field_wait = 50.0f; b->field_done = 0; }
     b->action = a;
     b->want = scripts[a].motion;
     b->restart = 1;
@@ -88,6 +93,8 @@ void nevan_spawn(NevanBrain *b, int health) {
     b->alpha = 1.0f;
     b->pattern = -1;
     for (i = 0; i < 6; ++i) b->shells[i].on = 0;
+    for (i = 0; i < 4; ++i) b->strikes[i].on = 0;
+    b->field = -1;
     b->home[0] = b->pos[0]; b->home[1] = b->pos[1]; b->home[2] = b->pos[2];
     for (i = 0; i < NEVAN_BATS; ++i) b->bats[i].on = 0;
     act(b, 0);
@@ -197,17 +204,106 @@ static void shell(NevanBrain *b, const float at[3], float fuse, float active, fl
     }
 }
 
+/* Action 24's strikes (FUN_003b7300): 1 / 1 / 2 by phase (0x5bc920, rank 0), each 30 frames after the last. */
+static const unsigned char strike_count[3] = {1, 1, 2};
+#define STRIKE_RADIUS 200.0f     /* FUN_0045dd70: shape 2, (0, 100, 0) up from the mark, radius 200 */
+#define STRIKE_DAMAGE 1500.0f    /* record 6 */
+#define FIELD_RADIUS 800.0f      /* FUN_0043e5d0: shape 6 about her chest, (0, -200, 0), 800 across, 100 high */
+#define FIELD_DAMAGE 1500.0f     /* record 1 */
+static const float field_floor_time[3] = {30.0f, 30.0f, 30.0f};   /* 0x5c9370, rank 0 by phase */
+
+static void strikes_start(NevanBrain *b) {
+    int i, n = 0;
+    for (i = 0; i < 4 && n < strike_count[b->phase]; ++i) {
+        if (b->strikes[i].on) continue;
+        b->strikes[i].on = 1; b->strikes[i].state = 0; b->strikes[i].done = 0;
+        b->strikes[i].wait = 30.0f * (float)n;
+        ++n;
+    }
+}
+
+/* FUN_0045d950 / FUN_0045da20: after its delay it marks his spot at 100 up (a beam from her right hand to it), 40
+ * frames later strikes there, live 20 frames. */
+static void strikes_update(NevanBrain *b, float f, float px, float py, float pz, int attacks) {
+    int i;
+    for (i = 0; i < 4; ++i) {
+        float dx, dy, dz, top;
+        if (!b->strikes[i].on) continue;
+        b->strikes[i].wait -= f;
+        if (b->strikes[i].state == 0) {
+            if (b->strikes[i].wait > 0.0f) continue;
+            b->strikes[i].pos[0] = px; b->strikes[i].pos[1] = 100.0f; b->strikes[i].pos[2] = pz;
+            b->strikes[i].state = 1; b->strikes[i].wait = 40.0f;
+        } else if (b->strikes[i].state == 1) {
+            if (((int)b->strikes[i].wait & 3) == 0) {
+                float at[3] = {b->strikes[i].pos[0], b->strikes[i].pos[1] - 90.0f, b->strikes[i].pos[2]}, v[3] = {0.0f, 20.0f, 0.0f};
+                fx_mote(at, v, STRIKE_RADIUS, 12.0f, 0.3f, 0xffff80c0u);   /* the mark (effect 0x1c7) */
+            }
+            if (b->strikes[i].wait < 0.0f) {
+                float at[3] = {b->strikes[i].pos[0], b->strikes[i].pos[1], b->strikes[i].pos[2]};
+                fx_explosion(at);   /* the bolt (effect 0x1ce) */
+                b->strikes[i].state = 2; b->strikes[i].wait = 20.0f;
+            }
+        } else {
+            /* Dante's middle against the capsule from the mark up 100. */
+            top = b->strikes[i].pos[1] + 100.0f;
+            dx = px - b->strikes[i].pos[0]; dz = pz - b->strikes[i].pos[2];
+            dy = py + 100.0f;
+            dy = dy < b->strikes[i].pos[1] ? b->strikes[i].pos[1] - dy : dy > top ? dy - top : 0.0f;
+            if (!b->strikes[i].done && attacks && dx * dx + dy * dy + dz * dz < (STRIKE_RADIUS + 60.0f) * (STRIKE_RADIUS + 60.0f)) {
+                b->strikes[i].done = 1;
+                b->land = 2; b->land_damage = STRIKE_DAMAGE;
+            }
+            if (b->strikes[i].wait < 0.0f) b->strikes[i].on = 0;
+        }
+    }
+}
+
+/* FUN_0043e250: the ring about her (stage 1, 50 frames), then the ring and the room's whole floor (stage 2: a box
+ * at (2300, 50, 2300), 1700 x 50 x 2200 each way, world space), each stage hurting once. Dante is clear in the air. */
+static void field_update(NevanBrain *b, float f, float px, float py, float pz, int attacks, float (*unit)(void)) {
+    float dx = px - b->pos[0], dz = pz - b->pos[2];
+    int hit = 0, k;
+    if (b->field < 0 || b->field >= 3) return;
+    if (b->action != 29 && b->action != 38) { b->field = -1; return; }
+    b->field_wait -= f;
+    if (b->field == 0) {
+        if (b->field_wait < 0.0f) { b->field = 1; b->field_wait = 50.0f; b->field_done = 0; }
+        return;
+    }
+    if (dx * dx + dz * dz < FIELD_RADIUS * FIELD_RADIUS && py < b->pos[1] + 24.0f) hit = 1;
+    if (b->field == 2 && px > 600.0f && px < 4000.0f && pz > 100.0f && pz < 4500.0f && py < 100.0f) hit = 1;
+    if (hit && attacks && !b->field_done) { b->field_done = 1; b->land = 2; b->land_damage = FIELD_DAMAGE; }
+    /* The sparks: about her, and, in stage 2, over the floor around him. */
+    for (k = 0; k < 3; ++k) {
+        float a = unit() * 6.2831853f, r = unit() * FIELD_RADIUS, v[3] = {0.0f, 40.0f, 0.0f};
+        float at[3] = {b->pos[0] + sinf(a) * r, b->pos[1] + 5.0f, b->pos[2] + cosf(a) * r};
+        fx_mote(at, v, 40.0f, 8.0f, 0.15f, 0xffff80c0u);
+        if (b->field == 2) {
+            float near[3] = {px + (unit() - 0.5f) * 1200.0f, 5.0f, pz + (unit() - 0.5f) * 1200.0f};
+            fx_mote(near, v, 40.0f, 8.0f, 0.15f, 0xffff80c0u);
+        }
+    }
+    if (b->field_wait < 0.0f) {
+        if (b->field == 1) { b->field = 2; b->field_wait = field_floor_time[b->phase]; b->field_done = 0; }
+        else b->field = 3;
+    }
+}
+
 /* An attack's event (its script's frame). */
 static void attack_event(NevanBrain *b, float px, float py, float pz, int attacks) {
     float mine[3] = {b->pos[0], b->pos[1], b->pos[2]}, his[3] = {px, py, pz};
-    float hand[3] = {b->pos[0] + sinf(b->yaw) * 80.0f, b->pos[1] + 120.0f, b->pos[2] + cosf(b->yaw) * 80.0f};
     (void)attacks;
     switch (b->action) {
     case 22: release_bats(b); break;
     case 23: release_bats(b); break;   /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him [as bats] */
-    case 24: shell(b, hand, 0.0f, 150.0f, 200.0f, 1500.0f, 0, 20.0f, 40.0f, px, py, pz); break;   /* Shl06, record 6 */
-    case 25: shell(b, his, 50.0f, 10.0f, 150.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;      /* Shl07 [record 7 inferred] */
-    case 29: case 38: shell(b, his, 30.0f, 10.0f, 150.0f, 1500.0f, 0, 0.0f, 0.0f, px, py, pz); break;   /* Shl01, record 1 */
+    case 24: strikes_start(b); break;   /* FUN_003b7300 → FUN_0045d720 */
+    /* 25 (FUN_003b7460): one of three layouts of FUN_00468580's bolts, chosen at random, counts by phase (0x5bc8f0 /
+     * 0x5bc900 / 0x5bc910), each 0x5bc960's frames after the last; their places (0x5cd210-0x5cd290) aren't decoded:
+     * a bolt on his spot, record 7's 500 [stand-in]. */
+    case 25: shell(b, his, 50.0f, 10.0f, 150.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;
+    /* 29 and 38: their floor lightning started with the action (field_update); the event (5) calls FUN_003ba660,
+     * not decoded. */
     case 30: shell(b, mine, 0.0f, 57.0f, 300.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz); break;      /* Shl03, record 3: to 134 */
     case 32: shell(b, his, 50.0f, 30.0f, 70.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;       /* Shl04, record 4 */
     case 33: case 34: case 35: {                                                                 /* Shl05, record 5: the kiss */
@@ -267,6 +363,8 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
     b->phase = phase_of(b);
     bats_update(b, f, px, py, pz, attacks);
     shells_update(b, f, px, py, pz, attacks);
+    strikes_update(b, f, px, py, pz, attacks);
+    field_update(b, f, px, py, pz, attacks, unit);
     if (a == 21 && b->health <= 0) {
         if (b->timer > 200.0f) { b->remove = 1; }
         return;
@@ -375,6 +473,7 @@ int nevan_hit(NevanBrain *b, int kind, float fx, float fz, int mortal) {
         if (b->health <= 0) {
             int i;
             for (i = 0; i < NEVAN_BATS; ++i) b->bats[i].on = 0;
+            for (i = 0; i < 4; ++i) b->strikes[i].on = 0;
             b->health = 0;
             act(b, 21);
             return 1;

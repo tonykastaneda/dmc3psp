@@ -27,6 +27,12 @@ typedef struct {
     /* Her shells (CEm028Shl01, Shl03-Shl07): a sphere that waits its fuse, then hurts for `active` frames; follow 1: it
      * stays on her; vel: it flies. Each hurts once. */
     struct { int on, follow, done; float pos[3], vel[3], fuse, active, radius, damage, top; } shells[6];
+    /* Action 24's strikes (FUN_0045d720's class): a delay, then his spot marked for 40 frames, then live for 20. */
+    struct { int on, state, done; float wait, pos[3]; } strikes[4];
+    /* Actions 29 / 38's floor lightning (FUN_0043df80's class): its stage (0 charging, 1 the ring about her, 2 the
+     * ring and the whole floor, 3 spent) and time; whether this stage has hurt him. */
+    int field, field_done;
+    float field_wait;
 } NevanBrain;
 
 void nevan_spawn(NevanBrain *b, int health);

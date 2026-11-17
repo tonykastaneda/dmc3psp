@@ -922,6 +922,29 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
 - **Hits** (`003bb150` → flags +0x5188-0x518f, `003bbcf0`): a reaction id 0/1/4/7/8/10-12 asks a light reel, 2/3 a
   heavy one, 0x14/0x15 the fall (21). None while she teleports (7-9) or in 33 / 34. Light: from 10 → 11, 11 → 10,
   13-15 → 13, 12 none, else 10 or 11; heavy: 13-15 → 14, 10 → 11, 11 → 10, 12 none, else 12.
+- **Movement, exactly** (rank 0 tables `0x5bcab0` + 0x90 per action, [time, distance, rate, top] by phase): 1-3
+  (`003b4330` & co. → `003b4500`) head at him, 4 (`003b4c20` → `003b4e30`) 90 degrees off his bearing, 5 (`003b5020` →
+  `003b51f0`) 75, 6 (`003b5450` → `003b5620`) -105 (backing out to 800); the side is `003b4d80`'s random bit
+  (+0x4e1f). At the distance she moves on at once; when the time's up (or 1-3 and 5 are within it, 6 beyond it) she
+  slows 0.98 a frame for 40 (state 2) first. 4 and 5 also slow within 200 of him, and slowing they move the speed
+  itself, not its square.
+- **Teleport** (`003b5870`, steps +6): 0-1 30 frames on her models' materials (+0x9c / +0xa0, 0 to 128, effect 0xe
+  at her chest), 2 her alpha +0x5161 128 to 0 over 30, 3 placed (`003ba790`) and turned to him, 4-5 15 frames (effect
+  0x93, sound 0x17), 6 alpha back over 30, 7 the materials back over 30, then her next move; moves 14 and 22 go on to
+  actions 27 and 38. Moves 9, 14, 22: (2500, 300, 1200) when Dante's z is over 2500, else (2500, 178, 3800).
+- **Shells** (hit records `0x5bc3d0`, 0x40 apart, damage at +4: 300, 1500, 1000, 800, 500, 800, 1500, 500):
+  - 24 (`003b7300`, on script event 3): 1 / 1 / 2 by phase (`0x5bc920`) of `0045d720`'s class from her right hand
+    (bone 9), 30 frames apart. Each (`0045d950`, `0045da20`): its delay, then his spot at y 100 is marked (a beam
+    effect 0x1c1 from her hand scaled to the distance / 500, the mark 0x1c7, sound 0x19); 40 frames later it strikes
+    (`0045dd70`: shape 2, (0, 100, 0) radius 200, record 6; effect 0x1ce, sound 0x1a), live 20.
+  - 25 (`003b7460`): one of three layouts at random, `00468580`'s class (`00468860` places them from `0x5cd210`-
+    `0x5cd290`): two at a time (`0x5bc910`: 1 / 2 / 3), two and three by turns (`0x5bc900`), or 3 / 3 / 5 together
+    (`0x5bc8f0`), each set `0x5bc960`'s 50 / 45 / 40 frames after the last; not decoded further.
+  - 29 / 38 (`003b7bd0` / `003b8d70`, as the action starts): `0043df80`'s class at her chest, effect 0x175 at his
+    feet. `0043e250`, only while she's in 29 or 38: 50 frames charging (effect 0x16c), then (`0043e5d0`, record 1)
+    shape 6 about her chest ((0, -200, 0), 800, 100) for 50, then that and a world box at (2300, 50, 2300) of half
+    sizes (1700, 50, 2200), the room's whole floor up to 100, for `0x5c9370`'s 30 / 30 / 30 frames, with a camera
+    shake (0x38, 0x39); each stage hurts once. Event 5 calls `003ba660` (not read).
 - **Hair, dress, sleeves** (`003b26a0`; model objects +0x880 body [1], +0xe80 [4], +0x1480 [5], +0x1a80 [6], their bone
   arrays +0x718, +0x778, +0x7d8, +0x814). A rig bone's +0xfc link record (+0x18 = a body bone's world matrix) ties it
   to the body: **[4] her hair** (texture 0), rig bones 0/1/2 on body bones 3/4/5, four strands of five from bone 2;
@@ -944,11 +967,11 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
   90 frames; scroll 1, type 3, texture 2 (the dark cloth) left over 400 frames, drifting 0.0001.
 
 **In the port** (`psp/testroom/nevan_boss.c`): the patterns, moves, phases, movement, teleports, scripts' motions
-and event frames, bats and reels above, at rank 0. Stand-ins: what events 23-25, 29, 30, 32, 35 and 38 make (shell
-classes `0x45d720`, `0x468580`, `0x43df80`, `0x417340`, `0x4179a0`, `0x4181a0` and the kiss's hold, not decoded) is a
-bolt on Dante's spot after 30 frames or, for 32, a sweep about her, at the bats' 300; 23 also lets out bats [inferred:
-`003ba470` keeps the bats' count]; move 9's place (her starting spot); which way she circles (+0x4e1f) is random; her
-fades hide her below a third rather than blending; the bats are drawn as glows. Her hair, dress and sleeves are the
+and event frames, bats and reels above, at rank 0, with the movement, teleports, 24's strikes and 29 / 38's floor
+lightning exactly as above (her fades blend). Stand-ins: 25's bolts (one on Dante's spot, 500), 23's circling bats
+(let out as the bats are; `003ba470` keeps the bats' count), the shapes of Shl03-05 beyond their numbers, the kiss's
+hold, the teleport's material steps (not shown), 29 / 38's event, a wall ray on the 7 / 8 teleports (she keeps to
+the stage instead); the bats are drawn as glows. Her hair, dress and sleeves are the
 game's (above): their rigs are appended to her skeleton (`tools/prepare_skinned_model.py`, EXTRA_CHAINS), linked
 bones follow her body, the chains step in her model space (`psp/testroom/cloth.c`, coat.c's FUN_0022f270 port), and
 the scrolls run (`enemy.c`, scrolls_update). Not ported: RateUV, InterUV, TurnTimeUV and RndUV (her script doesn't
