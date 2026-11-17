@@ -19,8 +19,8 @@
  *   his spot marked 40 frames, then live 20, radius 200, record 6); 29 / 38 (FUN_003b7bd0 / FUN_003b8d70) the floor
  *   lightning (FUN_0043df80's class: 50 frames charging, the ring of 800 about her 50, then the ring and the room's
  *   whole floor 30, record 1, only while she's in the action); 30 Shl03, 300 cm about her for the rest of the action
- *   (800); 32 Shl04, 70 cm on his spot after 50 frames, live 30 (500); 33-35 Shl05, the kiss, 200 cm about her lips
- *   for 5 frames (800).
+ *   (800); 32 Shl04, 70 cm on his spot after 50 frames, live 30 (500); 33 / 34 Shl05 at her feet, 200 cm for 5
+ *   frames (800), then she's gone at 40 frames and placed by move 9 at 75 (FUN_003b81b0); 35 the kiss's rush.
  * 25 (FUN_003b7460) its lightning balls (FUN_00468580's class, orbs_start): pillars or bars sweeping at him.
  * Stand-ins: 29 / 38's event (FUN_003ba660), the kiss's hold, 23's circling bats (let out as the bats are), and the shapes of
  * Shl03-05 beyond those numbers. */
@@ -435,11 +435,7 @@ static void attack_event(NevanBrain *b, float px, float py, float pz, int attack
      * not decoded. */
     case 30: shell(b, mine, 0.0f, 57.0f, 300.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz); break;      /* Shl03, record 3: to 134 */
     case 32: shell(b, his, 50.0f, 30.0f, 70.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;       /* Shl04, record 4 */
-    case 33: case 34: case 35: {                                                                 /* Shl05, record 5: the kiss */
-        float lips[3] = {b->pos[0], b->pos[1] + 100.0f, b->pos[2]};
-        shell(b, lips, 0.0f, 5.0f, 200.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz);
-        break;
-    }
+    case 35: break;   /* the kiss: its rush is in nevan_think */
     default: break;
     }
 }
@@ -586,6 +582,39 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
         break;
     case 10: case 11: case 12: case 13: case 14: case 21:
         if (b->done) { b->pattern = -1; next_move(b, d, unit); }
+        break;
+    case 33: case 34:
+        /* FUN_003b81b0: Shl05 at her feet (her root at the floor + 5) as it starts; at 40 frames she's gone (FUN_003b6030:
+         * alpha 0, +0x5166), and at 75 she takes move 9, whose teleport, seeing +0x5166, goes straight to placing her. */
+        if (b->step == 0) {
+            float feet[3] = {b->pos[0], b->pos[1] + 5.0f, b->pos[2]};
+            shell(b, feet, 0.0f, 5.0f, 200.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz);   /* Shl05, record 5 */
+            b->step = 1;
+        }
+        if (b->timer >= 40.0f) { b->alpha = 0.0f; b->hidden = 1; }
+        if (b->timer >= 75.0f) {
+            b->pattern = -1; b->move = 9;
+            act(b, 9);
+            b->step = 3;   /* placed next frame, then back over 30 */
+        }
+        break;
+    case 35:
+        /* FUN_003b8460: from its script's event she rushes him (the speed +0.1 a frame to 11, moving the speed:
+         * 0x5bcf40 / 0x5bcf70, rank 0) and, within 100 (0x5bcee0) and 50 of his height, takes him (FUN_0021f2e0) into
+         * the kiss's hold (action 36, FUN_003b8810: 360 / 420 / 480 frames unless he struggles free). The port's Dante
+         * can't be held: her catching him lands the kiss's record 5 (800) instead [stand-in]. */
+        turn_to(b, px, pz);
+        if (b->step == 1) {
+            b->speed += 0.1f * f;
+            if (b->speed > 11.0f) b->speed = 11.0f;
+            if (d > 1.0f) { float k = (b->speed * f < d ? b->speed * f : d) / d; b->pos[0] += dx * k; b->pos[2] += dz * k; }
+            keep_on_stage(b);
+            if (d < 100.0f + 60.0f && fabsf(py - b->pos[1]) < 50.0f) {
+                if (attacks) { b->land = 2; b->land_damage = 800.0f; }
+                b->step = 2;
+            }
+        } else if (b->step == 0 && s->event >= 0 && b->frame >= (float)s->event) { b->step = 1; b->speed = 0.0f; }
+        if (b->done) next_move(b, d, unit);
         break;
     case 23: {
         /* FUN_003b7180: she circles him as in action 4 (FUN_003b4e30) through the motion, sending the bats at its
