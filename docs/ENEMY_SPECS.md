@@ -955,3 +955,9 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   pairs that follow the Hells' table, and its decision data (per-rank pointer lists, `0x5ceef0`-`0x5cf500`) isn't
   laid out as the Hells' band and row tables: not decoded. Stand-ins: it decides with the Pride's table and the
   Pride's hit-script list, playing its own scripts by the same numbers.
+- **Soul Eater** (not ported; Prides with its 200 health stand in): new `0049a560`, constructor `0049a880` (on the
+  base `00257340`, as Nevan and Agni & Rudra, not the Hells'), vtable `0x611760`; per-frame `0049aa40` → `0049b7b0`
+  (state +4: 0 `0049ab30`, 1 `0049b7b0`, 2 `0049c2a0` the death), its action handlers at `0x4325d0`-`0x433fd0`;
+  set-up `0049ad90` reads `0x5c1340` (300, then turn rates), the attack records at **`0x5c13c0`** (record 0: **500**
+  damage, record 1: **3000**) and the defence block **`0x5c1440`** (+0x2c: health **200**, +0x20 damage scale 100).
+  Its body ([1]) is tagged EFM but should convert as the Blood-goyle's does (an EFM laid out as a MOD).
