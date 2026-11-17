@@ -1044,7 +1044,14 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
 
 - **Arachne**: health **1400** from block `0x5c3870` +0x2c (a second block, `0x5c396c`, has 2000; `003f2380` picks by
   spawn), already the port's. Its spiderlings are a separate 0x21b0-byte object (`004f0f60` → `004f0df0`), made by
-  action handler `003fd720`. The web shot (CEm010Shl00 / Shl01) isn't made by any action handler: inferred from its
+  action handler `003fd720` (action 0x76: once per Arachne, +0x36e0, and not while another class-0x1b object is up;
+  motion 0x24, effect 0x307 at its body). The object (vtable `0x614090`, update `004f1a80` → `004f1af0`, set-up
+  `004f12a0`, 47 functions at 0x4f0000-0x4f6000) is a **swarm**: one small spider per part of its model (count at
+  model +0x11), each with health (+0x1638) and a state (+0x5ec: 0, 2, 3, 4 hatching between the Arachne's bones
+  +0x820 / +0x8d0, 6 riding bone +0x850 until it drops, 8 crawling (re-aimed every 30-60 frames; Dante's feet,
+  bones 0x11 / 0x15, within 30 take 10 off it), 9 leaping (bounces off walls by a stage ray, lands by a floor ray),
+  10), its hit record `0x5c37b0`. Not ported.
+  The web shot (CEm010Shl00 / Shl01) isn't made by any action handler: inferred from its
   script events, not traced.
 - **Abyss in the port** (`ENEMY_ABYSS`; EST 24): its own body ([1], 23 bones, the Hells' skeleton) and scythe ([4]
   [inferred]), its own scripts [38] and caps [39] / [40] (`tools/gen_enemy_ai.py`: `abyss_ai_ops`), the Hells'
