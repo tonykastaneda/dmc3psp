@@ -68,8 +68,15 @@ at (frame - SetFrame) / ClipScale + SkipFrame from its start, MOT's Hermite with
 clear linear to the next) and DSTG_nnn.BIN (slot 00's `.scm` and texture set through `tools/prepare_stage.py --scm --ptx`,
 its play area the cameras' reach). `psp/testroom/demo.c` plays it at 60 frames a second: the stage and the camera
 (field of view as the port's vertical one [inferred]). Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
-arena through its cuts. Not yet: the cast, the sky, effects, messages, fades, sound, and starting demos from the event
-scripts.
+arena through its cuts. **The cast**: each model slot's MOD (slimmed as the enemies'), its texture set (8-bit, swizzled), its motion clips
+(MOT, streamed: the BIN keeps all but the motions resident, 1.5 MB for demo 5, and reads a clip's MOT 20 frames before
+it starts, freeing it after). Two things the demos showed: **a cutscene MOT stores a bone's translation records first**,
+then rotation, then scale (bits 6-8, 3-5, 0-2; the hips' first records are world positions, a face bone's 0x1ff run
+offsets, angles, 1.0s), the port's other motions are read as before; and **a CnsPos piece's root takes its parent
+bone's place** (a head is modelled where the neck bone rests, a hand at its forearm bone's origin) [inferred from the
+pieces' rests]. Room for it: the room's stage is freed while a demo plays (3.8 MB is free with the street loaded).
+Not yet: hide tracks, cloth, the second stage piece (slot 12's .scm), effects, messages, fades, sound, and starting
+demos from the event scripts.
 
 ## Porting plan
 

@@ -9,4 +9,6 @@ int demo_active(void);
 int demo_id(void);
 float demo_frame(void);                       /* the demo's clock, 60 a second */
 int demo_update(float dt, FollowCamera *camera);   /* 1 while it plays: the camera is the demo's */
+void demo_draw(void);                         /* the cast, after the stage */
+int demo_actor_count(void);
 #endif

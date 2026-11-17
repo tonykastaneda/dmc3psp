@@ -12,6 +12,7 @@ typedef struct {
 
 int stage_load(const char *path);   /* 1 on success */
 int stage_loaded(void);
+void stage_unload(void);           /* frees it (a cutscene's stage goes in its place) */
 const StageInfo *stage_info(void);
 /* Native collision bounds, independent of the visible scenery's extent. */
 const StageInfo *stage_collision_info(void);

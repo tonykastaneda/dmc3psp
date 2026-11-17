@@ -124,6 +124,13 @@ int stage_load(const char *path) {
     return 1;
 }
 
+/* Frees the stage (a cutscene loads its own in its place). */
+void stage_unload(void) {
+    if (blob) { free(blob); blob = 0; header = 0; }
+    if (chunk_visible) { free(chunk_visible); chunk_visible = 0; }
+    chunk_total = 0;
+}
+
 int stage_loaded(void) { return header != 0; }
 const StageInfo *stage_info(void) { return &info; }
 const StageInfo *stage_collision_info(void) { return &collision_info; }

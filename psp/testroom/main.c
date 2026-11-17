@@ -1294,6 +1294,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         sceGuDisable(GU_LIGHTING);
         sceGuDisable(GU_ALPHA_TEST);
         if (stage_loaded()) stage_draw();
+        demo_draw();
         goto scene_done;
     }
 
@@ -4538,7 +4539,7 @@ int main(int argc, char *argv[]) {
             char dir[256];
             path_in_game_dir(dir, sizeof dir, "");
             if (dir[0] && dir[strlen(dir) - 1] == '/') dir[strlen(dir) - 1] = 0;
-            enemy_test_note("demo start", demo_start(cmp_demo, dir), (float)cmp_demo);
+            enemy_test_note("demo start", demo_start(cmp_demo, dir), (float)demo_actor_count());
         }
         if (demo_active()) {
             FollowCamera shown = camera;

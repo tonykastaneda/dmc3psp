@@ -5,9 +5,15 @@
 writes DEMO_nnn.BIN (the camera, baked per demo frame) and DSTG_nnn.BIN (the demo's stage, as tools/prepare_stage.py
 builds a room). Everything stays local (the repo is public).
 
-DEMO_nnn.BIN (little endian):
-  +0x00 "DMO1", u32 frames, u32 camera offset, u32 reserved[5]
-  camera: frames x {f32 eye[3], f32 target[3], f32 fov (degrees), f32 roll}
+DEMO_nnn.BIN (little endian; offsets from its start):
+  +0x00 "DMO2", u32 frames, camera, textures, texture count, actors, actor count, resident (the bytes before the
+  MOTs: the runtime reads those and streams each motion as its clip comes up)
+  camera: frames x {f32 eye[3], f32 target[3], f32 fov (degrees), f32 channel 13}
+  texture: {u32 width, height, pixels (8-bit, swizzled), palette (256 ABGR)}
+  actor (128 bytes): i32 slot, parent actor (CnsPos, -1), parent bone, bones, vertices, indices, objects, motions;
+    u32 parents (i8), local (f32x3), rest (f32x3), vertices ({u, v, normal, position} f32), skin ({bones, weights}
+    u8x3 each, 8 bytes), indices (u16), objects ({texture, first index, count}), motions ({f32 set, end, scale, skip;
+    u32 MOT offset, size; 32 bytes}), 2 reserved; f32 pos[3], rot[3] (the clip's adjustments), shown from / to
 """
 import argparse
 import json
@@ -106,6 +112,107 @@ def bake_camera(timeline, files):
     return out
 
 
+def align(blob: bytearray, n: int = 16) -> int:
+    while len(blob) % n:
+        blob.append(0)
+    return len(blob)
+
+
+def bake_cast(timeline, files, blob: bytearray):
+    """Each model slot with a .mod: its skeleton, slimmed mesh, objects on the shared textures, its CnsPos and its
+    motion clips (raw MOT). Returns (texture table offset, count, actor table offset, count)."""
+    import prepare_skinned_model as psm
+    from prepare_stage import swizzle8
+    tracks = {(t["kind"], t["slot"]): t for t in timeline["tracks"]}
+    textures, texture_index = [], {}
+
+    def texture_set(name):
+        if name not in texture_index:
+            texture_index[name] = []
+            for tx in psm.decode_textures(files[name]):
+                pixels, palette = psm.indexed_texture(tx)
+                texture_index[name].append(len(textures))
+                textures.append((tx["width"], tx["height"], bytes(pixels), palette))
+        return texture_index[name]
+
+    actors = []
+    for slot in range(64):
+        model = tracks.get(("Model", slot))
+        if not model or not model["clips"]:
+            continue
+        clip = model["clips"][0]
+        name = str(clip.get("Model", ""))
+        if not name.lower().endswith(".mod") or name not in files or not files[name]:
+            continue
+        skel, mesh = psm.enemy_mesh(files[name], None)
+        tex = texture_set(clip["Texture"]) if clip.get("Texture") in files else []
+        motions = []
+        for mclip in (tracks.get(("Motion", slot)) or {"clips": []})["clips"]:
+            mot = mclip.get("Motion")
+            if mot and files.get(mot):
+                a, b = clip_span(mclip)
+                motions.append((a, b, float(mclip.get("ClipScale", 1.0) or 1.0), float(mclip.get("SkipFrame", 0.0)), files[mot]))
+        cns = clip.get("CnsPos")
+        actors.append({"slot": slot, "name": name, "skel": skel, "mesh": mesh, "tex": tex, "motions": motions,
+                       "parent": cns[0] if isinstance(cns, list) else -1, "bone": cns[1] if isinstance(cns, list) else 0,
+                       "pos": clip.get("Pos") or [0.0, 0.0, 0.0], "rot": clip.get("Rot") or [0.0, 0.0, 0.0],
+                       "span": clip_span(clip)})
+
+    tex_table = align(blob)
+    blob += bytes(16 * len(textures))
+    for i, (w, h, pixels, palette) in enumerate(textures):
+        pix = align(blob)
+        blob += swizzle8(w, h, pixels)
+        pal = align(blob)
+        blob += struct.pack("<256I", *palette)
+        struct.pack_into("<4I", blob, tex_table + 16 * i, w, h, pix, pal)
+
+    slot_to_actor = {a["slot"]: i for i, a in enumerate(actors)}
+    pending = []   # the MOTs go last: the runtime keeps what's before them and reads a motion as its clip comes up
+    actor_table = align(blob)
+    blob += bytes(128 * len(actors))
+    for i, a in enumerate(actors):
+        skel, mesh = a["skel"], a["mesh"]
+        n, v = skel["count"], len(mesh["positions"])
+        parents_at = align(blob)
+        blob += struct.pack(f"<{n}b", *skel["parents"])
+        local_at = align(blob)
+        for p in skel["local"]:
+            blob += struct.pack("<3f", *p[:3])
+        rest_at = align(blob)
+        for p in skel["world"]:
+            blob += struct.pack("<3f", *p[:3])
+        vert_at = align(blob)
+        for k in range(v):
+            blob += struct.pack("<8f", *mesh["uvs"][k][:2], *mesh["normals"][k][:3], *mesh["positions"][k][:3])
+        skin_at = align(blob)
+        for k in range(v):
+            blob += struct.pack("<6B2x", *mesh["bones"][k][:3], *mesh["weights"][k][:3])
+        index_at = align(blob)
+        blob += struct.pack(f"<{len(mesh['indices'])}H", *mesh["indices"])
+        object_at = align(blob)
+        for o in mesh["objects"]:
+            t = a["tex"][o["texture"]] if o["texture"] < len(a["tex"]) else (a["tex"][0] if a["tex"] else 0)
+            blob += struct.pack("<3I", t, o["index_start"], o["index_count"])
+        motion_at = align(blob)
+        blob += bytes(32 * len(a["motions"]))
+        for k, (s, e, scale, skip, data) in enumerate(a["motions"]):
+            pending.append((motion_at + 32 * k, s, e, scale, skip, data))
+        parent = slot_to_actor.get(a["parent"], -1)
+        struct.pack_into("<8i10I6f2f", blob, actor_table + 128 * i,
+                         a["slot"], parent, a["bone"], n, v, len(mesh["indices"]), len(mesh["objects"]), len(a["motions"]),
+                         parents_at, local_at, rest_at, vert_at, skin_at, index_at, object_at, motion_at, 0, 0,
+                         *a["pos"][:3], *a["rot"][:3], *a["span"])
+        on = "" if parent < 0 else f" on slot {a['parent']} bone {a['bone']}"
+        print(f"  slot {a['slot']:2d} {a['name']:14s} {n:2d} bones {v:5d} vertices {len(a['motions']):3d} motions{on}")
+    resident = align(blob)
+    for entry, s, e, scale, skip, data in pending:
+        at = align(blob)
+        blob += data
+        struct.pack_into("<4f2I", blob, entry, s, e, scale, skip, at, len(data))
+    return tex_table, len(textures), actor_table, len(actors), resident
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
@@ -122,7 +229,8 @@ def main():
     cam_at_offset = len(blob)
     for eye, target, fov, roll in camera:
         blob += struct.pack("<8f", *eye, *target, fov, roll)
-    struct.pack_into("<4sII", blob, 0, b"DMO1", len(camera), cam_at_offset)
+    tex_at, tex_count, actor_at, actor_count, resident = bake_cast(timeline, files, blob)
+    struct.pack_into("<4s7I", blob, 0, b"DMO2", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count, resident)
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / f"DEMO_{args.demo:03d}.BIN"
     out.write_bytes(blob)

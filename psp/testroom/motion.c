@@ -20,7 +20,11 @@ static unsigned int rd16(const unsigned char *p) { return (unsigned int)p[0] | (
 static unsigned int rd32(const unsigned char *p) { return rd16(p) | (rd16(p + 2) << 16); }
 static float rdf(const unsigned char *p) { unsigned int u = rd32(p); float f; memcpy(&f, &u, 4); return f; }
 
-static int parse(const Dmc3MotionBlob *blob, Motion *m) {
+/* translation_first: a bone with both rotation (bits 3-5) and translation (6-8) stores its translation records
+ * first, then rotation, then scale (cutscene motions: docs/CUTSCENES.md; their hips' first records hold world\n * positions, a face bone's (0x1ff) run offsets, angles, 1.0s). */
+static int parse_ordered(const Dmc3MotionBlob *blob, Motion *m, int translation_first);
+static int parse(const Dmc3MotionBlob *blob, Motion *m) { return parse_ordered(blob, m, 0); }
+static int parse_ordered(const Dmc3MotionBlob *blob, Motion *m, int translation_first) {
     const unsigned char *d = blob->data;
     unsigned int header, offset, bone, bit, declared;
     int skipped = 0;
@@ -42,10 +46,14 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
     m->channels = malloc(declared * sizeof(MotionChannel));
     if (!m->channels) return 0;
     for (bone = 0; bone < (unsigned)bones; ++bone) {
-        unsigned int mask = rd16(d + 0x1E + bone * 2);
-        for (bit = 0; bit < 16; ++bit) {
+        unsigned int mask = rd16(d + 0x1E + bone * 2), step;
+        int swap = translation_first;
+        for (step = 0; step < 16; ++step) {
             MotionChannel *c;
             unsigned int size, count, k;
+            /* Record order: bits ascending, or with swap translation (6-8), rotation (3-5), scale (0-2), then the rest. */
+            static const unsigned char swapped[16] = {6, 7, 8, 3, 4, 5, 0, 1, 2, 9, 10, 11, 12, 13, 14, 15};
+            bit = swap ? swapped[step] : step;
             if (!(mask >> bit & 1)) continue;
             if (offset + 16 > blob->size) return 0;
             unsigned int kind, record, stride;
@@ -77,6 +85,16 @@ static int parse(const Dmc3MotionBlob *blob, Motion *m) {
         }
     }
     return m->channel_count + skipped == (int)declared;
+}
+
+/* A MOT loaded at run time (a cutscene's, demo.c): the same parser; channels are malloc'd (free m->channels). */
+int motion_parse_blob(const char *name, const unsigned char *data, unsigned int size, Motion *m, int translation_first) {
+    Dmc3MotionBlob blob;
+    blob.name = name; blob.data = data; blob.size = size;
+    m->channels = 0;
+    if (parse_ordered(&blob, m, translation_first)) return 1;
+    free(m->channels); m->channels = 0;
+    return 0;
 }
 
 int motion_init(void) {

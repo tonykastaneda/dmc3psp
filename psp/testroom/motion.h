@@ -40,7 +40,9 @@ typedef struct {
     unsigned char has_trans[MOTION_MAX_BONES][3];
 } MotionSample;
 
-int motion_init(void);           /* parses every embedded MOT; returns count, <0 on error */
+int motion_init(void);
+/* Parse a MOT held elsewhere (it must outlive m); 1 on success. */
+int motion_parse_blob(const char *name, const unsigned char *data, unsigned int size, Motion *m, int translation_first);           /* parses every embedded MOT; returns count, <0 on error */
 int motion_count(void);
 int motion_find(const char *name);  /* index by name, -1 if absent */
 const Motion *motion_get(int index);
