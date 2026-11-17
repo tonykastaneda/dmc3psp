@@ -6,6 +6,8 @@
 - [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns and knockbacks are the game's; not yet: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects
 - [ ] Nevan: her patterns, moves, movement, teleports, motions, bats and reels are the game's (docs/ENEMY_SPECS.md G); not yet: what her other attacks' events make (lightning, the kiss: stand-in bolts and a sweep)
 - [ ] Arachne: no web shot or spiderlings (where they come from: docs/ENEMY_SPECS.md H); its health, 1400, is the game's
+- [ ] Beowulf: his scripts, attacks, damage, choices and phases are the game's (docs/ENEMY_SPECS.md I); not yet: his movement handlers' tables, the feather volley's flight, his stagger rule
+- [ ] Lady: a stand-in fight (her class, CEm037, isn't decoded yet)
 - [ ] Arkham: one fight runs both rounds, and Vergil doesn't join
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform
 - [x] Mission 16: 146's shelled sphere and 109's pair swing, lower on their switches, wear and knock as decoded; stand-ins: plain spheres, gravity and damage estimates, and the items aren't held back by them yet (finishing them wasn't shown in PPSSPP)

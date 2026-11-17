@@ -961,3 +961,33 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   set-up `0049ad90` reads `0x5c1340` (300, then turn rates), the attack records at **`0x5c13c0`** (record 0: **500**
   damage, record 1: **3000**) and the defence block **`0x5c1440`** (+0x2c: health **200**, +0x20 damage scale 100).
   Its body ([1]) is tagged EFM but should convert as the Blood-goyle's does (an EFM laid out as a MOD).
+
+---
+
+## I. Beowulf (class 33, CEm033; EST 51): Mission 11, room 217
+
+Pack 21 → GDATA 135 (em030.pac): [1] body (36 bones), [2] 43 motions (the scripts' ids are its slots), [8] his script
+bank (groups 0, 1, 3 used), [11] / [12] caps and shapes. Code: new `002d7e60`, constructor `002d8300`, vtable
+`0x604c60`, set-up `002d8680`, per-frame `002d85f0` → `002d99f0` (the action +0x37da, 28 of them). Health **10000**
+(`0x5b84e0` +0x2c). Attack records at **`0x5b7fa0`** (0x40 each; damage 300-1500).
+
+- **Actions → scripts** (`002da3d0` → `002da800(group, script)`): 0-4 → group 0 scripts 0, 1, 7, 8, 9; 5-10 → group 1
+  scripts 0, 1, 2, 3, 6, 9; 11 → group 0 (the walk); 12-21 → group 3 scripts 0-9; 0x16 (the phase roar) → group 1
+  script 0; 0x17 → group 0 script 7; 0x18-0x1b → group 3 scripts 11-14. (Without the room flags `0x1d0d738` = 0xd9 /
+  0x1a0, a request for 0x17 becomes 2.)
+- **Choice** (`002d99f0` from idle, 0 or 1): the phase's sector list (`0x5b8c50`[phase]: {action list, angle offset,
+  half-angle, reach}, `FUN_00359b40`), the first sector Dante stands in names a list of {action, weight} ended by
+  0x1c; a weighted pick (`FUN_00359f20`); 0x15 / 0x10 swap by Dante's height (150, `0x61967c`); the action just taken
+  isn't taken again (`002da7b0`, with +0x3908); an action may follow another only if mask `0x5b8df0`[current] &
+  `0x5a2100`[new] (from idle, all may). Rank 0:
+  phase 0: in front ±120° within 300 → 16 (70), 11 (30); behind ±120° within 400 → 17 (70), 11 (30); else 11.
+  phase 1: within 550 → 19 (70), 2 (30); else 2. phase 2: within 400 → 11 (35), 19 (30), 27 (35); within 600 → 2
+  (15), 19 (20), 27 (25), 18 (20), 15 (20); else 2 (20), 15 (50), 27 (30).
+- **Phase** (+0x38d0) steps up when his health fraction is under `0x619718`[phase]: 0.73, 0.47; action 0x16 plays.
+
+**In the port** (`enemy.c`, "Beowulf"): his scripts, caps and records run on the shared script runner
+(`tools/prepare_beowulf.py`; group g script n is entry 16 g + n), so his motions, hit windows and damage are the
+game's; the choice, phases and roar above. Stand-ins: his idle before choosing (40 frames), when a run or walk stops,
+turn rates, the stagger after 12 heavy hits (action 8), the volley's feathers (action 15: one on each of its script's
+events, record 12's 300, flying straight at 25 cm a frame), and the movement handlers' own tables (`0x5b8c64`,
+`0x5b8cb4`-`0x5b8d00`, `0x5b8660`, not read): he moves by his motions' root travel.

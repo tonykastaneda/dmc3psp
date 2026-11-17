@@ -394,7 +394,7 @@ NEVAN_MOTIONS = tuple((2, n) for n in (0, 10, 11, 12, 13, 14, 16, 17, 24, 25, 30
 # (walk), 07 forward 1673 (charge on all fours), 30/31/32 forward 290/341/206 (the three punches), 39 197 frames in
 # place (stomp and pillar), 36 forward 1354 rising 286 (leaping rush), 37 276 in place (the feather laser's charge),
 # 38 127 in place (flinch), 35 back 209 (knocked back), 16 back 277 over 310 (death).
-BEOWULF_MOTIONS = (0, 1, 7, 30, 31, 32, 39, 36, 37, 38, 35, 16)
+BEOWULF_MOTIONS = tuple(range(43))   # every slot of PAC [2]: his scripts (em030 [8], tools/prepare_beowulf.py) name them
 # Lady's, "ldCNN" (PAC [C] slot NN), read the same way [inferred]: 2-00 still (idle), 2-02 forward 323 in 38 (run),
 # 2-10 / 2-11 sideways 467 (strafe), 2-09 back 412 (backstep), 5-02 80 frames in place (shooting), 6-10 (a grenade),
 # 6-30 158 in place (Kalina Ann), 3-04 back 704 (the repel gun's escape), 6-41 (flinch), 6-44 back 593 (knocked
@@ -799,7 +799,13 @@ def main() -> None:
         motions.append({"name": f"ld{chunk}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     for slot in BEOWULF_MOTIONS:
         raw = pac_list(beowulf_pack[2])[slot]
-        parsed = parse_mot(raw)
+        if not raw:
+            continue
+        try:
+            parsed = parse_mot(raw)
+        except ValueError as error:
+            print(f"Beowulf bw{slot:02d}: not a MOT ({error}), skipped")
+            continue
         motions.append({"name": f"bw{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     raw=pac_list(pawn_pack[13])[1]  # Bishop death; idle clip 0 has duplicate keys rejected by the parser.
     parsed=parse_mot(raw)

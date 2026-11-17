@@ -46,12 +46,12 @@ def read_caps(pack):
     return caps
 
 
-def compile_bank(chunk, caps):
+def compile_bank(chunk, caps, group_index=0):
     """Compile one grouped S0 script bank, retaining op3/4 events and attack caps."""
     u16 = lambda at: struct.unpack_from("<H", chunk, at)[0]
     i16 = lambda at: struct.unpack_from("<h", chunk, at)[0]
     script_base, motion_base = u16(0), u16(2)
-    group = script_base + u16(script_base)  # S0, group 0
+    group = script_base + u16(script_base + 2 * group_index)  # S0, the group asked for (0 unless said)
     ops, starts = [], []
     for script in range(SCRIPT_COUNT):
         if script * 2 >= u16(group) or u16(group + script * 2) == 0xFFFF:

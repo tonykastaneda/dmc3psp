@@ -30,6 +30,7 @@
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
+#include "beowulf_scripts.h"
 #include "jester.h"
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
@@ -263,7 +264,6 @@ static void pawn_spawn(void);
 static void pawn_update(float f, float px, float py, float pz);
 static void pawn_hit(HitKind kind);
 static int ar_init(void);
-static int ar_motion_map[AR_SCRIPTS];   /* em026 [11] slot -> motion, -1 where the slot is empty */
 static void ar_rudra_spawn(void);
 static void ar_spawn(void);
 static void ar_update(float f, float px, float py, float pz);
@@ -874,13 +874,28 @@ static float ai_unit(void) { return (float)ai_random() * 2.3283064e-10f; }
 /* ---- Scripts: which motion, from where, until when. ---- */
 
 static int is_ar(void) { return e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA; }
-static const EnemyAiOp *script_ops(void) { return is_ar() ? (e->kind == ENEMY_AGNI ? ar_ops_0 : ar_ops_1) : e->kind == ENEMY_ENVY ? envy_ai_ops : e->kind == ENEMY_ABYSS ? abyss_ai_ops : enemy_ai_ops; }
+/* A boss with its own script bank (its pack's scripts, caps and attack records, and its own motions): Agni & Rudra
+ * (tools/prepare_agni_rudra.py), Beowulf (tools/prepare_beowulf.py). The Seven Hells' kinds return 0. */
+typedef struct { const EnemyAiOp *ops; const short *starts; int scripts; const EnemyAiCap *caps; int caps_count;
+                 const ArAttack *attacks; int attack_count; const int *motions; int motion_count; } ScriptBank;
+static int ar_motion_map[AR_SCRIPTS];
+#define BW_MOTIONS 43
+static int bw_motion_map[BW_MOTIONS];
+static const ScriptBank *script_bank(void) {
+    static const ScriptBank agni = {ar_ops_0, ar_starts_0, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
+    static const ScriptBank rudra = {ar_ops_1, ar_starts_1, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
+    static const ScriptBank beowulf = {bw_ops, bw_starts, BW_SCRIPTS, bw_caps, BW_CAPS, bw_attacks, BW_ATTACKS, bw_motion_map, BW_MOTIONS};
+    return e->kind == ENEMY_AGNI ? &agni : e->kind == ENEMY_RUDRA ? &rudra : e->kind == ENEMY_BEOWULF ? &beowulf : 0;
+}
+static int script_event;   /* the last script event the runner met this frame, + 1 (0: none) */
+static const EnemyAiOp *script_ops(void) { const ScriptBank *k = script_bank(); return k ? k->ops : e->kind == ENEMY_ENVY ? envy_ai_ops : e->kind == ENEMY_ABYSS ? abyss_ai_ops : enemy_ai_ops; }
 
 static void script_play_op(const EnemyAiOp *op) {
     int m, blend = op->c & 0xff;
-    if (is_ar()) {
-        m = op->a < AR_SCRIPTS ? ar_motion_map[op->a] : -1;
-        if (m < 0) return;   /* an empty slot of em026 [11] */
+    if (script_bank()) {
+        const ScriptBank *k = script_bank();
+        m = op->a < k->motion_count ? k->motions[op->a] : -1;
+        if (m < 0) return;   /* an empty or unexported motion slot */
     } else {
         if (op->a >= HL_MOTIONS) return;  /* a motion from a pack the port doesn't export */
         m = hl_motion[op->a];
@@ -912,7 +927,7 @@ static void script_run(void) {
             e->hit_done = 0;
             break;
         }
-        case 4: break;   /* an event (Agni & Rudra's scripts): not followed */
+        case 4: script_event = op->a + 1; break;   /* a script event: Beowulf's volley follows them; the others' aren't */
         default: e->script_at = op->b; break;
         }
     }
@@ -922,7 +937,8 @@ static void script_play(int n) {
     e->hit_left[0] = e->hit_left[1] = 0.0f;
     e->done = 0;
     {
-        int start = is_ar() ? (n >= 0 && n < AR_SCRIPTS ? (e->kind == ENEMY_AGNI ? ar_starts_0 : ar_starts_1)[n] : -1) : (e->kind == ENEMY_ENVY ? envy_ai_scripts : e->kind == ENEMY_ABYSS ? abyss_ai_scripts : enemy_ai_scripts)[n];
+        const ScriptBank *k = script_bank();
+        int start = k ? (n >= 0 && n < k->scripts ? k->starts[n] : -1) : (e->kind == ENEMY_ENVY ? envy_ai_scripts : e->kind == ENEMY_ABYSS ? abyss_ai_scripts : enemy_ai_scripts)[n];
         if (start < 0) { e->done = 1; return; }
         e->script_at = start;
     }
@@ -1808,7 +1824,7 @@ static void test_attack(float px, float py, float pz) {
         const EnemyAiCap *cap;
         float l[3], x, y, z, near_y;
         if (e->hit_left[k] <= 0.0f) continue;
-        cap = is_ar() ? &ar_caps[e->hit_cap[k] < AR_CAPS ? e->hit_cap[k] : 0] : &(e->kind == ENEMY_ENVY ? envy_ai_caps : e->kind == ENEMY_ABYSS ? abyss_ai_caps : enemy_ai_caps)[e->hit_cap[k]];
+        cap = script_bank() ? &script_bank()->caps[e->hit_cap[k] < script_bank()->caps_count ? e->hit_cap[k] : 0] : &(e->kind == ENEMY_ENVY ? envy_ai_caps : e->kind == ENEMY_ABYSS ? abyss_ai_caps : enemy_ai_caps)[e->hit_cap[k]];
         if (cap->bone) {
             if (!posed) { evaluate_pose(); posed = 1; }
             {
@@ -1830,9 +1846,11 @@ static void test_attack(float px, float py, float pz) {
             float reach = cap->radius + DANTE_RADIUS;
             if (x * x + y * y + z * z < reach * reach) {
                 e->hit_done = 1;
-                if (is_ar()) {
-                    /* The attack record (0x5cf6f0): its damage, and a heavy reaction from 500. */
-                    const ArAttack *r = &ar_attacks[e->hit_type < 22 ? e->hit_type : 0];
+                if (script_bank()) {
+                    /* The attack record (Agni & Rudra 0x5cf6f0, Beowulf 0x5b7fa0): its damage, and a heavy reaction
+                     * from 500. */
+                    const ScriptBank *bk = script_bank();
+                    const ArAttack *r = &bk->attacks[e->hit_type < bk->attack_count ? e->hit_type : 0];
                     land_attack(r->reaction >= 500.0f);
                     landed_damage = r->damage;
                     landed_kind = r->kind;
@@ -4595,68 +4613,195 @@ static void bishop_hit_glue(HitKind kind, float from_x, float from_z) {
 }
 
 
-/* ---- Beowulf (beowulf_boss.c decides; here his body). His health is the Enemy's own, for the boss bar. */
-#include "beowulf_boss.h"
-static BeowulfBrain beowulf_brain;
-static int beowulf_motion_id[BEOWULF_M_COUNT] = {-2};
-static void beowulf_play(int m, int restart) {
-    int id;
-    if (beowulf_motion_id[0] == -2) { int k; for (k = 0; k < BEOWULF_M_COUNT; ++k) beowulf_motion_id[k] = motion_find(beowulf_motion_names[k]); }
-    id = beowulf_motion_id[m];
-    if (id < 0) return;
-    if (id != e->motion || restart) {
-        e->prev_motion = e->motion; e->prev_frame = e->frame;
-        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 10.0f;
-        e->motion = id; e->frame = 0.0f; e->done = 0;
+/* ---- Beowulf (class 33, CEm033; em030.pac at GDATA 135), Mission 11's boss in 217 (docs/ENEMY_SPECS.md I), at rank 0.
+ * His actions (+0x37da, dispatched by FUN_002d99f0) each play a script of his bank (em030 [8], groups 0, 1, 3;
+ * FUN_002da3d0), run here by the shared script runner with his caps and attack records (tools/prepare_beowulf.py), so
+ * his motions, hit windows and damage are the game's. From idle he picks by sector (FUN_002da860, tables 0x5b8c50 by
+ * phase: the first sector Dante stands in names a weighted list of actions), never the action he last took again
+ * (FUN_002da7b0). His phase (+0x38d0) steps up below 73% and 47% of his health (0x619718), with a roar (action 0x16).
+ * Health 10000 (0x5b84e0 +0x2c). Stand-ins: how long he idles before he picks (40 frames), when a run or a walk stops
+ * (the sector it's for, or 240 frames), his turn rates, his stagger (12 heavy hits, action 8), and the feathers his
+ * volley (action 15) lets go on its script's events (300 damage, record 12; their flight isn't decoded). */
+#define BW_SCRIPT_OF(group, script) ((group) * 16 + (script))
+static const signed char bw_action_script[28] = {
+    BW_SCRIPT_OF(0, 0), BW_SCRIPT_OF(0, 1), BW_SCRIPT_OF(0, 7), BW_SCRIPT_OF(0, 8), BW_SCRIPT_OF(0, 9),
+    BW_SCRIPT_OF(1, 0), BW_SCRIPT_OF(1, 1), BW_SCRIPT_OF(1, 2), BW_SCRIPT_OF(1, 3), BW_SCRIPT_OF(1, 6), BW_SCRIPT_OF(1, 9),
+    BW_SCRIPT_OF(0, 1),   /* 11: FUN_002da800(0, ...) unless coming from 1, the walk [its script number isn't read] */
+    BW_SCRIPT_OF(3, 0), BW_SCRIPT_OF(3, 1), BW_SCRIPT_OF(3, 2), BW_SCRIPT_OF(3, 3), BW_SCRIPT_OF(3, 4), BW_SCRIPT_OF(3, 5),
+    BW_SCRIPT_OF(3, 6), BW_SCRIPT_OF(3, 7), BW_SCRIPT_OF(3, 8), BW_SCRIPT_OF(3, 9), BW_SCRIPT_OF(1, 0), BW_SCRIPT_OF(0, 7),
+    BW_SCRIPT_OF(3, 11), BW_SCRIPT_OF(3, 12), BW_SCRIPT_OF(3, 13), BW_SCRIPT_OF(3, 14)};
+enum { BW_IDLE = 0, BW_RUN = 2, BW_STAGGER = 8, BW_DEATH = 9, BW_WALK = 11, BW_ROAR = 0x16 };
+typedef struct { unsigned char action, weight; } BwPick;
+typedef struct { float angle, half, reach; BwPick picks[5]; } BwSector;   /* degrees; half 0: any side; reach 0: any */
+static const BwSector bw_sectors[3][3] = {
+    {{0.0f, 120.0f, 300.0f, {{16, 70}, {11, 30}}}, {180.0f, 120.0f, 400.0f, {{17, 70}, {11, 30}}}, {0.0f, 0.0f, 0.0f, {{11, 100}}}},
+    {{0.0f, 0.0f, 550.0f, {{19, 70}, {2, 30}}}, {0.0f, 0.0f, 0.0f, {{2, 100}}}, {0.0f, 0.0f, -1.0f, {{0, 0}}}},
+    {{0.0f, 0.0f, 400.0f, {{11, 35}, {19, 30}, {27, 35}}}, {0.0f, 0.0f, 600.0f, {{2, 15}, {19, 20}, {27, 25}, {18, 20}, {15, 20}}},
+     {0.0f, 0.0f, 0.0f, {{2, 20}, {15, 50}, {27, 30}}}}};
+static const float bw_phase_at[2] = {0.73f, 0.47f};
+#define BW_FEATHERS 12
+static struct { int on; float pos[3], vel[3], life; } bw_feathers[BW_FEATHERS];
+static int bw_phase, bw_last, bw_gauge;
+
+static int bw_init(void) {
+    int i, found = 0;
+    for (i = 0; i < BW_MOTIONS; ++i) {
+        char name[5] = {'b', 'w', (char)('0' + i / 10), (char)('0' + i % 10), 0};
+        bw_motion_map[i] = motion_find(name);
+        found += bw_motion_map[i] >= 0;
     }
+    return found > 0;
 }
+
+static void bw_go(int action) {
+    giga_note("beowulf", action, (float)e->health);
+    e->action = (unsigned char)action;
+    e->timer = 0.0f;
+    e->wake = 0.0f;
+    e->step = 0;
+    script_play(bw_action_script[action]);
+}
+
 static void beowulf_spawn_glue(void) {
-    BeowulfBrain *b = &beowulf_brain;
     float g;
+    static int ready = -1;
+    if (ready < 0) ready = bw_init();
     e->motion = -1;
     if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
-    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
-    beowulf_spawn(b, e->health);
-    beowulf_play(b->want, 1);
-    b->restart = 0;
+    e->plan = P_WATCH;
+    bw_phase = 0; bw_last = -1; bw_gauge = 0;
+    memset(bw_feathers, 0, sizeof bw_feathers);
+    bw_go(BW_IDLE);
     e->fade = 0.0f;
 }
-static void beowulf_update_glue(float f, float px, float py, float pz) {
-    BeowulfBrain *b = &beowulf_brain;
-    const Motion *m;
-    float g;
-    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
-    if (e->motion >= 0) {
-        m = motion_get(e->motion);
-        e->frame += f;
-        if (e->frame >= m->end_frame) {
-            e->done = 1;
-            e->frame = beowulf_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
+
+/* FUN_002da860 / FUN_00359f20 / FUN_002da7b0: the first sector Dante stands in, a weighted pick, not the last again. */
+static int bw_choose(float d, float rel_deg) {
+    int s, k, total = 0, pick = BW_IDLE;
+    for (s = 0; s < 3; ++s) {
+        const BwSector *z = &bw_sectors[bw_phase][s];
+        float off = rel_deg - z->angle;
+        if (z->reach < 0.0f) break;
+        while (off > 180.0f) off -= 360.0f;
+        while (off < -180.0f) off += 360.0f;
+        if (z->reach > 0.0f && d > z->reach) continue;
+        if (z->half > 0.0f && fabsf(off) > z->half) continue;
+        for (k = 0; k < 5 && z->picks[k].weight; ++k) total += z->picks[k].weight;
+        if (!total) continue;
+        {
+            int r = (int)(ai_unit() * (float)total), acc = 0;
+            for (k = 0; k < 5 && z->picks[k].weight; ++k) { acc += z->picks[k].weight; if (r < acc) { pick = z->picks[k].action; break; } }
+            if (pick == bw_last)
+                for (k = 0; k < 5 && z->picks[k].weight; ++k) if (z->picks[k].action != bw_last) { pick = z->picks[k].action; break; }
+        }
+        break;
+    }
+    return pick;
+}
+
+static void bw_feathers_update(float f, float px, float py, float pz) {
+    int i;
+    for (i = 0; i < BW_FEATHERS; ++i) {
+        float dx, dy, dz;
+        if (!bw_feathers[i].on) continue;
+        bw_feathers[i].pos[0] += bw_feathers[i].vel[0] * f;
+        bw_feathers[i].pos[1] += bw_feathers[i].vel[1] * f;
+        bw_feathers[i].pos[2] += bw_feathers[i].vel[2] * f;
+        dx = px - bw_feathers[i].pos[0]; dy = py + 100.0f - bw_feathers[i].pos[1]; dz = pz - bw_feathers[i].pos[2];
+        if (attacks_on && dx * dx + dy * dy + dz * dz < 110.0f * 110.0f) {
+            bw_feathers[i].on = 0;
+            land_attack(0);
+            landed_damage = bw_attacks[12].damage;
+            landed_x = bw_feathers[i].pos[0]; landed_z = bw_feathers[i].pos[2];
+            continue;
+        }
+        if ((bw_feathers[i].life -= f) <= 0.0f) bw_feathers[i].on = 0;
+        {
+            float still[3] = {0.0f, 0.0f, 0.0f};
+            fx_mote(bw_feathers[i].pos, still, 50.0f, 6.0f, 0.1f, 0xffc0f0ffu);
         }
     }
-    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
-    b->frame = e->frame; b->done = e->done;
-    beowulf_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
-    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
-    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
-    if (b->restart || beowulf_motion_id[b->want] != e->motion) { beowulf_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* his attack record's damage */
-    beowulf_draw_fx(b);
-    if (e->plan == P_DEATH) { e->timer += f; if (e->timer > 330.0f) e->active = 0; }
 }
+
+static void bw_feather(float px, float py, float pz) {
+    int i;
+    for (i = 0; i < BW_FEATHERS; ++i) {
+        float d[3], l;
+        if (bw_feathers[i].on) continue;
+        bw_feathers[i].on = 1;
+        bw_feathers[i].life = 120.0f;
+        bw_feathers[i].pos[0] = e->pos[0] + (ai_unit() - 0.5f) * 200.0f;
+        bw_feathers[i].pos[1] = e->pos[1] + 280.0f + ai_unit() * 80.0f;
+        bw_feathers[i].pos[2] = e->pos[2] + (ai_unit() - 0.5f) * 200.0f;
+        d[0] = px - bw_feathers[i].pos[0]; d[1] = py + 100.0f - bw_feathers[i].pos[1]; d[2] = pz - bw_feathers[i].pos[2];
+        l = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        if (l < 1.0f) l = 1.0f;
+        bw_feathers[i].vel[0] = d[0] / l * 25.0f; bw_feathers[i].vel[1] = d[1] / l * 25.0f; bw_feathers[i].vel[2] = d[2] / l * 25.0f;
+        return;
+    }
+}
+
+static void beowulf_update_glue(float f, float px, float py, float pz) {
+    float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, root[3], rel;
+    int a = e->action;
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    script_event = 0;
+    script_tick(f, root);
+    e->timer += f;
+    e->wake += f;
+    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->floor_y = g;
+    e->pos[1] = e->floor_y;
+    bw_feathers_update(f, px, py, pz);
+    if (e->plan == P_DEATH) {
+        if (e->done && e->timer > 330.0f) e->active = 0;
+        return;
+    }
+    rel = wrap_angle(atan2f(dx, dz) - e->yaw) * (180.0f / PI);
+    /* His phase: below 73% and 47% of his health, with a roar (action 0x16), once each. */
+    if (bw_phase < 2 && a != BW_ROAR && (float)e->health < (float)(ENEMY_HEALTH * BEOWULF_MAX / 250) * bw_phase_at[bw_phase]) {
+        ++bw_phase;
+        bw_go(BW_ROAR);
+        return;
+    }
+    switch (a) {
+    case 0: case 1:
+        goyle_turn_to(px, pz, 0.04f, f);
+        if (e->wake > 40.0f) { int next = bw_choose(d, rel); if (next != BW_IDLE) { bw_last = next; bw_go(next); return; } e->wake = 0.0f; }
+        break;
+    case BW_RUN: case BW_WALK: case 0x17:
+        goyle_turn_to(px, pz, a == BW_RUN ? 0.05f : 0.04f, f);
+        move_local(root[0], 0.0f, root[2]);
+        if ((a == BW_WALK ? d < 550.0f && fabsf(rel) < 60.0f : d < 300.0f) || e->timer > 240.0f) { bw_go(BW_IDLE); return; }
+        break;
+    default:
+        if (e->timer < 20.0f) goyle_turn_to(px, pz, 0.06f, f);
+        move_local(root[0], 0.0f, root[2]);
+        if (a == 15 && script_event) bw_feather(px, py, pz);   /* the volley: a feather on each of its events */
+        if (e->done) { bw_go(BW_IDLE); return; }
+        break;
+    }
+    keep_apart(px, py, pz, f);
+    if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
+}
+
 static void beowulf_hit_glue(HitKind kind) {
-    BeowulfBrain *b = &beowulf_brain;
     float at[3] = {e->pos[0], e->pos[1] + 200.0f, e->pos[2]};
+    int heavy = !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL);
     if (e->plan == P_DEATH) return;
     fx_hit_spark(at);
-    if (beowulf_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), mortal)) {
-        e->plan = P_DEATH;
-        e->timer = 0.0f;
-        died();
+    if (mortal) {
+        e->health -= heavy ? 2 : 1;
+        if (e->health <= 0) {
+            e->health = 0;
+            e->plan = P_DEATH;
+            bw_go(BW_DEATH);
+            e->timer = 0.0f;
+            died();
+            return;
+        }
     }
-    e->health = (short)b->health;
-    beowulf_play(b->want, b->restart);
-    b->restart = 0;
+    /* He doesn't flinch (super armour); a run of heavy blows staggers him [the count is a stand-in]. */
+    if (heavy && ++bw_gauge >= 12 && (e->action <= 2 || e->action == BW_WALK)) { bw_gauge = 0; bw_go(BW_STAGGER); }
 }
 
 /* ---- The Fallen (fallen.c decides; here his body, his spear and the shared attack turn). */
