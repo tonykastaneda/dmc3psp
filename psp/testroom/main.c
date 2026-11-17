@@ -4215,7 +4215,8 @@ int main(int argc, char *argv[]) {
             {
                 /* A new move of Dante's: bosses that guard see it start (Agni & Rudra, FUN_003aeec0). */
                 static int last_action;
-                if (combat.action != last_action && combat.action != 0) enemy_dante_attack(combat.action, combat.shots_pending > 0);
+                if (combat.action != last_action) enemy_dante_attack(combat.action, combat.shots_pending > 0);
+                enemy_dante_yaw(player.yaw);
                 last_action = combat.action;
             }
             if ((autotest || recording) && (combat.move != before || input.melee || input.style_action)) {

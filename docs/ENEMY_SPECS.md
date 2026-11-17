@@ -786,13 +786,24 @@ flinch js05, stun js14, launched js04, death js16.
   - kind 2, `0054d3a0` (0x540 bytes, vtable `0x616e30`, update `0054d590`, then `0054da60` / `0054d850`), its count
     `0x5e3010[encounter]`: not read.
   Ported in `jester.c` (the projectile follow-up below) and thrown in the fight (enemy.c).
+- **His defence and stun** (`FUN_0053d0d0` his hits, `FUN_0053eb20` the parameter row a hit meets, `FUN_0053e6a0` the
+  meter): the rows at `0x5e3a60` (0x54 bytes) are picked by the hit (blade or shot) and his state (+0x1e2: 3 stunned,
+  4 another); their +0x20 scales the damage, **1 as he is, 100 stunned, 35 in state 4** (hundredths). The stun meter
+  +0x4cc8 takes **50** a blade hit (`0x5e2f14`, rank 0) and **1.75 ×** the shot's own value a bullet (`0x5e2f10`;
+  that value, +0x4d54, isn't read). Past **249** (`0x5e2f30`) his next reaction is the stun (0x6b, `FUN_00535e60`:
+  motion js10, the meter emptied, **500** frames from `0x5e2ed0`). Otherwise a shot makes him flinch where he is
+  (0x67-0x6a, `FUN_00535470`, js06, row 0) and a blade sends him off (0x6d, `FUN_00536110`, js12, row 1) unless his
+  attack is due (idle time ≥ 500). Hits during his attacks (actions 0x15-0x2c, 0x3e-0x43) don't stop him. With
+  +0x4d30 set (a health threshold) a hit sends him to the arena's middle (3500, 500, 3500) and into his second set
+  of moves (+0x481d, `FUN_00539470`, action 0x79): not ported.
 - **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
   each throw starts the emitter its no-repeat pick names (`jester_projectiles_begin`, AI rank 0), the attack holds
   its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;
   what lands (the ball 1200 heavy, a trap 650, the cross 800) hurts Dante with that damage. They're drawn as motes
   (`jester_projectiles_draw`): the effects themselves aren't ported. Between attacks he idles or walks (his idle
-  actions aren't decoded). The stun gauge, flinch-and-vanish and arena clamp stay the stand-in's. The old cane
-  swings and taunt are no longer chosen: the game's first encounter has no such attacks in its picker.
+  actions aren't decoded). His defence, stun meter, flinch and vanish are the game's (above; a bullet's value is
+  the port's 8, an estimate); the arena clamp stays the stand-in's. The old cane swings and taunt are no longer
+  chosen: the game's first encounter has no such attacks in its picker.
 
 **Projectile follow-up (pM).** The emitters' tables use **AI rank `+481c`**, not encounter `+481e`:
 ball wait/speed `5e2fd0` = (140,70), (80,70), (40,70), (20,70); trap interval `5e3000` =
@@ -829,11 +840,14 @@ script runner, so motions, hit windows, caps and damage are the game's. Health 7
 1800 frames (lists `0x5cf6d0`, records `0x5cf600`); the healthier brother takes flags 0x12 / 0x22 (role 1, he
 attacks) and the other 0x213 / 0x223 (role 2, no attack permission: he works round Dante to the far side by the
 flank, `003ad5d0`). Ported from the decoding below: the attack timer, the zones, the attack choice
-and the lone brother's moves; the survivor takes up both swords. Guards: a new melee move of Dante's within 350 in front of one idling or moving makes Agni hop back (21), Rudra
-or the survivor guard (23, 25); a blow in the guard's first phase is turned (22, 24, 26: a hit), after which he
-counters at once from the second attack table [Dante's move classes aren't mapped: any melee move counts]. Not
-yet: the pair's openings and team moves (63, 64), the hops (16-21) beyond their scripts, the stagger gauge (heavy
-hits flinch them out of idling and moving, state 0), the game's own effects (the slam's fire and wind bursts 0x311 / 0x312 and the charged blades' 0x24c / 0x24d are stand-ins: the port's burst, hurting within 300 cm as attack record 12 [estimate], and motes), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
+and the lone brother's moves; the survivor takes up both swords. The brain's order is the game's: Dante beyond
+his side line turns him (state 0, `FUN_003af2c0`), then the reaction to Dante's move (`FUN_003aeec0`, below):
+Agni hops back (21), Rudra guards (23), the survivor never; a blow in the guard's first phase is turned (22, 24:
+a hit), after which he counters at once from the second attack table. A blow that throws (`FUN_003a2ab0` /
+`FUN_003a2c00`, vtable +0xe4 / +0xe0) knocks him back, 37 struck from in front, 38 from behind (which of Dante's
+hits are those is inferred: the port's heavy, slam and launch). Not yet: the pair's openings and team moves (63,
+64), the hops (16-21) beyond their scripts, the guard stances the scripts set (`FUN_003a1a50` turns hits while one
+is up), the game's own effects (the slam's fire and wind bursts 0x311 / 0x312 and the charged blades' 0x24c / 0x24d are stand-ins: the port's burst, hurting within 300 cm as attack record 12 [estimate], and motes), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
 Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.
 They start as statues (ar71/ar72) and wake within 900 cm, when struck, or after 600 frames (the game plays a
 cutscene). One boss bar for both.
@@ -850,9 +864,16 @@ cutscene). One boss bar for both.
   attacks by sword set (gp table `0x6195e0`: 21, 23, 25), 22-26 → 28-35, 27-29 → 36-38, 30/31 → 39-41,
   32/35 → 45, 33/34 → 42-44, 37 → 50, 38 → 51, 39 death → 52, 40/41 → 53, 42-45 → 55-58, 46-49 → 87-90,
   50 → 59, 51 → 60, 55 → 69, 56/65 → 77, 57/58 → 84-86, 59 → 80/78/82, 60 → 81/79/83.
-- **The brain** (`003acfb0` with his brother up, `003ace70` alone), in order: a flinch pending (+0x2df5 bit 0 →
-  state 0); a reaction to Dante's attack (`003aeec0`: by Dante's move class and the zone, fewer than 3 or 2 recent);
-  an attack when allowed (`003ade30`); else a move (`003ad5d0` paired, `003ad180` alone).
+- **The brain** (`003acfb0` with his brother up, `003ace70` alone), in order: the pair's opening (`003aedd0`, state
+  64); Dante in an odd sector (+0x2df5 bit 0, below) → **state 0, a turn** (ar26 at 0x888 a frame); a reaction to
+  Dante's move (`003aeec0`); an attack when allowed (`003ade30`); else a move (`003ad5d0` paired, `003ad180` alone).
+- **Sector** (+0x2df5, `003afd30` on the angle to Dante, 65536 a circle): 0 within ±0x1000 in front, 2 / 4 to
+  ±0x4000, 3 / 5 to ±0x7000, 1 behind. **+0x2df4 is the zone**, not a count.
+- **Reaction** (`003aeec0`): never with both swords (+0x2f40 = 2); only for a move id (`FUN_0021e920`, the command
+  table's action) that differs from the last (+0x2ec3), Dante in an even sector, and, for Dante (character byte
+  `0x1d0d741` = 0): Stinger **7 / 8** in zones 0-2 and facing him (Dante's yaw − his − 0x4000 under 0x8001, +0x2dee);
+  **38 / 39** in zones 0-2; **92 and 4** in zones 0-1. Other moves get none: the last branch tests +0x2ec2, which
+  stays 0xff. The state is the gp table's (21, 23) by sword set.
 - **Zones** (`003afc60`, +0x164 = distance to Dante): ≤210, ≤350, ≤650, ≤1000, beyond (0-4). **Role** +0x2ee2 =
   `[2,0,1,2,3,4][flags & 15]` (gp table `0x6195d8`), 1 when alone. **Flank** +0x2ee3 (`003acae0`): the angle at
   Dante between the brothers, under 0x1400 → 0, under 0x4800 → 1 / 3 (by side), else 2 / 4.

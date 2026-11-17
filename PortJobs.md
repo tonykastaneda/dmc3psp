@@ -2,8 +2,8 @@
 
 - [ ] Soul Eaters: Missions 11 and 15
 - [ ] The Abyss: Missions 17 and 19
-- [ ] Jester: simplified fight
-- [ ] Agni & Rudra: simplified fight
+- [ ] Jester: his attacks, throws, defence and stun meter are the game's; not yet: his second set of moves (later encounters and the health threshold), his idle actions, the throws' effects, a bullet's stun value (estimate)
+- [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns and knockbacks are the game's; not yet: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects
 - [ ] Nevan: no lightning or kiss; health, speeds and timings are estimates
 - [ ] Arachne: no web shot or spiderlings; health is an estimate
 - [ ] Arkham: one fight runs both rounds, and Vergil doesn't join

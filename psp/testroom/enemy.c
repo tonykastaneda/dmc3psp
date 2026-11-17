@@ -266,7 +266,7 @@ static int ar_motion_map[AR_SCRIPTS];   /* em026 [11] slot -> motion, -1 where t
 static void ar_rudra_spawn(void);
 static void ar_spawn(void);
 static void ar_update(float f, float px, float py, float pz);
-static void ar_hit(HitKind kind);
+static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z);
 static float ar_health_total(float *maximum);
 static void goyle_turn_to(float px, float pz, float rate, float f);
 static void giga_orb(const float from[3], int kind, float px, float py, float pz);
@@ -1471,7 +1471,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind); return; }
     if (e->kind == ENEMY_LADY) { ++hits; lady_hit_glue(kind); return; }
-    if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind); return; }
+    if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
@@ -3174,17 +3174,20 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
  * section E). The game builds him like a player character, with moves (actions 0-0x15) an AI picks and
  * reactions (0x64-0x80), 383 functions in all (0x532000-0x556000): not ported. This is a stand-in fight on
  * his own model and motions: he walks in and swings his cane, lobs bombs that roll at Dante, teleports
- * behind him, and dances. Hits fill a stun gauge; stunned, he takes double damage. Which motion is which
+ * behind him, and dances. His defence and stun meter are the game's (jester_hit). Which motion is which
  * was chosen by their shapes and lengths (inferred); his health is an estimate. The arena's centre,
  * (3500, 492, 3500), is from his set-up (FUN_005331d0). */
 #define JESTER_HEALTH (ENEMY_HEALTH * 1500 / 250)
-#define JESTER_STUN_HITS 12.0f
+#define JESTER_STUN_AT 249.0f       /* the stun meter's threshold (0x5e2f30) */
+#define JESTER_STUN_FRAMES 500.0f   /* the stun's length (0x5e2ed0) */
 #define JESTER_ARENA 1400.0f   /* how far from the arena's centre he may go (its floor runs to 1550) */
 enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH,
        J_ATK_TP, J_ATK0, J_ATK1, J_ATK2 };
 static int jester_last_attack = -1, jester_last_throw = -1;
 /* jsNN, in tools/prepare_skinned_model.py's order: [3] 0-2, [4] 3-20, [5] 21-29, [6] 30-33, [19] 34-40. */
-static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 26, 26, 31, 5, 14, 4, 16, 32, 33, 30, 31};
+/* The flinch (js06), the stun (js10) and the blade's vanish (js12) are the reactions' own (0x370 calls in
+ * FUN_00535470, FUN_00535e60, FUN_00536110). */
+static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 12, 26, 31, 6, 10, 4, 16, 32, 33, 30, 31};
 static int jester_motion[sizeof(jester_motion_index)];
 
 static int jester_init(void) {
@@ -3242,7 +3245,6 @@ static void jester_update(float f, float px, float py, float pz) {
     const Motion *m;
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, s, c;
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
-    if (e->goyle_stone > 0.0f && e->action != J_STUN) { e->goyle_stone -= 0.02f * f; if (e->goyle_stone < 0.0f) e->goyle_stone = 0.0f; }
     m = motion_get(e->motion);
     e->frame += f;
     e->timer += f;
@@ -3364,10 +3366,10 @@ static void jester_update(float f, float px, float py, float pz) {
         break;
     case J_FLINCH:
         e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f; e->vel[0] *= 0.85f;
-        if (e->done) jester_state(ai_unit() < 0.5f ? J_VANISH : J_IDLE);
+        if (e->done) jester_state(J_IDLE);
         break;
     case J_STUN:
-        if (e->timer > 200.0f) { e->goyle_stone = 0.0f; jester_state(J_VANISH); }
+        if (e->timer > JESTER_STUN_FRAMES) jester_state(J_VANISH);
         break;
     case J_LAUNCHED:
         if (e->done) jester_state(J_IDLE);
@@ -3386,16 +3388,23 @@ static void jester_update(float f, float px, float py, float pz) {
     if (e->action != J_VANISH) e->pos[1] = e->floor_y;
 }
 
+/* FUN_0053d0d0 (his hits), FUN_0053eb20 (which of the parameter rows 0x5e3a60 the hit meets) and the reactions
+ * (FUN_00535470 a shot, FUN_00536110 a blade, FUN_00535e60 the stun). The rows' +0x20 scales the damage: 1 (in
+ * hundredths) as he is, 100 while stunned (+0x1e2 = 3). The stun meter (+0x4cc8) takes 50 a blade hit (0x5e2f14,
+ * rank 0) and 1.75 times the shot's own value a bullet (0x5e2f10; that value, +0x4d54, isn't read: the port's
+ * bullet's 8 [estimate]); past 249 (0x5e2f30) his next reaction is the stun, 500 frames (0x5e2ed0), the meter
+ * emptied. During his attacks (actions 0x15-0x2c, 0x3e-0x43) hits don't stop him. */
+static int jester_attacking(void) { return e->action == J_ATK_TP || (e->action >= J_ATK0 && e->action <= J_ATK2); }
 static void jester_hit(HitKind kind) {
     float at[3] = {e->pos[0], e->pos[1] + 110.0f, e->pos[2]};
-    int stunned = e->action == J_STUN;
+    int stunned = e->action == J_STUN, gun = kind == HIT_PISTOL;
     if (e->plan == P_DEATH || e->action == J_VANISH) return;
     ++hits;
     fx_hit_spark(at);
     if (mortal) {
-        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]; stunned, double [stand-in]. */
-        float dmg = kind == HIT_PISTOL ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
-        if (stunned) dmg *= 2.0f;
+        /* The port's hit values (as the Vanguard's: 42 light, 84 heavy, 8 a bullet), scaled as the row says. */
+        float dmg = gun ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        dmg *= stunned ? 1.0f : 0.01f;
         e->ar_health -= dmg;
         if (e->ar_health <= 0.0f) {
             e->ar_health = 0.0f;
@@ -3406,14 +3415,12 @@ static void jester_hit(HitKind kind) {
             return;
         }
     }
-    if (stunned) return;
-    e->goyle_stone += kind == HIT_PISTOL ? 0.2f : 1.0f;
-    if (e->goyle_stone >= JESTER_STUN_HITS) { jester_state(J_STUN); return; }
-    if (kind == HIT_LAUNCH) { jester_state(J_LAUNCHED); return; }
-    if (kind != HIT_PISTOL && (e->action == J_IDLE || e->action == J_WALK || e->action == J_TAUNT || e->action == J_FLINCH || e->action == J_BOMB)) {
-        e->vel[0] = kind == HIT_HEAVY ? 10.0f : 3.0f;
-        jester_state(J_FLINCH);
-    }
+    if (stunned || jester_attacking()) return;
+    e->goyle_stone += gun ? 1.75f * 8.0f : 50.0f;
+    if (e->goyle_stone > JESTER_STUN_AT) { e->goyle_stone = 0.0f; jester_state(J_STUN); return; }
+    if (gun) { e->vel[0] = 3.0f; jester_state(J_FLINCH); return; }   /* 0x67-0x6a: js06, on the spot (row 0) */
+    /* 0x6d: a blade's hit sends him off (row 1, 50-550 cm about Dante) unless his attack is due. */
+    if (e->wake < JESTER_ATTACK_WAIT) jester_state(J_VANISH);
 }
 
 #include "pawn.inc"
@@ -3431,10 +3438,41 @@ static int ar_statue_motion[2];
 static ArBrain ar_brains[2];
 static float ar_formation_time;            /* the pair's controller: frames left on this formation */
 static int ar_formation = 5;
-static unsigned short ar_dante_moves;
+static int ar_dante_action;     /* Dante's current move, the command table's action id (FUN_0021e920), 0 none */
+static float ar_dante_yaw;
 static int ar_force = -1;   /* tests: the next state either brother takes from idle */
-void enemy_ar_force(int state) { ar_force = state; }   /* counts Dante's melee moves (enemy_dante_attack) */
-void enemy_dante_attack(int action, int gun) { (void)action; if (!gun) ++ar_dante_moves; }
+void enemy_ar_force(int state) { ar_force = state; }
+void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
+void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
+
+/* FUN_003afd30: the sector Dante stands in about his facing (65536 a circle): 0 within 22.5 degrees in front, 2 / 4
+ * to 90 degrees either side, 3 / 5 to 157.5, 1 behind. Odd: he's beyond the side line. */
+static int ar_sector(float a) {
+    float deg = a * (180.0f / PI);
+    if (deg >= -22.5f && deg <= 22.5f) return 0;
+    if (deg > 22.5f && deg <= 90.0f) return 2;
+    if (deg < -22.5f && deg >= -90.0f) return 4;
+    if (deg > 90.0f && deg <= 157.5f) return 3;
+    if (deg < -90.0f && deg >= -157.5f) return 5;
+    return 1;
+}
+
+/* FUN_003aeec0, for Dante (character 0): a brother reacts to a new move of Dante's (+0x2ec3 keeps the last), never
+ * the survivor with both swords. Stinger (7, 8) within 650 with Dante in front and facing him (Dante's yaw less his,
+ * less 90 degrees, under 180); 38 / 39 within 650 in front; 92 and 4 within 350 in front. Other moves: none (the
+ * branch on +0x2ec2 never runs: it stays 0xff). */
+static int ar_reacts(const ArBrain *b, int action, float d, int sector) {
+    float rel;
+    if (b->set == 2 || (sector & 1)) return 0;
+    switch (action) {
+    case 7: case 8:
+        rel = wrap_angle(ar_dante_yaw - e->yaw - PI * 0.5f);
+        return d <= 650.0f && rel >= 0.0f;
+    case 38: case 39: return d <= 650.0f;
+    case 92: case 4: return d <= 350.0f;
+    default: return 0;
+    }
+}
 
 static int ar_init(void) {
     int i;
@@ -3557,15 +3595,15 @@ static void ar_update(float f, float px, float py, float pz) {
     }
     ar_brain_tick(b, &s, f);
     in = ar_state_info(e->action);
-    if (e->ar_seen != ar_dante_moves) {
-        /* FUN_003aeec0: a new move of Dante's within 350 in front of him, while he idles or moves: Agni hops
-         * back (21), Rudra guards (23), the survivor guards (25). Dante's move classes aren't mapped; any melee
-         * move counts, under the default rule (within 350). */
-        float a = wrap_angle(atan2f(dx, dz) - e->yaw);
-        e->ar_seen = ar_dante_moves;
-        if (in->brain && d <= 350.0f && fabsf(a) < PI * 0.5f) {
-            ar_go(b->set == 0 ? 21 : b->set == 1 ? 23 : 25);
-            return;
+    if (in->brain) {
+        int sector = ar_sector(wrap_angle(atan2f(dx, dz) - e->yaw));
+        /* FUN_003af2c0: Dante beyond his side line: he turns to him (state 0, ar26) before anything else. */
+        if (sector & 1) { ar_go(0); return; }
+        /* FUN_003aeec0: a new move of Dante's that he answers: Agni hops back (21), Rudra guards (23). */
+        if (ar_dante_action == 0) e->ar_seen = 0;
+        else if (e->ar_seen != (unsigned short)ar_dante_action) {
+            e->ar_seen = (unsigned short)ar_dante_action;
+            if (ar_reacts(b, ar_dante_action, d, sector)) { ar_go(b->set == 0 ? 21 : 23); return; }
         }
     }
     if (in->turn) goyle_turn_to(px, pz, (float)in->turn * (2.0f * PI / 65536.0f), f);
@@ -3624,7 +3662,7 @@ static void ar_update(float f, float px, float py, float pz) {
     }
 }
 
-static void ar_hit(HitKind kind) {
+static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z) {
     float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]}, damage;
     if (e->plan == P_DEATH) return;
     ++hits;
@@ -3650,8 +3688,13 @@ static void ar_hit(HitKind kind) {
             return;
         }
     }
-    /* A heavy blow staggers him out of idling or moving (state 0; the game's stagger gauge isn't decoded). */
-    if ((kind == HIT_HEAVY || kind == HIT_SLAM || kind == HIT_LAUNCH) && ar_state_info(e->action)->brain) ar_go(0);
+    /* A blow that throws (FUN_003a2ab0 / FUN_003a2c00, vtable +0xe4 / +0xe0: hit types beyond 0-2) knocks him
+     * back, state 37 (ar50) struck from in front, 38 (ar51) from behind. Which of Dante's hits are those types is
+     * inferred: the port's heavy, slam and launch. */
+    if ((kind == HIT_HEAVY || kind == HIT_SLAM || kind == HIT_LAUNCH) && ar_state_info(e->action)->brain) {
+        float dx = hit_from_x - e->pos[0], dz = hit_from_z - e->pos[2];
+        ar_go(ar_sector(wrap_angle(atan2f(dx, dz) - e->yaw)) & 1 ? 38 : 37);
+    }
 }
 
 static float ar_health_total(float *maximum) {
