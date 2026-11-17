@@ -585,7 +585,11 @@ Rooms 4xx are GDATA 736 + 4 x (n - 400).
 **In the port** (`tools/gen_rooms.py` Mission 19, `psp/testroom/mission19.c`, `docs/ARKHAM_SPEC.md`): 406 -> 405 ->
 404 (take the Samsara) -> 405 (set it at the statue, area 0) -> 408 -> 421, Arkham, to Mission Clear.
 - With the Samsara, 404's door goes straight back to 405's start 0 (the walk back through 403 and 406 is skipped).
-- The Abyss aren't ported: Prides stand in, and die to the sword (405's mirrors aren't in).
+- 405's mirrors (SET 444, `CStageSetMirror`; `psp/testroom/mission19.c`): eight (SETs 445-452), one lit green at a time,
+  another every 420 frames; only the lit one takes blows (1000 health), each throwing every enemy; two broken and the
+  set kills the Abyss, whose spawn records' op 8 (1, 1) bind them to it (no other blow kills them). Stand-ins: the
+  mirrors' effect (0x2e0) and the lit tint are a green glow, the shatter is the port's burst, the blows' damage is the
+  port's 42 / 84, and the throw is the port's heavy hit.
 - 404's hourglass (`psp/testroom/mission19.c`): EventTbl19 starts a 5400-frame timer (op 7f [5400, 1], 90 s) as he
   comes in before the Samsara is taken; when it runs out (switch 0x22) the glass turns, group 1 (3 Abyss) and group 0
   (5) are spawned and the timer starts again; clearing the room stops it. The parts play their own motions from the

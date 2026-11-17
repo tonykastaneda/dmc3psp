@@ -117,7 +117,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 17**: 128's God-cubes aren't moved (Dante comes in at start 2); 131's spikes are Mission 6's stand-in.
 - **Mission 18**: gates are doors; the bingo board's rule (CStageSetBingo) read as 3 × 3 in door order; the mirror is
   a glow; 401's chessmen spawn as Pawns or Prides.
-- **Mission 19**: **the mirrors aren't in**; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
+- **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect and tint, the port's burst for the
+  shatter, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
 - **Secret Missions**: 600's goal [inferred]; 605's 60 s limit [estimate]; 608's wagons (CStageSetTruck's timetable,

@@ -28,6 +28,8 @@ int m19_door_route(int room, int door, int has_samsara, int *next_room, int *sta
 #include <stdio.h>
 #include "stage.h"
 #include "hourglass_runtime.h"
+#include "enemy.h"
+#include "fx.h"
 
 #define SAND_FRAMES 5400.0f
 static int hg_on, hg_running, hg_turns;
@@ -63,7 +65,87 @@ static void hg_pose(void) {
     }
 }
 
+/* 405's mirror set (SET 444 MIRROR: CStageSetMirror, vtable 0x60f530; FUN_004621f0 its start, FUN_004624b0 its round,
+ * FUN_00462890 a hit, FUN_00462bd0 a break). Eight mirrors (0x5ccfe0: place and turn; STAY sets 445-452, 0x5cd090);
+ * one at a time is lit green (175, 255, 223), another unbroken one every 420 frames (+0x110), at random. Only the lit
+ * one takes blows: a box 300 wide, 650 high, 200 deep, 60 before it (0x5cd060), 1000 health each (+0xf0). Each blow
+ * throws every enemy in the room (FUN_0035a610); a broken one shatters (effect 0x1ea), its STAY goes, and the others'
+ * health is whole again; with two broken the set is done and the Abyss bound to it die (FUN_0035a720, each frame).
+ * Coming back (flag 1, gimmick_cmd10 444 1), they're all broken. */
+static const float mirror_at[8][4] = {{1679, 0, 2784, 112.5f}, {1679, 0, 2137, 67.5f}, {2136, 0, 1679, 22.5f},
+    {2783, 0, 1679, -22.5f}, {3241, 0, 2136, -67.5f}, {3241, 0, 2783, -112.5f}, {2784, 0, 3241, -157.5f},
+    {2137, 0, 3241, 157.5f}};
+static int mr_on, mr_state, mr_lit, mr_broken[8], mr_breaks, mr_blows, mr_struck;
+static float mr_health[8], mr_clock, mr_from[2];
+static unsigned int mr_seed = 0x2545f491u;
+static int mr_rand(int n) { mr_seed ^= mr_seed << 13; mr_seed ^= mr_seed >> 17; mr_seed ^= mr_seed << 5; return (int)(mr_seed % (unsigned int)n); }
+
+static void mr_pick(void) {
+    int open[8], n = 0, i;
+    for (i = 0; i < 8; ++i) if (!mr_broken[i] && i != mr_lit) open[n++] = i;
+    if (n) mr_lit = open[mr_rand(n)];
+    mr_clock = 420.0f;
+}
+
+static void mr_enter(int room, int done) {
+    int i;
+    mr_on = room == 405;
+    mr_struck = 0;
+    if (!mr_on) return;
+    for (i = 0; i < 8; ++i) { mr_broken[i] = done; mr_health[i] = 1000.0f; if (done) stage_hide_group(445 + i); }
+    mr_breaks = done ? 2 : 0;
+    mr_state = done ? 2 : 1;
+    mr_lit = mr_rand(8);
+    mr_clock = 420.0f;
+}
+
+void m19_test_mirror(int k) { if (mr_on && k >= 0 && k < 8 && !mr_broken[k]) { mr_lit = k; mr_clock = 1e9f; } }   /* tests: "mirrorlit k" */
+
+void m19_mirror_hit(float x, float y, float z, float yaw, float reach, int heavy) {
+    const float *m;
+    float a, s, c, lx, lz, ly, dx, dz, nx, nz;
+    if (!mr_on || mr_state != 1 || mr_broken[mr_lit]) return;
+    m = mirror_at[mr_lit];
+    a = m[3] * 3.14159265f / 180.0f; s = sinf(a); c = cosf(a);
+    /* Dante in the mirror's frame: its box spans x -150..150, y 0..650, z -40..160. */
+    dx = x - m[0]; dz = z - m[2];
+    lx = dx * c - dz * s; lz = dx * s + dz * c; ly = y - m[1];
+    nx = lx < -150.0f ? -150.0f - lx : lx > 150.0f ? lx - 150.0f : 0.0f;
+    nz = lz < -40.0f ? -40.0f - lz : lz > 160.0f ? lz - 160.0f : 0.0f;
+    if (nx * nx + nz * nz > reach * reach || ly + 250.0f < 0.0f || ly > 650.0f) return;
+    {
+        /* facing it */
+        float cx = m[0] + s * 60.0f - x, cz = m[2] + c * 60.0f - z, l = sqrtf(cx * cx + cz * cz);
+        if (l > 1.0f && (cx * sinf(yaw) + cz * cosf(yaw)) / l < 0.0f) return;
+    }
+    mr_health[mr_lit] -= heavy ? 84.0f : 42.0f;   /* the port's hit values */
+    ++mr_blows;
+    mr_struck = 1; mr_from[0] = x; mr_from[1] = z;
+}
+
+static void mr_update(float f) {
+    int i;
+    if (!mr_on) return;
+    if (mr_state == 2) { enemy_mirror_kill(); return; }
+    if (mr_struck) { mr_struck = 0; enemy_mirror_blow(mr_from[0], mr_from[1]); }
+    if (mr_health[mr_lit] < 0.0f && !mr_broken[mr_lit]) {
+        float at[3] = {mirror_at[mr_lit][0], 325.0f, mirror_at[mr_lit][2]};
+        mr_broken[mr_lit] = 1;
+        stage_hide_group(445 + mr_lit);
+        fx_explosion(at);
+        if (++mr_breaks > 1) { mr_state = 2; enemy_mirror_kill(); return; }
+        for (i = 0; i < 8; ++i) if (!mr_broken[i]) mr_health[i] = 1000.0f;
+        mr_pick();
+    }
+    if ((mr_clock -= f) < 0.0f) mr_pick();
+    {
+        /* The lit mirror's glow (its effect, 0x2e0, isn't converted). */
+        float at[3] = {mirror_at[mr_lit][0], 325.0f, mirror_at[mr_lit][2]}, v[3] = {0.0f, 0.0f, 0.0f};
+        fx_mote(at, v, 260.0f, 240.0f, 0.05f, 0xa0dfffafu);
+    }
+}
 void m19_enter(int room, int stopped) {
+    mr_enter(room, stopped);
     hg_on = room == 404;
     hg_running = hg_on && !stopped;
     hg_spin = 0.0f;
@@ -73,6 +155,7 @@ void m19_enter(int room, int stopped) {
 
 int m19_update(float dt, int cleared) {
     int out = 0;
+    mr_update(dt * 60.0f);
     if (!hg_on) return 0;
     if (hg_running && cleared) hg_running = 0;   /* the enemies cleared stop it, as it stands */
     if (hg_running) {
@@ -93,5 +176,6 @@ int m19_clock_text(char *out, int size) {
 }
 
 void m19_status(char *out, int size) {
-    snprintf(out, size, "hourglass on=%d running=%d sand=%.0f turns=%d", hg_on, hg_running, hg_sand, hg_turns);
+    snprintf(out, size, "hourglass on=%d running=%d sand=%.0f turns=%d mirrors on=%d state=%d lit=%d breaks=%d blows=%d hp=%.0f", hg_on, hg_running, hg_sand, hg_turns,
+             mr_on, mr_state, mr_lit, mr_breaks, mr_blows, mr_on ? mr_health[mr_lit] : 0.0f);
 }

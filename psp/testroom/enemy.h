@@ -57,6 +57,8 @@ void enemy_dante_attack(int action, int gun);   /* Dante's move changed (0: none
 void enemy_dante_yaw(float yaw);                /* where Dante faces, each frame */
 void enemy_set_hit_weapon(int melee);   /* the melee weapon of the hits that follow (0 Rebellion, 1 Cerberus...) */   /* Dante fired from here */      /* those fallen far below a riding lift: gone */          /* those not yet dead */
 void enemy_kill_all(void);            /* for tests */
+void enemy_mirror_blow(float from_x, float from_z);   /* 405's lit mirror struck: every enemy thrown */
+void enemy_mirror_kill(void);         /* 405's mirrors broken: the Abyss bound to them die */
 void enemy_trim(int keep);
 void enemy_ar_force(int state);       /* tests: Agni or Rudra next takes this game state */
 void enemy_clear_minions(void);      /* tests: retain the boss and the script's alive-count gates */

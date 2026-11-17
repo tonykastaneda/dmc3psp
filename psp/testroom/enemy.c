@@ -152,6 +152,7 @@ typedef struct {
     unsigned char j_second, j_pending, j_up;   /* the Jester's second set (+0x481d), its threshold crossed (+0x4d30),
                                                   up off the floor (+0x4818) */
     unsigned char j_hops; float j_g;   /* the Jester's hops left (+0x4d18) and their gravity (+0x4810) */
+    unsigned char mirror_bound;     /* 405's Abyss (their spawn records' op 8 (1, 1)): only the mirrors kill them */
     /* Its parts' chains (Nevan's hair and dress): each extra bone's state, whether they hang yet, and the 60 fps
      * frames of game time not stepped yet. */
     ClothJoint *cloth;
@@ -470,6 +471,7 @@ static void spawn_one(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
     last_spawned = e;
+    e->mirror_bound = 0;
     if (hold_owner == e) hold_let_go(1);   /* a slot taken again lets go of him */
     if (kind == ENEMY_GIGAPEDE) { giga_spawn(); return; }
     if (kind == ENEMY_LEVIATHAN) {
@@ -594,6 +596,7 @@ void enemy_set_mortal(int on) { mortal = on; }
  * 5000 / 6500 / 10000, 0x5e2f60). */
 void enemy_set_spawn_param(int index, int value) {
     Enemy *a = last_spawned;
+    if (a && a->active && index == 1 && a->kind == ENEMY_ABYSS) { a->mirror_bound = (unsigned char)(value != 0); return; }
     if (!a || !a->active || index != 0 || a->kind != ENEMY_JESTER || value < 0 || value > 2) return;
     a->encounter = (unsigned char)value;
     a->ar_health = jester_max_health(value);
@@ -674,6 +677,33 @@ void enemy_trim(int keep) {
     for (i = 0; i < ENEMY_MAX; ++i)
         if (enemies[i].active && enemies[i].plan != P_DEATH && keep-- <= 0) enemies[i].active = 0;
 }
+static void plan_set(int p);
+static void died(void);
+/* 405's mirror set (CStageSetMirror): a blow on its lit mirror throws every enemy in the room (FUN_0035a610, vtable
+ * +0xe4); with two broken, it kills them (FUN_0035a720, +0xd8, each frame). */
+void enemy_mirror_blow(float from_x, float from_z) {
+    Enemy *was = e;
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        if (!enemies[i].active || enemies[i].plan == P_DEATH) continue;
+        e = &enemies[i];
+        enemy_hit(HIT_HEAVY, from_x, from_z);
+    }
+    e = was;
+}
+void enemy_mirror_kill(void) {
+    Enemy *was = e;
+    int i;
+    for (i = 0; i < ENEMY_MAX; ++i) {
+        if (!enemies[i].active || enemies[i].plan == P_DEATH || !enemies[i].mirror_bound) continue;
+        e = &enemies[i];
+        e->health = 0; e->air = 0;
+        plan_set(P_DEATH);
+        died();
+    }
+    e = was;
+}
+
 void enemy_kill_all(void) {
     int i;
     coffins_reset();
@@ -1617,7 +1647,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_GOYLE) { goyle_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
-    if (mortal) {
+    if (mortal && !e->mirror_bound) {
         e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->air = 0;
@@ -3072,7 +3102,7 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
         fx_hit_spark(at);
     }
     if (e->plan == P_DEATH) return;
-    if (mortal) {
+    if (mortal && !e->mirror_bound) {
         e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->plan = P_DEATH;

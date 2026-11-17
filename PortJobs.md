@@ -11,7 +11,7 @@
 - [ ] Arkham: one fight runs both rounds, and Vergil doesn't join
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform
 - [x] Mission 16: 146's shelled sphere and 109's pair swing, lower on their switches, wear and knock as decoded; stand-ins: plain spheres, gravity and damage estimates, and the items aren't held back by them yet (finishing them wasn't shown in PPSSPP)
-- [ ] Mission 19: the mirrors aren't in
+- [x] Mission 19: 405's mirrors (CStageSetMirror) run: one lit at a time, 420 frames each, 1000 health, every blow throwing the enemies, two broken killing the Abyss bound to them (their op 8 (1, 1)); stand-ins: a glow for the mirrors' effect, the port's hit values
 - [x] Mission 19: the hourglass runs the script's 90-second timer and the room's own sand and spin motions, and the Abyss come back when it runs out; stand-ins: a countdown for its HUD, group 0 respawned in place of groups 1 and 0, the glass's turn not played
 - [x] Secret Mission 12: the moving blocks run their own motions from the room's data and carry Dante; their sides don't stop him (stand-in), and the motion's start when he enters is the port's
 - [x] Messages: the event scripts' message blocks run with the game's text in a box (text from the disc at build time, kept local); flags the missions keep in C aren't linked, so a few flag-gated texts don't show or show late (docs/EVENT_SCRIPTS.md)

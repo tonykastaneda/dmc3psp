@@ -1969,6 +1969,7 @@ static struct { float x, y, z, yaw, dt, floor, cframe, pen; short move, script, 
 static int cmp_realdt;   /* "realdt 1": the real clock, as in play, not a fixed step */
 static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": for a test, the mission begins in that room */
 static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
+static int cmp_mirror_at, cmp_mirror_k;
 static int cmp_item[8][2], cmp_item_count, cmp_trim_at, cmp_trim_keep, cmp_force_at, cmp_force_state;      /* "item id state": for a test, a key item starts got (1) or used (2) */
 static void cmp_load(void) {
     char path[320], line[64];
@@ -2023,6 +2024,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "bosshits ", 9) == 0) {
             if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
         }
+        else if (strncmp(line, "mirrorlit ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_mirror_at, &cmp_mirror_k);   /* "mirrorlit frame k": 405's mirror k lit */
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
@@ -2779,6 +2781,7 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if (mission_choice.mission == 15) m15_hit(player->x, player->y, player->z, player->yaw, reach);   /* mission15.c: the portals */
     if (mission_choice.mission == 17) doppelganger_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* 139's crests */
     if (mission_choice.mission == 19) arkham_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* his Legions */
+    if (mission_choice.mission == 19) m19_mirror_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));   /* 405's mirrors */
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
         float dx = b->x - player->x, dz = b->z - player->z, d = sqrtf(dx * dx + dz * dz), dy = b->y - player->y;
@@ -4085,6 +4088,7 @@ int main(int argc, char *argv[]) {
                     }
             }
             if (cmp_force_at && frames == cmp_force_at) enemy_ar_force(cmp_force_state);
+    if (cmp_mirror_at && frames == cmp_mirror_at) m19_test_mirror(cmp_mirror_k);
             if (focus_cmp && cmp_clear_minions && frames%cmp_clear_minions==0) enemy_clear_minions();
             {
                 int g, k;
