@@ -124,7 +124,7 @@ MISSIONS = {
     # (group 1, Soul Eaters) -> 214 Altar of Evil (the slide blocks, then group 2: a Hell Vanguard and Soul Eaters;
     # psp/testroom/mission11.c) -> 239 the Temperance Wagon -> (216, the wagon ride: a stand-in, see EXTRA_DOORS) ->
     # 240 -> 217 Torture Chamber: Beowulf (group 0, EST 51).
-    11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0]}),
+    11: ("212", None, {"212": [0], "213": [1], "214": [2], "217": [0], "216": [0, 1]}),
     13: ("229", None, {"229": [0], "241": [0], "234": [0]}),
     20: ("411", None, {"411": [0], "012": [0]}),
     # Mission 14, from EventTbl14 (GDATA 252): 237 Lair of Judgement Ruins (its combat adjudicator opens door 0) -> 235
@@ -249,9 +249,9 @@ ITEM_OPENS += [(13,"232",51,[100])]
 # Doors that aren't in a room's door list: 142's area 0 plays demo 17, whose AFTER_DEMO is goto_room 144, 0.
 # (room, box centre and full sizes as BoxIn, next room, its start)
 EXTRA_DOORS = {"142": [((5521.5, 3701.0, 3503.5, 101.0, 2000.0, 601.0), "144", 0)]}
-# Mission 11: 239's area 0 boards the wagon (its door 1, to 216, is an event door). The ride itself (216's TRUCK set,
-# its clock and its ambushes) isn't in: the wagon arrives at once, at 240's start 3, as the ride's end does.
-EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3, 11, 11),
+# Mission 11: 239's area 0 boards the wagon (its door 1, to 216 start 0, is an event door): the ride (216's TRUCK set,
+# psp/testroom/wagon.c; its groups 0 then 1), then 240's start 3 (mission11.c m11_room_done). Mission 14 still skips it.
+EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "216", 0, 11, 11),
                       ((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3, 14, 14)]   # Missions 11 and 14
 
 # ---- Mission 12, "Hunter and hunted", from EventTbl12 (GDATA 250; docs/GAME_FLOW.md). After demo 31 it starts in 217
@@ -706,7 +706,7 @@ def main():
     for mission, (first, end, sets) in MISSIONS.items():
         for room, wanted in sets.items():
             for difficulty in (0, 1):
-                ops = compile_script(rooms[room]["groups"], wanted, difficulty, {1: 40, 3: 30} if mission == 2 else None)
+                ops = compile_script(rooms[room]["groups"], wanted, difficulty, {1: 40, 3: 30} if mission == 2 else {1: 60} if (mission, room) == (11, "216") else None)   # 216: group 1 once group 0 is down (EventTbl11), then its 60
                 print(f"mission {mission} {'EN'[difficulty]} room {room} groups {wanted}: {len(ops)} ops, "
                       f"{sum(1 for o in ops if o[0] == OP_SPAWN)} spawns")
                 lines.append(f"static const RoomOp m{mission}_{difficulty}_{room}_ops[] = {{" +

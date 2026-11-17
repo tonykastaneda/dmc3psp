@@ -118,3 +118,12 @@ void m11_draw(void) {
 void m11_status(char *out, int size) {
     snprintf(out, size, "blocks=%.0f/%d %.0f/%d", blocks[0].moved, blocks[0].fitted, blocks[1].moved, blocks[1].fitted);
 }
+
+/* 216's script (EventTbl11): its waves (groups 0, then 1) cleared, 60 frames later goto_room 240, start 3 (from 239;
+ * riding back from 240, 239 start 3, which Mission 11 doesn't take). [The 60 frames aren't waited.] */
+int m11_room_done(int room, int *next_room, int *start) {
+    if (room != 216) return 0;
+    *next_room = 240;
+    *start = 3;
+    return 1;
+}

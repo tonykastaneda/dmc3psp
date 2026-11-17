@@ -10,5 +10,6 @@ void m11_update(float dt);
 void m11_hit(float x, float y, float z, float yaw, float reach, int heavy);
 void m11_draw(void);
 void m11_status(char *out, int size);   /* for tests */
+int m11_room_done(int room, int *next_room, int *start);   /* 216's ride over: where it goes */
 
 #endif

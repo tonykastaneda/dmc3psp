@@ -327,8 +327,14 @@ In the port: the route plays from 212 to Mission Clear in PPSSPP. Stand-ins and 
 - **214's slide blocks** (`mission11.c`): melee from behind pushes a block along -z (300 x its zure a hit), and within
   100 cm of its hole it drops in. They're drawn as stone boxes and don't stop Dante. With both in, STAY 200 is hidden
   for the passage, door 1 opens and group 2 runs; until then doors 0 and 1 are held, as block 1 does.
-- **The wagon ride (216)** isn't in: 239's area 0 is a door straight to 240's start 3 (`EXTRA_DOORS`), so its clock,
-  its object waves and groups 0 and 1 are skipped.
+- **The wagon ride (216)** (`psp/testroom/wagon.c`, `tools/prepare_stage.py`): its TRUCK set (`CStageSetTruck`, vtable
+  `0x610b30`) turns the track past the still wagon: model 0, a 90-degree arc of rock wall and rail, about the base
+  (10000, 0, 0) at speed / radius a frame (40 / 12350; parsed by `00485c60` / `00485ff0`, run by `004865e0` /
+  `004867b0`), the way set by gimmick 0c 100 (0 from 239, 1 from 240). 239's area 0 now boards it; groups 0, then 1 once 0
+  is down (EventTbl11's counter 5), then 240's start 3. Stand-ins: three copies of the arc baked 90 degrees apart and
+  turned within a part (the game chains parts as each passes), not subdivided (memory); the script's camera moves (ops
+  0x7c / 0x7d), its 36000-frame clock and op 0x23's waits aren't read; the 60 frames before 240 aren't waited; its
+  point lights (LIGHT 150 / 151) and the truck's own enemy part (`em_model` 2 5 6, `CStageSetTruckEnemy`) aren't in.
 - **Beowulf** (em030, GDATA 135, pack 21) has his own model and motions (`beowulf_boss.c`): the three punches, a
   charge on all fours, a leaping rush, a stomp that sends a pillar rolling at Dante, and a volley of light feathers
   after his body flashes; super armour, a gauge staggers him. Which motion is which is read from their root paths;

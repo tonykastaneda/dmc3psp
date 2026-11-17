@@ -44,6 +44,9 @@ from dmc3_image import AfsArchive, Iso9660
 from scm_ps2 import parse_scm
 from tim2 import decode_picture
 
+WAGON_TAG = 224   # room 216's turning track, 224-226 (psp/testroom/wagon.c)
+WAGON_COPIES = (0, 1, 2)
+
 STAGE_SLOT = 276
 STAGE_DATA_SLOT = 277
 MAX_EDGE = 500.0          # cm
@@ -559,6 +562,24 @@ def main() -> None:
             kind_flag = 2 if texture in blend_textures else (1 if texture in alpha_textures else 0)
             batches.append([texture, kind_flag, subdivided, 0, gimmicks.LIFT_TAG if kind == "LIFT" else numbers.get(s["index"], 0)])
             prop_batches += 1
+
+    # Room 216, the Temperance Wagon's ride: its TRUCK set (CStageSetTruck, FUN_004865e0 / 004867b0) turns its parts
+    # (model 0, a 90-degree arc of tunnel and rail centred on +Z) about its base (10000, 0, 0) while the wagon stands
+    # still. Baked three times, 90 degrees apart, tagged WAGON_TAG + k for psp/testroom/wagon.c to turn.
+    if args.slot == 576 and len(stage) > 5:
+        part = gimmicks.model_triangles(gimmicks.models(stage[5]).get(0, b""))
+        for k in WAGON_COPIES:
+            a = math.radians((k - 1) * 90.0)
+            ca, sa = math.cos(a), math.sin(a)
+            by_texture = {}
+            for tri, texture in part:
+                vs = tuple((10000.0 + ca * v[0] + sa * v[2], v[1], ca * v[2] - sa * v[0]) + tuple(v[3:]) for v in tri)
+                by_texture.setdefault(texture, []).append(vs)   # not subdivided: three copies would not fit in memory
+            for texture, subdivided in by_texture.items():
+                texture = min(texture, len(textures) - 1)
+                kind_flag = 2 if texture in blend_textures else (1 if texture in alpha_textures else 0)
+                batches.append([texture, kind_flag, subdivided, 0, WAGON_TAG + k])
+        print(f"{name}: the wagon's track, 3 x {len(part)} triangles")
 
     # ---- write the blob
     blob = bytearray(256)  # header placeholder

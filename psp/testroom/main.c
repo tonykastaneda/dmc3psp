@@ -48,6 +48,7 @@ int testroom_frame;
 #include "doppelganger_boss.h"
 #include "arkham_boss.h"
 #include "mission19.h"
+#include "wagon.h"
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
@@ -3084,6 +3085,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     blocks_enter(mission_mode ? room_number(room) : -1);   /* 611's moving blocks */
     spheres_enter(mission_mode && mission_choice.mission == 16 ? room_number(room) : -1);   /* 109's and 146's spheres */
     m19_enter(mission_mode && mission_choice.mission == 19 ? room_number(room) : -1, room_is_cleared(room) || item_state[57] != 0);   /* 404's hourglass */
+    wagon_enter(mission_mode ? room_number(room) : -1, m10_previous == 240);   /* 216's ride (wagon.c): backward from 240 */
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
@@ -3251,6 +3253,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     needles_update(dt, player->x, player->y, player->z, player->on_ground);
     blocks_update(dt, &player->x, &player->y, &player->z, player->on_ground);
     spheres_update(dt);
+    if (mission_mode) wagon_update(dt);
     if (mission_mode && mission_choice.mission == 19 && m19_update(dt, room_is_cleared(mission_room))) {
         /* 404's sand ran out: the Abyss come back (mission19.c). */
         enemy_trim(0);
@@ -3473,9 +3476,10 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
      * wave dies, without entering the blocking Mission Clear menu or taking
      * a scripted exit. Ordinary audit mode still exercises normal routes. */
     if (focus_cmp && cmp_enemy_audit == 2) return 0;
-    if (mission_choice.mission == 12) {
+    if (mission_choice.mission == 12 || mission_choice.mission == 11) {
         int next = 0, start = 0;
-        if (m12_room_done(room_number(mission_room), &next, &start)) {   /* mission12.c: the ride's end */
+        if (mission_choice.mission == 12 ? m12_room_done(room_number(mission_room), &next, &start)
+                                         : m11_room_done(room_number(mission_room), &next, &start)) {   /* mission12.c: the ride's end */
             char want[16];
             snprintf(want, sizeof(want), "ROOM_%03d.BIN", next);
             if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
