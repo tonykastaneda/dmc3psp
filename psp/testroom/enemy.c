@@ -217,6 +217,13 @@ static M3 world_rot[MAX_BONES];
 static float world_pos[MAX_BONES][3];
 static void scrolls_update(float frames);
 static float enemy_wind[2];   /* pushes Dante this frame (enemy_push_out) */
+/* A hold on Dante (enemy.h): taken this frame, its need, how it ended, where from, the health drained, his escape. */
+static int hold_new, hold_need, hold_end, hold_broken;
+static float hold_from[2], hold_drain;
+int enemy_hold_take(int *need) { if (!hold_new) return 0; hold_new = 0; *need = hold_need; return 1; }
+float enemy_take_hold_drain(void) { float d = hold_drain; hold_drain = 0.0f; return d; }
+int enemy_hold_end(float *from_x, float *from_z) { int r = hold_end; hold_end = 0; *from_x = hold_from[0]; *from_z = hold_from[1]; return r; }
+void enemy_hold_broken(void) { hold_broken = 1; }
 
 static void m_identity(M3 *m) { memset(m, 0, sizeof(*m)); m->m[0][0] = m->m[1][1] = m->m[2][2] = 1.0f; }
 static void m_mul(M3 *o, const M3 *a, const M3 *b) {
@@ -249,6 +256,7 @@ static void goyle_spawn(void);
 static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
+void enemy_test_note(const char *what, int a, float b) { giga_note(what, a, b); }
 static int goyle_bullet(const float from[3], const float to[3]);
 static int enemy_giga_part(int k, float out[3]);
 static void enemy_giga_struck(const float at[3], float damage);
@@ -4774,9 +4782,15 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     }
     b->pos[0] = e->pos[0]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done;
+    b->held_free = hold_broken; hold_broken = 0;
+    if (ar_force >= 0 && !b->hidden && b->action <= 6) { nevan_force(b, ar_force); ar_force = -1; }   /* tests: "arforce" */
     {
         int before = b->action;
         nevan_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+        /* The kiss's hold on Dante: taken, drained, let go or thrown (main's side: combat_hold). */
+        if (b->hold) { hold_new = 1; hold_need = b->hold; b->hold = 0; }
+        hold_drain += b->drain; b->drain = 0.0f;
+        if (b->release) { hold_end = b->release; hold_from[0] = b->pos[0]; hold_from[1] = b->pos[2]; b->release = 0; }
         if (b->action != before) giga_note("nevan", b->action, b->pos[0] * 10000.0f + b->pos[2]);
     }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;

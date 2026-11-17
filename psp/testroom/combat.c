@@ -1175,6 +1175,44 @@ static void start_knockdown(Combat *c, Player *player, int kind) {
 }
 
 /* Returns 1 while it owns Dante this frame. */
+/* Held (his action 0x2e): he can't move or attack. FUN_00254a20 counts the struggle each frame: 1 when the stick's
+ * direction isn't what it was, 2 for each button pressed; past the holder's need he's free. His pose is the heavy
+ * flinch held at its 10th frame [stand-in: action 0x2e's own motion isn't found]. */
+#define HELD_POSE_FRAME 10.0f
+static void held_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
+    int dir = -1;
+    player->attacking = 1;
+    if (input->stick_x * input->stick_x + input->stick_y * input->stick_y > (STICK_TILT_NEUTRAL / STICK_TILT_SCALE) * (STICK_TILT_NEUTRAL / STICK_TILT_SCALE))
+        dir = (int)floorf((atan2f(input->stick_x, input->stick_y) + (float)M_PI) / ((float)M_PI / 4.0f) + 0.5f) & 7;
+    if (dir != c->held_dir) ++c->held_mash;
+    c->held_dir = dir;
+    c->held_mash += 2 * ((input->melee != 0) + (input->gun != 0) + (input->style_action != 0) + (input->jump != 0));
+    if (c->held_mash > c->held_need) c->held_free = 1;
+    c->frame += dt * MOTION_FPS;
+    if (c->frame > HELD_POSE_FRAME) c->frame = HELD_POSE_FRAME;
+}
+
+void combat_hold(Combat *c, Player *player, int need) {
+    player->air_kind = AIR_NONE;
+    player->jump_motion = -1;
+    c->air = 0;
+    c->action = 0;
+    start_move(c, MOVE_HIT_HEAVY, 0);
+    c->held = 1; c->held_mash = 0; c->held_need = need; c->held_dir = -1; c->held_free = 0;
+}
+int combat_held(const Combat *c) { return c->held; }
+int combat_hold_broken(Combat *c, Player *player) {
+    if (!c->held || !c->held_free) return 0;
+    c->held = c->held_free = 0;
+    end_move(c, player);
+    return 1;
+}
+void combat_release(Combat *c, Player *player) {
+    if (!c->held) return;
+    c->held = c->held_free = 0;
+    end_move(c, player);
+}
+
 static int knockdown_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
     const float *fl = knock_flags[c->kd_far];
     const Motion *m = motion_get(c->motion);
@@ -1312,6 +1350,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     if (c->fade_weight > 0.0f) c->fade_weight -= c->fade_seconds > 0.0f ? dt / c->fade_seconds : 1.0f;
     if (c->fade_weight < 0.0f) c->fade_weight = 0.0f;
     if (c->sword_out > 0.0f) c->sword_out -= dt;
+    if (c->held) { held_update(c, player, input, dt); return; }
     if (knockdown_update(c, player, input, dt)) return;
 
     /* Free cancels: gate 15 hands control back to movement, gate 8 to a jump. */
@@ -1755,6 +1794,7 @@ float combat_dead_frames(const Combat *c) { return c->dead_time; }
 int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage) {
     float to_attacker;
     int front, down;
+    if (c->held) return 1;   /* held: other blows pass [the port's: what the game does isn't read] */
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
         c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK ||
         c->move == MOVE_DOWN || c->move == MOVE_DOWN_FAR || c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR ||

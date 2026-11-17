@@ -91,6 +91,16 @@ void enemy_finish_collisions(float px, float py, float pz);
 void enemy_set_dante_yaw(float yaw);
 /* Devil Trigger drained from Dante since the last call, in the game's units (1000 a rune) [the Soul Eater's hold]. */
 float enemy_take_dt_drain(void);
+/* An enemy holding Dante (FUN_0021f2e0, his action 0x2e: Nevan's kiss). main asks each frame:
+ * enemy_hold_take: 1 if one took hold of him this frame, with the mash he needs to break free;
+ * enemy_take_hold_drain: health the hold took from him since the last call;
+ * enemy_hold_end: 0 holding on (or none), 1 it let him go, 2 it threw him (from x, z);
+ * enemy_hold_broken: he mashed free. */
+int enemy_hold_take(int *need);
+float enemy_take_hold_drain(void);
+int enemy_hold_end(float *from_x, float *from_z);
+void enemy_hold_broken(void);
+void enemy_test_note(const char *what, int a, float b);   /* tests: a line in the focus log */
 /* An attack reached Dante this frame: returns 1 once per hit, from where, and if it's a heavy one. */
 int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
 /* Original attack-record damage, or -1 for the generic 700/800 fallback. */

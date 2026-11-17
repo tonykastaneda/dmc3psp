@@ -8,9 +8,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Systems that touch everything
 
-- **Dante can't be held.** No player "grabbed" state: the Soul Eater's hold clings to his head and his hits free him
-  (the game: mashing out of FUN_0021f2e0's hold); Nevan's kiss (action 36, FUN_003b8810) lands its 800 instead.
-  `enemy.c` soul_*, `nevan_boss.c` action 35.
+- **Dante held** (his action 0x2e, `combat_hold`): Nevan's kiss holds him and he mashes free as the game counts it,
+  but his held pose is the heavy flinch stopped at frame 10 (action 0x2e's own motion isn't found), her throw at the
+  end is a knockdown without damage (his action 0x16 isn't read), and other blows pass him while he's held. The Soul
+  Eater's hold still clings to his head and his hits free him. `combat.c` held_update, `enemy.c` soul_*.
 - **Real-time cutscenes** aren't played (Mission 2's intro, Vergil's scenes, demo 53 in Arkham's fight, ...). PortJobs.
 - **Sound**: only in movies; no music or effects in menus or the game. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
@@ -61,7 +62,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   as record 12 [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Arachne** (more): its class is built like a player (60+ actions by id, FUN_003f6eb0; per-frame FUN_003f3e40,
   wall-crawling): a full decode, not started.
-- **Nevan**: 23's bats are let out as 22's (her swarm +0x4db0 isn't ported); the kiss's hold (above); 29 / 38's event 5
+- **Nevan**: 23's bats are let out as 22's (her swarm +0x4db0 isn't ported); the kiss's hold's pose (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
   carried between moves isn't confirmed. `nevan_boss.c`.

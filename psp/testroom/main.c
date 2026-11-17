@@ -2090,6 +2090,7 @@ static void cmp_load(void) {
     fclose(f);
     if (cmp_frames > CMP_MAX_FRAMES) cmp_frames = CMP_MAX_FRAMES;
 }
+static int cmp_seen_frame = -1;   /* the last frame cmp_pad ran */
 static void cmp_pad(int frame, PlayerInput *input) {
     int i;
     if(cmp_swing>0 && frame>=cmp_swing_from && frame<=cmp_swing_to && frame%cmp_swing==0) {input->melee=1;input->melee_held=1;}
@@ -2109,8 +2110,9 @@ static void cmp_pad(int frame, PlayerInput *input) {
     }
     for (i = 0; i < cmp_event_count; ++i) {
         const char *b = cmp_events[i].button;
-        int held = frame >= cmp_events[i].first && frame <= cmp_events[i].last;
-        int pressed = frame == cmp_events[i].first;
+        /* A press whose frame a slow frame stepped over still lands, on the next one. */
+        int pressed = cmp_events[i].first <= frame && cmp_events[i].first > cmp_seen_frame;
+        int held = pressed || (frame >= cmp_events[i].first && frame <= cmp_events[i].last);
         if (!held) continue;
         if (!strcmp(b, "lup")) input->stick_y = 1.0f;
         else if (!strcmp(b, "ldown")) input->stick_y = -1.0f;
@@ -2140,8 +2142,8 @@ static void cmp_pad(int frame, PlayerInput *input) {
             else if (!strcmp(b, "square")) debug_pressed |= PSP_CTRL_SQUARE;
         }
     }
-}
-static int focus_weapons;  /* "weapons": each melee weapon and gun, sheathed, then swung / drawn */
+    cmp_seen_frame = frame;
+} int focus_weapons;  /* "weapons": each melee weapon and gun, sheathed, then swung / drawn */
 #define WEAPONS_STEP 100
 #define WEAPONS_FRAMES (WEAPONS_STEP * 5 + 10)
 /* "plink": locked on and standing, single shots with gaps; reports the biggest
@@ -4301,6 +4303,23 @@ int main(int argc, char *argv[]) {
             {
                 float drained = enemy_take_dt_drain() / 1000.0f;   /* runes [1000 a rune inferred] */
                 if (drained > 0.0f && !player.devil) { player.dt_energy -= drained; if (player.dt_energy < 0.0f) player.dt_energy = 0.0f; }
+            }
+            {
+                /* A hold on Dante (Nevan's kiss): taken, his health drained, his struggle, let go or thrown. */
+                int need, end;
+                float hx, hz, drained = enemy_take_hold_drain();
+                if (enemy_hold_take(&need)) combat_hold(&combat, &player, need);
+                if (combat_held(&combat) && drained > 0.0f) {
+                    player.health -= drained;
+                    if (player.health < 1.0f) player.health = combat_dante_can_die ? 0.0f : 1.0f;
+                }
+                if (combat_hold_broken(&combat, &player)) enemy_hold_broken();
+                end = enemy_hold_end(&hx, &hz);
+                if (end && combat_held(&combat)) {
+                    combat_release(&combat, &player);
+                    /* Thrown (his action 0x16) [stand-in: a knockdown without damage]. */
+                    if (end == 2) combat_player_hit_kind(&combat, &player, hx, hz, 2, 0.0f);
+                }
             }
                 if(leviathan_boss_drain_trigger(dt*60,player.devil))player.devil=0;
                 orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);

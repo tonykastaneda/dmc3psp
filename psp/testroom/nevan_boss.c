@@ -66,6 +66,7 @@ static const float move_keep[7] = {0.0f, 300.0f, 300.0f, 900.0f, 0.0f, 300.0f, 8
 static const float move_rate[7] = {0.0f, 0.1f, 0.5f, 0.5f, 0.2f, 0.1f, 0.1f};
 static const float move_top[7] = {0.0f, 2.5f, 6.0f, 6.0f, 2.5f, 2.5f, 2.5f};
 static const unsigned char bat_count[3] = {2, 3, 4};
+static const float hold_frames[3] = {360.0f, 420.0f, 480.0f};   /* the kiss's hold, 0x5bce50 rank 0 by phase */
 #define BAT_DAMAGE 1000.0f   /* record 2 (FUN_002949c0(hit, 2) in FUN_00418f50) */
 #define BAT_RADIUS 80.0f
 #define STAGE_RADIUS 1500.0f   /* how far from where she came in she may go (the room's floor) */
@@ -86,9 +87,12 @@ static void act(NevanBrain *b, int a) {
     b->frame = 0.0f;
 }
 
+void nevan_force(NevanBrain *b, int action) { act(b, action); }   /* tests */
+
 void nevan_spawn(NevanBrain *b, int health) {
     int i;
     b->health = b->max_health = health;
+    b->hold = b->held_free = b->release = 0; b->drain = b->hold_time = b->heal = 0.0f;
     b->land = b->remove = b->hidden = 0;
     b->speed = 0.0f;
     b->alpha = 1.0f;
@@ -601,8 +605,7 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
     case 35:
         /* FUN_003b8460: from its script's event she rushes him (the speed +0.1 a frame to 11, moving the speed:
          * 0x5bcf40 / 0x5bcf70, rank 0) and, within 100 (0x5bcee0) and 50 of his height, takes him (FUN_0021f2e0) into
-         * the kiss's hold (action 36, FUN_003b8810: 360 / 420 / 480 frames unless he struggles free). The port's Dante
-         * can't be held: her catching him lands the kiss's record 5 (800) instead [stand-in]. */
+         * the kiss's hold (action 36, below). */
         turn_to(b, px, pz);
         if (b->step == 1) {
             b->speed += 0.1f * f;
@@ -610,10 +613,33 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
             if (d > 1.0f) { float k = (b->speed * f < d ? b->speed * f : d) / d; b->pos[0] += dx * k; b->pos[2] += dz * k; }
             keep_on_stage(b);
             if (d < 100.0f + 60.0f && fabsf(py - b->pos[1]) < 50.0f) {
-                if (attacks) { b->land = 2; b->land_damage = 800.0f; }
                 b->step = 2;
+                if (attacks) {
+                    /* FUN_003b8810 state 0: his struggle's need, 0x5bcf10 [phase × rank × 3] (80 at rank 0), and
+                     * the hold's time, 0x5bce50 [phase + rank × 3]. */
+                    b->hold = 80;
+                    b->hold_time = hold_frames[phase_of(b)];
+                    b->heal = 0.0f;
+                    act(b, 36);
+                    break;
+                }
             }
         } else if (b->step == 0 && s->event >= 0 && b->frame >= (float)s->event) { b->step = 1; b->speed = 0.0f; }
+        if (b->done) next_move(b, d, unit);
+        break;
+    case 36: {
+        /* FUN_003b8810, the kiss: 10 a frame from his health (0x5bce80, FUN_0021ecc0), half of it back to her
+         * (0x5bceb0, capped at her most); he mashes free (FUN_00254a20) into her heavy reel (+0x5189 → 12), or
+         * when the time's out she throws him (37; his 0x16). */
+        float units = (float)(b->max_health > 0 ? b->max_health : 1) / 7000.0f;
+        if (b->held_free) { b->release = 1; act(b, 12); break; }
+        b->drain = 10.0f * f;
+        b->heal += 10.0f * 0.5f * f * units;
+        while (b->heal >= 1.0f && b->health < b->max_health) { ++b->health; b->heal -= 1.0f; }
+        if ((b->hold_time -= f) < 0.0f) { b->release = 2; act(b, 37); }
+        break;
+    }
+    case 37:
         if (b->done) next_move(b, d, unit);
         break;
     case 23: {

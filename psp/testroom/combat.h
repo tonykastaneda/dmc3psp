@@ -150,6 +150,9 @@ typedef struct {
     float kd_hang;         /* kind 7: frames hanging before the flight (config +0x3c) */
     int kd_launch, kd_pop; /* kind 7 (FUN_002e9f50) / kind 6 (FUN_002ea390) */
     int twosome_set, twosome_shots;   /* Twosome Time's set (+0x3c6d) and shots in the series */
+    /* Held by an enemy (his action 0x2e, FUN_0021f2e0): the mash toward breaking free (FUN_00254a20, +0x4a4c /
+     * +0x4a4e) and the stick's last direction (+0x4a4a). */
+    int held, held_mash, held_need, held_dir, held_free;
     float fade_seconds;    /* this move's blend in from the last pose (0: a cut) */
 } Combat;
 
@@ -164,6 +167,13 @@ int combat_player_hit_damage(Combat *c, Player *player, float from_x, float from
 /* The same with the attack record's kind (+0x18; FUN_002e8d20): 0 flinch, 1 heavy flinch, 2-5 knockdown
  * (4 and up the far one), 7 launch; any hit in the air knocks him down. */
 int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage);
+/* An enemy takes hold of him (FUN_0021f2e0: his action 0x2e); need is the mash to break free (FUN_00254a10).
+ * While held he can't move or attack; combat_hold_broken says he's mashed free (and lets go); combat_release ends it
+ * from the holder's side. */
+void combat_hold(Combat *c, Player *player, int need);
+int combat_held(const Combat *c);
+int combat_hold_broken(Combat *c, Player *player);
+void combat_release(Combat *c, Player *player);
 /* Set by the game in missions (off in test scenes): health can reach 0, and he stays down. */
 extern int combat_dante_can_die;
 /* Frames he has lain dead, 0 while alive. */

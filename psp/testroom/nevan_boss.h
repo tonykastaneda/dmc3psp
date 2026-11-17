@@ -22,6 +22,12 @@ typedef struct {
     int want, restart;           /* out: the motion to play (an index into nevan_motion_names), and from the top */
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
     float land_damage;           /* out: its damage (the attack record's) */
+    /* The kiss's hold (action 36, FUN_003b8810). */
+    int hold;                    /* out: she took Dante this frame; the mash he needs (0x5bcf10) */
+    int held_free;               /* in: he mashed free */
+    int release;                 /* out: she let him go (1) or threw him (2) */
+    float drain;                 /* out: health taken from him this frame */
+    float hold_time, heal;       /* +0x517c; her health back, part units */
     int remove;                  /* out: she's gone */
     NevanBat bats[NEVAN_BATS];
     /* Her shells (CEm028Shl01, Shl03-Shl07): a sphere that waits its fuse, then hurts for `active` frames; follow 1: it
@@ -39,6 +45,7 @@ typedef struct {
     int orbs_pending;            /* 25 has started: make its balls this frame */
 } NevanBrain;
 
+void nevan_force(NevanBrain *b, int action);   /* tests: start an action now */
 void nevan_spawn(NevanBrain *b, int health);
 void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks);
 /* kind: 0 light, 1 heavy, 2 a blow that throws. 1 if she fell. */

@@ -993,9 +993,12 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
 
 **In the port** (`psp/testroom/nevan_boss.c`): the patterns, moves, phases, movement, teleports, scripts' motions
 and event frames, bats and reels above, at rank 0, with the movement, teleports, 24's strikes and 29 / 38's floor
-lightning and 25's balls as above (her fades blend). Stand-ins: 23's circling bats
-(let out as the bats are; `003ba470` keeps the bats' count), the shapes of Shl03-05 beyond their numbers, the kiss's
-hold, the teleport's material steps (not shown), 29 / 38's event, a wall ray on the 7 / 8 teleports (she keeps to
+lightning and 25's balls as above (her fades blend). The kiss's hold is the game's (36, `003b8810`: Dante held, his
+action 0x2e; 360 / 420 / 480 frames by phase, `0x5bce50`; 10 a frame from him, `0x5bce80`, half back to her,
+`0x5bceb0`; 80 struggle points free him, `0x5bcf10`, counted as `00254a20` does: 2 a button pressed, 1 a change of the
+stick; free, she reels heavy, 12; timed out, she throws him, 37). Stand-ins: 23's circling bats
+(let out as the bats are; `003ba470` keeps the bats' count), the shapes of Shl03-05 beyond their numbers, the
+teleport's material steps (not shown), 29 / 38's event, a wall ray on the 7 / 8 teleports (she keeps to
 the stage instead); the bats are drawn as glows. Her hair, dress and sleeves are the
 game's (above): their rigs are appended to her skeleton (`tools/prepare_skinned_model.py`, EXTRA_CHAINS), linked
 bones follow her body, the chains step in her model space (`psp/testroom/cloth.c`, coat.c's FUN_0022f270 port), and
