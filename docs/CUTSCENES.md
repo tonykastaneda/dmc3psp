@@ -50,9 +50,15 @@ file is a list of clips, `# Clip` ... `# End`, every clip with `SetFrame` (its s
   textures the same texture sets as pl000 [0] (`.ptx`), stages SCM (as `tools/prepare_stage.py`). Demo Dante
   (pl101) has 25 bones.
 - **Motions** are MOT (`parse_mot` reads them: `pl101_00_c001.mot`, 268 frames, 25 bones).
-- **Cameras** (`.cam`, 416 bytes for a cut): a 0x60-byte lead, `CAM\0`, the cut's length twice (268), then a base
-  value for each of its channels (-45.9; 30394, 7083, 2576; 29283, 2424, 58.5: [inferred] a roll or field of view, the
-  eye and the target), then keyed channels that look like MOT's curve records. Not decoded yet.
+- **Cameras** (`.cam`; class CCameraMotion, vtable `0x601d10`; played by CCameraClip, vtable `0x602010`, whose
+  update `FUN_0024d010` evaluates it at the clip's frame). `FUN_002116b0(motion, cam)` reads: +4 `CAM\0`, +8 a mask of
+  the keyed channels (bit k = channel k, 14 of them), +0xc loops, +0x10 / +0x14 start and end frame, +0x18 / +0x1c the
+  loop's span, +0x20-+0x54 a base value per channel; each keyed channel is bound by `FUN_001fa410(track, n, cam)`
+  (the n-th present) and evaluated by `FUN_001fae10(frame, track)`. `FUN_00211b60` then builds the camera: **eye** =
+  channels 6-8 + channels 0-2, **target** = 9-11 + 0-2, **field of view** = channel 12 (degrees), +0x24 = channel 13.
+  Demo 5's cut 1: mask 0x3fc0 (channels 6-13 keyed), 0-268, eye (-46, 30394, 7083), target (2576, 29283, 2424),
+  58.5 degrees, channel 13 6.0. The keyed records from +0x58 aren't decoded yet (`FUN_001fa410` / `FUN_001fae10`;
+  they look like MOT's curve records). `FUN_00211a10(step)` advances the frame (looping or holding at the end).
 - **Hide tracks** (`.hid`): `HID\0` after a 0x90 lead, then 1.0 / 10.0 pairs and a run of per-frame bytes [not decoded].
 
 ## Porting plan
