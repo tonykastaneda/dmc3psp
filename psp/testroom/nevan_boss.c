@@ -145,7 +145,7 @@ static void release_bats_n(NevanBrain *b, int count, float gap) {
     for (i = 0; i < NEVAN_BATS && n < count; ++i) {
         NevanBat *t = &b->bats[i];
         if (t->on) continue;
-        t->on = 1;
+        t->on = 1; t->swarm = 0;
         t->wait = gap * (float)n;
         t->life = 360.0f;
         t->speed = 0.0f;
@@ -159,12 +159,96 @@ static void release_bats_n(NevanBrain *b, int count, float gap) {
 
 static void release_bats(NevanBrain *b) { release_bats_n(b, bat_count[b->phase], 8.0f); }
 
+/* Action 23's swarm (FUN_003ba470 → FUN_003c9080, mode 1): each with a random vector of 0x5bc7d0's 15 (1..15; her
+ * side, up and forward [their frame taken as hers, inferred]) as its first heading, let go 20 / 15 / 12 frames apart. */
+static const float swarm_vectors[16][3] = {{100, 0, 20}, {85, 15, 20}, {75, 25, 20}, {60, 40, 20}, {50, 50, 20},
+    {40, 60, 20}, {25, 75, 20}, {15, 85, 20}, {0, 100, 20}, {-15, 85, 20}, {-25, 75, 20}, {-40, 60, 20}, {-50, 50, 20},
+    {-75, 25, 20}, {-85, 15, 20}, {-100, 0, 20}};
+static unsigned int swarm_seed = 0x9e3779b9u;
+static float swarm_unit(void) { swarm_seed ^= swarm_seed << 13; swarm_seed ^= swarm_seed >> 17; swarm_seed ^= swarm_seed << 5; return (float)(swarm_seed >> 8) / 16777216.0f; }
+static void release_swarm(NevanBrain *b, int count, float gap, float (*unit)(void)) {
+    int i, n = 0;
+    float s = sinf(b->yaw), c = cosf(b->yaw);
+    for (i = 0; i < NEVAN_BATS && n < count; ++i) {
+        NevanBat *t = &b->bats[i];
+        const float *v;
+        float l;
+        int k;
+        if (t->on) continue;
+        k = (int)(unit() * 16.0f) & 15;
+        if (!k) k = 1;
+        v = swarm_vectors[k];
+        t->on = 1; t->swarm = 1;
+        t->wait = gap * (float)n;
+        t->life = 180.0f; t->speed = 25.0f; t->turn_wait = 0.0f;
+        t->pos[0] = b->pos[0] + s * 100.0f; t->pos[1] = b->pos[1] + 150.0f; t->pos[2] = b->pos[2] + c * 100.0f;
+        t->dir[0] = v[0] * c + v[2] * s; t->dir[1] = v[1]; t->dir[2] = v[2] * c - v[0] * s;
+        l = sqrtf(t->dir[0] * t->dir[0] + t->dir[1] * t->dir[1] + t->dir[2] * t->dir[2]);
+        t->dir[0] /= l; t->dir[1] /= l; t->dir[2] /= l;
+        ++n;
+    }
+}
+
+/* FUN_00513030: turn a heading toward a point by at most `limit` radians. */
+static void steer(float dir[3], const float from[3], const float to[3], float limit) {
+    float w[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]}, l = sqrtf(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]), dot, p[3], pl, a;
+    int k;
+    if (l < 1.0f) return;
+    for (k = 0; k < 3; ++k) w[k] /= l;
+    dot = dir[0] * w[0] + dir[1] * w[1] + dir[2] * w[2];
+    if (dot > 1.0f) dot = 1.0f;
+    if (dot < -1.0f) dot = -1.0f;
+    a = acosf(dot);
+    if (a <= limit) { for (k = 0; k < 3; ++k) dir[k] = w[k]; return; }
+    for (k = 0; k < 3; ++k) p[k] = w[k] - dot * dir[k];
+    pl = sqrtf(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+    if (pl < 1e-4f) return;
+    for (k = 0; k < 3; ++k) dir[k] = dir[k] * cosf(limit) + p[k] / pl * sinf(limit);
+}
+
+/* The swarm's bats (FUN_003c80e0 / FUN_00512f20): out, 300 beyond Dante's chest (FUN_003c9140) at 25 a frame for up to
+ * 180, turning up to 0x800 (11.25 degrees) a frame (0x5bc360); within 50 of that point, or its time out, back to her at
+ * 60 a frame, turning 0x600 every 3 frames, 240 at most, gone within 100 of her (mode 3, 0x5bc380). Their hit is a
+ * 50 cm sphere, record 0 of 0x5bc3d0 (300). */
+static void swarm_update(NevanBrain *b, NevanBat *t, float f, float px, float py, float pz, int attacks) {
+    float dx, dy, dz;
+    int k;
+    if (t->wait > 0.0f) {
+        if ((t->wait -= f) > 0.0f) return;
+        {
+            float w[3] = {px - t->pos[0], py + 150.0f - t->pos[1], pz - t->pos[2]}, l = sqrtf(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
+            if (l < 1.0f) l = 1.0f;
+            for (k = 0; k < 3; ++k) t->target[k] = t->pos[k] + w[k] / l * (l + 300.0f);
+        }
+    }
+    if (t->swarm == 1) {
+        steer(t->dir, t->pos, t->target, 0x800 * 6.2831853f / 65536.0f * f);
+    } else {
+        float home[3] = {b->pos[0], b->pos[1] + 150.0f, b->pos[2]};
+        if ((t->turn_wait -= f) <= 0.0f) { t->turn_wait = 3.0f; steer(t->dir, t->pos, home, 0x600 * 6.2831853f / 65536.0f); }
+        dx = home[0] - t->pos[0]; dy = home[1] - t->pos[1]; dz = home[2] - t->pos[2];
+        if (dx * dx + dy * dy + dz * dz < 100.0f * 100.0f) { t->on = 0; return; }
+    }
+    for (k = 0; k < 3; ++k) t->pos[k] += t->dir[k] * t->speed * f;
+    dx = px - t->pos[0]; dy = py + 100.0f - t->pos[1]; dz = pz - t->pos[2];
+    if (t->swarm == 1 && dx * dx + dy * dy + dz * dz < (50.0f + 60.0f) * (50.0f + 60.0f)) {
+        if (attacks) { b->land = 1; b->land_damage = 300.0f; }
+        t->swarm = 2; t->speed = 60.0f; t->life = 240.0f;
+        return;
+    }
+    dx = t->target[0] - t->pos[0]; dy = t->target[1] - t->pos[1]; dz = t->target[2] - t->pos[2];
+    if (t->swarm == 1 && (dx * dx + dy * dy + dz * dz < 50.0f * 50.0f || (t->life -= f) <= 0.0f)) {
+        t->swarm = 2; t->speed = 60.0f; t->life = 240.0f;
+    } else if (t->swarm == 2 && (t->life -= f) <= 0.0f) t->on = 0;
+}
+
 static void bats_update(NevanBrain *b, float f, float px, float py, float pz, int attacks) {
     int i;
     for (i = 0; i < NEVAN_BATS; ++i) {
         NevanBat *t = &b->bats[i];
         float dx, dy, dz, d, s;
         if (!t->on) continue;
+        if (t->swarm) { swarm_update(b, t, f, px, py, pz, attacks); continue; }
         if (t->wait > 0.0f) {
             if ((t->wait -= f) > 0.0f) continue;
             /* Released: aimed once at his chest (Dante + 150). */
@@ -426,9 +510,9 @@ static void attack_event(NevanBrain *b, float px, float py, float pz, int attack
     (void)attacks;
     switch (b->action) {
     case 22: release_bats(b); break;
-    /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him, each to a random one of 0x5bc7d0's offsets; her
-     * swarm (+0x4db0) isn't ported, so they're let out as action 22's bats are. */
-    case 23: release_bats_n(b, swarm_count[b->phase], swarm_gap[b->phase]); break;
+    /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him, each first along a random one of 0x5bc7d0's
+     * vectors, homing (swarm_update). */
+    case 23: release_swarm(b, swarm_count[b->phase], swarm_gap[b->phase], swarm_unit); break;
     case 24: strikes_start(b); break;   /* FUN_003b7300 → FUN_0045d720 */
     case 25: {   /* script event 4 (0x61acf8 = 3): her balls go (FUN_00469050 → state 1) */
         int i;

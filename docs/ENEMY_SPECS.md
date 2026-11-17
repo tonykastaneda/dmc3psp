@@ -962,9 +962,11 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
   (`003c9080`: mode 1), `0x5bc930` (20 / 15 / 12) frames apart, each with a random vector from `0x5bc7d0` (16 of
   them, (100, 0, 20) round to (-100, 0, 20) through (0, 100, 20)). Mode 1 (`003c80e0`): it keeps to her formation
   point (`003b9c40`) until its wait's out, then aims 300 beyond Dante + 150 (`003c9140`) and steers (`00512f20`) by
-  `0x5bc360`: 25 a frame, 180 frames at most, done within 50; its first heading is its vector, and the block's turn
-  limit reads 0 (straight). Speeds in the formation: `0x5b7d40` + mode × 0x28 (the speed rising by [rank] to its
-  top, squared over 1). Not ported: the swarm is let out as action 22's bats.
+  `0x5bc360`: 25 a frame, 180 frames at most, done within 50, its first heading its vector, turning up to 0x800
+  (11.25°) a frame (+0x14 is a short, 0x800; it read as 0 printed as a float); then back to her (mode 3, `0x5bc380`: 60
+  a frame, 0x600 every 3 frames, 240 at most, within 100). Hit: a 50 cm sphere, `0x5bc3d0` record 0 (300). Speeds in the formation: `0x5b7d40` + mode × 0x28 (the speed rising by [rank] to its
+  top, squared over 1). In the port (`nevan_boss.c` swarm_update): all of it but her formation before launch (they leave from her chest) and
+  the vectors' frame (taken as hers [inferred]).
 - **Bats** (action 22, `003b6c90`): 2 / 3 / 4 by phase (`0x5bce38`), 8 frames apart, made 150 before her and 100
   up (`004187f0` → class `00418970`, vtable `0x60d210`). Each (`00418a50`, `00418bf0`) aims once at Dante + 150 and
   flies straight: speed +0.2 a frame to 18 (`0x5be780`, rank 0), moving its square, for 360 frames; an 80 cm

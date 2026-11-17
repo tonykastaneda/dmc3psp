@@ -62,7 +62,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   as record 12 [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Arachne** (more): its class is built like a player (60+ actions by id, FUN_003f6eb0; per-frame FUN_003f3e40,
   wall-crawling): a full decode, not started.
-- **Nevan**: 23's bats are let out as 22's (her swarm +0x4db0 isn't ported); the kiss's hold's pose (above); 29 / 38's event 5
+- **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; the kiss's hold's pose (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
