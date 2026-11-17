@@ -15,6 +15,8 @@ typedef struct {
     float frame;                 /* in: the motion's frame */
     int done;                    /* in: the motion has played to its end */
     float timer, speed, alpha, wait;
+    float brake;                 /* a move's last 40 frames, slowing (FUN_003b4330 & co., state 2) */
+    int placed;                  /* out: a teleport put her here; find the floor from pos[1] down */
     int action, step, health, max_health, hidden, side;
     int pattern, pattern_at, move, phase;
     int want, restart;           /* out: the motion to play (an index into nevan_motion_names), and from the top */

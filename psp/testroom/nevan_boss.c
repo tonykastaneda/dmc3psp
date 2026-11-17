@@ -120,7 +120,7 @@ static void next_move(NevanBrain *b, float d, float (*unit)(void)) {
     if (m == END_MOVE || b->pattern_at >= 16) { b->pattern = -1; m = 0; }
     b->move = m;
     act(b, move_action[m]);
-    if (b->action >= 4 && b->action <= 6) b->side = unit() < 0.5f;   /* which way she circles (+0x4e1f) isn't read */
+    if (b->action >= 4 && b->action <= 6) b->side = unit() < 0.5f;   /* +0x4e1f: a random bit (FUN_003b4d80) */
 }
 
 static void release_bats(NevanBrain *b) {
@@ -272,23 +272,34 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
         return;
     }
     if (a <= 6 && a != 0) {
-        /* FUN_003b4500 (1-3) and FUN_003b4e30 (4-6): the speed climbs to its top; the square of it, in cm, a frame. */
-        float keep = move_keep[a], room = d - keep, step;
-        b->speed += move_rate[a] * f;
-        if (b->speed > move_top[a]) b->speed = move_top[a];
-        step = b->speed * b->speed * f;
+        /* 1-3 close on him to their distance (FUN_003b4330 & co. → FUN_003b4500); 4 circles him, heading 90 degrees
+         * off his bearing (FUN_003b4c20 → FUN_003b4e30); 5 closes at 75 (FUN_003b5020 → FUN_003b51f0); 6 backs out to
+         * 800 at 105 (FUN_003b5450 → FUN_003b5620); the side is +0x4e1f's. The speed climbs by the rate to the top
+         * (FUN_0035a4a0) and she moves its square a frame, stopping at the distance; once the time's up (or she's at
+         * it) she slows 0.98 a frame for 40 (state 2), and then moves on. 4 and 5 also slow within 200 of him, and
+         * when slowing they move the speed itself, not its square. */
+        static const float heading[7] = {0.0f, 0.0f, 0.0f, 0.0f, 1.5707963f, 1.3089969f, -1.8325957f};
+        float keep = move_keep[a], room, step, dir;
+        int slowing = b->step == 2 || ((a == 4 || a == 5) && d < 200.0f), reached = 0;
         turn_to(b, px, pz);
-        if (a <= 3) {
-            if (room <= 0.0f) step = 0.0f; else if (room < step) step = room;
-            b->pos[0] += sinf(b->yaw) * step; b->pos[2] += cosf(b->yaw) * step;
+        if (b->step == 0) b->step = 1;
+        if (!slowing) {
+            b->speed += move_rate[a] * f;
+            if (b->speed > move_top[a]) b->speed = move_top[a];
+            step = b->speed * b->speed;
         } else {
-            float side = b->yaw + (b->side ? -1.5707963f : 1.5707963f);
-            if (d < 200.0f) { b->speed *= 0.98f; step = b->speed * b->speed * f; }
-            b->pos[0] += sinf(side) * step; b->pos[2] += cosf(side) * step;
-            if (keep > 0.0f && room > 0.0f) { float k = room < step ? room : step; b->pos[0] += sinf(b->yaw) * k; b->pos[2] += cosf(b->yaw) * k; }
+            b->speed *= powf(0.98f, f);
+            step = a <= 3 ? b->speed * b->speed : b->speed;
         }
-        if (b->timer > move_time[a >= 4][b->phase] || (keep > 0.0f && room <= 0.0f)) next_move(b, d, unit);
+        room = a == 6 ? keep - d : a == 4 ? 1e9f : d - keep;
+        if (room <= 0.0f) { reached = 1; step = 0.0f; }
+        else if (room < step) { reached = 1; step = room; }
+        dir = b->yaw + (b->side ? -heading[a] : heading[a]);
+        b->pos[0] += sinf(dir) * step * f; b->pos[2] += cosf(dir) * step * f;
         keep_on_stage(b);
+        if (reached && a != 4) { next_move(b, d, unit); return; }
+        if (b->step == 1 && (b->timer > move_time[a >= 4][b->phase] || (a != 4 && room <= 0.0f))) { b->step = 2; b->brake = 40.0f; }
+        else if (b->step == 2 && (b->brake -= f) < 0.0f) next_move(b, d, unit);
         return;
     }
     switch (a) {
@@ -298,22 +309,50 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
         if (b->timer > idle_frames[b->phase]) next_move(b, d, unit);
         break;
     case 7: case 8: case 9:
-        /* FUN_003b5870: out over 30 frames, moved, back over 30. */
-        if (b->step == 0) {
-            b->alpha = 1.0f - b->timer / 30.0f;
-            if (b->timer >= 30.0f) {
+        /* FUN_003b5870, by its steps (+6): 0-1 30 frames on her materials (+0x9c / +0xa0 0 to 128: not decoded, so
+         * not shown), 2 her alpha (+0x5161) down over 30, 3 placed (FUN_003ba790) and turned to him, 4-5 15 frames
+         * away, 6 her alpha back over 30, 7 the materials back over 30, then the next move. */
+        b->wait -= f;
+        switch (b->step) {
+        case 0: b->step = 1; b->wait = 30.0f; break;
+        case 1: if (b->wait < 0.0f) { b->step = 2; b->wait = 30.0f; } break;
+        case 2:
+            b->alpha = b->wait > 0.0f ? b->wait / 30.0f : 0.0f;
+            if (b->wait < 0.0f) b->step = 3;
+            break;
+        case 3:
+            if (a == 9) {
+                /* Moves 9, 14 and 22: to an end of the room, on its stage, away from him. */
+                if (pz > 2500.0f) { b->pos[0] = 2500.0f; b->pos[1] = 300.0f; b->pos[2] = 1200.0f; }
+                else { b->pos[0] = 2500.0f; b->pos[1] = 178.0f; b->pos[2] = 3800.0f; }
+            } else {
+                /* 400 (7) or 1000 (8) cm beyond him, on the line from the room's middle (2500, 2500); the floor
+                 * under 400 up. [The game stops her short of a wall by a ray from where she was; here she keeps to
+                 * the stage.] */
                 float cx = px - 2500.0f, cz = pz - 2500.0f, l = sqrtf(cx * cx + cz * cz), r = a == 8 ? 1000.0f : 400.0f;
                 if (l < 1.0f) { cx = 0.0f; cz = 1.0f; l = 1.0f; }
-                if (a == 9) { b->pos[0] = b->home[0]; b->pos[2] = b->home[2]; }
-                else { b->pos[0] = px + cx / l * r; b->pos[2] = pz + cz / l * r; }
+                b->pos[0] = px + cx / l * r; b->pos[2] = pz + cz / l * r;
+                b->pos[1] = 400.0f;
                 keep_on_stage(b);
-                turn_to(b, px, pz);
-                b->hidden = 1; b->step = 1; b->timer = 0.0f;
             }
-        } else {
-            b->hidden = 0;
-            b->alpha = b->timer / 30.0f;
-            if (b->timer >= 30.0f) { b->alpha = 1.0f; next_move(b, d, unit); }
+            b->placed = 1;
+            turn_to(b, px, pz);
+            b->hidden = 1; b->step = 4;
+            break;
+        case 4: b->step = 5; b->wait = 15.0f; break;
+        case 5: if (b->wait < 0.0f) { b->step = 6; b->wait = 30.0f; b->hidden = 0; } break;
+        case 6:
+            b->alpha = b->wait > 0.0f ? 1.0f - b->wait / 30.0f : 1.0f;
+            if (b->wait < 0.0f) { b->step = 7; b->wait = 30.0f; b->alpha = 1.0f; }
+            break;
+        default:
+            if (b->wait < 0.0f) {
+                /* Moves 14 and 22 go on to 27 and 38 (+0x4e16); the rest take the pattern's next move. */
+                if (b->move == 14) { b->pattern = -1; act(b, 27); }
+                else if (b->move == 22) { b->pattern = -1; act(b, 38); }
+                else next_move(b, d, unit);
+            }
+            break;
         }
         break;
     case 10: case 11: case 12: case 13: case 14: case 21:

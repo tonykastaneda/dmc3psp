@@ -145,6 +145,7 @@ typedef struct {
     ClothJoint *cloth;
     unsigned char cloth_ready;
     float cloth_frames;
+    float veil;                     /* 0 opaque; above, drawn blended with alpha 1 - veil (Nevan's fades) */
 } Enemy;
 
 static float body_radius(const Enemy *a) { return a->kind == ENEMY_VANGUARD ? 50.0f : ENEMY_RADIUS; }
@@ -518,6 +519,7 @@ static void spawn_one(int kind, float x, float z) {
     e->hidden = 0;
     e->cloth_ready = 0;
     e->cloth_frames = 0.0f;
+    e->veil = 0.0f;
     e->active = 1;
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
@@ -2509,7 +2511,7 @@ static void update_pose(float elapsed, float interval, int index, int count) {
 }
 
 static void draw_one(void) {
-    int i, bound = -1;
+    int i, bound = -1, translucent, blend_was = 0;
     if (e->hidden) return;
     const EnemyModel *m = &enemy_models[e->kind];
     const EnemyTextureSet *set = &enemy_texture_sets[m->texture_set];
@@ -2531,6 +2533,14 @@ static void draw_one(void) {
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     if (e->kind == ENEMY_AGNI) sceGuColor(0xff8090ffu);        /* Agni: red */
     else if (e->kind == ENEMY_RUDRA) sceGuColor(0xffffa080u);  /* Rudra: blue */
+    translucent = e->veil > 0.001f;
+    if (translucent) {
+        float a = 1.0f - (e->veil > 1.0f ? 1.0f : e->veil);
+        blend_was = sceGuGetStatus(GU_BLEND);
+        sceGuEnable(GU_BLEND);
+        sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+        sceGuColor(((unsigned int)(a * 255.0f) << 24) | 0x00ffffffu);
+    }
     if (e->kind == ENEMY_GOYLE && (e->action == 15 || e->action == 16 || e->action == 17 || e->action == 19) && e->plan != P_DEATH) {
         /* Stone: grey. */
         sceGuDisable(GU_TEXTURE_2D);
@@ -2574,6 +2584,10 @@ static void draw_one(void) {
         sceGuTexFlush();
         sceGumDrawArray(GU_TRIANGLES, VTYPE, m->weapon_index_count, weapon_indices[e->kind], weapon_vertices[e->kind]);
         sceGumPopMatrix();
+    }
+    if (translucent) {
+        sceGuColor(0xffffffffu);
+        if (!blend_was) sceGuDisable(GU_BLEND);
     }
 }
 
@@ -4616,10 +4630,15 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
         if (b->action != before) giga_note("nevan", b->action, b->pos[0] * 10000.0f + b->pos[2]);
     }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
-    if (floor_under(e->pos[0], e->floor_y + 300.0f, e->pos[2], &g)) e->floor_y = g;
+    if (b->placed) {
+        /* A teleport: the floor under where it put her (FUN_003ba790), or that height itself. */
+        e->floor_y = floor_under(e->pos[0], b->pos[1] + 1.0f, e->pos[2], &g) ? g : b->pos[1];
+        b->placed = 0;
+    } else if (floor_under(e->pos[0], e->floor_y + 300.0f, e->pos[2], &g)) e->floor_y = g;
     e->pos[1] = e->floor_y;   /* her own motions carry her height (the stand-in's 140 cm lift is gone) */
     b->pos[1] = e->pos[1];
-    e->hidden = (unsigned char)(b->hidden || b->alpha < 0.35f);   /* her fades (FUN_003b5870's alpha, no blend here) */
+    e->hidden = (unsigned char)b->hidden;
+    e->veil = 1.0f - b->alpha;   /* her fades (FUN_003b5870's +0x5161), blended */
     if (b->restart || nevan_motion_id[b->want] != e->motion) { nevan_play(b->want, b->restart); b->restart = 0; }
     if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }
     nevan_draw_fx(b);
