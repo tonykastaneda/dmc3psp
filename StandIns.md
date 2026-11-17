@@ -52,10 +52,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Soul Eater**: Dante is held from its bite and struggles free (above), but isn't lifted or turned with it, and his struggle's count isn't reset as the hold starts; the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
   dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
   `enemy.c` soul_*.
-- **Jester**: his later encounters run (448 in Mission 12, 449 in Mission 17, with their health), but his second set (0x79 to the middle,
-  +0x481d, the 5-way pick with 0x7f / 0x80 and the float 0x7b) never runs; his idle actions (0x64, the walks) are the
-  stand-in's; the throws are motes; a bullet's stun value 8 [estimate]; the arena clamp is the stand-in's.
-  `enemy.c` ~3428-3650, `jester.c`, PortJobs.
+- **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
+  clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
+  shown, his idle actions (0x64, the walks) are the stand-in's, the throws are motes, a bullet's stun value 8
+  [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit
   records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300

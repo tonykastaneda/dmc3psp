@@ -149,6 +149,9 @@ typedef struct {
     float ar_health;                /* Agni & Rudra: 7000 each; the Jester: 5000 */
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
     unsigned char encounter;        /* the Jester: which of his three fights (+0x481e, the spawn record's op 8) */
+    unsigned char j_second, j_pending, j_up;   /* the Jester's second set (+0x481d), its threshold crossed (+0x4d30),
+                                                  up off the floor (+0x4818) */
+    unsigned char j_hops; float j_g;   /* the Jester's hops left (+0x4d18) and their gravity (+0x4810) */
     /* Its parts' chains (Nevan's hair and dress): each extra bone's state, whether they hang yet, and the 60 fps
      * frames of game time not stepped yet. */
     ClothJoint *cloth;
@@ -3468,12 +3471,18 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
 #define JESTER_STUN_FRAMES 500.0f   /* the stun's length (0x5e2ed0) */
 #define JESTER_ARENA 1400.0f   /* how far from the arena's centre he may go (its floor runs to 1550) */
 enum { J_IDLE, J_WALK, J_CANE, J_CANE2, J_BOMB, J_VANISH, J_APPEAR, J_TAUNT, J_FLINCH, J_STUN, J_LAUNCHED, J_DEATH,
-       J_ATK_TP, J_ATK0, J_ATK1, J_ATK2 };
-static int jester_last_attack = -1, jester_last_throw = -1;
+       J_ATK_TP, J_ATK0, J_ATK1, J_ATK2,
+       /* His second set (+0x481d): 0x79 up out of the middle (states 0x32-0x34), 0x7b the fall (0x35), 0x7f the charge
+        * (0x3e-0x40), 0x80 the hops (0x41-0x43), and their recovery. */
+       J_RISE, J_FALL, J_CHARGE, J_HOPS, J_RECOVER };
+static int jester_last_attack = -1, jester_last_throw = -1, jester_last_five = -1;
+static int ar_force;   /* tests (defined with Agni & Rudra's) */
+#define JESTER_FLOOR 492.0f
 /* jsNN, in tools/prepare_skinned_model.py's order: [3] 0-2, [4] 3-20, [5] 21-29, [6] 30-33, [19] 34-40. */
 /* The flinch (js06), the stun (js10) and the blade's vanish (js12) are the reactions' own (0x370 calls in
  * FUN_00535470, FUN_00535e60, FUN_00536110). */
-static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 12, 26, 31, 6, 10, 4, 16, 32, 33, 30, 31};
+static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 12, 26, 31, 6, 10, 4, 16, 32, 33, 30, 31,
+                                                  25, 1, 1, 29, 3};   /* FUN_0053bd90's 0x19, 1, 1, 0x1d, 3 */
 static int jester_motion[sizeof(jester_motion_index)];
 
 static int jester_init(void) {
@@ -3516,11 +3525,32 @@ static void jester_spawn(void) {
     e->goyle_stone = 0.0f;   /* his stun gauge */
     e->health = 1;
     e->encounter = 0;   /* his first unless the spawn record says (enemy_set_spawn_param) */
+    e->j_second = e->j_pending = e->j_up = 0;
     e->ar_health = jester_max_health(0);
     e->wake = 0.0f;
     jester_projectiles_reset(&jester_world);
     jester_state(J_TAUNT);
     e->fade = 0.0f;
+}
+
+/* His sphere in the second set (00548fb0: 160 cm (0x5e3238), 150 up), its record's damage on Dante, as a knock-down
+ * (kind 3). 1 if it hit. */
+static int jester_sphere(float px, float py, float pz, float damage) {
+    float dx = px - e->pos[0], dy = py + 100.0f - (e->pos[1] + 150.0f), dz = pz - e->pos[2];
+    if (!attacks_on || dx * dx + dy * dy + dz * dz > (160.0f + DANTE_RADIUS) * (160.0f + DANTE_RADIUS)) return 0;
+    land_attack(1);
+    landed_x = e->pos[0]; landed_z = e->pos[2]; landed_damage = damage;
+    return 1;
+}
+
+/* One of 0x80's hops (state 0x42): T = 45 / 2 frames (0x5e3064 + 0x5e3068 x a random, halved), H = 500 (0x5e306c);
+ * up at 2H / T, gravity -2H / T^2, along toward Dante (at most 500 away, 0x5e3074) over 2T. */
+static void jester_hop(float px, float pz) {
+    float tt = 45.0f / 2.0f, h = 500.0f, dx = px - e->pos[0], dz = pz - e->pos[2], l = sqrtf(dx * dx + dz * dz);
+    if (l > 500.0f) { dx *= 500.0f / l; dz *= 500.0f / l; }
+    e->vel[0] = dx / (tt * 2.0f); e->vel[2] = dz / (tt * 2.0f);
+    e->vel[1] = 2.0f * h / tt; e->j_g = -2.0f * h / (tt * tt);
+    e->pos[1] = JESTER_FLOOR + 0.01f;
 }
 
 /* Between attacks: the stand-in's idling (his own idle actions, 0x64 and the walks, aren't decoded). */
@@ -3545,6 +3575,13 @@ static void jester_update(float f, float px, float py, float pz) {
         if (e->timer > 150.0f) { jester_puff(); e->active = 0; }
         return;
     }
+    if (ar_force == 0x79 && e->encounter && !e->j_second && e->action != J_RISE) {   /* tests: "arforce frame 121" */
+        ar_force = -1;
+        e->ar_health = e->encounter == 1 ? 2400.0f : 4400.0f;
+        e->j_pending = 1;
+        jester_projectiles_stop(&jester_world);
+        jester_state(J_RISE);
+    }
     jester_projectiles_update(&jester_world, f, e->pos[0], e->pos[1], e->pos[2], e->yaw, px, py, pz, attacks_on, ai_unit);
     {
         float hx, hz, damage;
@@ -3562,11 +3599,27 @@ static void jester_update(float f, float px, float py, float pz) {
         /* FUN_00534490: his idle time reaches the wait, and he picks an attack (FUN_0053e960). */
         e->wake += f;
         if (e->wake >= JESTER_ATTACK_WAIT) {
+            int five = -1;
             e->wake = 0.0f;
-            e->shoot_set = (signed char)jester_pick(&jester_last_attack, ai_unit);
-            giga_note("jester attack", e->shoot_set, e->ar_health);
-            jester_state(J_ATK_TP);
-            jester_puff();
+            if (e->j_second) {
+                /* FUN_00534490 with +0x481d: on the floor (+0x4818 clear) the fall, 0x7b; else FUN_0053ea40's
+                 * no-repeat pick of five: 0x75, 0x76, 0x77, 0x7f, 0x80. */
+                if (!e->j_up) five = 5;
+                else {
+                    five = (int)(ai_unit() * 5.0f) % 5;
+                    if (five == jester_last_five) five = (five + 1) % 5;
+                    jester_last_five = five;
+                }
+            }
+            giga_note("jester attack", five >= 0 ? 10 + five : jester_last_attack, e->ar_health);
+            if (five == 5) { jester_state(J_FALL); jester_puff(); }
+            else if (five == 3) jester_state(J_CHARGE);
+            else if (five == 4) jester_state(J_HOPS);
+            else {
+                e->shoot_set = (signed char)(five >= 0 ? five : jester_pick(&jester_last_attack, ai_unit));
+                jester_state(J_ATK_TP);
+                jester_puff();
+            }
         }
     }
     switch (e->action) {
@@ -3595,8 +3648,92 @@ static void jester_update(float f, float px, float py, float pz) {
         }
         if (e->done && e->step && e->timer >= jester_projectiles_minimum(&jester_world)) {
             jester_projectiles_stop(&jester_world);
+            e->j_up = 0;   /* his attacks end on the floor (FUN_005373c0, state 0x2e, clears +0x4818) [inferred] */
             jester_state(J_IDLE);
         }
+        break;
+    case J_RISE:
+        /* 0x79 (FUN_00539470 → state 0x32, FUN_00539540): at the arena's middle, out of sight 60 frames; then from
+         * y -220 facing Dante (js25), up 6 a frame to the floor (0x33, FUN_005397c0), and his second set is on. */
+        if (e->step == 0) {
+            e->hidden = 1;
+            if (e->timer >= 60.0f) {
+                e->hidden = 0; e->step = 1;
+                e->pos[0] = 3500.0f; e->pos[1] = -220.0f; e->pos[2] = 3500.0f;
+                e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
+                e->frame = 0.0f; e->done = 0;
+                jester_puff();
+            } else e->frame = 0.0f;
+        } else {
+            e->pos[1] += 6.0f * f;
+            if (e->pos[1] > JESTER_FLOOR) e->pos[1] = JESTER_FLOOR;
+            if (e->done) { e->j_second = 1; e->j_up = 1; e->j_pending = 0; jester_state(J_IDLE); }
+        }
+        break;
+    case J_FALL:
+        /* 0x7b (FUN_00539a40, state 0x35 FUN_00539c80): up at y 2492 over where he was for 60 frames (0x5e2fc0), then
+         * falling (1.11 a frame more, +0x4810) onto a spot 50-550 from Dante (FUN_00536540 row 1) in 60 frames;
+         * falling, his sphere (00548fb0 kind 2: 160 cm, record 7, 1000) hurts. Landed, idle (0x36). */
+        if (e->step == 0) {
+            float tx, tz;
+            jester_reappear(1, px, pz, &tx, &tz, ai_unit);
+            e->vel[0] = (tx - e->pos[0]) / 60.0f; e->vel[2] = (tz - e->pos[2]) / 60.0f; e->vel[1] = 0.0f;
+            e->pos[1] = 2492.0f;
+            e->step = 1; e->j_up = 1;
+        } else if (e->step == 1) {
+            if (e->timer >= 60.0f) e->step = 2;
+        } else {
+            e->pos[1] += e->vel[1] * f - 1.1111f * 0.5f * f * f;
+            e->vel[1] -= 1.1111f * f;
+            e->pos[0] += e->vel[0] * f; e->pos[2] += e->vel[2] * f;
+            jester_sphere(px, py, pz, 1000.0f);
+            if (e->pos[1] < JESTER_FLOOR) { e->pos[1] = JESTER_FLOOR; jester_puff(); jester_state(J_IDLE); }
+        }
+        break;
+    case J_CHARGE:
+        /* 0x7f (FUN_0053a550; states 0x3e-0x40): 120 frames (0x5e3020) turning to him 5 degrees a frame, then 300
+         * (0x5e302c) charging along his facing at 45 a frame (0x5e3024), turned back toward the middle within 35
+         * degrees at random (0x5e3028) at the arena's edge (+0x4d1d) [the edge as the port's arena clamp]; his
+         * sphere (kind 1: 160 cm, record 6, 1000) is live, resting 30 frames after a hit. Then 60 frames (js03). */
+        if (e->step == 0) {
+            goyle_turn_to(px, pz, 5.0f * PI / 180.0f, f);
+            if (e->timer >= 120.0f) { e->step = 1; e->timer = 0.0f; e->vel[0] = sinf(e->yaw) * 45.0f; e->vel[2] = cosf(e->yaw) * 45.0f; e->vel[1] = 0.0f; }
+        } else {
+            float ox = e->pos[0] - 3500.0f, oz = e->pos[2] - 3500.0f;
+            e->pos[0] += e->vel[0] * f; e->pos[2] += e->vel[2] * f;
+            if (fabsf(ox) > JESTER_ARENA - 50.0f || fabsf(oz) > JESTER_ARENA - 50.0f) {
+                if (e->vel[0] * ox + e->vel[2] * oz > 0.0f) {
+                    float a = atan2f(-ox, -oz) + (ai_unit() * 2.0f - 1.0f) * 35.0f * PI / 180.0f;
+                    e->vel[0] = sinf(a) * 45.0f; e->vel[2] = cosf(a) * 45.0f;
+                }
+            }
+            e->yaw = atan2f(e->vel[0], e->vel[2]);
+            if (e->vel[1] > 0.0f) e->vel[1] -= f;   /* resting after a hit */
+            else if (jester_sphere(px, py, pz, 1000.0f)) e->vel[1] = 30.0f;
+            if (e->timer >= 300.0f) jester_state(J_RECOVER);
+        }
+        break;
+    case J_HOPS:
+        /* 0x80 (FUN_0053afb0; states 0x41-0x43): 120 frames (0x5e30c0) spinning 10 degrees a frame (js29), then 5 hops
+         * (0x5e3060, rank 0) at Dante: each 45 frames (0x5e3064), 500 high (0x5e306c), at most 500 along
+         * (0x5e3074); falling, his sphere (kind 2, record 7, 1000) is live. Then 60 frames. */
+        e->yaw += 10.0f * PI / 180.0f * f;
+        if (e->step == 0) {
+            if (e->timer >= 120.0f) { e->step = 1; e->j_hops = 5; jester_hop(px, pz); }
+        } else {
+            e->pos[1] += e->vel[1] * f + e->j_g * 0.5f * f * f;
+            e->vel[1] += e->j_g * f;
+            e->pos[0] += e->vel[0] * f; e->pos[2] += e->vel[2] * f;
+            if (e->vel[1] < 0.0f) jester_sphere(px, py, pz, 1000.0f);
+            if (e->pos[1] < JESTER_FLOOR) {
+                e->pos[1] = JESTER_FLOOR;
+                jester_puff();
+                if (--e->j_hops > 0) jester_hop(px, pz); else jester_state(J_RECOVER);
+            }
+        }
+        break;
+    case J_RECOVER:
+        if (e->timer >= 60.0f || e->done) jester_state(J_IDLE);
         break;
     case J_IDLE:
         goyle_turn_to(px, pz, 0.08f, f);
@@ -3672,7 +3809,7 @@ static void jester_update(float f, float px, float py, float pz) {
     if (e->pos[2] > 3500.0f + JESTER_ARENA) e->pos[2] = 3500.0f + JESTER_ARENA;
     if (!floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) g = 492.0f;
     e->floor_y = g;
-    if (e->action != J_VANISH) e->pos[1] = e->floor_y;
+    if (e->action != J_VANISH && e->action != J_RISE && e->action != J_FALL && e->action != J_HOPS) e->pos[1] = e->floor_y;
 }
 
 /* FUN_0053d0d0 (his hits), FUN_0053eb20 (which of the parameter rows 0x5e3a60 the hit meets) and the reactions
@@ -3681,11 +3818,11 @@ static void jester_update(float f, float px, float py, float pz) {
  * rank 0) and 1.75 times the shot's own value a bullet (0x5e2f10; that value, +0x4d54, isn't read: the port's
  * bullet's 8 [estimate]); past 249 (0x5e2f30) his next reaction is the stun, 500 frames (0x5e2ed0), the meter
  * emptied. During his attacks (actions 0x15-0x2c, 0x3e-0x43) hits don't stop him. */
-static int jester_attacking(void) { return e->action == J_ATK_TP || (e->action >= J_ATK0 && e->action <= J_ATK2); }
+static int jester_attacking(void) { return e->action == J_ATK_TP || (e->action >= J_ATK0 && e->action <= J_ATK2) || e->action >= J_RISE; }
 static void jester_hit(HitKind kind) {
     float at[3] = {e->pos[0], e->pos[1] + 110.0f, e->pos[2]};
     int stunned = e->action == J_STUN, gun = kind == HIT_PISTOL;
-    if (e->plan == P_DEATH || e->action == J_VANISH) return;
+    if (e->plan == P_DEATH || e->action == J_VANISH || e->hidden) return;
     ++hits;
     fx_hit_spark(at);
     if (mortal) {
@@ -3702,7 +3839,11 @@ static void jester_hit(HitKind kind) {
             return;
         }
     }
+    /* FUN_00534490: in a later encounter, below its threshold (0x5e2f64: 2500, 4500), +0x4d30; his next reaction is
+     * then 0x79 (FUN_0053bfc0), up out of the middle into his second set. */
+    if (e->encounter && !e->j_second && e->ar_health < (e->encounter == 1 ? 2500.0f : 4500.0f)) e->j_pending = 1;
     if (stunned || jester_attacking()) return;
+    if (e->j_pending) { jester_puff(); jester_state(J_RISE); return; }
     e->goyle_stone += gun ? 1.75f * 8.0f : 50.0f;
     if (e->goyle_stone > JESTER_STUN_AT) { e->goyle_stone = 0.0f; jester_state(J_STUN); return; }
     if (gun) { e->vel[0] = 3.0f; jester_state(J_FLINCH); return; }   /* 0x67-0x6a: js06, on the spot (row 0) */

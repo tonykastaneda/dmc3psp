@@ -798,7 +798,21 @@ flinch js05, stun js14, launched js04, death js16.
   (0x67-0x6a, `FUN_00535470`, js06, row 0) and a blade sends him off (0x6d, `FUN_00536110`, js12, row 1) unless his
   attack is due (idle time ≥ 500). Hits during his attacks (actions 0x15-0x2c, 0x3e-0x43) don't stop him. With
   +0x4d30 set (a health threshold) a hit sends him to the arena's middle (3500, 500, 3500) and into his second set
-  of moves (+0x481d, `FUN_00539470`, action 0x79): not ported.
+  of moves (+0x481d, `FUN_00539470`, action 0x79), below.
+- **The second set** (encounters 1 and 2, below 2500 / 4500, `0x5e2f64`): 0x79 (state 0x32 `00539540`, 0x33
+  `005397c0`): out of sight at the middle 60 frames, then from y -220 facing Dante (js25) up 6 a frame to the floor.
+  His attacks then (`00534490`): on the floor (+0x4818 clear: landings clear it, `005373c0` / `0053a160`) 0x7b, else
+  `0053ea40`'s no-repeat pick of five, 0x75 / 0x76 / 0x77 / 0x7f / 0x80. **0x7b** (`00539a40`, state 0x35 `00539c80`):
+  up at y 2492 for 60 frames (`0x5e2fc0`), then falling (gravity 1.11, +0x4810) onto a spot from row 1 (or the middle,
+  by +0x4dc4) in 60 frames. **0x7f** (`0053a550`, 0x3e-0x40 `0053a670` / `0053a9d0` / `0053ae90`): 120 frames
+  turning 5° a frame, 300 charging at 45 along his facing (`0x5e3020` row: 120, 45, 35, 300), back toward the middle
+  ±35° at random at the edge (+0x4d1d), 60 to recover (js03). **0x80** (`0053afb0`, 0x41-0x43): 120 frames spinning 10°
+  a frame (js29, `0x5e30c0`), then 5 hops (`0x5e3060`: count 5, 45 frames, 500 high, at most 500 toward him), 60 to
+  recover. In each, a sphere rides him (`00548fb0`, 150 up, 160 cm `0x5e3238`): kind 1 in the charge (record 6,
+  1000, live, resting 30 frames after a hit), kind 2 falling in 0x7b / 0x80 (record 7, 1000), both knock-downs.
+  **In the port**: all of it (`enemy.c` J_RISE / J_FALL / J_CHARGE / J_HOPS); stand-ins: the charge's edge is the
+  port's arena clamp, his attacks clear +0x4818 as they end [inferred from `005373c0`], the effects (0x3cb / 0x3cc trails,
+  0x3f3) and the room flag 0x79 sets aren't shown, the 0x7b / 0x80 hop motions are js01 / js29 as `0053bd90` names them.
 - **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
   each throw starts the emitter its no-repeat pick names (`jester_projectiles_begin`, AI rank 0), the attack holds
   its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;
