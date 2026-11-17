@@ -8,7 +8,7 @@
 - [ ] Arachne: no web shot or spiderlings (where they come from: docs/ENEMY_SPECS.md H); its health, 1400, is the game's
 - [ ] Beowulf: his scripts, attacks, damage, choices, phases, walk / run / turn rules, stagger's end and the volley's counts and wind are the game's (docs/ENEMY_SPECS.md I); and so is his attack gate (0x5b8900); his hit reactions (stagger 8, 5, 6, 10) are too; not yet: the feathers' flight
 - [ ] Lady: her gun modes, ranges, turn rate, magazine, bursts, motions, damage, waypoint rings, walk, mode 0x28, mode 0x1a, specials 0x1b / 0x1c, line of sight, grapple escape (0x1d: the rise, the ledges or a waypoint, the drop) and ledge mode (0x1e: her shots, the hop down) are the game's (docs/ENEMY_SPECS.md J); not yet: the wire's look and direction, the ledges in the collision (her special gate is the game's, 0x5cc100)
-- [ ] Arkham: one fight runs both rounds, and Vergil doesn't join
+- [ ] Arkham: one fight runs both rounds, and Vergil doesn't join (decoded: the script's op 0x7e makes him a second player, Dante's partner, docs/ARKHAM_SPEC.md 1; not ported: a second player with Vergil's moveset and the partner AI)
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform
 - [x] Mission 16: 146's shelled sphere and 109's pair swing, lower on their switches, wear and knock as decoded; stand-ins: plain spheres, gravity and damage estimates, and the items aren't held back by them yet (finishing them wasn't shown in PPSSPP)
 - [x] Mission 19: 405's mirrors (CStageSetMirror) run: one lit at a time, 420 frames each, 1000 health, every blow throwing the enemies, two broken killing the Abyss bound to them (their op 8 (1, 1)); stand-ins: a glow for the mirrors' effect, the port's hit values

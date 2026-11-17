@@ -16,6 +16,12 @@ value under 700).
   5 textures; [12] a Legion, 8 bones (cloth `em033_00.clt` in [13]); [15] a 7-bone piece (`em033_01.clt`).
 - **Health 18000** (`DAT_005c1e6c`, kept at `+0x1c24`). The room's first group ends at 9000 (demo 53: Vergil joins);
   group 1 is Arkham again, set to **9000** (`0x460ca000`).
+- **The second round** (EventTbl19 room 421, counter 1, after demo 53): spawn_group 1 (Arkham, his spawn record's op 8
+  (0, 1): the round's 9000), then **op 0x7e [0]** (`FUN_0020be20` → `FUN_0025e540`): a second player object is made
+  (`FUN_00204210(1, 1, 1)`, kept at Dante +0x3d44 and the game's +0x10), placed by Dante, both flagged partners
+  (+0x3c7b), Dante's mode +0x28aa = 3: **Vergil joins as a player character** (the partner a second pad drives,
+  or the game's partner AI), not as an enemy class. **op 0x78 [23]** (`FUN_00211150`) shows hint 23 once (bit 23
+  of the save's +0x70). Porting him needs a second player with Vergil's moveset and the partner's AI (not read).
 - The phase byte `+0x15d1` follows his health (`3d4540`): over 9000 → 0, over 3000 → 1, else 2.
 
 ## 2. The states (`+0x1424`, `3d2220`'s switch; `3d3760` sets one and starts its script)
