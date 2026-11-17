@@ -427,27 +427,44 @@ def main() -> None:
     parser.add_argument("iso", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--slot", type=int, default=STAGE_SLOT, help="GDATA slot of the stage; its data is the next one")
+    # A cutscene's stage (tools/prepare_demo.py): a bare SCM and its texture set, no collision; the play area is
+    # where its cameras go (x0 y0 z0 x1 y1 z1).
+    parser.add_argument("--scm", type=Path, help="a demo's stage .scm instead of a GDATA slot")
+    parser.add_argument("--ptx", type=Path, help="its texture set (.ptx)")
+    parser.add_argument("--play", type=float, nargs=6, help="the demo's play area")
     args = parser.parse_args()
 
-    with Iso9660(args.iso) as iso:
-        afs = AfsArchive(iso, "GDATA.AFS")
-        read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
-        stage = pac_entries(read(args.slot))
-        stage_data = pac_entries(read(args.slot + 1))
-    name = stage[0][:16].split(b"\0")[0].decode("ascii", "replace")
-    textures = decode_textures(stage[1])
-    hits = parse_hits(stage[3])
-    scm = choose_scm(stage[2], hits)
+    if args.scm:
+        name = args.scm.stem
+        stage = [b"", args.ptx.read_bytes(), args.scm.read_bytes()]
+        stage_data = [b""]
+        textures = decode_textures(stage[1])
+        hits = []
+        scm = parse_scm(stage[2], True, transform=True)
+        play = (list(args.play[:3]), list(args.play[3:]))
+        play = ([v - PLAY_MARGIN for v in play[0]], [v + PLAY_MARGIN for v in play[1]])
+        sx, sy, sz = ((play[0][k] + play[1][k]) * 0.5 for k in range(3))
+        syaw = 0.0
+    else:
+        with Iso9660(args.iso) as iso:
+            afs = AfsArchive(iso, "GDATA.AFS")
+            read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
+            stage = pac_entries(read(args.slot))
+            stage_data = pac_entries(read(args.slot + 1))
+        name = stage[0][:16].split(b"\0")[0].decode("ascii", "replace")
+        textures = decode_textures(stage[1])
+        hits = parse_hits(stage[3])
+        scm = choose_scm(stage[2], hits)
+        # Where Dante can be: the collision's bounds, a little enlarged.
+        play = ([min(t[k + 3 * j] for t in hits for j in range(3)) - PLAY_MARGIN for k in range(3)],
+                [max(t[k + 3 * j] for t in hits for j in range(3)) + PLAY_MARGIN for k in range(3)])
+
+        # Player start: first POS record (x, y, z at +4, yaw in degrees at +16).
+        pos = next(c for c in stage_data if c[:4] == b"POS\0")
+        sx, sy, sz = struct.unpack_from("<3f", pos, 0x14)
+        syaw = struct.unpack_from("<f", pos, 0x20)[0]
     hit_walls = [t for t in hits if abs(t[10]) < 0.5]
     hit_floors = [t for t in hits if t[10] >= 0.5]
-    # Where Dante can be: the collision's bounds, a little enlarged.
-    play = ([min(t[k + 3 * j] for t in hits for j in range(3)) - PLAY_MARGIN for k in range(3)],
-            [max(t[k + 3 * j] for t in hits for j in range(3)) + PLAY_MARGIN for k in range(3)])
-
-    # Player start: first POS record (x, y, z at +4, yaw in degrees at +16).
-    pos = next(c for c in stage_data if c[:4] == b"POS\0")
-    sx, sy, sz = struct.unpack_from("<3f", pos, 0x14)
-    syaw = struct.unpack_from("<f", pos, 0x20)[0]
 
     # Gather triangles per (texture) batch in sub-mesh order.
     batches = []  # (texture, alpha, tris)
@@ -498,7 +515,7 @@ def main() -> None:
         stage_data[0].decode("latin1").replace("\r", ""), re.M)]
     # Rooms whose open edges he's meant to drop from though no floor shows right under them: 114 Heavenrise
     # Chamber's balconies over its shaft (the walkthrough: "drop down to the ground level").
-    edge_walls = [] if args.slot in NO_EDGE_WALL_SLOTS else open_edge_walls(hit_floors, hit_walls, floor, door_boxes)
+    edge_walls = [] if args.scm or args.slot in NO_EDGE_WALL_SLOTS else open_edge_walls(hit_floors, hit_walls, floor, door_boxes)
     hit_walls += edge_walls
     if not floor and hit_floors:
         floor = [t[:9] for t in hit_floors]
@@ -521,7 +538,7 @@ def main() -> None:
     # The room's props (tools/gimmicks.py): breakables and static pieces, one batch per (prop, texture), each
     # breakable's tagged with its number so the runtime can stop drawing it once it's broken. Not floor.
     import gimmicks
-    game_text = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1")
+    game_text = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1") if not args.scm else ""
     # Keyed by the set's place in the room's list: each call parses the text afresh.
     numbers = {s["index"]: n for n, s, *_ in gimmicks.breakables(game_text, stage[5])} if len(stage) > 5 else {}
     for index, tag in gimmicks.story_tags(game_text).items():

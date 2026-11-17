@@ -1,0 +1,12 @@
+#ifndef DMC3PSP_TESTROOM_DEMO_H
+#define DMC3PSP_TESTROOM_DEMO_H
+/* The game's real-time cutscenes (demo.c, docs/CUTSCENES.md). */
+#include "player.h"
+
+int demo_start(int demo, const char *dir);   /* loads DEMO_nnn.BIN and DSTG_nnn.BIN from dir; 1 on success */
+void demo_stop(void);
+int demo_active(void);
+int demo_id(void);
+float demo_frame(void);                       /* the demo's clock, 60 a second */
+int demo_update(float dt, FollowCamera *camera);   /* 1 while it plays: the camera is the demo's */
+#endif

@@ -49,6 +49,7 @@ int testroom_frame;
 #include "arkham_boss.h"
 #include "mission19.h"
 #include "wagon.h"
+#include "demo.h"
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
@@ -1272,7 +1273,8 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     {
         /* The game's vertical FOV for this camera (camera.c; 55 degrees on the follow camera by default). */
         float fov = camera->fov > 0.05f ? camera->fov * 57.29578f : 60.0f;
-        if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
+        if (demo_active()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 50.0f, 60000.0f);   /* a demo's stage is city-sized */
+        else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
         else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
     }
     sceGumMatrixMode(GU_VIEW);
@@ -1287,6 +1289,13 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     }
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
+    if (demo_active()) {   /* a cutscene: its stage and its own cast only (demo.c) */
+        sceGuDisable(GU_TEXTURE_2D);
+        sceGuDisable(GU_LIGHTING);
+        sceGuDisable(GU_ALPHA_TEST);
+        if (stage_loaded()) stage_draw();
+        goto scene_done;
+    }
 
     /* Floor and grid don't write depth: no z-fighting between them, and
      * Dante (drawn after) always wins over the floor plane. */
@@ -1436,7 +1445,8 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         }
         draw_lock_on_reticle(player, camera);
     }
-    draw_hud(hud);
+scene_done:
+    if (!demo_active()) draw_hud(hud);
     if (player->weapon_wheel) draw_weapon_wheel(player);
     if (debug_open) draw_debug_menu(anim.viewer);
     if (pause_active) pause_draw();
@@ -1983,6 +1993,7 @@ static int cmp_realdt;   /* "realdt 1": the real clock, as in play, not a fixed 
 static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": for a test, the mission begins in that room */
 static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
 static int cmp_mirror_at, cmp_mirror_k;
+static int cmp_demo = -1;   /* tests: a demo to play at frame 2 */
 static int cmp_item[8][2], cmp_item_count, cmp_trim_at, cmp_trim_keep, cmp_force_at, cmp_force_state;      /* "item id state": for a test, a key item starts got (1) or used (2) */
 static void cmp_load(void) {
     char path[320], line[64];
@@ -2038,6 +2049,7 @@ static void cmp_load(void) {
             if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
         }
         else if (strncmp(line, "mirrorlit ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_mirror_at, &cmp_mirror_k);   /* "mirrorlit frame k": 405's mirror k lit */
+        else if (strncmp(line, "demo ", 5) == 0) cmp_demo = atoi(line + 5);   /* "demo n": play demo n from the start (demo.c) */
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
@@ -4522,7 +4534,19 @@ int main(int argc, char *argv[]) {
             focus_coat_camera(&player, &camera, frames);
             hud[0] = hud[1] = hud[2] = hud[3] = NULL;
         }
+        if (cmp_demo >= 0 && frames == 2) {
+            char dir[256];
+            path_in_game_dir(dir, sizeof dir, "");
+            if (dir[0] && dir[strlen(dir) - 1] == '/') dir[strlen(dir) - 1] = 0;
+            enemy_test_note("demo start", demo_start(cmp_demo, dir), (float)cmp_demo);
+        }
+        if (demo_active()) {
+            FollowCamera shown = camera;
+            if (demo_update(dt, &shown)) { render_scene(&player, &shown, hud, bones_now); goto frame_drawn; }
+            enemy_test_note("demo end", demo_id(), demo_frame());
+        }
         render_scene(&player, &camera, hud, bones_now);
+        frame_drawn:
 
         frame_us = sceKernelGetSystemTimeLow() - frame_start;
         last_frame_us = frame_us;

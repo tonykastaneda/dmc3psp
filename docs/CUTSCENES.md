@@ -14,7 +14,7 @@ most are **real-time**: the engine plays models, motions and cameras from a time
   file, [1] a linked id (-1 for none; read by `FUN_002e41b0`), [2]-[5] the four language files (`0x6c37d3` picks one).
   A file id is `index << 16 | archive`; archive 0 is GDATA.AFS (`0FLIST.DIR`: GData, MData1, MData2, SData).
 - **58 real-time demos**: 0-3, 5-13, 15-17, 20, 22-37, 39, 41-53, 55-60, 114, 123, 220, 326, 335 (`--list`). Demo 5
-  is Mission 1's opening (GDATA 1042, 6305 frames, 20 camera cuts); 53 Vergil joining Dante against Arkham (GDATA
+  opens Mission 3 (the tower rising; its files say m03_s00) (GDATA 1042, 6305 frames, 20 camera cuts); 53 Vergil joining Dante against Arkham (GDATA
   1386, 4838 frames, 39 cuts).
 
 ## The package (a PAC of 13)
@@ -60,6 +60,16 @@ file is a list of clips, `# Clip` ... `# End`, every clip with `SetFrame` (its s
   58.5 degrees, channel 13 6.0. The keyed records from +0x58 aren't decoded yet (`FUN_001fa410` / `FUN_001fae10`;
   they look like MOT's curve records). `FUN_00211a10(step)` advances the frame (looping or holding at the end).
 - **Hide tracks** (`.hid`): `HID\0` after a 0x90 lead, then 1.0 / 10.0 pairs and a run of per-frame bytes [not decoded].
+
+## In the port
+
+`tools/prepare_demo.py <iso> <id>` bakes DEMO_nnn.BIN (the camera per demo frame: each camera clip's `.cam` evaluated
+at (frame - SetFrame) / ClipScale + SkipFrame from its start, MOT's Hermite with per-frame slopes, a key with bit 15
+clear linear to the next) and DSTG_nnn.BIN (slot 00's `.scm` and texture set through `tools/prepare_stage.py --scm --ptx`,
+its play area the cameras' reach). `psp/testroom/demo.c` plays it at 60 frames a second: the stage and the camera
+(field of view as the port's vertical one [inferred]). Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
+arena through its cuts. Not yet: the cast, the sky, effects, messages, fades, sound, and starting demos from the event
+scripts.
 
 ## Porting plan
 
