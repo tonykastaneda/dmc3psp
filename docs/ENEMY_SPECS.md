@@ -1124,6 +1124,11 @@ bank (groups 0, 1, 3 used), [11] / [12] caps and shapes. Code: new `002d7e60`, c
   charge, with Dante behind and under 3 strides, `0x5b8cc4`). Idle (0) fills +0x168 at 2 / 3 / 4 a frame by phase
   (`0x5b88c8`) while the gate at +0x130 is shut.
 - **Stagger** (8, `002dbb00`): when done, `0x619670`[phase]: 0, 1, 1.
+- **His hits** (`002df8e0`, vtable +0xc4): none while in 5-7. A blade from within ±40° in front (0x1c72) staggers him
+  (8) `0x5b8ce0`[phase] % of the time (30, 20, 10); a knock-down record (kind 4) over 600 sets his blade tally (+0x38d8)
+  to its limit (100000, `0x61966c`): action 5; shots add their damage to +0x38d4 and past 1500 (`0x619668`) give 6 unless
+  in phase 2; his first shot hit gives 10 (+0x3903), later ones 50% (`0x619724`). Each hit adds 0.3 × its damage to
+  +0x168 (`0x619720`). In the port: all of it, the port's heavy / slam / launch taken as the kind-4 record [inferred].
 - **Volley** (15, `002dcf00`): event 1 lets `0x5b8650`[rank] + 1 feathers go (7), the next event 1 `0x5b8660`[rank]
   + 1 (3) (the feather actor `0040cef0`, not read); event 4 a wind pushing Dante away 4.7 a frame for 190 frames
   (gp-0x6a48, gp-0x6a40); effect 0xc1 on event 3.

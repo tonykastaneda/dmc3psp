@@ -295,7 +295,7 @@ static void lady_spawn_glue(void);
 static void lady_update_glue(float f, float px, float py, float pz);
 static void lady_hit_glue(HitKind kind);
 static void beowulf_update_glue(float f, float px, float py, float pz);
-static void beowulf_hit_glue(HitKind kind);
+static void beowulf_hit_glue(HitKind kind, float from_x, float from_z);
 static void soul_spawn_glue(void);
 static void soul_update_glue(float f, float px, float py, float pz);
 static void soul_hit_glue(HitKind kind);
@@ -1629,7 +1629,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
-    if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind); return; }
+    if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_SOUL) { ++hits; soul_hit_glue(kind); return; }
     if (e->kind == ENEMY_LADY) { ++hits; lady_hit_glue(kind); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind, from_x, from_z); return; }
@@ -5143,9 +5143,7 @@ static void bishop_hit_glue(HitKind kind, float from_x, float from_z) {
  * his motions, hit windows and damage are the game's. From idle he picks by sector (FUN_002da860, tables 0x5b8c50 by
  * phase: the first sector Dante stands in names a weighted list of actions), never the action he last took again
  * (FUN_002da7b0). His phase (+0x38d0) steps up below 73% and 47% of his health (0x619718), with a roar (action 0x16).
- * Health 10000 (0x5b84e0 +0x2c). Stand-ins: how long he idles before he picks (40 frames), when a run or a walk stops
- * (the sector it's for, or 240 frames), his turn rates, his stagger (12 heavy hits, action 8), and the feathers his
- * volley (action 15) lets go on its script's events (300 damage, record 12; their flight isn't decoded). */
+ * Health 10000 (0x5b84e0 +0x2c). His gate, movement and hit reactions are the game's (below); stand-in: the feathers' flight (300 damage, record 12). */
 #define BW_SCRIPT_OF(group, script) ((group) * 16 + (script))
 static const signed char bw_action_script[28] = {
     BW_SCRIPT_OF(0, 0), BW_SCRIPT_OF(0, 1), BW_SCRIPT_OF(0, 7), BW_SCRIPT_OF(0, 8), BW_SCRIPT_OF(0, 9),
@@ -5166,6 +5164,8 @@ static const float bw_phase_at[2] = {0.73f, 0.47f};
 #define BW_FEATHERS 12
 static struct { int on; float pos[3], vel[3], life; } bw_feathers[BW_FEATHERS];
 static int bw_phase, bw_last, bw_gauge;
+static float bw_shots;   /* his shot tally (+0x38d4) */
+static int bw_shot_once;             /* his first shot hit (+0x3903) */
 static float bw_gate;   /* his attack gate (+0x130; block 0x5b8900): opens past 300 (difficulty under 369) */
 static float bw_wind;
 #define BW_TURN_FAST (1274.0f / 65536.0f * 6.2831853f)   /* 0x619680 */
@@ -5198,7 +5198,7 @@ static void beowulf_spawn_glue(void) {
     e->motion = -1;
     if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     e->plan = P_WATCH;
-    bw_phase = 0; bw_last = -1; bw_gauge = 0; bw_gate = 0.0f;
+    bw_phase = 0; bw_last = -1; bw_gauge = 0; bw_gate = 0.0f; bw_shots = 0.0f; bw_shot_once = 0;
     memset(bw_feathers, 0, sizeof bw_feathers);
     bw_go(BW_IDLE);
     e->fade = 0.0f;
@@ -5350,7 +5350,7 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
     if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
 }
 
-static void beowulf_hit_glue(HitKind kind) {
+static void beowulf_hit_glue(HitKind kind, float from_x, float from_z) {
     float at[3] = {e->pos[0], e->pos[1] + 200.0f, e->pos[2]};
     int heavy = !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL);
     if (e->plan == P_DEATH) return;
@@ -5366,8 +5366,26 @@ static void beowulf_hit_glue(HitKind kind) {
             return;
         }
     }
-    /* He doesn't flinch (super armour); a run of heavy blows staggers him [the count is a stand-in]. */
-    if (heavy && ++bw_gauge >= 12 && (e->action <= 2 || e->action == BW_WALK)) { bw_gauge = 0; bw_go(BW_STAGGER); }
+    /* FUN_002df8e0, his hits (super armour otherwise). Not while he's in 5-7 already, nor dying:
+     * - a knock-down record (kind 4) of over 600 sets his blade tally (+0x38d8) to its limit, 100000 (0x61966c): action 5
+     *   [the port's heavy, slam and launch taken as that record];
+     * - shots add to +0x38d4 (their damage), and past 1500 (0x619668) action 6 unless he's in his last phase; his first
+     *   shot hit plays 10 (+0x3903), later ones half the time (0x619724);
+     * - a blade from within 40 degrees in front staggers him (8) 30 / 20 / 10% of the time by phase (0x5b8ce0). */
+    if (e->action >= 5 && e->action <= 7) return;
+    if (kind == HIT_PISTOL) {
+        bw_shots += 10000.0f / 240.0f;   /* a port bullet's share of his health, in his units */
+        if (bw_shots >= 1500.0f && bw_phase != 2) { bw_shots = 0.0f; bw_go(6); }
+        else if (!bw_shot_once) { bw_shot_once = 1; bw_go(10); }
+        else if (ai_unit() * 100.0f < 50.0f && e->action <= 2) bw_go(10);
+        return;
+    }
+    if (kind == HIT_HEAVY || kind == HIT_SLAM || kind == HIT_LAUNCH) { bw_go(5); return; }
+    if (e->action != BW_STAGGER) {
+        float rel = wrap_angle(atan2f(from_x - e->pos[0], from_z - e->pos[2]) - e->yaw);
+        static const float chance[3] = {30.0f, 20.0f, 10.0f};
+        if (fabsf(rel) < 0x1c72 * (2.0f * PI / 65536.0f) && ai_unit() * 100.0f < chance[bw_phase]) bw_go(BW_STAGGER);
+    }
 }
 
 /* ---- The Soul Eater (class 16, CEm016; EST 34): Missions 11 and 15. From its class's code (docs/ENEMY_SPECS.md H):

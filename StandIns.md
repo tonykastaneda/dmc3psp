@@ -66,7 +66,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
-- **Beowulf**: what sets off his stagger (12 heavy hits, a stand-in count); the feathers' flight
+- **Beowulf**: which of Dante's blows are his kind-4 records (the port's heavy, slam, launch [inferred]); the feathers' flight
   (their actor 0040cef0 isn't read); the run stops at once, not at its next stride's event; his charge (4) from the
   run isn't taken. `enemy.c` Beowulf, PortJobs.
 - **Lady**: her grapple (0x1d) and ledge mode (0x1e) are ported, but the wire isn't drawn and she rises straight up
