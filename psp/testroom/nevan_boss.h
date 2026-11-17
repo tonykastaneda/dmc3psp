@@ -22,7 +22,9 @@ typedef struct {
     float land_damage;           /* out: its damage (the attack record's) */
     int remove;                  /* out: she's gone */
     NevanBat bats[NEVAN_BATS];
-    float strike[3], strike_time;   /* a stand-in strike's spot and its fuse */
+    /* Her shells (CEm028Shl01, Shl03-Shl07): a sphere that waits its fuse, then hurts for `active` frames; follow 1: it
+     * stays on her; vel: it flies. Each hurts once. */
+    struct { int on, follow, done; float pos[3], vel[3], fuse, active, radius, damage, top; } shells[6];
 } NevanBrain;
 
 void nevan_spawn(NevanBrain *b, int health);

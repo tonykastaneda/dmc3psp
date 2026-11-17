@@ -14,10 +14,14 @@
  *   360 frames; an 80 cm sphere, attack record 0x5bc3d0: 300 damage (FUN_00418a50 / FUN_00418bf0 / FUN_00418f50).
  * - Her hits (FUN_003bb150, FUN_003bbcf0): a light one makes her reel (10 or 11), a heavy one 12 (14 if reeling
  *   from 13-15), one that throws knocks her down (21); not while teleporting or in 33 / 34.
- * Stand-ins: the other attacks' events (23-25, 29, 30, 32, 35, 38) fire on their scripts' frames, but what they make
- * (shells 0x45d720, 0x468580, 0x43df80, 0x417340, 0x4179a0, 0x4181a0, the kiss's hold) isn't decoded: a bolt that
- * falls on Dante's spot after 30 frames, or a sweep about her for 32, at the bats' 300 damage. Where move 9 takes
- * her isn't read: back to where she came in. */
+ * - Her other attacks' events make her shells (CEm028Shl01, Shl03-Shl07, hit records 0x5bc3d0 by FUN_002949c0's
+ *   index): 24 Shl06, a 200 cm ball from her hand at him, 20 a frame rising to 40 (1500); 25 Shl07 on his spot (500
+ *   [record inferred]); 29 / 38 Shl01, from her hand to the spot it marks under him (1500); 30 Shl03, 300 cm about
+ *   her for the rest of the action (800); 32 Shl04, 70 cm on his spot after 50 frames, live 30 (500); 33-35 Shl05,
+ *   the kiss, 200 cm about her lips for 5 frames (800).
+ * Stand-ins: the shells' flight and shapes beyond those numbers (Shl01's 800 / 2200 aren't placed; it strikes his spot
+ * after 30 frames, 150 cm), the kiss's hold, 23's circling bats (let out as the bats are), where move 9 takes her
+ * (back to where she came in). */
 #include <math.h>
 #include "nevan_boss.h"
 #include "fx.h"
@@ -60,7 +64,7 @@ static const float move_keep[7] = {0.0f, 300.0f, 300.0f, 900.0f, 0.0f, 300.0f, 8
 static const float move_rate[7] = {0.0f, 0.1f, 0.5f, 0.5f, 0.2f, 0.1f, 0.1f};
 static const float move_top[7] = {0.0f, 2.5f, 6.0f, 6.0f, 2.5f, 2.5f, 2.5f};
 static const unsigned char bat_count[3] = {2, 3, 4};
-#define BAT_DAMAGE 300.0f
+#define BAT_DAMAGE 1000.0f   /* record 2 (FUN_002949c0(hit, 2) in FUN_00418f50) */
 #define BAT_RADIUS 80.0f
 #define STAGE_RADIUS 1500.0f   /* how far from where she came in she may go (the room's floor) */
 
@@ -83,7 +87,7 @@ void nevan_spawn(NevanBrain *b, int health) {
     b->speed = 0.0f;
     b->alpha = 1.0f;
     b->pattern = -1;
-    b->strike_time = 0.0f;
+    for (i = 0; i < 6; ++i) b->shells[i].on = 0;
     b->home[0] = b->pos[0]; b->home[1] = b->pos[1]; b->home[2] = b->pos[2];
     for (i = 0; i < NEVAN_BATS; ++i) b->bats[i].on = 0;
     act(b, 0);
@@ -174,19 +178,83 @@ static void keep_on_stage(NevanBrain *b) {
     if (l > STAGE_RADIUS) { b->pos[0] = b->home[0] + hx / l * STAGE_RADIUS; b->pos[2] = b->home[2] + hz / l * STAGE_RADIUS; }
 }
 
-/* An attack's event (its script's frame): bats, or a stand-in strike. */
+/* Her shells (0x5bc3d0's records by FUN_002949c0's index). A sphere that waits `fuse`, then is live `active` frames. */
+static void shell(NevanBrain *b, const float at[3], float fuse, float active, float radius, float damage, int follow,
+                  float speed, float top, float px, float py, float pz) {
+    int i;
+    for (i = 0; i < 6; ++i) {
+        float d[3], l;
+        if (b->shells[i].on) continue;
+        b->shells[i].on = 1; b->shells[i].done = 0; b->shells[i].follow = follow;
+        b->shells[i].pos[0] = at[0]; b->shells[i].pos[1] = at[1]; b->shells[i].pos[2] = at[2];
+        b->shells[i].fuse = fuse; b->shells[i].active = active; b->shells[i].radius = radius; b->shells[i].damage = damage;
+        b->shells[i].top = top;
+        d[0] = px - at[0]; d[1] = py + 100.0f - at[1]; d[2] = pz - at[2];
+        l = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        if (l < 1.0f) l = 1.0f;
+        b->shells[i].vel[0] = d[0] / l * speed; b->shells[i].vel[1] = d[1] / l * speed; b->shells[i].vel[2] = d[2] / l * speed;
+        return;
+    }
+}
+
+/* An attack's event (its script's frame). */
 static void attack_event(NevanBrain *b, float px, float py, float pz, int attacks) {
+    float mine[3] = {b->pos[0], b->pos[1], b->pos[2]}, his[3] = {px, py, pz};
+    float hand[3] = {b->pos[0] + sinf(b->yaw) * 80.0f, b->pos[1] + 120.0f, b->pos[2] + cosf(b->yaw) * 80.0f};
+    (void)attacks;
     switch (b->action) {
-    case 22: case 23: release_bats(b); break;   /* 23's FUN_003ba470 also lets out bats it keeps count of [inferred] */
-    case 32: {
-        float dx = px - b->pos[0], dz = pz - b->pos[2];
-        if (attacks && dx * dx + dz * dz < 300.0f * 300.0f && fabsf(py - b->pos[1]) < 300.0f) { b->land = 2; b->land_damage = BAT_DAMAGE; }
+    case 22: release_bats(b); break;
+    case 23: release_bats(b); break;   /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him [as bats] */
+    case 24: shell(b, hand, 0.0f, 150.0f, 200.0f, 1500.0f, 0, 20.0f, 40.0f, px, py, pz); break;   /* Shl06, record 6 */
+    case 25: shell(b, his, 50.0f, 10.0f, 150.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;      /* Shl07 [record 7 inferred] */
+    case 29: case 38: shell(b, his, 30.0f, 10.0f, 150.0f, 1500.0f, 0, 0.0f, 0.0f, px, py, pz); break;   /* Shl01, record 1 */
+    case 30: shell(b, mine, 0.0f, 57.0f, 300.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz); break;      /* Shl03, record 3: to 134 */
+    case 32: shell(b, his, 50.0f, 30.0f, 70.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;       /* Shl04, record 4 */
+    case 33: case 34: case 35: {                                                                 /* Shl05, record 5: the kiss */
+        float lips[3] = {b->pos[0], b->pos[1] + 100.0f, b->pos[2]};
+        shell(b, lips, 0.0f, 5.0f, 200.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz);
         break;
     }
-    default:
-        b->strike[0] = px; b->strike[1] = py; b->strike[2] = pz;
-        b->strike_time = 30.0f;
-        break;
+    default: break;
+    }
+}
+
+static void shells_update(NevanBrain *b, float f, float px, float py, float pz, int attacks) {
+    int i;
+    for (i = 0; i < 6; ++i) {
+        float dx, dy, dz, r;
+        if (!b->shells[i].on) continue;
+        if (b->shells[i].follow) { b->shells[i].pos[0] = b->pos[0]; b->shells[i].pos[2] = b->pos[2]; }
+        if (b->shells[i].top > 0.0f) {
+            /* Shl06's flight: 20 a frame, rising to 40 (+0x428) [the rate is an estimate]. */
+            float s = sqrtf(b->shells[i].vel[0] * b->shells[i].vel[0] + b->shells[i].vel[1] * b->shells[i].vel[1] + b->shells[i].vel[2] * b->shells[i].vel[2]);
+            if (s > 0.0f && s < b->shells[i].top) { float k = (s + 0.5f * f) / s; b->shells[i].vel[0] *= k; b->shells[i].vel[1] *= k; b->shells[i].vel[2] *= k; }
+        }
+        b->shells[i].pos[0] += b->shells[i].vel[0] * f; b->shells[i].pos[1] += b->shells[i].vel[1] * f; b->shells[i].pos[2] += b->shells[i].vel[2] * f;
+        if (b->shells[i].fuse > 0.0f) {
+            b->shells[i].fuse -= f;
+            if (((int)(b->shells[i].fuse) & 3) == 0) {
+                float at[3] = {b->shells[i].pos[0], b->shells[i].pos[1] + 10.0f, b->shells[i].pos[2]}, v[3] = {0.0f, 30.0f, 0.0f};
+                fx_mote(at, v, b->shells[i].radius, 12.0f, 0.3f, 0xffffd060u);   /* the warning */
+            }
+            if (b->shells[i].fuse <= 0.0f && !b->shells[i].follow) {
+                float at[3] = {b->shells[i].pos[0], b->shells[i].pos[1] + 20.0f, b->shells[i].pos[2]};
+                fx_explosion(at);
+            }
+            continue;
+        }
+        r = b->shells[i].radius + 60.0f;
+        dx = px - b->shells[i].pos[0]; dy = py + 100.0f - b->shells[i].pos[1]; dz = pz - b->shells[i].pos[2];
+        if (b->shells[i].follow) dy = 0.0f;
+        if (!b->shells[i].done && attacks && dx * dx + dy * dy + dz * dz < r * r) {
+            b->shells[i].done = 1;
+            b->land = 2; b->land_damage = b->shells[i].damage;
+        }
+        {
+            float still[3] = {0.0f, 0.0f, 0.0f};
+            fx_mote(b->shells[i].pos, still, b->shells[i].radius * 0.5f, 10.0f, 0.06f, 0xffffe080u);
+        }
+        if ((b->shells[i].active -= f) <= 0.0f) b->shells[i].on = 0;
     }
 }
 
@@ -198,16 +266,7 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
     b->timer += f;
     b->phase = phase_of(b);
     bats_update(b, f, px, py, pz, attacks);
-    if (b->strike_time > 0.0f && (b->strike_time -= f) <= 0.0f) {
-        float sx = px - b->strike[0], sz = pz - b->strike[2];
-        float at[3] = {b->strike[0], b->strike[1] + 20.0f, b->strike[2]};
-        fx_explosion(at);
-        if (attacks && sx * sx + sz * sz < 150.0f * 150.0f) { b->land = 2; b->land_damage = BAT_DAMAGE; }
-    }
-    if (b->strike_time > 0.0f && ((int)b->timer & 3) == 0) {
-        float at[3] = {b->strike[0], b->strike[1] + 10.0f, b->strike[2]}, v[3] = {0.0f, 30.0f, 0.0f};
-        fx_mote(at, v, 120.0f, 12.0f, 0.3f, 0xffffd060u);
-    }
+    shells_update(b, f, px, py, pz, attacks);
     if (a == 21 && b->health <= 0) {
         if (b->timer > 200.0f) { b->remove = 1; }
         return;
