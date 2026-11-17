@@ -838,6 +838,38 @@ static int part_visible(int i){
     if(i==PART_BODY || i==PART_COAT)return !vb.dt;
     return 1;
 }
+/* Mission 19's partner Vergil (CPlVergil, ARKHAM_SPEC 1): his body (em035 [1], Dante's 24-bone layout) posed by the
+ * bone transforms of a player Pose (main.c's partner, playing Dante's moves a frame late) and drawn where he stands.
+ * His coat and Yamato aren't posed [stand-in]. */
+void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], float x, float y, float z, float yaw) {
+    int b, k, j;
+    if (vb.active) return;   /* the boss's own buffers are in use */
+    for (b = 0; b < 24; ++b) {
+        for (k = 0; k < 3; ++k) { for (j = 0; j < 3; ++j) body_pose[b].m[k][j] = rot[b][k][j]; body_pose[b].p[k] = pos[b][k]; }
+    }
+    skin_part(PART_BODY);
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadIdentity();
+    {
+        ScePspFVector3 p = {x, y, z};
+        sceGumTranslate(&p);
+    }
+    sceGumRotateY(yaw);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_LIGHTING);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuColor(0xffffffffu);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexScale(1.0f, 1.0f);
+    sceGuTexOffset(0.0f, 0.0f);
+    sceGuClutMode(GU_PSM_8888, 0, 0xFF, 0);
+    sceGuTexMode(GU_PSM_T8, 0, 0, 1);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    draw_part(PART_BODY);
+    sceGuDisable(GU_ALPHA_TEST);
+}
+
 void vergil_boss_draw(void) {
     int i;
     if (!vb.active || vb.hidden) return;

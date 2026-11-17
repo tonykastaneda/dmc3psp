@@ -87,8 +87,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Doppelganger**: the middle region within 550 [estimate]; which dark sixth he comes up in [inferred]; his coat
   rigid (its cloth em031_01.clt isn't run); his sword's offset [inferred]; the crests' lighting is a glow.
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.
-- **Arkham**: one fight runs both rounds and **Vergil doesn't join** (round 2: EST 53 again with op 8 (0, 1); the ally
-  isn't decoded); he stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
+- **Arkham**: one fight runs both rounds; Vergil joins the second as Dante's partner (Dante's input a frame late, as the
+  game), but plays Dante's moveset on his body (his own isn't ported), with no coat or sword, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
   rigid, their count and the summon clock's reload [estimates]; his hits' damage not from records; demo 53 / 328 not
   played. `arkham_boss.c`, ARKHAM_SPEC.md, PortJobs.
 - **Hell Vanguard**: the P312 dissolve. VANGUARD_EFFECTS.md.

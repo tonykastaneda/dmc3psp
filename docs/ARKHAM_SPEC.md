@@ -21,7 +21,12 @@ value under 700).
   (`FUN_00204210(1, 1, 1)`, kept at Dante +0x3d44 and the game's +0x10), placed by Dante, both flagged partners
   (+0x3c7b), Dante's mode +0x28aa = 3: **Vergil joins as a player character** (the partner a second pad drives,
   or the game's partner AI), not as an enemy class. **op 0x78 [23]** (`FUN_00211150`) shows hint 23 once (bit 23
-  of the save's +0x70). Porting him needs a second player with Vergil's moveset and the partner's AI (not read).
+  of the save's +0x70). With no second pad, he **replays Dante's input** a frame late (`FUN_0021fe30` in mode 3: the input recorder
+  `FUN_00489590` / `FUN_00489670`, the Doppelganger's, delayed `0x594bd8`[level]: 1, 30, 60 frames).
+  **In the port** (`main.c` partner, `vergil_boss_draw_partner`): as the second round begins (9000) a second Player /
+  Combat beside Dante takes Dante's input a frame late and hits Arkham as Dante's blows do. Stand-ins: Dante's moveset
+  (Vergil's player moveset, `CPlVergil` / pl001, isn't ported) on Vergil's body (em035 [1], Dante's bone layout), no coat
+  or Yamato, untouchable, his shots not fired.
 - The phase byte `+0x15d1` follows his health (`3d4540`): over 9000 → 0, over 3000 → 1, else 2.
 
 ## 2. The states (`+0x1424`, `3d2220`'s switch; `3d3760` sets one and starts its script)
@@ -70,8 +75,8 @@ Sections 1-3 at variant 0. Approximations:
   and burst on touching him (400); one blade hit cuts one down. Drawn rigid. The summon clock's reload is 900 frames
   [estimate].
 - **Damage taken:** as Vergil's (42 light, 84 heavy, × 1.1; Easy × 2).
-- **The second round:** at 9000 he pauses 120 frames (demo 53 isn't played) and fights on at 9000; Vergil doesn't
-  join, and Dante keeps his whole moveset.
+- **The second round:** at 9000 he pauses 120 frames (demo 53 isn't played) and fights on at 9000; Vergil joins
+  as above.
 - **Death:** the room clears and Mission Clear follows (demo 328 isn't played).
 
 ## 5. Checked in PPSSPP (2026-11-14)

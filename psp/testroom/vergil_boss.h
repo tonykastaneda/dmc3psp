@@ -18,6 +18,8 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
 /* Returns 1 only on the transition to the dying state. */
 int vergil_boss_hit(int kind, float from_x, float from_z, int mortal);
 void vergil_boss_draw(void);
+/* Mission 19's partner: his body posed by a player Pose's model-space bone transforms (24 bones), at (x, y, z), yaw. */
+void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], float x, float y, float z, float yaw);
 int vergil_boss_dying(void);
 int vergil_boss_hidden(void);   /* mid-teleport: not there to be hit */
 float vergil_boss_health(void);

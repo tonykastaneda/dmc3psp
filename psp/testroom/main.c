@@ -162,6 +162,16 @@ static void perf_add(unsigned int gap, unsigned int update, unsigned int skin) {
 }
 static Pose pose;
 static AnimState anim;
+/* Mission 19's partner, Vergil (EventTbl19 op 0x7e after demo 53: FUN_0025e540 makes a second player, CPlVergil;
+ * docs/ARKHAM_SPEC.md 1). With no second pad he replays Dante's input a frame late (FUN_0021fe30 in mode 3:
+ * FUN_00489590 / FUN_00489670, delay 0x594bd8[level], 1 frame at level 0). Stand-ins: Dante's moveset on Vergil's
+ * body (his own isn't ported), no coat or sword, untouchable, his shots not fired. */
+static int partner_on;
+static Player partner;
+static Combat partner_combat;
+static AnimState partner_anim;
+static Pose partner_pose;
+static PlayerInput partner_input;   /* Dante's input a frame back */
 static Combat combat;
 
 /* Rebellion is drawn in Dante's right hand (data bone 9: the -X side, which
@@ -1398,6 +1408,8 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     } else {
         enemy_draw();
     }
+    if (partner_on) vergil_boss_draw_partner((const float (*)[3][3])partner_pose.world_rot, (const float (*)[3])partner_pose.world_pos,
+                                             partner.x, partner.y, partner.z, partner.yaw + MODEL_YAW_OFFSET);
     {
         float eye[3] = {camera->x, camera->y, camera->z};
         nfx_draw(eye);   /* the PS2's own effects: orbs, Cerberus's ice */
@@ -4430,6 +4442,29 @@ int main(int argc, char *argv[]) {
             pose_procedural(&pose, &player, time);
         }
         pose_evaluate(&pose);
+        if (mission_mode && mission_choice.mission == 19 && room_number(mission_room) == 421 && motions_loaded > 0) {
+            /* The partner joins as Arkham's second round begins (his health at 9000, demo 53 not played). */
+            if (!partner_on && arkham_boss_health() > 0.0f && arkham_boss_health() <= 9000.0f && !arkham_boss_dying()) {
+                partner = player;
+                partner.x += cosf(player.yaw) * 200.0f; partner.z -= sinf(player.yaw) * 200.0f;
+                combat_reset(&partner_combat);
+                partner_anim = anim;
+                memset(&partner_input, 0, sizeof partner_input);
+                partner_on = 1;
+                enemy_test_note("partner joins", 0, arkham_boss_health());
+            }
+            if (partner_on) {
+                FollowCamera beside = camera;   /* his stick read as Dante's was; Dante's camera untouched */
+                partner_input.reset = partner_input.toggle_viewer = partner_input.taunt = 0;
+                combat_update(&partner_combat, &partner, &partner_input, player.devil ? dt * 1.1f : dt);
+                player_update(&partner, &beside, &partner_input, dt);
+                anim_update(&partner_anim, &partner, dt);
+                anim_pose(&partner_anim, &partner, &partner_combat, &partner_pose, time);
+                pose_evaluate(&partner_pose);
+                combat_take_shots(&partner_combat);   /* his shots aren't fired */
+                partner_input = input;
+            }
+        } else partner_on = 0;
         if (focus && focus_plink) plink_measure(&pose, frames);
         fx_update(dt);
         nfx_update(player.quicksilver ? dt * 6.0f : dt * 60.0f);
