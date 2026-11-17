@@ -4469,7 +4469,7 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     if (floor_under(e->pos[0], e->floor_y + 300.0f, e->pos[2], &g)) e->floor_y = g;
-    e->pos[1] = e->floor_y + 140.0f;   /* she floats, reclining (her body is modelled lying back) */
+    e->pos[1] = e->floor_y;   /* her own motions carry her height (the stand-in's 140 cm lift is gone) */
     b->pos[1] = e->pos[1];
     e->hidden = (unsigned char)(b->hidden || b->alpha < 0.35f);   /* her fades (FUN_003b5870's alpha, no blend here) */
     if (b->restart || nevan_motion_id[b->want] != e->motion) { nevan_play(b->want, b->restart); b->restart = 0; }

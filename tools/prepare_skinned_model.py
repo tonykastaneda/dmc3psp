@@ -379,6 +379,12 @@ ENEMY_KINDS = (
 )
 AR_SLOT = 131
 JESTER_SLOT = 140
+# More MODs rigged to a kind's own body skeleton, drawn as part of it: Nevan's [4] (23 bones, as her body; her dress).
+EXTRA_SKINS = {}
+# Parts on their own rigs that the game hangs from a body bone and runs as chains (FUN_00230150 / CCnsChain, its .clt):
+# here drawn rigid, at their rest pose, skinned wholly to that bone. Nevan (FUN_003b38e0 / FUN_003b26a0): [4] and [5]
+# from bone 4 (her neck), [6] on her root. (pack index, body bone)
+EXTRA_RIGID = {"nevan": ((4, 4), (5, 4), (6, 0))}
 PAWN_SLOT = 127
 JESTER_MOTION_CHUNKS = (3, 4, 5, 6, 19, 28, 29)
 GOYLE_SLOT = 125
@@ -500,6 +506,29 @@ def write_enemy(output: Path, packs: dict) -> None:
         if body[:4] == b"EFM ":
             body = b"MOD " + body[4:]
         skel, mesh = enemy_mesh(body, GOYLE_RATIO if slot == GOYLE_SLOT else 0.45 if slot in (JESTER_SLOT, AR_SLOT, BEOWULF_SLOT, LADY_SLOT) else None)
+        for extra_index in EXTRA_SKINS.get(name, ()):
+            # Another MOD rigged to the body's own skeleton (Nevan's [4], her dress): skinned with it, one mesh.
+            extra = packs[slot][extra_index]
+            if parse_skeleton(extra)["count"] != skel["count"]:
+                raise ValueError(f"{name} [{extra_index}] isn't on the body's skeleton")
+            _, more = enemy_mesh(extra)
+            base, start = len(mesh["positions"]), len(mesh["indices"])
+            for key in ("positions", "normals", "uvs", "bones", "weights"):
+                mesh[key] = list(mesh[key]) + list(more[key])
+            mesh["indices"] = list(mesh["indices"]) + [i + base for i in more["indices"]]
+            mesh["objects"] = list(mesh["objects"]) + [{**o, "index_start": o["index_start"] + start} for o in more["objects"]]
+        for extra_index, bone in EXTRA_RIGID.get(name, ()):
+            extra = packs[slot][extra_index]
+            more = build_mesh(extra, parse_skeleton(extra)["count"])
+            bx, by, bz = skel["world"][bone]
+            base, start = len(mesh["positions"]), len(mesh["indices"])
+            mesh["positions"] = list(mesh["positions"]) + [(x + bx, y + by, z + bz) for x, y, z in more["positions"]]
+            mesh["normals"] = list(mesh["normals"]) + list(more["normals"])
+            mesh["uvs"] = list(mesh["uvs"]) + list(more["uvs"])
+            mesh["bones"] = list(mesh["bones"]) + [(bone, 0, 0)] * len(more["positions"])
+            mesh["weights"] = list(mesh["weights"]) + [(31, 0, 0)] * len(more["positions"])
+            mesh["indices"] = list(mesh["indices"]) + [i + base for i in more["indices"]]
+            mesh["objects"] = list(mesh["objects"]) + [{**o, "index_start": o["index_start"] + start} for o in more["objects"]]
         if weapon_index is None:
             # No weapon: one degenerate triangle keeps the tables the same shape.
             wmesh = {"positions": [(0.0, 0.0, 0.0)], "normals": [(0.0, 1.0, 0.0)], "uvs": [(0.0, 0.0)],
