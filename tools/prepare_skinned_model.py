@@ -531,7 +531,9 @@ LADY_MOTIONS = ((2, 0), (2, 10), (2, 11), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8)
                 (5, 23), (5, 30), (4, 0), (4, 1), (6, 10), (6, 30), (3, 4), (6, 41), (6, 44),
                 # Mode 0x1a's action 0x85; 0x1b's 0x5c, 0x56-0x58, 0x59; 0x1c's 0x72, 0x73 (FUN_00445e30 / 00445f00 /
                 # 004460c0; action a >= 0x53 plays PAC [6] slot a - 0x53).
-                (6, 50), (6, 3), (6, 4), (6, 5), (6, 6), (6, 31), (6, 32))   # [6] 9 (0x5c) is empty
+                (6, 50), (6, 3), (6, 4), (6, 5), (6, 6), (6, 31), (6, 32),   # [6] 9 (0x5c) is empty
+                # 0x1d's grapple 0x5e, 0x5f, 0x61, 0x62 and mode 0x1e's ledge shot 0x8f and hop 0x0c
+                (6, 11), (6, 12), (6, 14), (6, 15), (6, 60), (2, 12))   # [2] 14 (0x0e) is empty
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 
@@ -1036,7 +1038,11 @@ def main() -> None:
         motions.append({"name": f"nv{chunk}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     for chunk, slot in LADY_MOTIONS:
         raw = pac_list(lady_pack[chunk])[slot]
-        parsed = parse_mot(raw)
+        try:
+            parsed = parse_mot(raw)
+        except ValueError:
+            print(f"Lady's motion [{chunk}] {slot} is empty: not exported")
+            continue
         motions.append({"name": f"ld{chunk}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     for slot in BEOWULF_MOTIONS:
         raw = pac_list(beowulf_pack[2])[slot]

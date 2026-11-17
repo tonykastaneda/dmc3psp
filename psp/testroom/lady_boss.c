@@ -29,13 +29,15 @@ const char *const lady_motion_names[LADY_M_COUNT] = {
     "ld400", "ld401",                              /* 0x2a the pause, 0x2b the reload */
     "ld610", "ld630", "ld304", "ld641", "ld644",
     /* 0x85; 0x5c (its slot, [6] 9, is empty: the gun's draw stands in), 0x56-0x59; 0x72, 0x73 */
-    "ld650", "ld502", "ld603", "ld604", "ld605", "ld606", "ld631", "ld632"};
+    "ld650", "ld502", "ld603", "ld604", "ld605", "ld606", "ld631", "ld632",
+    /* 0x1d's grapple 0x5e, 0x5f, 0x61, 0x62; mode 0x1e's 0x8f, 0x0c, 0x0e */
+    "ld611", "ld612", "ld614", "ld615", "ld660", "ld212", "ld614"};   /* 0x0e's slot, [2] 14, is empty: 0x61's landing */
 
 enum { L_IDLE, L_GUN, L_GUN2, L_TURN, L_SHOOT, L_SHOOT2, L_MOVE, L_PAUSE, L_RELOAD, L_GRENADE, L_KALINA, L_ESCAPE,
-       L_FLINCH, L_KNOCK, L_DOWN, L_POSE, L_BIG, L_VOLLEY };
+       L_FLINCH, L_KNOCK, L_DOWN, L_POSE, L_BIG, L_VOLLEY, L_LEDGE };
 static const unsigned char action_motion[] = {LADY_M_WALK, LADY_M_GUN, LADY_M_GUN2, LADY_M_TURN, LADY_M_SHOT,
     LADY_M_SHOT2, LADY_M_RUN, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_ESCAPE,
-    LADY_M_FLINCH, LADY_M_KNOCK, LADY_M_KNOCK, LADY_M_POSE, LADY_M_AIM, LADY_M_KALINA};
+    LADY_M_FLINCH, LADY_M_KNOCK, LADY_M_KNOCK, LADY_M_POSE, LADY_M_AIM, LADY_M_KALINA, LADY_M_LEDGE_SHOT};
 
 /* Her waypoints (FUN_00448df0 / FUN_00448920 / FUN_00445590): two rings of 16 about the room's middle (0x5cc350), the
  * floor's (0x5cc1d0, radius about 1270, y 1) and the raised middle's (0x5cc290, about 680, y 101). She takes the nearer
@@ -47,6 +49,8 @@ static const float ring_floor[16][2] = {{2500, 1126}, {2014, 1226}, {1599, 1499}
 static const float ring_middle[16][2] = {{2500, 1723}, {2242, 1777}, {2022, 1922}, {1877, 2142}, {1823, 2400}, {1877, 2658},
     {2022, 2878}, {2242, 3023}, {2500, 3077}, {2758, 3023}, {2978, 2878}, {3123, 2658}, {3177, 2400}, {3123, 2142},
     {2978, 1922}, {2758, 1777}};
+/* The five ledges she grapples onto (0x5cc360, y 501). */
+static const float ledges[5][2] = {{1940, 1629}, {1594, 2694}, {2500, 3353}, {3406, 2694}, {3060, 1629}};
 #define MIDDLE_X 2500.0f
 #define MIDDLE_Z 2400.0f
 #define SPECIAL_GATE 600.0f   /* [estimate] how often the special gate (the manager at +0x130, +0x88) opens */
@@ -109,6 +113,9 @@ static const float record_damage[4] = {80.0f, 500.0f, 1000.0f, 1500.0f};   /* pi
 
 int lady_loops(int motion) { return motion == LADY_M_IDLE || motion == LADY_M_WALK || motion == LADY_M_RUN; }
 
+/* Another motion within the action. */
+static void play(LadyBrain *b, int m) { b->want = m; b->restart = 1; b->done = 0; b->frame = 0.0f; }
+
 static void act(LadyBrain *b, int a) {
     b->action = a;
     b->want = action_motion[a];
@@ -125,6 +132,7 @@ void lady_spawn(LadyBrain *b, int health) {
     b->to[0] = b->pos[0]; b->to[1] = b->pos[1]; b->to[2] = b->pos[2];
     b->ring = 1; b->spot = 0; b->side = 0; b->volleys = 0;
     b->token = SPECIAL_GATE;
+    b->air = b->ledge = 0; b->speed = b->clock = 0.0f;
     b->land = 0;
     b->gauge = 0.0f;
     b->magazine = MAGAZINE;
@@ -375,10 +383,80 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
         if (b->done) act(b, L_IDLE);
         break;
     case L_ESCAPE:
-        face(b, px, pz, TURN, f);
-        move(b, -ESCAPE_SPEED, 0.0f, f);
-        if (!b->step && b->frame > 50.0f) { b->step = 1; fire(b, 1, px, py, pz, 0.0f); }
-        if (b->done) act(b, L_IDLE);
+        /* FUN_00446330 (mode 0x1d), her grapple: 0x5d while she turns (1820) to her next waypoint; facing it, 0x5e
+         * fires the wire; then 0x5f (0x60 above rank 0), rising at 20 a frame, 1 more each frame (0x61a524 /
+         * 0x61a528), for up to 120 (0x61a534). At y 1200 (0x61a530) she lets go over a ledge (0x5cc360, y 501) in
+         * her health's middle third (FUN_00449230 = 1), the one beside Dante's nearest that's nearer him, else over
+         * her next waypoint, and drops (0x62) 20 a frame (0x61a52c) to land (0x61); on a ledge, mode 0x1e, else her
+         * walk. Grenades as she lets go only above rank 1 (0x5cc150). */
+        if (b->step == 0) { waypoint_pick(b, unit); b->ledge = 0; b->step = 1; }
+        if (b->step == 1) {
+            float want = atan2f(b->to[0] - b->pos[0], b->to[2] - b->pos[2]) - b->yaw;
+            while (want > 3.14159265f) want -= 6.2831853f;
+            while (want < -3.14159265f) want += 6.2831853f;
+            face_point(b, b->to, TURN, f);
+            if (b->done && fabsf(want) < TURN * f + 0.001f) { play(b, LADY_M_WIRE); b->step = 2; }
+        } else if (b->step == 2) {
+            if (b->done) { play(b, LADY_M_ZIP); b->speed = 20.0f; b->clock = 120.0f; b->air = 1; b->step = 3; }
+        } else if (b->step == 3) {
+            b->speed += 1.0f * f;
+            b->pos[1] += b->speed * f;
+            if (b->pos[1] >= 1200.0f) {
+                float h = (float)b->health / (float)(b->max_health > 0 ? b->max_health : 1);
+                if (h >= 0.33f && h < 0.66f) {
+                    /* FUN_00449120: the ledge nearest Dante [inferred: by distance]; then whichever of its two
+                     * neighbours is nearer him (+0x47c8 bit 0 clear). */
+                    int i, n = 0, a, c;
+                    float best = 1e12f, da, dc;
+                    for (i = 0; i < 5; ++i) {
+                        float lx = ledges[i][0] - px, lz = ledges[i][1] - pz;
+                        if (lx * lx + lz * lz < best) { best = lx * lx + lz * lz; n = i; }
+                    }
+                    a = n ? n - 1 : 4; c = n == 4 ? 0 : n + 1;
+                    da = (ledges[a][0] - px) * (ledges[a][0] - px) + (ledges[a][1] - pz) * (ledges[a][1] - pz);
+                    dc = (ledges[c][0] - px) * (ledges[c][0] - px) + (ledges[c][1] - pz) * (ledges[c][1] - pz);
+                    n = da < dc ? a : c;
+                    b->pos[0] = ledges[n][0]; b->pos[2] = ledges[n][1];
+                    b->ledge = 1;
+                } else {
+                    waypoint_pick(b, unit);
+                    b->pos[0] = b->to[0]; b->pos[2] = b->to[2];
+                }
+                play(b, LADY_M_ZIP_FALL); b->step = 4;
+            } else if ((b->clock -= f) < 0.0f) { play(b, LADY_M_ZIP_FALL); b->step = 4; }
+            else if (b->done) play(b, LADY_M_ZIP);
+        } else if (b->step == 4) {
+            float floor = b->ledge ? 501.0f : b->floor_y;   /* the ledges aren't in the port's collision: y 501 (0x5cc360) */
+            b->pos[1] -= 20.0f * f;
+            if (b->pos[1] <= floor) { b->pos[1] = floor; b->air = b->ledge ? 3 : 0; play(b, LADY_M_ZIP_LAND); b->step = 5; }
+        } else if (b->done) {
+            if (b->pos[1] > 501.0f - 10.0f) { b->last_mode = 0x1e; act(b, L_LEDGE); }
+            else act(b, L_IDLE);
+        }
+        break;
+    case L_LEDGE:
+        /* FUN_00446f60 (mode 0x1e): on her ledge, 0x8f 0x5cc160[rank] times (3), turning to him at 1820 (0x61a4f8);
+         * then the hop down (0x0c) facing the middle if he's further out than she is, else away from it, falling 28 a
+         * frame (+0x4824 = -28) to the floor, the landing (0x0e), then her walk. What 0x8f fires [inferred]: one
+         * pistol shot. */
+        if (b->step == 0) { b->volleys = 3; b->clock = 0.0f; b->step = 1; }
+        if (b->step == 1) {
+            face(b, px, pz, TURN, f);
+            if (b->clock == 0.0f && b->frame > 10.0f) { b->clock = 1.0f; fire(b, 0, px, py, pz, 0.0f); }
+            if (b->done) {
+                if (--b->volleys < 1) {
+                    float mx = b->pos[0] - MIDDLE_X, mz = b->pos[2] - MIDDLE_Z, ox = px - MIDDLE_X, oz = pz - MIDDLE_Z;
+                    /* FUN_00359c80(middle, her): from her to the middle (it's how she turns to a target). */
+                    b->yaw = atan2f(-mx, -mz) + (mx * mx + mz * mz < ox * ox + oz * oz ? 0.0f : 3.14159265f);
+                    play(b, LADY_M_HOP); b->air = 2; b->ledge = 0; b->step = 2;
+                } else { play(b, LADY_M_LEDGE_SHOT); b->clock = 0.0f; }
+            }
+        } else if (b->step == 2) {
+            if (b->done) b->step = 3;   /* off the ledge by the hop's root travel */
+        } else if (b->step == 3) {
+            b->pos[1] -= 28.0f * f;
+            if (b->pos[1] <= b->floor_y) { b->pos[1] = b->floor_y; b->air = 0; play(b, LADY_M_HOP_LAND); b->step = 4; }
+        } else if (b->done) act(b, L_IDLE);
         break;
     case L_FLINCH: case L_KNOCK:
         if (b->action == L_KNOCK) move(b, -593.0f / 37.0f * 0.5f, 0.0f, f);
@@ -402,10 +480,12 @@ int lady_hit(LadyBrain *b, int heavy, int mortal) {
             int i;
             for (i = 0; i < LADY_SHOTS; ++i) b->shots[i].on = 0;
             act(b, L_DOWN);
+            b->air = 0;
             return 1;
         }
     }
     b->gauge += heavy ? 2.0f : 1.0f;
+    if (b->air || b->action == L_ESCAPE || b->action == L_LEDGE) return 0;   /* on the wire or a ledge: no flinch [the port's] */
     if (b->gauge >= KNOCK_HITS) { b->gauge = 0.0f; act(b, L_KNOCK); }
     else if (b->action == L_IDLE || b->action == L_TURN || b->action == L_MOVE) act(b, L_FLINCH);
     return 0;

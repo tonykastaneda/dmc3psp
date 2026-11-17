@@ -8,7 +8,8 @@ enum { LADY_M_IDLE, LADY_M_STRAFE_R, LADY_M_STRAFE_L, LADY_M_GUN, LADY_M_TURN, L
        LADY_M_SHOT_DOWN, LADY_M_GUN2, LADY_M_TURN2, LADY_M_SHOT2, LADY_M_SHOT2_UP, LADY_M_SHOT2_DOWN, LADY_M_WALK,
        LADY_M_RUN, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_ESCAPE, LADY_M_FLINCH,
        LADY_M_KNOCK, LADY_M_POSE, LADY_M_AIM, LADY_M_BIG, LADY_M_BIG_UP, LADY_M_BIG_DOWN, LADY_M_BIG_END,
-       LADY_M_VOLLEY, LADY_M_VOLLEY_END, LADY_M_COUNT };
+       LADY_M_VOLLEY, LADY_M_VOLLEY_END, LADY_M_WIRE, LADY_M_ZIP, LADY_M_ZIP_LAND, LADY_M_ZIP_FALL, LADY_M_LEDGE_SHOT,
+       LADY_M_HOP, LADY_M_HOP_LAND, LADY_M_COUNT };
 extern const char *const lady_motion_names[LADY_M_COUNT];   /* tools/prepare_skinned_model.py LADY_MOTIONS */
 
 #define LADY_SHOTS 16
@@ -26,6 +27,10 @@ typedef struct {
     float to[3];                 /* where she's going (+0x47f0) */
     int volleys;                 /* mode 0x1c's shots left (+0x4848) */
     float token;                 /* frames until her next special (the manager +0x130's gate isn't read) */
+    float speed, clock;          /* the grapple's rise (+0x4824 / +0x4828) and its clock (+0x482c) */
+    int air;                     /* out: off the floor, pos[1] hers (2: the hop, which her motion's root travel moves;
+                                    3: on a ledge) */
+    int ledge;                   /* she let go over a ledge (0x5cc360) */
     int want, restart;           /* out */
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
     float land_damage;           /* out: its attack record's damage */

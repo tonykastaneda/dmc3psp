@@ -1127,13 +1127,23 @@ dispatch `00444c90` (+0x47c0: modes 0-0x17 her walk `00445210`, 0x18 `004455d0`,
   0x58 by his height, `0044ad40`), its event 1, then 0x59. **0x1c** (`004460c0`): 0x71, 0x72 `0x5cc140`'s times (2),
   0x73, turning toward her next waypoint at 1820. **0x1d** (`00446330`): her grapple: 0x5d, then turned to it 0x5e,
   a wire (`0049e4f0`) up at `0x61a520`, rising to `0x61a530` while dropping `0x5cc150` grenades, onto the nearest of
-  five ledges at y 501 (`0x5cc360`) or a waypoint, 0x62, 0x61 landing, then mode 0x1e or her walk.
+  five ledges at y 501 (`0x5cc360`) or a waypoint, 0x62, 0x61 landing, then mode 0x1e or her walk. In full: the rise
+  is 20 a frame, 1 more each frame (`0x61a524` / `0x61a528`), for up to 120 frames (`0x61a534`); at y 1200
+  (`0x61a530`) she's put over a ledge in her health's middle third (`00449230` = 1: the neighbour of Dante's nearest
+  ledge, `00449120`, that's nearer him), else over her next waypoint, and drops 20 a frame (`0x61a52c`). +0x484c is
+  the rank: 0x60 for 0x5f and `0x5cc150` (1) grenades as she lets go only above rank 1.
+- **Mode 0x1e** (`00446f60`, on a ledge): action 0x8f `0x5cc160`[rank] times (3, 2, 2, 1), turning to him at 1820;
+  then 0x0c, the hop down, facing the middle (`00359c80(middle, her)`, the way she turns to a target) if he's further
+  from it than she is, else away; falling 28 a frame (+0x4824 = -28) to the floor, 0x0e, then her walk (0x17).
 - **Line of sight** (`00449450`): a ray from her to him (`FUN_00201da0`).
 
 **In the port** (`psp/testroom/lady_boss.c`): the modes above at rank 0, each action's own motion, her turn rate,
 magazine and burst count, and her records' damage; her waypoints, walk, 0x28, 0x1a, the special picker, 0x1b and
-0x1c, and her line of sight (a stage ray), as decoded above. Stand-ins: her escape (0x1d: still a leap back with a
-grenade, not the grapple and ledges), the special gate (every 600 frames [estimate]), what 0x1b and 0x1c fire (a
+0x1c, her line of sight (a stage ray), her grapple (0x1d) and her ledge mode (0x1e), as decoded above. Stand-ins:
+the grapple's wire isn't drawn and she rises straight up (its direction, `0044b780`, isn't read); the ledges aren't in
+the port's collision (it has only the floor there), so she perches at their y 501 until her hop; `00449120` taken as
+the ledge nearest Dante; 0x0e's slot ([2] 14) is empty, 0x61's landing plays; what 0x8f fires (one pistol shot
+[inferred]); the special gate (every 600 frames [estimate]), what 0x1b and 0x1c fire (a
 rocket on 0x56, a grenade each 0x72 [inferred]), 0x5c's motion (its slot, [6] 9, is empty: the gun's draw), her run's
 speed [estimate], shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun 500,
 grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.

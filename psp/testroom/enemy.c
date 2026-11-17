@@ -5548,17 +5548,26 @@ static void lady_update_glue(float f, float px, float py, float pz) {
     float g;
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
     if (e->motion >= 0) {
+        float before = e->frame;
         m = motion_get(e->motion);
         e->frame += f;
         if (e->frame >= m->end_frame) {
             e->done = 1;
             e->frame = lady_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
         }
+        if (b->air == 2 && e->frame > before) {
+            /* The hop from a ledge: her motion's root travel moves her (the grapple's moves are the brain's). */
+            float a[3], c[3], sn = sinf(e->yaw), cs = cosf(e->yaw);
+            motion_root(m, before, a); motion_root(m, e->frame, c);
+            e->pos[0] += (c[0] - a[0]) * cs + (c[2] - a[2]) * sn;
+            e->pos[2] += (c[2] - a[2]) * cs - (c[0] - a[0]) * sn;
+        }
     }
+    if (floor_under(e->pos[0], e->pos[1] + 50.0f, e->pos[2], &g)) b->floor_y = g;
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done;
     {
-        int before = b->action;
+        int before = b->action, before_step = b->step;
         {
             /* FUN_00449450: a ray from her (head height) to him; a wall or floor between means he's out of sight. */
             float from[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]}, to[3] = {px, py + 100.0f, pz}, t;
@@ -5566,9 +5575,17 @@ static void lady_update_glue(float f, float px, float py, float pz) {
             lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, sight);
         }
         if (b->action != before) giga_note("lady", b->action, (float)b->magazine);
+        else if (b->step != before_step && b->air + (b->action == 11) + (b->action == 18) > 0) { giga_note("lady_step", b->step * 1000 + b->health, b->pos[0]); giga_note("lady_z", b->step, b->pos[2]); }
     }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
-    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    /* Off the floor, the bodies' settle pass treats her as airborne, over the floor below her now. */
+    e->air = b->air != 0;
+    if (b->air) {
+        e->pos[1] = b->pos[1];
+        if (floor_under(e->pos[0], e->pos[1] + 50.0f, e->pos[2], &g)) b->floor_y = g;   /* where she is now */
+        e->floor_y = b->floor_y;
+    }
+    else if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     if (b->restart || lady_motion_id[b->want] != e->motion) { lady_play(b->want, b->restart); b->restart = 0; }
     if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* her attack record's damage */
     lady_draw_fx(b);
