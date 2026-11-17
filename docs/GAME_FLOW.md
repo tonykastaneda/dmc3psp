@@ -366,7 +366,8 @@ Demo 31 leads to 217 Torture Chamber at start 1 (item 50 is given here; the soul
 217 door 0 -> 240 -> the Temperance Wagon ride, 216 (groups 2, 3, 4: 18 Seven Hells; then goto_room 239, start 3)
 -> 239 door 0 -> 214 (group 1: Prides and Lusts) -> 213 (group 0: 7 Blood-goyles) -> 212 (group 2: 6
 Blood-goyles) -> 211 (group 0: a Hell Vanguard (EST 26) and Prides) -> 201 The Rotating Bridge (start 2; item 50
-turns it) -> door 3 -> 218 -> door 1 -> 228. In 228, demo 32 and Geryon on the bridge (group 0, EST 50, class 32);
+turns it) -> door 3 -> 218 -> door 1 -> 228. 218's door 4 is the side trip to 448, the Jester's second encounter
+(group 1: 6500 health, his spawn record's op 8 (0, 1)); flag 4 (him beaten) disables it. In 228, demo 32 and Geryon on the bridge (group 0, EST 50, class 32);
 at 80% he leaves, the bridge falls (demo 33) and the fight goes on at start 2 below; after him demo 34, the
 Quicksilver (item 34), door 1 and demo 35, Mission Clear.
 
@@ -376,6 +377,8 @@ above, start to Mission Clear.
   at its start, and the ride doesn't move. Its waves cleared, Dante goes on to 239 at **start 1** (starts 2 and 3
   are on the wagon, which has no collision in 239) [approximation].
 - 240's wagon is a box door into 216 (EXTRA_DOORS).
+- 448: the Jester, his second encounter (room script op ROOM_OP_PARAM carries the encounter to him); his second
+  set of moves below 2500 isn't ported (docs/ENEMY_SPECS.md E).
 - 201's bridge isn't turned by item 50; door 3 is walked to as it stands [approximation].
 - 228: Geryon both phases; at 80% Dante is put at start 2. No cutscenes. The script gives Quicksilver (item 34) by
   itself after demo 34; the port lays it as a glow at start 2 (where the fight below goes on) and holds Mission
@@ -497,7 +500,7 @@ Pitch-Black Void -> 141 Skull Spire -> 138 Moonlight Mile -> 143 Dark-pact Chamb
 | 139 | Counter 0: group 0, the Doppelganger (EST 52); beaten, demo 48 -> 139 start 1, counter 0 to 1, item 35 (the Doppelganger style) unless Vergil; door 0 (the middle) back to 143 start 2 |
 | 130 | (side) Trial of the Warrior: group 0, Gluttonies, a Sloth and a Hell Vanguard, its seals' times by difficulty |
 | 121 | (side) Firestorm Chamber: group 1, 4 Enigmas and a Hell Vanguard |
-| 449 | (side) group 2, then flag 5 shuts 129's door 2 |
+| 449 | (side) the Jester's third encounter: group 2 (10000 health, op 8 (0, 2)); flag 5 shuts 129's door 2. In the port it runs (the second set below 4500 doesn't) |
 
 **In the port** (`tools/gen_rooms.py` Mission 17, `psp/testroom/mission17.c`, `docs/DOPPELGANGER_SPEC.md`): the
 route above, start to Mission Clear.

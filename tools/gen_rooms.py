@@ -52,6 +52,9 @@ SLOTS = {"000": 272, "001": 276, "002": 280, "003": 284, "004": 288, "005": 292,
          "103": 336, "113": 376, "120": 404, "121": 408, "122": 412, "123": 416, "124": 420, "125": 424, "126": 428, "127": 432,
          # SE: the Jester's arenas follow st400 at 736, four slots a room. 422 is Mission 5's.
          "422": 824,
+         # The Jester's later arenas: 448 (from 218, Mission 12's, group 1) and 449 (from 129, Mission 17's, group 2);
+         # st447 isn't on the disc, so they're 924 and 928.
+         "448": 924, "449": 928,
          "300": 680, "301": 684, "302": 688, "303": 692, "304": 696, "305": 700, "306": 704,
          "307": 708, "308": 712, "309": 716, "310": 720, "311": 724, "312": 728, "313": 732}
 # Mission 7 (Upper Temen-ni-gru to the Peak of Darkness): room 1xx is GDATA 324 + 4 x (n - 100).
@@ -154,7 +157,7 @@ for _first, _end, _sets in MISSIONS.values():
 FIRST_START = {5: 2, 7: 2, 10: 2, 11: 1, 14: 1}
 # A mission cleared by a room's fight being over (its boss), not a door or an item.
 CLEAR_ROOMS = {5: "121", 7: "144", 8: "302", 9: "210", 10: "211", 11: "217", 13: "234"}   # 9: Nevan (the game then plays demo 24 by 210's door 1)
-OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE = 0, 1, 2
+OP_SPAWN, OP_WAIT, OP_WAIT_ALIVE, OP_PARAM = 0, 1, 2, 3
 # Divinity Statues: where the event scripts open the shop (op 7a after examining in an EVE area). Mission 3's
 # is in 13th Avenue, area 0 of room 005's EVE chunk (its four corners average to this). Rooms whose EVE chunk has
 # a statue area (type 5, as 120's Azure Garden) are added from it (parse_shop_area).
@@ -257,11 +260,12 @@ EXTRA_DOORS["239"] = [((3005.5, 1451.0, 3527.5, 263.0, 3000.0, 131.0), "240", 3,
 # -> 228 Underground Arena: Geryon (group 0, EST 50 = CEm029; psp/testroom/geryon_boss.c), whose fall clears it.
 SLOTS.update({"211": 556, "212": 560, "213": 564, "214": 568, "216": 576, "217": 580, "218": 584, "228": 624,
               "239": 668, "240": 672})
-MISSIONS[12] = ("217", None, {"214": [1], "213": [0], "212": [2], "211": [0], "216": [2, 3, 4], "228": [0]})
+MISSIONS[12] = ("217", None, {"214": [1], "213": [0], "212": [2], "211": [0], "216": [2, 3, 4], "228": [0], "448": [1]})
 FIRST_START[12] = 1
 CLEAR_ROOMS[12] = "228"
 CLEAR_ROOMS[16] = "115"   # Lady; the game then plays demo 45 and Dante climbs 119, the High-fly Zone, to its exit
-GATES += [(12, "218", "448", "999")]   # 218's door to the Jester (448) is disabled in Mission 12
+# 218's door 4 leads to the Jester's second encounter (448, group 1: its spawn record's op 8 (0, 1)); the script
+# disables it once he's beaten (flag 4).
 # 240's door into the ride (216) is a box the wagon carries Dante into: here, a box on the wagon at start 0.
 # Mission 18: the Netherworld's rooms are joined by GATE sets (mirrors), not doors: each one's place and next room
 # (next00 room, start). A box 400 across and 800 high round it stands in for stepping into it.
@@ -295,7 +299,7 @@ EXTRA_DOORS["219"] = [((2497.0, 1.0, 2107.0, 390.0, 400.0, 213.0), "106", 3, 15,
 # 143 start 2: area 1 clears the mission. 130 (Trial of the Warrior, group 0), 121 (group 1) and 449 are side trips.
 SLOTS.update({"128": 436, "129": 440, "130": 444, "131": 448, "132": 452, "133": 456, "139": 480, "140": 484,
               "141": 488, "143": 496})
-MISSIONS[17] = ("133", None, {"132": [0], "141": [0], "139": [0], "130": [0]})
+MISSIONS[17] = ("133", None, {"132": [0], "141": [0], "139": [0], "130": [0], "449": [2]})   # 449: the Jester's third
 FIRST_START[17] = 1
 CATAPULT_ROOMS.add("131")
 # 143's area 1 (block 3: counter 0 is 1 after the Doppelganger, sw_in_area 1 -> mission_clear): walk into it.
@@ -616,6 +620,8 @@ def compile_script(groups, wanted, difficulty, group_delays=None):
             elif op == 3 and pending is not None:
                 out.append((OP_SPAWN, pending, args[0], args[1], args[2]))
                 pending = None
+            elif op == 8 and len(args) >= 2:   # a value for the enemy just spawned (the Jester's encounter, +0x481e)
+                out.append((OP_PARAM, args[0], args[1], 0, 0))
             elif op == 9 and args and args[0] == 1 and len(args) >= 2:
                 out.append((OP_WAIT, args[1], 0, 0, 0))
             elif op == 9 and args and args[0] == 0 and len(args) >= 3:
@@ -681,7 +687,7 @@ def main():
              "typedef struct { short room; float x, z, yaw, half_x, half_z, low, high, switch_pos[3]; short mission, need_item; } RoomLift;",
              "typedef struct { short room; float x, y, z, half; } RoomCatapult;",
              "#define ROOM_NONE (-1)",
-             "enum { ROOM_OP_SPAWN, ROOM_OP_WAIT, ROOM_OP_WAIT_ALIVE };",
+             "enum { ROOM_OP_SPAWN, ROOM_OP_WAIT, ROOM_OP_WAIT_ALIVE, ROOM_OP_PARAM };",
              f"#define MISSION_COUNT {max(MISSIONS)}",
              f"#define MISSION_PRESENT_MASK 0x{sum(1 << (m - 1) for m in MISSIONS):x}u"]
     for name in names:

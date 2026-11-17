@@ -753,7 +753,10 @@ shapes and lengths [inferred]: idle js21, walk js03, swings js08/js09, bombs js1
 flinch js05, stun js14, launched js04, death js16.
 
 **Decoded** (`psp/testroom/jester.c`; decompiled 0x532800-0x556000):
-- **Health** by encounter (+0x481e, from the spawn record; `0x5e2f60`): **5000** (room 422, the first), 6500, 10000.
+- **Health** by encounter (+0x481e, from the spawn record; `0x5e2f60`, with the second set's threshold at +4):
+  **5000** (room 422, Mission 5: group 0), **6500** below 2500 (room 448, through 218's door 4 in Mission 12: group 1),
+  **10000** below 4500 (room 449, through 129's door in Mission 17: group 2). The rooms' groups 0-2 are the three, each
+  a spawn record with op 8 (0, n) after it setting the encounter; st447 isn't on the disc (448, 449 are GDATA 924, 928).
   The parameter block is `0x5e3a60` (its own +0x2c, 7000, is overwritten by that). In the port Dante's hits take 42 /
   84 as against the Vanguard's 3000.
 - **Where he reappears** (`FUN_00536230(row)`): table `0x5e2e40`, 12 bytes a row {about Dante?, radius, spread}: row 0

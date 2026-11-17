@@ -148,6 +148,7 @@ typedef struct {
     signed char goyle_splits;
     float ar_health;                /* Agni & Rudra: 7000 each; the Jester: 5000 */
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
+    unsigned char encounter;        /* the Jester: which of his three fights (+0x481e, the spawn record's op 8) */
     /* Its parts' chains (Nevan's hair and dress): each extra bone's state, whether they hang yet, and the 60 fps
      * frames of game time not stepped yet. */
     ClothJoint *cloth;
@@ -461,9 +462,11 @@ static int kind_health(int kind) {
 }
 
 
+static Enemy *last_spawned;   /* for the room script's values (enemy_set_spawn_param) */
 static void spawn_one(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
+    last_spawned = e;
     if (hold_owner == e) hold_let_go(1);   /* a slot taken again lets go of him */
     if (kind == ENEMY_GIGAPEDE) { giga_spawn(); return; }
     if (kind == ENEMY_LEVIATHAN) {
@@ -583,6 +586,15 @@ void enemy_spawn(float x, float z) {
 }
 
 void enemy_set_mortal(int on) { mortal = on; }
+
+/* A spawn record's op 8 (index, value), for the enemy it just made: the Jester's encounter (+0x481e: health
+ * 5000 / 6500 / 10000, 0x5e2f60). */
+void enemy_set_spawn_param(int index, int value) {
+    Enemy *a = last_spawned;
+    if (!a || !a->active || index != 0 || a->kind != ENEMY_JESTER || value < 0 || value > 2) return;
+    a->encounter = (unsigned char)value;
+    a->ar_health = jester_max_health(value);
+}
 
 int enemy_add(float x, float z) { return enemy_add_kind(ENEMY_PRIDE, x, z); }
 
@@ -877,7 +889,7 @@ int enemy_boss_health(float *health, float *maximum) {
         *health=ar_health_total(maximum);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_JESTER) {
-        *health=enemies[i].ar_health;*maximum=jester_max_health(0);return 1;
+        *health=enemies[i].ar_health;*maximum=jester_max_health(enemies[i].encounter);return 1;
     }
     for(i=0;i<ENEMY_MAX;++i)if(enemies[i].active && enemies[i].plan!=P_DEATH && enemies[i].kind==ENEMY_LADY) {
         *health=enemies[i].health;*maximum=ENEMY_HEALTH * LADY_MAX / 250;return 1;
@@ -3503,7 +3515,8 @@ static void jester_spawn(void) {
     e->motion = -1;
     e->goyle_stone = 0.0f;   /* his stun gauge */
     e->health = 1;
-    e->ar_health = jester_max_health(0);   /* room 422 is his first encounter */
+    e->encounter = 0;   /* his first unless the spawn record says (enemy_set_spawn_param) */
+    e->ar_health = jester_max_health(0);
     e->wake = 0.0f;
     jester_projectiles_reset(&jester_world);
     jester_state(J_TAUNT);

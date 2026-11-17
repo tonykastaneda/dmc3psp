@@ -52,7 +52,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Soul Eater**: Dante is held from its bite and struggles free (above), but isn't lifted or turned with it, and his struggle's count isn't reset as the hold starts; the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
   dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
   `enemy.c` soul_*.
-- **Jester**: his later encounters (Missions 9, 17) aren't in the room tables, so his second set (0x79 to the middle,
+- **Jester**: his later encounters run (448 in Mission 12, 449 in Mission 17, with their health), but his second set (0x79 to the middle,
   +0x481d, the 5-way pick with 0x7f / 0x80 and the float 0x7b) never runs; his idle actions (0x64, the walks) are the
   stand-in's; the throws are motes; a bullet's stun value 8 [estimate]; the arena clamp is the stand-in's.
   `enemy.c` ~3428-3650, `jester.c`, PortJobs.

@@ -3003,6 +3003,9 @@ static int script_run(float dt, float floor_y) {
         case ROOM_OP_WAIT:
             script_wait = (float)op->a;
             break;
+        case ROOM_OP_PARAM:
+            enemy_set_spawn_param(op->a, op->b);
+            break;
         default:
             script_wait = (float)op->b + 0.01f;
             script_waiting_alive = op->a;

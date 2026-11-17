@@ -100,6 +100,8 @@ int enemy_hold_take(int *need);
 float enemy_take_hold_drain(void);
 int enemy_hold_end(float *from_x, float *from_z);
 void enemy_hold_broken(void);
+/* A room script's value for the enemy it just spawned (the spawn record's op 8: the Jester's encounter). */
+void enemy_set_spawn_param(int index, int value);
 void enemy_test_note(const char *what, int a, float b);   /* tests: a line in the focus log */
 /* An attack reached Dante this frame: returns 1 once per hit, from where, and if it's a heavy one. */
 int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
