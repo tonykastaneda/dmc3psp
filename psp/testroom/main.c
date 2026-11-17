@@ -1886,7 +1886,7 @@ static int cmp_death;
 static int cmp_hit_frame = -1, cmp_hit_kind, cmp_hit_damage = 500;   /* "hitme f kind damage": hit Dante from 1 m ahead */
 #define CMP_MAX_EVENTS 64
 #define CMP_MAX_FRAMES 18000
-static struct { char button[12]; int first, last; } cmp_events[CMP_MAX_EVENTS];
+static struct { char button[12]; int first, last, every; } cmp_events[CMP_MAX_EVENTS];   /* every: pressed again each n frames (mashing) */
 /* "walkto x z first last": over those frames the stick points at (x, z) from wherever he is, through the camera,
  * as a player steers; it lets go within 25 cm. Real walking: no teleports. */
 #define CMP_MAX_WALKS 64
@@ -2085,7 +2085,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "orbs ", 5) == 0) shop_state.red_orbs = atoi(line + 5);
         else if (strncmp(line, "kind ", 5) == 0) { int kind=atoi(line+5);dummy_kind=kind==ENEMY_VANGUARD||kind==ENEMY_VERGIL||kind==ENEMY_GERYON||kind==ENEMY_DOPPELGANGER||kind==ENEMY_ARKHAM||kind==ENEMY_LEVIATHAN?kind:kind%ENEMY_KIND_TOTAL;enemy_set_dummy_kind(dummy_kind); }
         else if (strncmp(line, "gun ", 4) == 0) cmp_gun = atoi(line + 4);
-        else if (sscanf(line, "%11s %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last) == 3) ++cmp_event_count;
+        else if ((cmp_events[cmp_event_count].every = 0, sscanf(line, "%11s %d %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last, &cmp_events[cmp_event_count].every)) >= 3) ++cmp_event_count;
     }
     fclose(f);
     if (cmp_frames > CMP_MAX_FRAMES) cmp_frames = CMP_MAX_FRAMES;
@@ -2112,6 +2112,12 @@ static void cmp_pad(int frame, PlayerInput *input) {
         const char *b = cmp_events[i].button;
         /* A press whose frame a slow frame stepped over still lands, on the next one. */
         int pressed = cmp_events[i].first <= frame && cmp_events[i].first > cmp_seen_frame;
+        if (cmp_events[i].every > 0 && frame >= cmp_events[i].first && frame <= cmp_events[i].last) {
+            /* "button first last every": a press each n frames, released between (a mash). */
+            int k = (frame - cmp_events[i].first) / cmp_events[i].every, seen = (cmp_seen_frame - cmp_events[i].first) / cmp_events[i].every;
+            pressed = cmp_seen_frame < cmp_events[i].first || k != seen;
+            if (!pressed) continue;
+        }
         int held = pressed || (frame >= cmp_events[i].first && frame <= cmp_events[i].last);
         if (!held) continue;
         if (!strcmp(b, "lup")) input->stick_y = 1.0f;

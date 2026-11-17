@@ -219,10 +219,18 @@ static void scrolls_update(float frames);
 static float enemy_wind[2];   /* pushes Dante this frame (enemy_push_out) */
 /* A hold on Dante (enemy.h): taken this frame, its need, how it ended, where from, the health drained, his escape. */
 static int hold_new, hold_need, hold_end, hold_broken;
+static Enemy *hold_owner;   /* who holds him */
 static float hold_from[2], hold_drain;
+static void giga_note(const char *what, int a, float b);
+static void hold_take(int need) { hold_new = 1; hold_need = need; hold_broken = 0; hold_owner = e; giga_note("hold", need, (float)e->kind); }
+static void hold_let_go(int how) { if (hold_owner == e) { hold_end = how; hold_from[0] = e->pos[0]; hold_from[1] = e->pos[2]; hold_owner = 0; } }
+static int hold_freed(void) { int r = hold_owner == e && hold_broken; if (r) { hold_broken = 0; hold_owner = 0; } return r; }
 int enemy_hold_take(int *need) { if (!hold_new) return 0; hold_new = 0; *need = hold_need; return 1; }
 float enemy_take_hold_drain(void) { float d = hold_drain; hold_drain = 0.0f; return d; }
-int enemy_hold_end(float *from_x, float *from_z) { int r = hold_end; hold_end = 0; *from_x = hold_from[0]; *from_z = hold_from[1]; return r; }
+int enemy_hold_end(float *from_x, float *from_z) {
+    int r;
+    if (hold_owner && !hold_owner->active) { hold_owner = 0; hold_end = 1; }   /* its holder's gone */
+    r = hold_end; hold_end = 0; *from_x = hold_from[0]; *from_z = hold_from[1]; return r; }
 void enemy_hold_broken(void) { hold_broken = 1; }
 
 static void m_identity(M3 *m) { memset(m, 0, sizeof(*m)); m->m[0][0] = m->m[1][1] = m->m[2][2] = 1.0f; }
@@ -456,6 +464,7 @@ static int kind_health(int kind) {
 static void spawn_one(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
+    if (hold_owner == e) hold_let_go(1);   /* a slot taken again lets go of him */
     if (kind == ENEMY_GIGAPEDE) { giga_spawn(); return; }
     if (kind == ENEMY_LEVIATHAN) {
         if (!leviathan_boss_init()) return;
@@ -4782,15 +4791,15 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     }
     b->pos[0] = e->pos[0]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done;
-    b->held_free = hold_broken; hold_broken = 0;
+    b->held_free = hold_freed();
     if (ar_force >= 0 && !b->hidden && b->action <= 6) { nevan_force(b, ar_force); ar_force = -1; }   /* tests: "arforce" */
     {
         int before = b->action;
         nevan_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
         /* The kiss's hold on Dante: taken, drained, let go or thrown (main's side: combat_hold). */
-        if (b->hold) { hold_new = 1; hold_need = b->hold; b->hold = 0; }
+        if (b->hold) { hold_take(b->hold); b->hold = 0; }
         hold_drain += b->drain; b->drain = 0.0f;
-        if (b->release) { hold_end = b->release; hold_from[0] = b->pos[0]; hold_from[1] = b->pos[2]; b->release = 0; }
+        if (b->release) { e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; hold_let_go(b->release); b->release = 0; }
         if (b->action != before) giga_note("nevan", b->action, b->pos[0] * 10000.0f + b->pos[2]);
     }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
@@ -5179,9 +5188,11 @@ static void beowulf_hit_glue(HitKind kind) {
  * it fades out (+0x4c4 down); out of his view the gauge is 30 and it shows (alpha 4 a frame of it, to 120 of 128). It
  * hovers 20-80 over him (+0x4b4, re-rolled every 50-200 frames), moving a twentieth of the difference a frame (down at
  * most 3, up at most 1) in its hovering actions (0x10000000).
- * Stand-ins: Dante can't be held, so its hold (7) clings to his head draining his Devil Trigger (FUN_0021eae0: 20 a
- * frame, 1000 a rune [inferred]) and his hits free him (the game: mashing); the rank-0 teleport (4) reappears ahead of
- * his facing, not the camera's; 16 (a dodge when he does move 0x11 near it) isn't triggered. */
+ * Its bite holds Dante (FUN_0021f2e0, combat_hold) and its hold (7) drains his Devil Trigger (FUN_0021eae0: 20 a frame,
+ * 1000 a rune [inferred]) until he struggles 60 points free (8) or its time's up (9, the burst).
+ * Stand-ins: he isn't lifted or turned with it (FUN_0049dac0's states: up 15 a frame less 0.64, for 18 frames); the
+ * struggle's count isn't reset as the hold starts (FUN_00254a10 in 7); the rank-0 teleport (4) reappears ahead of his
+ * facing, not the camera's; 16 (a dodge when he does move 0x11 near it) isn't triggered. */
 enum { SE_HOVER = 0, SE_COME = 1, SE_KNOCK = 2, SE_KNOCK2 = 3, SE_BLINK = 4, SE_CLOSE = 5, SE_BITE = 6, SE_HOLD = 7,
        SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DEATH = 30 };
 static float se_dante_yaw, se_dt_drain;
@@ -5342,7 +5353,8 @@ static void soul_update_glue(float f, float px, float py, float pz) {
         if (e->step == 1 && e->timer <= 0.0f) {
             float mx = e->pos[0] + sinf(e->yaw) * 60.0f - px, my = e->pos[1] + 120.0f - (py + 100.0f), mz = e->pos[2] + cosf(e->yaw) * 60.0f - pz;
             e->step = 2;
-            if (attacks_on && mx * mx + my * my + mz * mz < 150.0f * 150.0f) { se_go(SE_LATCH); return; }
+            /* Held (not if he's held already: FUN_0021f2e0 refuses): 60 struggle points free him (FUN_004331b0's FUN_00254a10). */
+            if (attacks_on && !hold_owner && mx * mx + my * my + mz * mz < 150.0f * 150.0f) { hold_take(60); se_go(SE_LATCH); return; }
         }
         if (e->done) { se_go(SE_SPIN); return; }
         break;
@@ -5350,12 +5362,14 @@ static void soul_update_glue(float f, float px, float py, float pz) {
     case SE_LATCH:
         /* FUN_00433930: on his head, its script, then the hold. */
         held = 1;
+        if (hold_freed()) { se_go(SE_FREED); return; }
         if (e->done) { se_go(SE_HOLD); return; }
         break;
     case SE_HOLD:
         /* FUN_004331b0: draining his Devil Trigger 20 a frame for its time (240 + 60 at rank 0); freed, 8; its time up,
          * 9, the burst. */
         held = 1;
+        if (hold_freed()) { se_go(SE_FREED); return; }   /* FUN_00254a20: past 60, 8 */
         if (e->step == 0) { e->timer = se_time(a); e->step = 1; }
         se_dt_drain += 20.0f * f;
         if (e->timer <= 0.0f) { se_go(SE_BURST); return; }
@@ -5368,7 +5382,7 @@ static void soul_update_glue(float f, float px, float py, float pz) {
     case SE_BURST:
         /* FUN_004333c0: its script's record 1 (3000) on him, gone 30 frames later. */
         held = 1;
-        if (e->step == 0) { e->timer = 30.0f; e->step = 1; }
+        if (e->step == 0) { e->timer = 30.0f; e->step = 1; hold_let_go(1); }
         if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
         if (e->timer <= 0.0f) { e->plan = P_DEATH; e->active = 0; }
         break;
@@ -5433,13 +5447,13 @@ static void soul_hit_glue(HitKind kind) {
             e->health = 0;
             e->plan = P_DEATH;
             se_go(SE_DEATH);
+            hold_let_go(1);
             e->timer = 30.0f;
             e->se_vel[0] = e->se_vel[1] = e->se_vel[2] = 0.0f;
             died();
             return;
         }
     }
-    if (e->action == SE_HOLD || e->action == SE_LATCH) { se_go(SE_FREED); return; }   /* [stand-in for his struggling] */
     if (heavy && e->action != SE_BLINK) { se_go(SE_KNOCK); return; }
     e->se_hit_pending = 1;   /* FUN_0049b7b0: a hit while hovering or coming shows it (15) */
 }

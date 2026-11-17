@@ -11,7 +11,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Dante held** (his action 0x2e, `combat_hold`): Nevan's kiss holds him and he mashes free as the game counts it,
   but his held pose is the heavy flinch stopped at frame 10 (action 0x2e's own motion isn't found), her throw at the
   end is a knockdown without damage (his action 0x16 isn't read), and other blows pass him while he's held. The Soul
-  Eater's hold still clings to his head and his hits free him. `combat.c` held_update, `enemy.c` soul_*.
+  Eater's bite holds him too (60 to break free). `combat.c` held_update, `enemy.c` soul_*.
 - **Real-time cutscenes** aren't played (Mission 2's intro, Vergil's scenes, demo 53 in Arkham's fight, ...). PortJobs.
 - **Sound**: only in movies; no music or effects in menus or the game. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
@@ -49,7 +49,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
   [estimate]; its spear is straight at his chest (the shell isn't decoded). `fallen.c`, `enemy.c` ~5383.
 - **Dullahan**: which script is which [inferred]. `dullahan.c`.
-- **Soul Eater**: Dante isn't held (above); the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
+- **Soul Eater**: Dante is held from its bite and struggles free (above), but isn't lifted or turned with it, and his struggle's count isn't reset as the hold starts; the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
   dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
   `enemy.c` soul_*.
 - **Jester**: his later encounters (Missions 9, 17) aren't in the room tables, so his second set (0x79 to the middle,

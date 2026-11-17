@@ -1043,7 +1043,7 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   0x2c each: time and random by rank, turn in degrees a frame, the decision list `0x5c14d0` → `0x5c14a0`: rank 0
   always 1, in Dante's view 0), its sight and showing (+0x4bc / +0x4c4), hover (+0x4b4 / +0x4b8), its actions 0-15
   and death (`0049c2a0`). The hold (7) drains his Devil Trigger (+0x28c4, FUN_0021eae0 20 a frame) and, its time up,
-  bursts (9: record 1, 3000). Stand-ins: Dante isn't held (it clings to his head; his hits free him), the rank-0
+  bursts (9: record 1, 3000). Its bite holds Dante (`combat_hold`) and 60 struggle points free him (`004331b0`: `00254a10` / `00254a20`). Stand-ins: he isn't lifted or turned with it (`0049dac0`), the rank-0
   teleport's camera angle (his facing), 16's trigger, the cone's width (±60 degrees).
 - **Soul Eater** (as decoded): new `0049a560`, constructor `0049a880` (on the
   base `00257340`, as Nevan and Agni & Rudra, not the Hells'), vtable `0x611760`; per-frame `0049aa40` → `0049b7b0`

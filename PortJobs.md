@@ -1,6 +1,6 @@
 # Port jobs
 
-- [x] Soul Eaters: Missions 11 and 15 run their own class (ENEMY_SOUL: model, wing chains, scripts, action table, sight and showing, approach, bite, hold draining DT, burst, death; docs/ENEMY_SPECS.md H); stand-ins: Dante isn't held (it clings, his hits free him), the rank-0 teleport's angle, the dodge's trigger
+- [x] Soul Eaters: Missions 11 and 15 run their own class (ENEMY_SOUL: model, wing chains, scripts, action table, sight and showing, approach, bite, hold draining DT, burst, death; docs/ENEMY_SPECS.md H); Dante held from its bite, struggling free at 60; stand-ins: he isn't lifted with it, the rank-0 teleport's angle, the dodge's trigger
 - [x] The Abyss: its own body, scythe, scripts, caps, health (1500) and now its own decision table (0x5ce910: bands, zones, rows) and plans 40 / 58 / 59 (its taunt, sweep, and sink-and-rise, scripts 100-102 and PAC [36]'s motions) run on the Hells' machinery (Missions 17, 19), docs/ENEMY_SPECS.md H; stand-in: the Pride's hit-script list
 - [ ] Jester: his attacks, throws, defence and stun meter are the game's; not yet: his second set of moves (later encounters and the health threshold), his idle actions, the throws' effects, a bullet's stun value (estimate)
 - [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns, knockbacks and the pair's opening (state 64: both leaps and the brothers' wait) are the game's; not yet: the pedestal climb and team moves, the scripts' guard stances, the hops' records, the effects
