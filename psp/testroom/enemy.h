@@ -99,6 +99,7 @@ float enemy_take_dt_drain(void);
  * enemy_hold_end: 0 holding on (or none), 1 it let him go, 2 it threw him (from x, z);
  * enemy_hold_broken: he mashed free. */
 int enemy_hold_take(int *need);
+const char *enemy_hold_motion(void);   /* Dante's motion while held (the holder's), or 0 */
 float enemy_take_hold_drain(void);
 int enemy_hold_end(float *from_x, float *from_z);
 void enemy_hold_broken(void);

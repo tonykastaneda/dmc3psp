@@ -9,9 +9,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 ## Systems that touch everything
 
 - **Dante held** (his action 0x2e, `combat_hold`): Nevan's kiss holds him and he mashes free as the game counts it,
-  but his held pose is the heavy flinch stopped at frame 10 (action 0x2e's own motion isn't found), her throw at the
-  end is a knockdown without damage (his action 0x16 isn't read), and other blows pass him while he's held. The Soul
-  Eater's bite holds him too (60 to break free). `combat.c` held_update, `enemy.c` soul_*.
+  and he plays her held motion (her pack's [3] slot 20, as the game hands it him), but breaking free doesn't play
+  her [3] 21, her throw at the end is a knockdown without damage, and other blows pass him while he's held. The Soul
+  Eater's bite holds him too (60 to break free) in its held loop ([9] 12), without its lift (10, 11) or end (14). The
+  Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
+  `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** aren't played (Mission 2's intro, Vergil's scenes, demo 53 in Arkham's fight, ...). PortJobs.
 - **Sound**: only in movies; no music or effects in menus or the game. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.

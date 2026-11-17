@@ -979,6 +979,10 @@ def main() -> None:
         motions.extend(mots_in_pac(read_chunk(chunk_index), f"{chunk_index}-"))
     # Rebellion moveset follows Dante's base motions ("rb-NN" = PAC slot NN).
     motions.extend(mots_in_pac(rebellion_moves, "rb-"))
+    # Dante held by an enemy plays motions from the holder's own pack (FUN_0021f2e0's bank, group 0x20): Nevan's [3]
+    # ("nvh-20" held, "nvh-21" breaking free), the Soul Eater's [9] ("seh-10" to "seh-14": the lift, held loop, end).
+    motions.extend(mots_in_pac(nevan_pack[3], "nvh-"))
+    motions.extend(mots_in_pac(soul_pack[9], "seh-"))
     for slot, data in study_moves.items():
         motions.extend(mots_in_pac(data, f"s{slot}-"))
     # The weapons' own motions, "w<weapon>-NN"; a placement record's mode picks one.

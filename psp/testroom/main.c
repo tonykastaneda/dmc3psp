@@ -4337,7 +4337,7 @@ int main(int argc, char *argv[]) {
                 /* A hold on Dante (Nevan's kiss): taken, his health drained, his struggle, let go or thrown. */
                 int need, end;
                 float hx, hz, drained = enemy_take_hold_drain();
-                if (enemy_hold_take(&need)) combat_hold(&combat, &player, need);
+                if (enemy_hold_take(&need)) combat_hold(&combat, &player, need, enemy_hold_motion() ? motion_find(enemy_hold_motion()) : -1);
                 if (combat_held(&combat) && drained > 0.0f) {
                     player.health -= drained;
                     if (player.health < 1.0f) player.health = combat_dante_can_die ? 0.0f : 1.0f;

@@ -230,7 +230,16 @@ static int hold_new, hold_need, hold_end, hold_broken;
 static Enemy *hold_owner;   /* who holds him */
 static float hold_from[2], hold_drain;
 static void giga_note(const char *what, int a, float b);
-static void hold_take(int need) { hold_new = 1; hold_need = need; hold_broken = 0; hold_owner = e; giga_note("hold", need, (float)e->kind); }
+/* Dante's motion while held, from the holder's pack (FUN_0021f2e0's bank, FUN_0021f3a0's index): Nevan's kiss 0x14
+ * (her [3] slot 20, 003b8810), the Soul Eater's held loop 0xc (its [9] slot 12, 0049dac0 state 4). The Arachne's
+ * (its [15], 003f8080) isn't wired. */
+static const char *hold_motion;
+static void hold_take(int need) {
+    hold_new = 1; hold_need = need; hold_broken = 0; hold_owner = e;
+    hold_motion = e->kind == ENEMY_NEVAN ? "nvh-20" : e->kind == ENEMY_SOUL ? "seh-12" : 0;
+    giga_note("hold", need, (float)e->kind);
+}
+const char *enemy_hold_motion(void) { return hold_motion; }
 static void hold_let_go(int how) { if (hold_owner == e) { hold_end = how; hold_from[0] = e->pos[0]; hold_from[1] = e->pos[2]; hold_owner = 0; } }
 static int hold_freed(void) { int r = hold_owner == e && hold_broken; if (r) { hold_broken = 0; hold_owner = 0; } return r; }
 int enemy_hold_take(int *need) { if (!hold_new) return 0; hold_new = 0; *need = hold_need; return 1; }

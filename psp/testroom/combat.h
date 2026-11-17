@@ -152,7 +152,7 @@ typedef struct {
     int twosome_set, twosome_shots;   /* Twosome Time's set (+0x3c6d) and shots in the series */
     /* Held by an enemy (his action 0x2e, FUN_0021f2e0): the mash toward breaking free (FUN_00254a20, +0x4a4c /
      * +0x4a4e) and the stick's last direction (+0x4a4a). */
-    int held, held_mash, held_need, held_dir, held_free;
+    int held, held_mash, held_need, held_dir, held_free, held_loop;
     float fade_seconds;    /* this move's blend in from the last pose (0: a cut) */
 } Combat;
 
@@ -170,7 +170,7 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
 /* An enemy takes hold of him (FUN_0021f2e0: his action 0x2e); need is the mash to break free (FUN_00254a10).
  * While held he can't move or attack; combat_hold_broken says he's mashed free (and lets go); combat_release ends it
  * from the holder's side. */
-void combat_hold(Combat *c, Player *player, int need);
+void combat_hold(Combat *c, Player *player, int need, int motion);   /* motion: the holder's for him, or -1 */
 int combat_held(const Combat *c);
 int combat_hold_broken(Combat *c, Player *player);
 void combat_release(Combat *c, Player *player);

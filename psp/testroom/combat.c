@@ -1175,9 +1175,10 @@ static void start_knockdown(Combat *c, Player *player, int kind) {
 }
 
 /* Returns 1 while it owns Dante this frame. */
-/* Held (his action 0x2e): he can't move or attack. FUN_00254a20 counts the struggle each frame: 1 when the stick's
- * direction isn't what it was, 2 for each button pressed; past the holder's need he's free. His pose is the heavy
- * flinch held at its 10th frame [stand-in: action 0x2e's own motion isn't found]. */
+/* Held (his action 0x2e, FUN_0022b9b0): he can't move or attack. FUN_00254a20 counts the struggle each frame: 1 when
+ * the stick's direction isn't what it was, 2 for each button pressed; past the holder's need he's free. His motion is
+ * the holder's: FUN_0021f2e0 hands him a motion bank from its own pack and FUN_0021f3a0 an index in it, played by
+ * FUN_002500d0 (group 0x20). With none (a holder whose motions aren't wired), the heavy flinch held at its 10th frame. */
 #define HELD_POSE_FRAME 10.0f
 static void held_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
     int dir = -1;
@@ -1189,15 +1190,21 @@ static void held_update(Combat *c, Player *player, const PlayerInput *input, flo
     c->held_mash += 2 * ((input->melee != 0) + (input->gun != 0) + (input->style_action != 0) + (input->jump != 0));
     if (c->held_mash > c->held_need) c->held_free = 1;
     c->frame += dt * MOTION_FPS;
-    if (c->frame > HELD_POSE_FRAME) c->frame = HELD_POSE_FRAME;
+    if (c->held_loop) {
+        const Motion *m = motion_get(c->motion);
+        float span = m ? m->end_frame - m->loop_start : 0.0f;
+        if (span > 0.0f) while (c->frame > m->end_frame) c->frame -= span;
+    } else if (c->frame > HELD_POSE_FRAME) c->frame = HELD_POSE_FRAME;
 }
 
-void combat_hold(Combat *c, Player *player, int need) {
+void combat_hold(Combat *c, Player *player, int need, int motion) {
     player->air_kind = AIR_NONE;
     player->jump_motion = -1;
     c->air = 0;
     c->action = 0;
     start_move(c, MOVE_HIT_HEAVY, 0);
+    c->held_loop = motion >= 0 && motion_get(motion);
+    if (c->held_loop) { c->motion = motion; c->script = -1; c->script_bank = -1; c->frame = 0.0f; }
     c->held = 1; c->held_mash = 0; c->held_need = need; c->held_dir = -1; c->held_free = 0;
 }
 int combat_held(const Combat *c) { return c->held; }
