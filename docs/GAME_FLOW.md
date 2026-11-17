@@ -272,9 +272,8 @@ script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run t
 - **Arachnes** (em010, GDATA 121, pack 5 in the table at 0x58e740) have their own model and motions (`arachne.c`):
   they run at Dante, lunge and leap. Which motion is which is read from their root paths; their class's decision
   tables, the web shot and the spiderlings aren't in. Health is an estimate.
-- **Nevan** (em028, GDATA 133, pack 19) has her own model and motions (`nevan_boss.c`), reclining in the air as her
-  body is modelled: she hovers, glides at Dante, sweeps her blade, sends batches of bats (glows, not models) and
-  vanishes to his far side. Her lightning and kiss aren't in; health, speeds and timings are estimates.
+- **Nevan** (em028, GDATA 133, pack 19) runs her class's code (`nevan_boss.c`, `docs/ENEMY_SPECS.md` G): her patterns,
+  movement, teleports, bats, lightning attacks, hair and dress; what's left is in `StandIns.md`.
 - 210's STAY 150 (a white sheet over the stage) is hidden in Mission 9 on, as the script's gimmick_cmd10 [150, 0] does.
 
 ### Mission 10: "The job"
@@ -505,7 +504,7 @@ route above, start to Mission Clear.
 - 128's God-cubes (STAY sets) aren't moved: the door from 133 brings Dante in at start 2, by door 2 [approximation].
 - 131's red pod throws Dante to its door (the Mission 7 catapults' code).
 - 143's area 0 takes Dante to 139; area 1 is the goal (walk up the slope to it and press O) once 139 is cleared.
-- The Abyss aren't ported: Prides stand in.
+- The Abyss are their own port (ENEMY_ABYSS, its own decision table).
 - 131's spikes (NEEDLE 100, type 1) are Mission 6's stand-in (`psp/testroom/needles.c`): the set's code
   (FUN_003df400 and after, about 4 KB driving the needles' own models and motions) isn't decoded. The rows start at
   area 0 (x 185-1160, and its doorway) and stop at area 1 (x 8348-8648), once a mission (flag 1); they come down the
