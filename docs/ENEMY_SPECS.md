@@ -926,7 +926,9 @@ cutscene). One boss bar for both.
   script 3 at (0, 3, 0) and 16; 0x34 script 4 with 300 frames; 0x35 at him (turning 0x800), landing or zone under 2
   ends it (zone under 4 by its clock: state 0x41); 0x36 twenty frames still; 0x37 back to idle (state 2). State 63
   (`003aad50`): the same start, then (`003b09c0(5)`) up to y 960 onto his pedestal: state 59 at (3065, 960, 1780)
-  (Agni) or 60 at (1930, 960, 1778) (Rudra), setting the room's flag bit 1 / 2 (+0x18 +0x5c).
+  (Agni) or 60 at (1930, 960, 1778) (Rudra), setting the room's flag bit 1 / 2 (+0x18 +0x5c). The brain (`003acfb0`)
+  takes 63 first, when its flags +0x2ede hold 0x8000 (`003af2f0`); `003ac9c0` copies them each frame from the pair
+  manager's member row (+0x2ed8, +0x27c); what sets 0x8000 there isn't in the exported code.
 - **Guard** (`003a1a50`, a hit while a script's guard is up): by the hit's kind and Dante's sector, turned (vtable
   +0x34 on the hit, +0xe8, effect by the record) or taken (+0x38, effect +0x34's id); 0x2ec4 counts, past +0x2ec5 the
   hit gets through. Needs Dante's hit records, which the port doesn't model.
