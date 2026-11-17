@@ -4,7 +4,7 @@
 - [ ] The Abyss: Missions 17 and 19
 - [ ] Jester: his attacks, throws, defence and stun meter are the game's; not yet: his second set of moves (later encounters and the health threshold), his idle actions, the throws' effects, a bullet's stun value (estimate)
 - [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns and knockbacks are the game's; not yet: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects
-- [ ] Nevan: no lightning or kiss; health, speeds and timings are estimates
+- [ ] Nevan: her patterns, moves, movement, teleports, motions, bats and reels are the game's (docs/ENEMY_SPECS.md G); not yet: what her other attacks' events make (lightning, the kiss: stand-in bolts and a sweep)
 - [ ] Arachne: no web shot or spiderlings; health is an estimate
 - [ ] Arkham: one fight runs both rounds, and Vergil doesn't join
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform

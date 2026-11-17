@@ -888,3 +888,44 @@ cutscene). One boss bar for both.
 - **Moves** (`003ad180` alone): beyond 1000 leap (11) unless role ≥ 3, then on a 12-frame wait 12; 650-1000 → 12, or
   3, or 14/15 at random; 350-650 → 12, 4, 14/15, or 13 when role ≥ 4; nearer → 4 or 13. Paired (`003ad5d0`) adds the
   flank: 14 / 6-7 / 15 / 9-10 / 3-4 for flank 4 / 3 / 2 / 1 / 0.
+
+---
+
+## G. Nevan (class 31, CEm031; EST 49): Mission 9, room 210
+
+Pack 19 → GDATA 133 (em028.pac): [1] her body, [2] a PAC of 60 motions (the scripts' motion ids are its slots), [3]
+22 more, [10] her action scripts (39, one per action, the Seven Hells' script format), [11] / [12] caps and shapes
+(all hurt caps: her blows come from what her events make). Code 0x3b1b40-0x3c6000: new `003b1b40`, constructor
+`003b2240`, vtable `0x609cc0`, per-frame `003b38e0` (dispatch on the action, +0x4be4, 39 of them), set-up `003b26a0`.
+Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (under 250 → 0); phase +0x4e18 by health
+(`003baf10`): over 5000, over 2000, the rest.
+
+- **Patterns** (`003bba20`): a weighted pick from `0x5c1970` + rank·0xf0 + phase·0x50, the first row with Dante
+  within 600 cm, the second (+0x28) beyond; each row is 8 pattern ids then 8 weights. Rank 0: near {0: 80, 1: 20},
+  {0: 20, 3: 60, 4: 20}, {0: 10, 3: 20, 6: 70}; far {8: 50, 9: 50}, {8: 50, 10: 50}, {8: 50, 14: 50} by phase.
+- **Moves** (`0x5c1930`: 16 pattern pointers; each a list ending in 23); `003bbc50` takes the next, `003b9a00` makes
+  it an action through `0x5bc250` (moves 0-9 → actions 0-9, 10-13 → 22-25, 15-21 → 28, 29, 30, 32, 33, 34, 35; 14
+  and 22 → 9).
+- **Movement** (rank 0; frames by phase / distance kept / speed rate / top): 0 idles 30, 20, 10 frames (`0x5bca20`);
+  1 closes to 300 (200/150/120 frames, 0.1, 2.5), 2 to 300 (0.5, 6), 3 to 900 (0.5, 6); 4-6 circle him (120/100/80
+  frames, 0.2 or 0.1, 2.5), 5 and 6 also closing to 300 and 800. The speed rises by the rate a frame to the top
+  (`FUN_0035a4a0`) and she moves its **square** in cm a frame (`003b4500`, `003b4e30`). 7-9 (`003b5870`) fade her out
+  over 30 frames, place her 400 (move 7) or 1000 (move 8) cm beyond Dante on the line from the room's middle (2500,
+  2500), a floor ray from 400 up (`003ba790`), and fade her back over 30.
+- **Scripts** (action: motion, event frame): 22 m40 @82, 23 m41 @67, 24 m42 @165, 25 m46 @126, 29 m25 @90, 30 m44
+  @77 (looped to 134), 32 m45 @24, 33-35 m49 @107 and @240 (the kiss), 38 m25 @90; 10-14 the reels (m10-m14), 21 the
+  fall (m24), 28 m30.
+- **Bats** (action 22, `003b6c90`): 2 / 3 / 4 by phase (`0x5bce38`), 8 frames apart, made 150 before her and 100
+  up (`004187f0` → class `00418970`, vtable `0x60d210`). Each (`00418a50`, `00418bf0`) aims once at Dante + 150 and
+  flies straight: speed +0.2 a frame to 18 (`0x5be780`, rank 0), moving its square, for 360 frames; an 80 cm
+  sphere with record `0x5bc3d0` (**300** damage, kind 8).
+- **Hits** (`003bb150` → flags +0x5188-0x518f, `003bbcf0`): a reaction id 0/1/4/7/8/10-12 asks a light reel, 2/3 a
+  heavy one, 0x14/0x15 the fall (21). None while she teleports (7-9) or in 33 / 34. Light: from 10 → 11, 11 → 10,
+  13-15 → 13, 12 none, else 10 or 11; heavy: 13-15 → 14, 10 → 11, 11 → 10, 12 none, else 12.
+
+**In the port** (`psp/testroom/nevan_boss.c`): the patterns, moves, phases, movement, teleports, scripts' motions
+and event frames, bats and reels above, at rank 0. Stand-ins: what events 23-25, 29, 30, 32, 35 and 38 make (shell
+classes `0x45d720`, `0x468580`, `0x43df80`, `0x417340`, `0x4179a0`, `0x4181a0` and the kiss's hold, not decoded) is a
+bolt on Dante's spot after 30 frames or, for 32, a sweep about her, at the bats' 300; 23 also lets out bats [inferred:
+`003ba470` keeps the bats' count]; move 9's place (her starting spot); which way she circles (+0x4e1f) is random; her
+fades hide her below a third rather than blending; the bats are drawn as glows.

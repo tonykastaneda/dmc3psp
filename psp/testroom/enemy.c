@@ -4441,14 +4441,18 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     }
     b->pos[0] = e->pos[0]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done;
-    nevan_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+    {
+        int before = b->action;
+        nevan_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+        if (b->action != before) giga_note("nevan", b->action, b->pos[0] * 10000.0f + b->pos[2]);
+    }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     if (floor_under(e->pos[0], e->floor_y + 300.0f, e->pos[2], &g)) e->floor_y = g;
     e->pos[1] = e->floor_y + 140.0f;   /* she floats, reclining (her body is modelled lying back) */
     b->pos[1] = e->pos[1];
-    e->hidden = (unsigned char)b->hidden;
+    e->hidden = (unsigned char)(b->hidden || b->alpha < 0.35f);   /* her fades (FUN_003b5870's alpha, no blend here) */
     if (b->restart || nevan_motion_id[b->want] != e->motion) { nevan_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }
     nevan_draw_fx(b);
     if (b->remove) e->active = 0;
 }
@@ -4457,7 +4461,7 @@ static void nevan_hit_glue(HitKind kind, float from_x, float from_z) {
     float at[3] = {e->pos[0], e->pos[1] + 120.0f, e->pos[2]};
     if (b->hidden || e->plan == P_DEATH) return;
     fx_hit_spark(at);
-    if (nevan_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
+    if (nevan_hit(b, kind == HIT_SLAM || kind == HIT_LAUNCH ? 2 : !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
         e->plan = P_DEATH;
         died();
     }

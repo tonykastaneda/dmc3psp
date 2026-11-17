@@ -382,9 +382,10 @@ GOYLE_SLOT = 125
 # [inferred]: 7-10 still (idle), 7-01 forward 1120 in 63 frames (run), 10-11 lunge 274, 10-08 leap 704 (pounce),
 # 8-01 short (flinch), 8-00 back 210 (knocked back), 8-15 330 frames (death).
 ARACHNE_MOTIONS = ((7, 10), (7, 1), (10, 11), (10, 8), (8, 1), (8, 0), (8, 15))
-# Nevan's, "nvCNN", read the same way [inferred]: 2-00 still (hover), 2-01 forward 128 (glide), 2-14 163 frames in
-# place (blade), 2-40 236 in place (bats), 2-13 the shortest (flinch), 2-45 back 260 (knocked back), 2-49 (death).
-NEVAN_MOTIONS = ((2, 0), (2, 1), (2, 14), (2, 40), (2, 13), (2, 45), (2, 49))
+# Nevan's, "nvCNN": every motion her action scripts (em028 [10], one per action, docs/ENEMY_SPECS.md G) play,
+# PAC [2] slot NN.
+NEVAN_MOTIONS = tuple((2, n) for n in (0, 10, 11, 12, 13, 14, 16, 17, 24, 25, 30, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+                                       49, 50, 51))
 # Beowulf's, "bwNN" (PAC [2] slot NN), read the same way [inferred]: 00 still (idle), 01 forward 1257 in 149 frames
 # (walk), 07 forward 1673 (charge on all fours), 30/31/32 forward 290/341/206 (the three punches), 39 197 frames in
 # place (stomp and pillar), 36 forward 1354 rising 286 (leaping rush), 37 276 in place (the feather laser's charge),
