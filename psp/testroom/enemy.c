@@ -32,6 +32,7 @@
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
 #include "beowulf_scripts.h"
+#include "soul_eater_scripts.h"
 #include "jester.h"
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
@@ -146,6 +147,12 @@ typedef struct {
     unsigned char cloth_ready;
     float cloth_frames;
     float veil;                     /* 0 opaque; above, drawn blended with alpha 1 - veil (Nevan's fades) */
+    /* The Soul Eater (CEm016): its sight gauge (+0x4bc: 30 out of Dante's view, down while he looks), how shown it is
+     * (+0x4c4, 0-30), its hover over him (+0x4b4) and when that's re-rolled (+0x4b8), its local velocity (+0x60), its
+     * teleport's point (+0x3b0), its charge count (+0x448), whether a hit came while it couldn't react (+0x4d2). */
+    float se_sight, se_show, se_lift, se_lift_wait, se_vel[3], se_to[3];
+    signed char se_charges;
+    unsigned char se_hit_pending;
 } Enemy;
 
 static float body_radius(const Enemy *a) { return a->kind == ENEMY_VANGUARD ? 50.0f : ENEMY_RADIUS; }
@@ -260,6 +267,9 @@ static void lady_update_glue(float f, float px, float py, float pz);
 static void lady_hit_glue(HitKind kind);
 static void beowulf_update_glue(float f, float px, float py, float pz);
 static void beowulf_hit_glue(HitKind kind);
+static void soul_spawn_glue(void);
+static void soul_update_glue(float f, float px, float py, float pz);
+static void soul_hit_glue(HitKind kind);
 static void nevan_update_glue(float f, float px, float py, float pz);
 static void nevan_hit_glue(HitKind kind, float from_x, float from_z);
 static void arachne_update_glue(float f, float px, float py, float pz);
@@ -419,6 +429,7 @@ static int kind_health(int kind) {
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1300 / 250;   /* 0x5c32a0 +0x2c (class 11, copied by FUN_00342450) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * BEOWULF_MAX / 250;   /* 0x5b84e0 +0x2c (class 33, FUN_002d95a4) */
+    case ENEMY_SOUL: return (ENEMY_HEALTH * 200 + 125) / 250;   /* 0x5c1440 +0x2c (class 16, FUN_0049ad90) */
     case ENEMY_LADY: return ENEMY_HEALTH * LADY_MAX / 250;   /* 0x5cbe40 +0x2c (class 37, FUN_00444a8c) */
     case ENEMY_AGNI: case ENEMY_RUDRA: return ENEMY_HEALTH * 1200 / 250;
     default: return ENEMY_HEALTH;
@@ -531,6 +542,7 @@ static void spawn_one(int kind, float x, float z) {
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_BEOWULF) { beowulf_spawn_glue(); return; }
+    if (kind == ENEMY_SOUL) { soul_spawn_glue(); return; }
     if (kind == ENEMY_LADY) { lady_spawn_glue(); return; }
     if (kind == ENEMY_AGNI) { ar_spawn(); return; }
     if (kind == ENEMY_RUDRA) { ar_rudra_spawn(); return; }
@@ -556,7 +568,6 @@ int enemy_add_class(int spawn_class, float x, float z) {
     Enemy *selected = e;
     int i, kind = enemy_kind_for_class(spawn_class), hp = 0;
     if (spawn_class >= 24 && spawn_class <= 27 && kind == ENEMY_PRIDE) hp = 1500;
-    if (spawn_class == 34 && kind == ENEMY_PRIDE) hp = 200;
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (!enemies[i].active) {
             e = &enemies[i];
@@ -692,6 +703,7 @@ void enemy_select_nearest(float x, float z) {
         const Enemy *o = &enemies[i];
         float dx = o->pos[0] - x, dz = o->pos[2] - z, d = dx * dx + dz * dz;
         if (o->active && o->plan != P_DEATH && !(o->kind == ENEMY_VANGUARD && o->hidden) &&
+            !(o->kind == ENEMY_SOUL && o->veil > 0.97f) &&   /* unseen, it can't be locked on (0x80000000) */
             !(o->kind == ENEMY_GIGAPEDE && giga_part_out(o->step)) &&
             !(o->kind == ENEMY_CERBERUS && cerberus_boss_dying()) &&
             !(o->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) &&
@@ -733,6 +745,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 25) return ENEMY_ENVY;
     if (spawn_class == 24) return ENEMY_ABYSS;
     if (spawn_class == 28) return ENEMY_ARACHNE;
+    if (spawn_class == 34) return ENEMY_SOUL;
     if (spawn_class == 49) return ENEMY_NEVAN;
     if (spawn_class == 51) return ENEMY_BEOWULF;
     if (spawn_class == 55) return ENEMY_LADY;
@@ -892,11 +905,15 @@ typedef struct { const EnemyAiOp *ops; const short *starts; int scripts; const E
 static int ar_motion_map[AR_SCRIPTS];
 #define BW_MOTIONS 43
 static int bw_motion_map[BW_MOTIONS];
+#define SE_MOTIONS 14
+static int se_motion_map[SE_MOTIONS];
 static const ScriptBank *script_bank(void) {
     static const ScriptBank agni = {ar_ops_0, ar_starts_0, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
     static const ScriptBank rudra = {ar_ops_1, ar_starts_1, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
     static const ScriptBank beowulf = {bw_ops, bw_starts, BW_SCRIPTS, bw_caps, BW_CAPS, bw_attacks, BW_ATTACKS, bw_motion_map, BW_MOTIONS};
-    return e->kind == ENEMY_AGNI ? &agni : e->kind == ENEMY_RUDRA ? &rudra : e->kind == ENEMY_BEOWULF ? &beowulf : 0;
+    static const ScriptBank soul = {se_ops, se_starts, SE_SCRIPTS, se_caps, SE_CAPS, se_attacks, SE_ATTACKS, se_motion_map, SE_MOTIONS};
+    return e->kind == ENEMY_AGNI ? &agni : e->kind == ENEMY_RUDRA ? &rudra : e->kind == ENEMY_BEOWULF ? &beowulf :
+           e->kind == ENEMY_SOUL ? &soul : 0;
 }
 static int script_event;   /* the last script event the runner met this frame, + 1 (0: none) */
 static const EnemyAiOp *script_ops(void) { const ScriptBank *k = script_bank(); return k ? k->ops : e->kind == ENEMY_ENVY ? envy_ai_ops : e->kind == ENEMY_ABYSS ? abyss_ai_ops : enemy_ai_ops; }
@@ -1500,6 +1517,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind); return; }
+    if (e->kind == ENEMY_SOUL) { ++hits; soul_hit_glue(kind); return; }
     if (e->kind == ENEMY_LADY) { ++hits; lady_hit_glue(kind); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
@@ -1989,6 +2007,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_BEOWULF) { beowulf_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_SOUL) { soul_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_LADY) { lady_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_update(f, px, py, pz); return; }
     script_tick(f, root);
@@ -2343,7 +2362,7 @@ static void pose_parts(void) {
     const int body = m->body_bone_count;
     unsigned char *is_free = bone_free[e->kind];
     int i, c, b, k, steps;
-    if (m->bone_count == body) return;
+    if (m->bone_count == body && !m->cloth_count) return;
     if (!bone_free_built[e->kind]) {
         for (c = 0; c < m->cloth_count; ++c)
             for (b = 0; b < m->cloths[c].bone_count; ++b) is_free[m->cloths[c].bones[b]] = 1;
@@ -2358,13 +2377,14 @@ static void pose_parts(void) {
     }
     if (!m->cloth_count) return;
     if (!e->cloth) {
-        e->cloth = memalign(16, sizeof(ClothJoint) * ENEMY_MAX_EXTRA_BONES);
+        /* One joint a bone (a chain may run a part's bones or the body's own: the Soul Eater's wings). */
+        e->cloth = memalign(16, sizeof(ClothJoint) * ENEMY_MAX_BONES);
         if (!e->cloth) return;
         e->cloth_ready = 0;
     }
     if (!e->cloth_ready) {
-        for (i = body; i < m->bone_count; ++i) {
-            ClothJoint *j = &e->cloth[i - body];
+        for (i = 0; i < m->bone_count; ++i) {
+            ClothJoint *j = &e->cloth[i];
             memcpy(j->pos, world_pos[i], sizeof(j->pos));
             memset(j->vel, 0, sizeof(j->vel));
             memcpy(&j->rot, &world_rot[i], sizeof(j->rot));
@@ -2377,7 +2397,7 @@ static void pose_parts(void) {
     while (steps-- > 0) {
         for (c = 0; c < m->cloth_count; ++c) {
             const EnemyCloth *cl = &m->cloths[c];
-            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness};
+            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness, cl->axis, cl->limit};
             ClothCapsule caps[4];
             int n = cl->capsule_count < 4 ? cl->capsule_count : 4;
             for (k = 0; k < n; ++k) {
@@ -2396,19 +2416,19 @@ static void pose_parts(void) {
                 int bone = cl->bones[b], p = m->bone_parent[bone];
                 const float rest[3] = {m->bone_rest[bone].x - m->bone_rest[p].x, m->bone_rest[bone].y - m->bone_rest[p].y,
                                        m->bone_rest[bone].z - m->bone_rest[p].z};
-                const float *pp = is_free[p] ? e->cloth[p - body].pos : world_pos[p];
-                const ClothM3 *pr = is_free[p] ? &e->cloth[p - body].rot : (const ClothM3 *)&world_rot[p];
-                cloth_step(&e->cloth[bone - body], pp, pr, rest, &params, caps, n);
+                const float *pp = is_free[p] ? e->cloth[p].pos : world_pos[p];
+                const ClothM3 *pr = is_free[p] ? &e->cloth[p].rot : (const ClothM3 *)&world_rot[p];
+                cloth_step(&e->cloth[bone], pp, pr, rest, &params, caps, n);
             }
         }
     }
-    /* The chains' bones where they hang, and whatever rides on them. */
-    for (i = body; i < m->bone_count; ++i) {
+    /* The chains' bones where they hang, and whatever of a part's rides on them. */
+    for (i = 0; i < m->bone_count; ++i) {
         int p = m->bone_parent[i];
         if (is_free[i]) {
-            memcpy(world_pos[i], e->cloth[i - body].pos, sizeof(world_pos[i]));
-            memcpy(&world_rot[i], &e->cloth[i - body].rot, sizeof(world_rot[i]));
-        } else if (m->bone_link[i] < 0 && p >= body) hang_from(i, p);
+            memcpy(world_pos[i], e->cloth[i].pos, sizeof(world_pos[i]));
+            memcpy(&world_rot[i], &e->cloth[i].rot, sizeof(world_rot[i]));
+        } else if (i >= body && m->bone_link[i] < 0 && p >= body) hang_from(i, p);
     }
 }
 
@@ -4969,6 +4989,279 @@ static void beowulf_hit_glue(HitKind kind) {
     }
     /* He doesn't flinch (super armour); a run of heavy blows staggers him [the count is a stand-in]. */
     if (heavy && ++bw_gauge >= 12 && (e->action <= 2 || e->action == BW_WALK)) { bw_gauge = 0; bw_go(BW_STAGGER); }
+}
+
+/* ---- The Soul Eater (class 16, CEm016; EST 34): Missions 11 and 15. From its class's code (docs/ENEMY_SPECS.md H):
+ * per frame FUN_0049b7b0, its actions FUN_004325d0-FUN_00433fd0 (+5), each playing its own script (FUN_0049cdf0;
+ * tools/prepare_soul_eater.py), timed by its action table (FUN_0049ce50), turning by it (FUN_0049cf80), deciding by its
+ * one list (FUN_0049dea0: at rank 0 in Dante's view it hovers (0), else it comes for him (1)).
+ * Its trick: while he looks its way (FUN_00359b40, his facing) its sight gauge runs down (at half speed at rank 0) and
+ * it fades out (+0x4c4 down); out of his view the gauge is 30 and it shows (alpha 4 a frame of it, to 120 of 128). It
+ * hovers 20-80 over him (+0x4b4, re-rolled every 50-200 frames), moving a twentieth of the difference a frame (down at
+ * most 3, up at most 1) in its hovering actions (0x10000000).
+ * Stand-ins: Dante can't be held, so its hold (7) clings to his head draining his Devil Trigger (FUN_0021eae0: 20 a
+ * frame, 1000 a rune [inferred]) and his hits free him (the game: mashing); the rank-0 teleport (4) reappears ahead of
+ * his facing, not the camera's; 16 (a dodge when he does move 0x11 near it) isn't triggered. */
+enum { SE_HOVER = 0, SE_COME = 1, SE_KNOCK = 2, SE_KNOCK2 = 3, SE_BLINK = 4, SE_CLOSE = 5, SE_BITE = 6, SE_HOLD = 7,
+       SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DEATH = 30 };
+static float se_dante_yaw, se_dt_drain;
+void enemy_set_dante_yaw(float yaw) { se_dante_yaw = yaw; }
+float enemy_take_dt_drain(void) { float d = se_dt_drain; se_dt_drain = 0.0f; return d; }
+
+static int se_init(void) {
+    int i, found = 0;
+    for (i = 0; i < SE_MOTIONS; ++i) {
+        char name[5] = {'s', 'e', (char)('0' + i / 10), (char)('0' + i % 10), 0};
+        se_motion_map[i] = motion_find(name);
+        found += se_motion_map[i] >= 0;
+    }
+    return found > 0;
+}
+
+/* FUN_0049ce50: this action's time, rank 0. */
+static float se_time(int a) { return se_actions[a].time[0] + se_actions[a].rand[0] * ai_unit(); }
+
+/* FUN_0049cdb0 / FUN_0049cdf0: a new action, its own script. */
+static void se_go(int a) {
+    giga_note("soul", a, (float)e->health);
+    e->action = (unsigned char)a;
+    e->step = 0;
+    e->wake = 0.0f;
+    e->timer = 0.0f;
+    script_play(a == SE_DEATH ? 2 : a == SE_ARRIVE ? 13 : a);
+}
+
+/* FUN_00359b40: is it within his facing's cone (+-60 degrees) [the cone's width is read as 0x5555 either way]. */
+static int se_seen(float px, float pz) {
+    float d = wrap_angle(atan2f(e->pos[0] - px, e->pos[2] - pz) - se_dante_yaw);
+    return fabsf(d) < PI / 3.0f;
+}
+
+/* FUN_0049dea0 at rank 0: in his view, hover (0); out of it, come for him (1). */
+static void se_decide(float px, float pz) {
+    int next = se_seen(px, pz) ? SE_HOVER : SE_COME;
+    if (next != e->action) se_go(next);
+    else e->timer = se_time(next), e->step = 1;
+}
+
+/* FUN_0042e0c0: its local velocity along its facing. */
+static void se_move(float f) { move_local(e->se_vel[0] * f, e->se_vel[1] * f, e->se_vel[2] * f); }
+
+static void soul_spawn_glue(void) {
+    float g;
+    static int ready = -1;
+    if (ready < 0) ready = se_init();
+    e->motion = -1;
+    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->floor_y = g;
+    e->pos[1] = e->floor_y + 100.0f;
+    e->plan = P_WATCH;
+    e->se_sight = 30.0f; e->se_show = 0.0f; e->se_lift = 50.0f; e->se_lift_wait = 0.0f;
+    e->se_vel[0] = e->se_vel[1] = e->se_vel[2] = 0.0f;
+    e->se_charges = 0; e->se_hit_pending = 0;
+    e->veil = 1.0f;
+    se_go(SE_ARRIVE);   /* FUN_0049ad90, spawn type 0: action 13 */
+    e->fade = 0.0f;
+}
+
+static void soul_update_glue(float f, float px, float py, float pz) {
+    float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), root[3];
+    int a = e->action, hover = 0, steady = 0, held = 0;
+    float turn = (float)se_actions[a < SE_SCRIPTS ? a : 0].turn[0] * (PI / 180.0f);
+    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
+    script_event = 0;
+    script_tick(f, root);
+    e->timer -= f;
+    if (a == SE_DEATH) {
+        /* FUN_0049c2a0: script 2, spinning 0x300 a frame, falling, fading over 30 frames, then gone. */
+        e->yaw = wrap_angle(e->yaw + 0.0736f * f);
+        e->se_vel[1] -= 0.5f * f;
+        se_move(f);
+        e->veil = 1.0f - (e->timer > 0.0f ? e->timer : 0.0f) * 4.0f / 128.0f;
+        if (e->timer <= 0.0f) e->active = 0;
+        return;
+    }
+    if (e->se_hit_pending && (a == SE_HOVER || a == SE_COME)) { e->se_hit_pending = 0; se_go(SE_SHOWN); a = SE_SHOWN; }
+    switch (a) {
+    case SE_HOVER:
+        hover = 1;
+        if (e->step == 0) { e->timer = se_time(a); e->step = 1; e->wake = 0.0f; }
+        goyle_turn_to(px, pz, turn, f);
+        if (e->timer <= 0.0f) {
+            if ((e->wake += 1.0f) > 2.0f) { se_go(SE_BLINK); return; }
+            se_decide(px, pz);
+        }
+        break;
+    case SE_COME:
+        hover = 1;
+        if (e->step == 0) {
+            /* FUN_00432730: 12 a frame beyond 2000, 8 beyond 1000, else 4. */
+            e->se_vel[0] = e->se_vel[1] = 0.0f;
+            e->se_vel[2] = d > 2000.0f ? 12.0f : d > 1000.0f ? 8.0f : 4.0f;
+            e->timer = se_time(a); e->step = 1;
+        }
+        goyle_turn_to(px, pz, turn, f);
+        se_move(f);
+        if (d < 200.0f) { se_go(SE_CLOSE); return; }
+        if (e->timer <= 0.0f) se_decide(px, pz);
+        break;
+    case SE_KNOCK: case SE_KNOCK2:
+        /* FUN_00432930: back at 20, easing to 0 by 2 a frame; then the blink. */
+        steady = 1;
+        if (e->step == 0) { e->se_vel[0] = e->se_vel[1] = 0.0f; e->se_vel[2] = -20.0f; e->step = 1; }
+        e->se_vel[2] += 2.0f * f; if (e->se_vel[2] > 0.0f) e->se_vel[2] = 0.0f;
+        se_move(f);
+        if (e->done) { se_go(SE_BLINK); return; }
+        break;
+    case SE_BLINK:
+        /* FUN_00432ad0: out over 10 frames, then (FUN_0049d6e0) a point 400-900 cm from him at his floor + 100,
+         * half the way there a frame for 10 frames, then back over 30, and a new decision. */
+        steady = 1;
+        if (e->step == 0) { e->timer = 10.0f; e->step = 1; }
+        if (e->step == 1) {
+            e->veil = 1.0f - (e->timer > 0.0f ? e->timer : 0.0f) / 10.0f;
+            if (e->timer <= 0.0f) {
+                float ang = se_dante_yaw + (ai_unit() - 0.5f) * (PI / 4.0f), r = 400.0f + 500.0f * ai_unit(), g;
+                e->se_to[0] = px + sinf(ang) * r; e->se_to[2] = pz + cosf(ang) * r;
+                e->se_to[1] = (floor_under(px, py + 100.0f, pz, &g) ? g : py) + 100.0f;
+                e->timer = 10.0f; e->step = 2; e->veil = 1.0f;
+            }
+        } else if (e->step == 2) {
+            int k;
+            for (k = 0; k < 3; ++k) e->pos[k] += (e->se_to[k] - e->pos[k]) * 0.5f;
+            if (e->timer <= 0.0f) { for (k = 0; k < 3; ++k) e->pos[k] = e->se_to[k]; e->timer = 0.0f; e->step = 3; }
+        } else {
+            goyle_turn_to(px, pz, turn, f);
+            e->veil = 1.0f + e->timer / 30.0f;   /* timer runs from 0 down: in over 30 */
+            if (e->timer <= -30.0f) { e->veil = 0.0f; e->se_show = 0.0f; se_decide(px, pz); }
+        }
+        return;   /* its own alpha while it blinks */
+    case SE_CLOSE:
+        /* FUN_00432e30: under 100 it backs off, rising 3 a frame, for 60 frames; beyond 500 back to 1; else, its
+         * time up, the bite. */
+        hover = 1;
+        if (e->step == 0) { e->se_vel[0] = e->se_vel[1] = e->se_vel[2] = 0.0f; e->timer = se_time(a); e->step = 1; }
+        if (e->step == 1) {
+            goyle_turn_to(px, pz, turn, f);
+            if (d < 100.0f) { e->timer = 60.0f; e->se_vel[2] = -12.0f; e->step = 2; }
+            else if (d > 500.0f) { se_go(SE_COME); return; }
+            else if (e->timer <= 0.0f) { se_go(SE_BITE); return; }
+        } else {
+            e->se_lift += 3.0f * f;
+            goyle_turn_to(px, pz, -turn, f);
+            se_move(f);
+            if (e->timer <= 0.0f) { se_decide(px, pz); return; }
+        }
+        break;
+    case SE_BITE: {
+        /* FUN_00433000: it dives (its hover 6 a frame lower); 23 frames in, its mouth within 150 of his middle takes
+         * him (FUN_0021f2e0 → 14, the latch); its script done, 12. */
+        steady = 1;
+        e->se_lift -= 6.0f * f;
+        e->pos[1] = py + e->se_lift > e->floor_y ? py + e->se_lift : e->floor_y;
+        if (e->step == 0) { e->timer = 23.0f; e->step = 1; }
+        if (e->step == 1 && e->timer <= 0.0f) {
+            float mx = e->pos[0] + sinf(e->yaw) * 60.0f - px, my = e->pos[1] + 120.0f - (py + 100.0f), mz = e->pos[2] + cosf(e->yaw) * 60.0f - pz;
+            e->step = 2;
+            if (attacks_on && mx * mx + my * my + mz * mz < 150.0f * 150.0f) { se_go(SE_LATCH); return; }
+        }
+        if (e->done) { se_go(SE_SPIN); return; }
+        break;
+    }
+    case SE_LATCH:
+        /* FUN_00433930: on his head, its script, then the hold. */
+        held = 1;
+        if (e->done) { se_go(SE_HOLD); return; }
+        break;
+    case SE_HOLD:
+        /* FUN_004331b0: draining his Devil Trigger 20 a frame for its time (240 + 60 at rank 0); freed, 8; its time up,
+         * 9, the burst. */
+        held = 1;
+        if (e->step == 0) { e->timer = se_time(a); e->step = 1; }
+        se_dt_drain += 20.0f * f;
+        if (e->timer <= 0.0f) { se_go(SE_BURST); return; }
+        break;
+    case SE_FREED:
+        /* FUN_00433310: thrown off, its script, then hovering. */
+        steady = 1;
+        if (e->done) { se_go(SE_HOVER); return; }
+        break;
+    case SE_BURST:
+        /* FUN_004333c0: its script's record 1 (3000) on him, gone 30 frames later. */
+        held = 1;
+        if (e->step == 0) { e->timer = 30.0f; e->step = 1; }
+        if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
+        if (e->timer <= 0.0f) { e->plan = P_DEATH; e->active = 0; }
+        break;
+    case SE_SPIN:
+        /* FUN_004336e0: its charges spent (none at rank 0), back to hovering when its script's done. */
+        steady = 1;
+        if (e->done) { se_go(SE_HOVER); return; }
+        break;
+    case SE_ARRIVE:
+        /* FUN_004337f0: in over 100 frames to half shown, turning to him; at 120 a decision. */
+        steady = 1;
+        goyle_turn_to(px, pz, turn, f);
+        e->veil = 1.0f - (-e->timer) * 0.64f / 100.0f;
+        if (-e->timer >= 120.0f) { e->veil = 0.0f; e->se_show = 15.0f; se_decide(px, pz); }
+        return;
+    case SE_SHOWN:
+        /* FUN_00433a70: a hit shows it: after 0-80 frames fully shown, its script at 1.5 speed, then the blink. */
+        if (e->step == 0) { e->timer = 80.0f * ai_unit(); e->step = 1; }
+        if (e->step == 1) { if (e->timer <= 0.0f) { e->se_sight = 30.0f; e->se_show = 30.0f; e->step = 2; script_play(15); } }
+        else { goyle_turn_to(px, pz, turn, f); if (e->done) { se_go(SE_BLINK); return; } }
+        hover = 1;
+        break;
+    default:
+        if (e->done) se_go(SE_HOVER);
+        break;
+    }
+    if (held) {
+        /* FUN_0049dd80: on his head, 5 ahead of it. */
+        e->pos[0] = px + sinf(se_dante_yaw) * 5.0f; e->pos[1] = py + 120.0f; e->pos[2] = pz + cosf(se_dante_yaw) * 5.0f;
+        e->yaw = se_dante_yaw;
+        e->veil = 0.0f;
+        return;
+    }
+    /* Its hover (0x10000000) and its re-rolled height. */
+    if ((e->se_lift_wait -= f) < 0.0f) { e->se_lift_wait = 50.0f + 150.0f * ai_unit(); e->se_lift = 20.0f + 60.0f * ai_unit(); }
+    if (hover) {
+        float k = (e->pos[1] - (py + e->se_lift)) / 20.0f;
+        if (k > 3.0f) k = 3.0f;
+        if (k < -1.0f) k = -1.0f;
+        e->pos[1] -= k * f;
+    }
+    (void)steady;
+    /* Its sight gauge and how shown it is (FUN_0049b7b0), rank 0's halves. */
+    if (se_seen(px, pz)) { e->se_sight -= 0.5f * f; if (e->se_sight < 0.0f) e->se_sight = 0.0f; }
+    else e->se_sight = 30.0f;
+    if (e->se_sight >= 30.0f) { e->se_show += f; if (e->se_show > 30.0f) e->se_show = 30.0f; }
+    else { e->se_show -= 0.5f * f; if (e->se_show < 0.0f) e->se_show = 0.0f; }
+    e->veil = 1.0f - e->se_show * 4.0f / 128.0f;
+    keep_apart(px, py, pz, f);
+    if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
+}
+
+static void soul_hit_glue(HitKind kind) {
+    float at[3] = {e->pos[0], e->pos[1] + 130.0f, e->pos[2]};
+    int heavy = !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL);
+    if (e->plan == P_DEATH || e->action == SE_BURST) return;
+    fx_hit_spark(at);
+    e->se_show = 30.0f; e->se_sight = 30.0f;
+    if (mortal) {
+        e->health -= heavy ? 2 : 1;
+        if (e->health <= 0) {
+            e->health = 0;
+            e->plan = P_DEATH;
+            se_go(SE_DEATH);
+            e->timer = 30.0f;
+            e->se_vel[0] = e->se_vel[1] = e->se_vel[2] = 0.0f;
+            died();
+            return;
+        }
+    }
+    if (e->action == SE_HOLD || e->action == SE_LATCH) { se_go(SE_FREED); return; }   /* [stand-in for his struggling] */
+    if (heavy && e->action != SE_BLINK) { se_go(SE_KNOCK); return; }
+    e->se_hit_pending = 1;   /* FUN_0049b7b0: a hit while hovering or coming shows it (15) */
 }
 
 /* ---- The Fallen (fallen.c decides; here his body, his spear and the shared attack turn). */

@@ -4296,7 +4296,12 @@ int main(int argc, char *argv[]) {
                 /* During a script's event the enemies wait (a stand-in: what the game's event mode stops in
                  * them isn't decoded), so they don't set on a Dante who can't move. */
                 if (!(mission_mode && msg_event_on()))
-                    enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+                    enemy_set_dante_yaw(player.yaw);
+            enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+            {
+                float drained = enemy_take_dt_drain() / 1000.0f;   /* runes [1000 a rune inferred] */
+                if (drained > 0.0f && !player.devil) { player.dt_energy -= drained; if (player.dt_energy < 0.0f) player.dt_energy = 0.0f; }
+            }
                 if(leviathan_boss_drain_trigger(dt*60,player.devil))player.devil=0;
                 orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);
                 enemy_clamp_player(&player.z);

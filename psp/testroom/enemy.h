@@ -10,7 +10,7 @@
 
 /* The kinds there are models for, in tools/prepare_skinned_model.py's ENEMY_KINDS order. */
 typedef enum {
-    ENEMY_PRIDE, ENEMY_GLUTTONY, ENEMY_LUST, ENEMY_SLOTH, ENEMY_WRATH, ENEMY_GREED, ENEMY_ENIGMA, ENEMY_GOYLE, ENEMY_JESTER, ENEMY_AGNI, ENEMY_RUDRA, ENEMY_ENVY, ENEMY_ARACHNE, ENEMY_NEVAN, ENEMY_PAWN, ENEMY_DULLAHAN, ENEMY_BEOWULF, ENEMY_FALLEN, ENEMY_LADY, ENEMY_BISHOP, ENEMY_ABYSS, ENEMY_KIND_TOTAL
+    ENEMY_PRIDE, ENEMY_GLUTTONY, ENEMY_LUST, ENEMY_SLOTH, ENEMY_WRATH, ENEMY_GREED, ENEMY_ENIGMA, ENEMY_GOYLE, ENEMY_JESTER, ENEMY_AGNI, ENEMY_RUDRA, ENEMY_ENVY, ENEMY_ARACHNE, ENEMY_NEVAN, ENEMY_PAWN, ENEMY_DULLAHAN, ENEMY_BEOWULF, ENEMY_FALLEN, ENEMY_LADY, ENEMY_BISHOP, ENEMY_ABYSS, ENEMY_SOUL, ENEMY_KIND_TOTAL
 } EnemyKind;
 /* Not a model kind: the Gigapede's head and segments, which take one enemy slot each. */
 #define ENEMY_GIGAPEDE 100
@@ -87,6 +87,10 @@ int enemy_poses_done(void);         /* running total, to measure the saving */
 void enemy_update(float dt, float px, float py, float pz);
 /* Final enemy contact solve after Dante's body/wall pass; never moves Dante. */
 void enemy_finish_collisions(float px, float py, float pz);
+/* Dante's facing, for those that hide from his gaze (the Soul Eater); set before enemy_update. */
+void enemy_set_dante_yaw(float yaw);
+/* Devil Trigger drained from Dante since the last call, in the game's units (1000 a rune) [the Soul Eater's hold]. */
+float enemy_take_dt_drain(void);
 /* An attack reached Dante this frame: returns 1 once per hit, from where, and if it's a heavy one. */
 int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
 /* Original attack-record damage, or -1 for the generic 700/800 fallback. */

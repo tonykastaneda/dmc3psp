@@ -117,6 +117,12 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $BeowulfHeader) -or
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_beowulf.py"), $Iso.FullName, "--output", $Generated)
 }
+$SoulHeader = Join-Path $Generated "soul_eater_scripts.h"
+if ($Regenerate -or -not (Test-Path -LiteralPath $SoulHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_soul_eater.py")).LastWriteTime -gt (Get-Item -LiteralPath $SoulHeader).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_soul_eater.py"), $Iso.FullName, "--output", $Generated)
+}
 
 $VergilHeader = Join-Path $Generated "boss_vergil_runtime.h"
 if ($Regenerate -or -not (Test-Path -LiteralPath $VergilHeader) -or

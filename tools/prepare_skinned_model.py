@@ -375,6 +375,9 @@ ENEMY_KINDS = (
     # body (the Hells' skeleton; its [35] motions are the Hells' byte for byte), [4] its scythe [inferred: the largest
     # of [3]-[5]].
     ("abyss", 118, 1, 4),
+    # The Soul Eater (class 16, EST 34), em016.pac: GDATA 126 (a PNST), pack 11 in the table at 0x58e740. [0] textures,
+    # [1] its body (an EFM laid out as a MOD, 24 bones), [3] its six wing chains (em016_00.clt), [8] its motions.
+    ("soul", 126, 1, None),
 
 )
 AR_SLOT = 131
@@ -393,6 +396,49 @@ EXTRA_SKINS = {}
 EXTRA_CHAINS = {"nevan": ((4, {0: 3, 1: 4, 2: 5}, 7, (0x5BC030, 0x5BC040, 3)),
                           (5, {0: 1, 1: 14, 2: 2, 3: 3}, 8, None),
                           (6, {0: 14, 1: 7, 2: 8, 6: 11, 7: 12}, None, None))}
+# Chains on a body's own bones (its .clt's pack index): the Soul Eater's six wings (FUN_0049ad90: [3] read six times by
+# FUN_0022fbd0 onto its body's bones), X-axis, no gravity, no length limit.
+BODY_CHAINS = {"soul": 3}
+# Its motions, "seNN", PAC [8] slot NN: its scripts (em016 [6], tools/prepare_soul_eater.py) name them by slot.
+SOUL_MOTIONS = tuple(range(14))
+
+
+def parse_cloths(text: str):
+    """Every cloth of a .clt (ClothNum of them, each from ClothNo to End): its values, its bones with their axes."""
+    cloths, current = [], None
+    for line in text.splitlines():
+        parts = line.split()
+        if not parts or parts[0].startswith((";", "$")):
+            continue
+        if parts[0] == "ClothNo":
+            current = {"bones": [], "axes": []}
+            cloths.append(current)
+        elif current is None:
+            continue
+        elif parts[0] == "Bone":
+            current["bones"].append(int(parts[1]))
+            current["axes"].append(parts[2] if len(parts) > 2 else "Y")
+        elif parts[0] != "End":
+            values = []
+            for value in parts[1:]:
+                try:
+                    values.append(float(value))
+                except ValueError:
+                    pass
+            current[parts[0]] = values
+    return cloths
+
+
+def cloth_entry(cloth, bones, capsules):
+    """A chain's runtime values; FUN_0022f1d0's defaults where the script is silent."""
+    # X and NX (the mirrored wings) are one axis here: cloth.c takes its sign from the bone's rest offset.
+    axes = {"X" if a == "NX" else a for a in cloth.get("axes", ["Y"])}
+    if len(axes) > 1 or not axes <= {"Y", "X"}:
+        raise ValueError(f"cloth axes {axes}: only one of Y or X per chain is ported")
+    return {"bones": bones, "gravity": cloth.get("Gravity", [0.0, -0.2, 0.0])[1],
+            "spring": cloth.get("SpringForce", [0.05])[0], "max_speed": cloth.get("MaxSpeed", [50.0])[0],
+            "stiffness": cloth.get("Stiffness", [0.3])[0], "capsules": capsules,
+            "axis": 1 if axes == {"X"} else 0, "limit": int(cloth.get("LimitLength", [1])[0])}
 
 
 # Texture scrolls (.TSC, parsed by FUN_0019d4a0 / FUN_0019d620, run by FUN_0019daf0 each frame) and the parts they
@@ -548,7 +594,8 @@ def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
         "typedef struct { int bone; Dmc3Vec3 a, b; float radius; } EnemyClothCapsule;",
         "/* One CCnsChain: its bones (the model's, parents first) and its .clt's values (per 60 fps frame). */",
         "typedef struct EnemyCloth { const unsigned char *bones; int bone_count; float gravity, spring, max_speed, stiffness;",
-        "    const EnemyClothCapsule *capsules; int capsule_count; } EnemyCloth;",
+        "    const EnemyClothCapsule *capsules; int capsule_count;",
+        "    int axis, limit; /* the bones' axis (0 Y, 1 X), LimitLength */ } EnemyCloth;",
         "/* A .TSC scroll (FUN_0019d620): type (1 linear, 3 eased), DirUV, TimeUV (frames a cycle), MinimumUV. */",
         "typedef struct EnemyScroll { int type, dir_u, dir_v; float time_u, time_v, minimum_u, minimum_v; } EnemyScroll;",
         "typedef struct {",
@@ -646,11 +693,18 @@ def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
                 if bone_link[b] >= 0 or parents[b] < 0 or parents[b] > b:
                     raise ValueError(f"{name} [{clt_index}]: chain bone {b - base} is linked or out of order")
             capsules = read_capsules(read_exe, capsule_spec)
-            cloths.append({"bones": free, "gravity": cloth.get("Gravity", [0.0, -0.2, 0.0])[1],
-                           "spring": cloth.get("SpringForce", [0.05])[0], "max_speed": cloth.get("MaxSpeed", [50.0])[0],
-                           "stiffness": cloth.get("Stiffness", [0.3])[0], "capsules": capsules})
+            cloths.append(cloth_entry(cloth, free, capsules))
             print(f"  {name} [{part_index}] chain: bones {[b - base for b in free]}, gravity {cloths[-1]['gravity']}, "
                   f"stiffness {cloths[-1]['stiffness']}, capsules {capsules}")
+        if name in BODY_CHAINS:
+            script = packs[slot][BODY_CHAINS[name]].replace(b"\0", b"").decode("ascii", "replace")
+            for cloth in parse_cloths(script):
+                for b in cloth["bones"]:
+                    if b >= body_count or parents[b] < 0 or parents[b] > b:
+                        raise ValueError(f"{name}: chain bone {b} isn't a body bone after its parent")
+                cloths.append(cloth_entry(cloth, list(cloth["bones"]), []))
+            print(f"  {name} body chains: {[c['bones'] for c in cloths]}, axis {[c['axis'] for c in cloths]}, "
+                  f"limit {[c['limit'] for c in cloths]}, stiffness {[c['stiffness'] for c in cloths]}")
         if weapon_index is None:
             # No weapon: one degenerate triangle keeps the tables the same shape.
             wmesh = {"positions": [(0.0, 0.0, 0.0)], "normals": [(0.0, 1.0, 0.0)], "uvs": [(0.0, 0.0)],
@@ -706,7 +760,8 @@ def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
         if cloths:
             lines.append(f"static const EnemyCloth {n}_cloths[] = {{" + ",".join(
                 f"{{{n}_cloth{c}_bones,{len(cl['bones'])},{c_float(cl['gravity'])},{c_float(cl['spring'])},"
-                f"{c_float(cl['max_speed'])},{c_float(cl['stiffness'])},{n}_cloth{c}_capsules,{len(cl['capsules'])}}}"
+                f"{c_float(cl['max_speed'])},{c_float(cl['stiffness'])},{n}_cloth{c}_capsules,{len(cl['capsules'])},"
+                f"{cl['axis']},{cl['limit']}}}"
                 for c, cl in enumerate(cloths)) + "};")
         table.append(
             f'    {{"{name}",{n}_bone_parent,{n}_bone_local,{n}_bone_rest,{n}_positions,{n}_normals,{n}_uvs,'
@@ -775,6 +830,7 @@ def main() -> None:
         beowulf_pack = pac_list(read_slot(BEOWULF_SLOT))
         fallen_pack = pac_list(read_slot(FALLEN_SLOT))
         lady_pack = pac_list(read_slot(LADY_SLOT))
+        soul_pack = pnst_entries(read_slot(126))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
@@ -905,7 +961,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 118: abyss_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack}, executable)
+    write_enemy(args.output, {117: enemy_pack, 118: abyss_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack, 126: soul_pack}, executable)
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack, abyss_pack)
     write_devils(args.output, devil_packs)
 
@@ -1002,6 +1058,14 @@ def main() -> None:
             print(f"Blood-goyle gb{slot:02d}: not a MOT ({error}), skipped")
             continue
         motions.append({"name": f"gb{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    # The Soul Eater's: "seNN" from [8].
+    soul_motions = pac_list(soul_pack[8])
+    for slot in SOUL_MOTIONS:
+        raw = soul_motions[slot] if slot < len(soul_motions) else b""
+        if not raw:
+            continue
+        parsed = parse_mot(raw)
+        motions.append({"name": f"se{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     mlines = [
         "#ifndef DMC3_MOTION_RUNTIME_H",
         "#define DMC3_MOTION_RUNTIME_H",

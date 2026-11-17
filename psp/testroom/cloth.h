@@ -15,6 +15,8 @@ typedef struct {
 
 typedef struct {
     float gravity, spring, max_speed, stiffness;
+    int axis_x;   /* the bones' 'X' in the .clt (the Soul Eater's wings), else 'Y' */
+    int limit;    /* LimitLength (FUN_0022f270's +0xb4): hold the rest length */
 } ClothParams;
 
 /* A capsule, both ends and the radius already where the body is now. */

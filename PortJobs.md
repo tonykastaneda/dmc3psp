@@ -1,6 +1,6 @@
 # Port jobs
 
-- [ ] Soul Eaters: Missions 11 and 15
+- [x] Soul Eaters: Missions 11 and 15 run their own class (ENEMY_SOUL: model, wing chains, scripts, action table, sight and showing, approach, bite, hold draining DT, burst, death; docs/ENEMY_SPECS.md H); stand-ins: Dante isn't held (it clings, his hits free him), the rank-0 teleport's angle, the dodge's trigger
 - [ ] The Abyss: its own body, scythe, scripts, caps and health (1500) run on the Hells' machinery (Missions 17, 19); not yet: its own decision table (it decides with the Pride's), docs/ENEMY_SPECS.md H
 - [ ] Jester: his attacks, throws, defence and stun meter are the game's; not yet: his second set of moves (later encounters and the health threshold), his idle actions, the throws' effects, a bullet's stun value (estimate)
 - [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns and knockbacks are the game's; not yet: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects

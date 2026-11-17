@@ -1012,7 +1012,15 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   pairs that follow the Hells' table, and its decision data (per-rank pointer lists, `0x5ceef0`-`0x5cf500`) isn't
   laid out as the Hells' band and row tables: not decoded. Stand-ins: it decides with the Pride's table and the
   Pride's hit-script list, playing its own scripts by the same numbers.
-- **Soul Eater** (not ported; Prides with its 200 health stand in): new `0049a560`, constructor `0049a880` (on the
+- **Soul Eater in the port** (`ENEMY_SOUL`, enemy.c's soul_*; `tools/prepare_soul_eater.py`): its body, motions (seNN,
+  PAC [8]), six wing chains (em016_00.clt: X / NX axes, no gravity, stiffness 0.1, no length limit; cloth.c), scripts
+  ([6], one per action; a wait to the motion's end ends one), caps, records (500, 3000), action table (`0x5c14f0`,
+  0x2c each: time and random by rank, turn in degrees a frame, the decision list `0x5c14d0` → `0x5c14a0`: rank 0
+  always 1, in Dante's view 0), its sight and showing (+0x4bc / +0x4c4), hover (+0x4b4 / +0x4b8), its actions 0-15
+  and death (`0049c2a0`). The hold (7) drains his Devil Trigger (+0x28c4, FUN_0021eae0 20 a frame) and, its time up,
+  bursts (9: record 1, 3000). Stand-ins: Dante isn't held (it clings to his head; his hits free him), the rank-0
+  teleport's camera angle (his facing), 16's trigger, the cone's width (±60 degrees).
+- **Soul Eater** (as decoded): new `0049a560`, constructor `0049a880` (on the
   base `00257340`, as Nevan and Agni & Rudra, not the Hells'), vtable `0x611760`; per-frame `0049aa40` → `0049b7b0`
   (state +4: 0 `0049ab30`, 1 `0049b7b0`, 2 `0049c2a0` the death), its action handlers at `0x4325d0`-`0x433fd0`;
   set-up `0049ad90` reads `0x5c1340` (300, then turn rates), the attack records at **`0x5c13c0`** (record 0: **500**

@@ -334,7 +334,7 @@ In the port: the route plays from 212 to Mission Clear in PPSSPP. Stand-ins and 
   charge on all fours, a leaping rush, a stomp that sends a pillar rolling at Dante, and a volley of light feathers
   after his body flashes; super armour, a gauge staggers him. Which motion is which is read from their root paths;
   timings, health and damage are estimates, and the pillars are glows that can't be broken.
-- **Soul Eaters** (class 16, em016) aren't ported and spawn as Prides. Mission Clear comes as Beowulf falls, not by
+- **Soul Eaters** (class 16, em016) are their own port (ENEMY_SOUL). Mission Clear comes as Beowulf falls, not by
   demo 30 at the shiny object.
 
 ### Mission 13: "Chaos' warm welcome"
@@ -432,7 +432,7 @@ the counter on one.
 **In the port** (`tools/gen_rooms.py` Mission 15, `psp/testroom/mission15.c`, `fallen.c`, `docs/FALLEN_SPEC.md`):
 the route 222 -> 202 -> 219 -> 200 (portal) -> 219 -> 202 (portal: 1) -> 212 -> 213 (52) -> 212 (portal: 2) -> 227
 -> 208 (53) -> 227 (portal: 0) -> 226 -> 224 (54) -> 226 (portal: 1) -> 211 -> 219 -> the lift -> 106, Mission Clear.
-- The Fallen are their own port (`fallen.c`); Soul Eaters (class 16) aren't ported and spawn as Prides.
+- The Fallen are their own port (`fallen.c`); Soul Eaters (class 16) are their own port (ENEMY_SOUL).
 - One examine at 219's control sets every fragment held (the port's item use now does that for any spot).
 - 219's lift isn't drawn or ridden: its platform (area 1) is a door into 106's start 3 once the three are set.
   106 clears as Dante arrives (demo 42 isn't played).

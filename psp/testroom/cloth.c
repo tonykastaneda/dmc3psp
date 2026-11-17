@@ -79,10 +79,12 @@ void cloth_rest(ClothJoint *joint, const float parent_pos[3], const ClothM3 *par
     joint->rot = *parent_rot;
 }
 
-/* FUN_0022f270 for one bone ('Y' axis, LimitLength on, no wind), as coat.c's step. */
+/* FUN_0022f270 for one bone (no wind), as coat.c's step. */
 void cloth_step(ClothJoint *joint, const float parent_pos[3], const ClothM3 *parent_rot, const float rest_offset[3],
                 const ClothParams *params, const ClothCapsule *capsules, int capsule_count) {
-    const float up[3] = {0.0f, 1.0f, 0.0f};
+    /* The axis the bone points back to its parent along: Y for a hanging chain; for an 'X' one (wings spread
+     * sideways), X toward the parent's side. */
+    const float up[3] = {params->axis_x ? (rest_offset[0] < 0.0f ? 1.0f : -1.0f) : 0.0f, params->axis_x ? 0.0f : 1.0f, 0.0f};
     const float stiffness = params->stiffness, keep = 1.0f - params->stiffness;
     float *p = joint->pos, *v = joint->vel;
     float rest_pos[3], rest_up[3], predicted[3], sim_up[3], blended[3], d[3], len, speed;
@@ -116,7 +118,7 @@ void cloth_step(ClothJoint *joint, const float parent_pos[3], const ClothM3 *par
         float stretch = len - limit;
         for (k = 0; k < 3; ++k) {
             float dir = d[k] / len;
-            p[k] = parent_pos[k] + dir * limit;
+            if (params->limit) p[k] = parent_pos[k] + dir * limit;
             v[k] -= params->spring * dir * stretch;
         }
     }
