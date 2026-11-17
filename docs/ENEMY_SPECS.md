@@ -929,3 +929,20 @@ classes `0x45d720`, `0x468580`, `0x43df80`, `0x417340`, `0x4179a0`, `0x4181a0` a
 bolt on Dante's spot after 30 frames or, for 32, a sweep about her, at the bats' 300; 23 also lets out bats [inferred:
 `003ba470` keeps the bats' count]; move 9's place (her starting spot); which way she circles (+0x4e1f) is random; her
 fades hide her below a third rather than blending; the bats are drawn as glows.
+
+---
+
+## H. Arachne (class 10, CEm010; EST 28), Soul Eater (class 16, CEm016; EST 34), Abyss (class 6, CEm006; EST 24): where they are
+
+From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` (top 16 bits = GDATA slot):
+
+| | class / pack | GDATA | new / constructor / vtable | pack layout |
+|---|---|---|---|---|
+| Arachne | 10 / 5 | 121 (em010) | `003f1e00` / `003f1770` / `0x60bf30` (per-frame `003f3e40`, actions `003f6eb0`, set-up `003f2380`) | [16] scripts, [17] caps, [18] shapes, PACs [7]-[15] motions |
+| Soul Eater | 16 / 11 | 126 (em016) | `0049a560` | [1] an **EFM** (effect model) body, [3] text, [4] caps, [5] shapes, [6] scripts, [8] / [9] motions |
+| Abyss | 6 / 1 | 118 (em006) | `0041bdb0` / `0041bc70` / `0x60d360` (its own class on the base `00284da0`, not the Hells' shared AI `003674a0`) | the Hells' layout: [1] body, [3]-[5] more MODs, [35] motions, [38] scripts, [39] caps, [40] shapes |
+
+- **Arachne**: health **1400** from block `0x5c3870` +0x2c (a second block, `0x5c396c`, has 2000; `003f2380` picks by
+  spawn), already the port's. Its spiderlings are a separate 0x21b0-byte object (`004f0f60` → `004f0df0`), made by
+  action handler `003fd720`. The web shot (CEm010Shl00 / Shl01) isn't made by any action handler: inferred from its
+  script events, not traced.
