@@ -66,14 +66,13 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
-- **Beowulf**: how long he idles before picking (40 frames; the attack gate at +0x130 isn't read, also Lady's
-  specials and the Hells' token); what sets off his stagger (12 heavy hits, a stand-in count); the feathers' flight
+- **Beowulf**: what sets off his stagger (12 heavy hits, a stand-in count); the feathers' flight
   (their actor 0040cef0 isn't read); the run stops at once, not at its next stride's event; his charge (4) from the
   run isn't taken. `enemy.c` Beowulf, PortJobs.
 - **Lady**: her grapple (0x1d) and ledge mode (0x1e) are ported, but the wire isn't drawn and she rises straight up
   (its direction, 0044b780, isn't read); the ledges aren't in the port's collision, so she perches at y 501 by hand
   until her hop; FUN_00449120 taken as the ledge nearest Dante; the hop's landing 0x0e plays 0x61's (its slot is
-  empty); 0x8f fires one pistol shot [inferred]; the special gate every 600 frames [estimate]; what 0x1b / 0x1c fire (a rocket, a
+  empty); 0x8f fires one pistol shot [inferred];  what 0x1b / 0x1c fire (a rocket, a
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.

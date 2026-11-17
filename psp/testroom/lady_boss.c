@@ -53,7 +53,9 @@ static const float ring_middle[16][2] = {{2500, 1723}, {2242, 1777}, {2022, 1922
 static const float ledges[5][2] = {{1940, 1629}, {1594, 2694}, {2500, 3353}, {3406, 2694}, {3060, 1629}};
 #define MIDDLE_X 2500.0f
 #define MIDDLE_Z 2400.0f
-#define SPECIAL_GATE 600.0f   /* [estimate] how often the special gate (the manager at +0x130, +0x88) opens */
+/* Her attack gate (+0x130, FUN_0032b450 / FUN_0032b5a0; its block 0x5cc100): a gauge filling 1 a frame with Dante within
+ * 1500 and 30 degrees of her facing, else 2 within 300; it opens past 100 (difficulty under 300). */
+#define SPECIAL_GATE 100.0f
 
 static void waypoint_pick(LadyBrain *b, float (*unit)(void)) {
     int r, i, best[2] = {0, 0};
@@ -131,7 +133,7 @@ void lady_spawn(LadyBrain *b, int health) {
     b->health = b->max_health = health;
     b->to[0] = b->pos[0]; b->to[1] = b->pos[1]; b->to[2] = b->pos[2];
     b->ring = 1; b->spot = 0; b->side = 0; b->volleys = 0;
-    b->token = SPECIAL_GATE;
+    b->token = 0.0f;
     b->air = b->ledge = 0; b->speed = b->clock = 0.0f;
     b->land = 0;
     b->gauge = 0.0f;
@@ -246,7 +248,7 @@ static void decide(LadyBrain *b, float d, float off, int from_walk) {
  * in sight, the middle third 0x1d (her escape), the last 0x1c (her volley). 1 if she took one. */
 static int special(LadyBrain *b, int sight) {
     float h = (float)b->health / (float)(b->max_health > 0 ? b->max_health : 1);
-    if (b->token > 0.0f) return 0;
+    if (b->token <= SPECIAL_GATE) return 0;
     if (h >= 0.66f) {
         if (!sight) return 0;
         b->last_mode = 0x1b; act(b, L_BIG);
@@ -255,7 +257,7 @@ static int special(LadyBrain *b, int sight) {
     } else {
         b->last_mode = 0x1c; act(b, L_VOLLEY);
     }
-    b->token = SPECIAL_GATE;
+    b->token = 0.0f;   /* FUN_0032b610 */
     return 1;
 }
 
@@ -263,12 +265,16 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
     float dx = px - b->pos[0], dz = pz - b->pos[2], d = sqrtf(dx * dx + dz * dz), off;
     b->land = 0;
     b->timer += f;
-    if (b->token > 0.0f) b->token -= f;
     shots_update(b, f, px, py, pz, attacks);
     if (b->gauge > 0.0f) b->gauge -= 0.01f * f;
     off = atan2f(dx, dz) - b->yaw;
     while (off > 3.14159265f) off -= 6.2831853f;
     while (off < -3.14159265f) off += 6.2831853f;
+    /* The gate's rows, the first that holds him (FUN_0032b450), ticked only in her walk, guns and run (modes below
+     * 0x18, 0x18, 0x19 and 0x28: FUN_00445210 / 004455d0 / 00445a20 / 00447850). */
+    if (b->action > L_MOVE) ;
+    else if (d < 1500.0f && fabsf(off) < 30.0f * DEG) b->token += 1.0f * f;
+    else if (d < 300.0f) b->token += 2.0f * f;
     switch (b->action) {
     case L_IDLE:
         /* Her walk (FUN_00445210): toward her next waypoint (picked as she starts), at 1 degree a frame. In sight:

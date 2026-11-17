@@ -5166,6 +5166,7 @@ static const float bw_phase_at[2] = {0.73f, 0.47f};
 #define BW_FEATHERS 12
 static struct { int on; float pos[3], vel[3], life; } bw_feathers[BW_FEATHERS];
 static int bw_phase, bw_last, bw_gauge;
+static float bw_gate;   /* his attack gate (+0x130; block 0x5b8900): opens past 300 (difficulty under 369) */
 static float bw_wind;
 #define BW_TURN_FAST (1274.0f / 65536.0f * 6.2831853f)   /* 0x619680 */
 #define BW_TURN_MID (637.0f / 65536.0f * 6.2831853f)     /* 0x619688 */
@@ -5197,7 +5198,7 @@ static void beowulf_spawn_glue(void) {
     e->motion = -1;
     if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     e->plan = P_WATCH;
-    bw_phase = 0; bw_last = -1; bw_gauge = 0;
+    bw_phase = 0; bw_last = -1; bw_gauge = 0; bw_gate = 0.0f;
     memset(bw_feathers, 0, sizeof bw_feathers);
     bw_go(BW_IDLE);
     e->fade = 0.0f;
@@ -5285,6 +5286,11 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
         return;
     }
     rel = wrap_angle(atan2f(dx, dz) - e->yaw) * (180.0f / PI);
+    /* His attack gate (FUN_0032b450, block 0x5b8900's rows, the first that holds him): 20 a frame within 500, else 5
+     * within 3000 and 30 degrees of his facing; ticked in his idle and action 1 (FUN_002da960 / 002daa00). */
+    if (a > 1) ;
+    else if (d < 500.0f) bw_gate += 20.0f * f;
+    else if (d < 3000.0f && fabsf(rel) < 30.0f) bw_gate += 5.0f * f;
     /* His phase: below 73% and 47% of his health, with a roar (action 0x16), once each. */
     if (bw_phase < 2 && a != BW_ROAR && (float)e->health < (float)(ENEMY_HEALTH * BEOWULF_MAX / 250) * bw_phase_at[bw_phase]) {
         ++bw_phase;
@@ -5298,7 +5304,7 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
             goyle_turn_to(px, pz, BW_TURN_FAST, f);
             if (e->done && e->timer >= 300.0f) { bw_go(BW_IDLE); return; }
         } else goyle_turn_to(px, pz, 0.04f, f);
-        if (e->wake > 40.0f) { int next = bw_choose(d, rel); if (next != BW_IDLE) { bw_last = next; bw_go(next); return; } e->wake = 0.0f; }
+        if (bw_gate > 300.0f) { int next = bw_choose(d, rel); if (next != BW_IDLE) { bw_last = next; bw_gate = 0.0f; bw_go(next); return; } }
         break;
     case BW_WALK:
         /* FUN_002dab50: turning 1274 a frame; Dante within 550 and 100 degrees of his facing (0x5b8c64) takes him into

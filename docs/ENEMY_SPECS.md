@@ -32,6 +32,16 @@ something decoded, or a guess. Where a line doesn't say, it is decoded.
 
 ---
 
+- **The attack gate** (the member at +0x130, vtable `0x60e874` for Lady; set up by `0032a290(gate, owner, block, ...)`):
+  a gauge (+0x38). `0032b450` (+0x84) ticks it: Dante's bearing and ground distance from the owner, then the first row
+  of block +0x18 ({range, half-angle in degrees, rate}, ending at 0) that holds him adds rate × the frame (per
+  frame, `0x1e53730`). `0032b5a0` (+0x88) says it's open: past block +0x14 [k], k the bucket of the difficulty value
+  (+0x14, 0-1199) in block +0x10. `0032b610` (+0x8c) empties it. Blocks: the Pride `0x5a8300` (open past 100 below
+  difficulty 250; 10 a frame within 250 and 45°, 0.5 within 1500 and 1°), Beowulf `0x5b8900` (300; 20 within 500, 5
+  within 3000 and 30°), Lady `0x5cc100` (100; 1 within 1500 and 30°, 2 within 300), and `0x5ab9d0`, `0x5acc10`,
+  `0x5b0330`, `0x5b0e60`, `0x5b1460`, `0x5cdd00`, `0x5ce910`, `0x5cf5b0`, `0x5bf290`, `0x5bc010`, `0x5c1370`,
+  `0x5e4160` (others, by their set-ups). Each class ticks it only in some states (Lady: walk, guns, run; Beowulf: idle
+  and action 1). The port uses it for Beowulf's choice and Lady's specials.
 ## A. Enigma (CEm013)
 
 ### What it is
