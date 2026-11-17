@@ -13,7 +13,7 @@ DEMO_nnn.BIN (little endian; offsets from its start):
   actor (128 bytes): i32 slot, parent actor (CnsPos, -1), parent bone, bones, vertices, indices, objects, motions;
     u32 parents (i8), local (f32x3), rest (f32x3), vertices ({u, v, normal, position} f32), skin ({bones, weights}
     u8x3 each, 8 bytes), indices (u16), objects ({texture, first index, count}), motions ({f32 set, end, scale, skip;
-    u32 MOT offset, size; 32 bytes}), 2 reserved; f32 pos[3], rot[3] (the clip's adjustments), shown from / to
+    u32 MOT offset, size; 32 bytes}), the bone its bounding sphere is about, its radius (f32); f32 pos[3], rot[3] (the clip's adjustments), shown from / to
 """
 import argparse
 import json
@@ -174,6 +174,10 @@ def bake_cast(timeline, files, blob: bytearray):
     for i, a in enumerate(actors):
         skel, mesh = a["skel"], a["mesh"]
         n, v = skel["count"], len(mesh["positions"])
+        # Its bounding sphere for culling: about the bone that carries it (1: the hips carry a cutscene body's place).
+        centre_bone = 1 if n > 1 else 0
+        c = skel["world"][centre_bone]
+        radius = max(math.dist(p[:3], c[:3]) for p in mesh["positions"]) * 1.25 + 30.0
         parents_at = align(blob)
         blob += struct.pack(f"<{n}b", *skel["parents"])
         local_at = align(blob)
@@ -201,7 +205,8 @@ def bake_cast(timeline, files, blob: bytearray):
         parent = slot_to_actor.get(a["parent"], -1)
         struct.pack_into("<8i10I6f2f", blob, actor_table + 128 * i,
                          a["slot"], parent, a["bone"], n, v, len(mesh["indices"]), len(mesh["objects"]), len(a["motions"]),
-                         parents_at, local_at, rest_at, vert_at, skin_at, index_at, object_at, motion_at, 0, 0,
+                         parents_at, local_at, rest_at, vert_at, skin_at, index_at, object_at, motion_at,
+                         centre_bone, struct.unpack("<I", struct.pack("<f", radius))[0],
                          *a["pos"][:3], *a["rot"][:3], *a["span"])
         on = "" if parent < 0 else f" on slot {a['parent']} bone {a['bone']}"
         print(f"  slot {a['slot']:2d} {a['name']:14s} {n:2d} bones {v:5d} vertices {len(a['motions']):3d} motions{on}")

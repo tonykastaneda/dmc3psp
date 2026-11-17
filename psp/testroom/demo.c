@@ -22,7 +22,9 @@ typedef struct { float eye[3], target[3], fov, roll; } DemoCamera;
 typedef struct { unsigned int width, height, pixels, palette; } DemoTexture;
 typedef struct {
     int slot, parent, parent_bone, bones, vertices, indices, objects, motions;
-    unsigned int parents_at, local_at, rest_at, vertex_at, skin_at, index_at, object_at, motion_at, reserved[2];
+    unsigned int parents_at, local_at, rest_at, vertex_at, skin_at, index_at, object_at, motion_at;
+    unsigned int centre_bone;   /* its bounding sphere: about this bone, */
+    float radius;               /* this far */
     float pos[3], rot[3], shown_from, shown_to;
     unsigned int pad[6];   /* 128 bytes, as written */
 } DemoActorData;
@@ -319,10 +321,25 @@ static void skin(Actor *a) {
     sceKernelDcacheWritebackRange(a->skinned, sizeof(DemoVertex) * (size_t)d->vertices);
 }
 
+/* Whether a sphere is in the view (clip = projection * view, read from GUM). */
+static int sphere_visible(const ScePspFMatrix4 *m, const float c[3], float r) {
+    float x = m->x.x * c[0] + m->y.x * c[1] + m->z.x * c[2] + m->w.x;
+    float y = m->x.y * c[0] + m->y.y * c[1] + m->z.y * c[2] + m->w.y;
+    float z = m->x.z * c[0] + m->y.z * c[1] + m->z.z * c[2] + m->w.z;
+    float w = m->x.w * c[0] + m->y.w * c[1] + m->z.w * c[2] + m->w.w;
+    /* r in clip units, loosely: the projection's largest scale. */
+    float s = r * 2.5f;
+    return w > -s && x > -w - s && x < w + s && y > -w - s && y < w + s && z < w + s;
+}
+
 void demo_draw(void) {
     const DemoTexture *tex;
     int i, k, bound = -1;
+    ScePspFMatrix4 view, proj, clip;
     if (!playing || !actor_count) return;
+    sceGumMatrixMode(GU_VIEW); sceGumStoreMatrix(&view);
+    sceGumMatrixMode(GU_PROJECTION); sceGumStoreMatrix(&proj);
+    gumMultMatrix(&clip, &proj, &view);
     tex = (const DemoTexture *)(blob + head->textures);
     for (i = 0; i < actor_count; ++i) actors[i].posed = 0;
     for (i = 0; i < actor_count; ++i) pose(&actors[i], 0);
@@ -345,6 +362,10 @@ void demo_draw(void) {
         const DemoObject *obj = (const DemoObject *)(blob + a->d->object_at);
         const unsigned short *idx = (const unsigned short *)(blob + a->d->index_at);
         if (demo_clock < a->d->shown_from || demo_clock >= a->d->shown_to) continue;
+        {
+            int cb = (int)a->d->centre_bone < a->d->bones ? (int)a->d->centre_bone : 0;
+            if (!sphere_visible(&clip, a->world_pos[cb], a->d->radius)) continue;
+        }
         skin(a);
         for (k = 0; k < a->d->objects; ++k) {
             if (obj[k].texture < head->texture_count && (int)obj[k].texture != bound) {
