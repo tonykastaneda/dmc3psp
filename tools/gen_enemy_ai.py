@@ -9,7 +9,10 @@ import struct
 SCRIPT_CHUNK, CAP_CHUNK, SHAPE_CHUNK = 38, 39, 40
 AI_TABLE = 0x5A8300
 # Per class, from their set-ups (build/hdref/enemy_specs.md): the Pride, the Gluttony (CEm001), the Sloth (CEm003).
-CLASS_TABLES = (("pride", 0x5A8300), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60), ("envy", 0x5CF5B0), ("greed", 0x5B0330))
+CLASS_TABLES = (("pride", 0x5A8300), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60), ("envy", 0x5CF5B0), ("greed", 0x5B0330),
+                ("abyss", 0x5A8300))   # the Abyss (CEm006): its AI code is a clone of the Hells'; its own decision data
+                                       # (block 0x61a678: per-rank pointer lists at 0x5ceef0-0x5cf500) isn't laid out
+                                       # as theirs and isn't decoded, so it decides with the Pride's table [stand-in]
 HIT_SCRIPTS = 0x5A7A80   # the list states name their hit reactions through
 HIT_SCRIPT_COUNT = 28
 SCRIPT_COUNT = 100
@@ -166,7 +169,7 @@ def floats(elf, address, count):
     return [elf.real(address + i * 4) for i in range(count)]
 
 
-def write_header(path, pack, executable, envy_pack=None):
+def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
     elf = Elf(executable)
     caps = read_caps(pack)
     ops, starts = compile_scripts(pack[SCRIPT_CHUNK], caps)
@@ -248,4 +251,18 @@ def write_header(path, pack, executable, envy_pack=None):
                       for k, b, x, y, z, r in envy_caps) + "};"]
         lines += ["static const unsigned char envy_ai_hit_scripts[] = {" +
                   ",".join(str(elf.byte(0x5CED30 + i * 2 + 1)) for i in range(HIT_SCRIPT_COUNT)) + "};"]
+    if abyss_pack is not None:
+        # The Abyss (em006, GDATA 118): the Hells' motions and caps layout, its own scripts [38] and caps [39] / [40].
+        # Its block's +0x10 (0x5ce910) is a list of pointers, not the hit-script list the Hells have there: the Pride's
+        # (which the Envy's matches byte for byte) stands in [inferred].
+        abyss_caps = read_caps(abyss_pack)
+        abyss_ops, abyss_starts = compile_scripts(abyss_pack[SCRIPT_CHUNK], abyss_caps)
+        lines += ["static const EnemyAiOp abyss_ai_ops[] = {" +
+                  ",".join("{%d,%d,%d,%d}" % op for op in abyss_ops) + "};",
+                  "static const short abyss_ai_scripts[] = {" + ",".join(map(str, abyss_starts)) + "};",
+                  "static const EnemyAiCap abyss_ai_caps[] = {" + ",".join(
+                      "{%d,%d,%s,%s,%s,%s}" % (k, b, real(x), real(y), real(z), real(r))
+                      for k, b, x, y, z, r in abyss_caps) + "};",
+                  "static const unsigned char abyss_ai_hit_scripts[] = {" +
+                  ",".join(str(elf.byte(HIT_SCRIPTS + i * 2 + 1)) for i in range(HIT_SCRIPT_COUNT)) + "};"]
     path.write_text("\n".join(lines) + "\n")

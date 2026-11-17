@@ -946,3 +946,12 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   spawn), already the port's. Its spiderlings are a separate 0x21b0-byte object (`004f0f60` → `004f0df0`), made by
   action handler `003fd720`. The web shot (CEm010Shl00 / Shl01) isn't made by any action handler: inferred from its
   script events, not traced.
+- **Abyss in the port** (`ENEMY_ABYSS`; EST 24): its own body ([1], 23 bones, the Hells' skeleton) and scythe ([4]
+  [inferred]), its own scripts [38] and caps [39] / [40] (`tools/gen_enemy_ai.py`: `abyss_ai_ops`), the Hells'
+  motions (its [35] is theirs byte for byte), health **1500** (block `0x5ce060` +0x2c, from its pointer block
+  `0x61a678`, laid out as the Pride's `0x618c28`: records `0x5cdde0`, blocks `0x5ce060` / `0x5ce110`, script map
+  `0x5ce1f0`). Its AI object (`004a8e30`, vtable `0x612220`, RTTI CComEm006) is a clone of the Hells' (`0x607b20`):
+  the same slots, the same function spacing. But its block's +0x10 is a list of pointers and +0x14 the 0x003-tagged
+  pairs that follow the Hells' table, and its decision data (per-rank pointer lists, `0x5ceef0`-`0x5cf500`) isn't
+  laid out as the Hells' band and row tables: not decoded. Stand-ins: it decides with the Pride's table and the
+  Pride's hit-script list, playing its own scripts by the same numbers.

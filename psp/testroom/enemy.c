@@ -154,7 +154,7 @@ static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
 static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5, 7, 11, HAND_BONE};
 static Enemy enemies[ENEMY_MAX];
 static float torso_offset[ENEMY_MAX][3];
-static int torso_kind(int kind) { return kind <= ENEMY_GREED || kind == ENEMY_ENVY; }
+static int torso_kind(int kind) { return kind <= ENEMY_GREED || kind == ENEMY_ENVY || kind == ENEMY_ABYSS; }
 static Enemy *e = &enemies[0];
 static int hits, attacks_on;
 static int landed;
@@ -176,6 +176,7 @@ static const EnemyAiClass *ai_class(void) {
     case ENEMY_GLUTTONY: return &enemy_ai_classes[AI_CLASS_GLUTTONY];
     case ENEMY_SLOTH: return &enemy_ai_classes[AI_CLASS_SLOTH];
     case ENEMY_ENVY: return &enemy_ai_classes[AI_CLASS_ENVY];
+    case ENEMY_ABYSS: return &enemy_ai_classes[AI_CLASS_ABYSS];
     default: return &enemy_ai_classes[AI_CLASS_PRIDE];
     }
 }
@@ -401,6 +402,7 @@ static int kind_health(int kind) {
     case ENEMY_DULLAHAN: return ENEMY_HEALTH * 300 / 250;   /* 0x5ccad0 +0x2c (class 12, FUN_003cc200) */
     case ENEMY_SLOTH: return ENEMY_HEALTH * 1200 / 250;
     case ENEMY_ENVY: return ENEMY_HEALTH * 400 / 250;
+    case ENEMY_ABYSS: return ENEMY_HEALTH * 1500 / 250;   /* its block 0x5ce060 +0x2c (0x61a678 +4) */
     case ENEMY_ENIGMA: return ENEMY_HEALTH * 600 / 250;
     case ENEMY_GOYLE: return ENEMY_HEALTH * 600 / 250;   /* 0x5bf4c0 +0x2c (class 14, FUN_0039c608) */
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
@@ -718,6 +720,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 53) return ENEMY_ARKHAM;
     if (spawn_class == 26) return ENEMY_VANGUARD;
     if (spawn_class == 25) return ENEMY_ENVY;
+    if (spawn_class == 24) return ENEMY_ABYSS;
     if (spawn_class == 28) return ENEMY_ARACHNE;
     if (spawn_class == 49) return ENEMY_NEVAN;
     if (spawn_class == 51) return ENEMY_BEOWULF;
@@ -871,7 +874,7 @@ static float ai_unit(void) { return (float)ai_random() * 2.3283064e-10f; }
 /* ---- Scripts: which motion, from where, until when. ---- */
 
 static int is_ar(void) { return e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA; }
-static const EnemyAiOp *script_ops(void) { return is_ar() ? (e->kind == ENEMY_AGNI ? ar_ops_0 : ar_ops_1) : e->kind == ENEMY_ENVY ? envy_ai_ops : enemy_ai_ops; }
+static const EnemyAiOp *script_ops(void) { return is_ar() ? (e->kind == ENEMY_AGNI ? ar_ops_0 : ar_ops_1) : e->kind == ENEMY_ENVY ? envy_ai_ops : e->kind == ENEMY_ABYSS ? abyss_ai_ops : enemy_ai_ops; }
 
 static void script_play_op(const EnemyAiOp *op) {
     int m, blend = op->c & 0xff;
@@ -919,7 +922,7 @@ static void script_play(int n) {
     e->hit_left[0] = e->hit_left[1] = 0.0f;
     e->done = 0;
     {
-        int start = is_ar() ? (n >= 0 && n < AR_SCRIPTS ? (e->kind == ENEMY_AGNI ? ar_starts_0 : ar_starts_1)[n] : -1) : (e->kind == ENEMY_ENVY ? envy_ai_scripts : enemy_ai_scripts)[n];
+        int start = is_ar() ? (n >= 0 && n < AR_SCRIPTS ? (e->kind == ENEMY_AGNI ? ar_starts_0 : ar_starts_1)[n] : -1) : (e->kind == ENEMY_ENVY ? envy_ai_scripts : e->kind == ENEMY_ABYSS ? abyss_ai_scripts : enemy_ai_scripts)[n];
         if (start < 0) { e->done = 1; return; }
         e->script_at = start;
     }
@@ -927,7 +930,7 @@ static void script_play(int n) {
 }
 
 /* The second list a state can name motions through; the game's PTR_DAT_00618c38. */
-static void script_play_hit(int n) { script_play((e->kind==ENEMY_ENVY?envy_ai_hit_scripts:enemy_ai_hit_scripts)[n]); }
+static void script_play_hit(int n) { script_play((e->kind==ENEMY_ENVY?envy_ai_hit_scripts:e->kind==ENEMY_ABYSS?abyss_ai_hit_scripts:enemy_ai_hit_scripts)[n]); }
 
 /* Move the script on by f frames. root gets how far the motion's root travelled. */
 static void script_tick(float f, float root[3]) {
@@ -1805,7 +1808,7 @@ static void test_attack(float px, float py, float pz) {
         const EnemyAiCap *cap;
         float l[3], x, y, z, near_y;
         if (e->hit_left[k] <= 0.0f) continue;
-        cap = is_ar() ? &ar_caps[e->hit_cap[k] < AR_CAPS ? e->hit_cap[k] : 0] : &(e->kind == ENEMY_ENVY ? envy_ai_caps : enemy_ai_caps)[e->hit_cap[k]];
+        cap = is_ar() ? &ar_caps[e->hit_cap[k] < AR_CAPS ? e->hit_cap[k] : 0] : &(e->kind == ENEMY_ENVY ? envy_ai_caps : e->kind == ENEMY_ABYSS ? abyss_ai_caps : enemy_ai_caps)[e->hit_cap[k]];
         if (cap->bone) {
             if (!posed) { evaluate_pose(); posed = 1; }
             {

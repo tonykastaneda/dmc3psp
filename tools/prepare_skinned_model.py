@@ -371,6 +371,10 @@ ENEMY_KINDS = (
     # (23 bones), motions in the PACs [2]-[6]. Her guns ([17] and up) aren't drawn yet.
     ("lady", LADY_SLOT, 1, None),
     ("bishop", 127, 12, None),
+    # The Abyss (class 6, EST 24), em006.pac: GDATA 118, pack 1 in the table at 0x58e740, the Hells' layout: [1] its
+    # body (the Hells' skeleton; its [35] motions are the Hells' byte for byte), [4] its scythe [inferred: the largest
+    # of [3]-[5]].
+    ("abyss", 118, 1, 4),
 
 )
 AR_SLOT = 131
@@ -576,6 +580,7 @@ def main() -> None:
         study_moves = {slot: read_slot(slot) for slot in STUDY_MOTION_SLOTS}
         enemy_pack = pnst_entries(read_slot(ENEMY_SLOT))
         envy_pack = pac_list(read_slot(119))
+        abyss_pack = pac_list(read_slot(118))
         enigma_pack = pac_list(read_slot(ENIGMA_SLOT))
         goyle_pack = pnst_entries(read_slot(GOYLE_SLOT))
         jester_pack = pac_list(read_slot(JESTER_SLOT))
@@ -718,8 +723,8 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack})
-    gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack)
+    write_enemy(args.output, {117: enemy_pack, 118: abyss_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack})
+    gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack, abyss_pack)
     write_devils(args.output, devil_packs)
 
     # Motions: every MOT in Dante's PAC chunks 2-4, embedded raw and parsed on

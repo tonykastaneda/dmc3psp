@@ -579,6 +579,7 @@ static int kind_max_health(int kind) {
     case ENEMY_DOPPELGANGER: return 10000;
     case ENEMY_ARKHAM: return 18000;
     case ENEMY_ENVY: return 400;
+    case ENEMY_ABYSS: return 1500;
     case ENEMY_LEVIATHAN: return 6500;
     case ENEMY_VANGUARD: return (int)vanguard_max_health();
     default: return 250;
@@ -593,7 +594,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "FALLEN", "LADY", "BISHOP"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "FALLEN", "LADY", "BISHOP", "ABYSS"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
