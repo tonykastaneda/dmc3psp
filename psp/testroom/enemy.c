@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cloth.h"
 #include "motion.h"
 #include "player.h"
 #include "stage.h"
@@ -139,6 +140,11 @@ typedef struct {
     signed char goyle_splits;
     float ar_health;                /* Agni & Rudra: 7000 each; the Jester: 5000 */
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
+    /* Its parts' chains (Nevan's hair and dress): each extra bone's state, whether they hang yet, and the 60 fps
+     * frames of game time not stepped yet. */
+    ClothJoint *cloth;
+    unsigned char cloth_ready;
+    float cloth_frames;
 } Enemy;
 
 static float body_radius(const Enemy *a) { return a->kind == ENEMY_VANGUARD ? 50.0f : ENEMY_RADIUS; }
@@ -194,6 +200,7 @@ static unsigned int anim_last_time;
 
 static M3 world_rot[MAX_BONES];
 static float world_pos[MAX_BONES][3];
+static void scrolls_update(float frames);
 
 static void m_identity(M3 *m) { memset(m, 0, sizeof(*m)); m->m[0][0] = m->m[1][1] = m->m[2][2] = 1.0f; }
 static void m_mul(M3 *o, const M3 *a, const M3 *b) {
@@ -509,6 +516,8 @@ static void spawn_one(int kind, float x, float z) {
     e->posed_frame = -1.0f; /* Force a bind pose even when this kind has no idle clip. */
     e->overlay_motion = -1;
     e->hidden = 0;
+    e->cloth_ready = 0;
+    e->cloth_frames = 0.0f;
     e->active = 1;
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
@@ -2255,6 +2264,10 @@ void enemy_update(float dt, float px, float py, float pz) {
         e = &enemies[i];
         was_x = e->pos[0]; was_y = e->pos[1]; was_z = e->pos[2];
         update_one(dt, px, py, pz);
+        if (e->active && e->kind < ENEMY_KIND_COUNT && enemy_models[e->kind].cloth_count) {
+            e->cloth_frames += dt * 60.0f;   /* the chains step at the game's 60 fps (FUN_003b38e0, once a frame) */
+            if (e->cloth_frames > 4.0f) e->cloth_frames = 4.0f;
+        }
         if (e->active && e->kind == ENEMY_GREED) greed_tick(i, dt * MOTION_FPS, px, pz);
         /* The room's walls, as for Dante: swept along everything that moved it this frame (its walk, root
          * motion, knockback, being pushed by him or the others), in steps of at most 15 cm, so a launch or a
@@ -2270,7 +2283,131 @@ void enemy_update(float dt, float px, float py, float pz) {
     }
     arrows_update(dt * MOTION_FPS, px, py, pz);
     coffins_update(dt * MOTION_FPS);
+    scrolls_update(dt * 60.0f);
     e = selected;
+}
+
+/* Each kind's .TSC scrolls (FUN_0019ddb0 a frame): the phase and MinimumUV's drift per axis, and the offsets drawn. */
+#define SCROLL_MAX 4
+static float scroll_phase[ENEMY_KIND_COUNT][SCROLL_MAX][2], scroll_drift[ENEMY_KIND_COUNT][SCROLL_MAX][2];
+static float scroll_uv[ENEMY_KIND_COUNT][SCROLL_MAX][2];
+
+static float wrap01(float x) { while (x > 1.0f) x -= 1.0f; while (x < 0.0f) x += 1.0f; return x; }
+
+/* frames: 60 fps frames of game time (the owner's speed, +0x1b0). Type 1 (FUN_0019e740 / FUN_0019e360): the
+ * phase moves frames / TimeUV a frame along DirUV, and is the offset. Type 3 (FUN_0019df50 / FUN_0019e840): the
+ * same phase eased, (cos((1 - phase) * pi) + 1) / 2, plus MinimumUV's drift. An axis with no time or direction
+ * stays at 0. */
+static void scrolls_update(float frames) {
+    int k, s, a;
+    for (k = 0; k < ENEMY_KIND_COUNT; ++k) {
+        const EnemyModel *m = &enemy_models[k];
+        for (s = 0; s < m->scroll_count && s < SCROLL_MAX; ++s) {
+            const EnemyScroll *sc = &m->scrolls[s];
+            for (a = 0; a < 2; ++a) {
+                float time = a ? sc->time_v : sc->time_u, minimum = a ? sc->minimum_v : sc->minimum_u;
+                int dir = a ? sc->dir_v : sc->dir_u;
+                float *phase = &scroll_phase[k][s][a], *drift = &scroll_drift[k][s][a];
+                if (time == 0.0f || dir == 0) { scroll_uv[k][s][a] = 0.0f; continue; }
+                *phase = wrap01(*phase + frames / time * (float)dir);
+                if (sc->type == 3) {
+                    float v = (cosf((1.0f - *phase) * PI) + 1.0f) * 0.5f;
+                    if (minimum != 0.0f) { *drift = wrap01(*drift + minimum * (float)dir * frames); v += *drift; }
+                    scroll_uv[k][s][a] = v;
+                } else scroll_uv[k][s][a] = *phase;
+            }
+        }
+    }
+}
+
+/* A part's bone at its rest offset from bone `from` (its link or its parent), turned with it. */
+static void hang_from(int i, int from) {
+    const EnemyModel *m = &enemy_models[e->kind];
+    float d[3] = {m->bone_rest[i].x - m->bone_rest[from].x, m->bone_rest[i].y - m->bone_rest[from].y,
+                  m->bone_rest[i].z - m->bone_rest[from].z};
+    int k;
+    world_rot[i] = world_rot[from];
+    for (k = 0; k < 3; ++k)
+        world_pos[i][k] = world_pos[from][k] + world_rot[from].m[k][0] * d[0] + world_rot[from].m[k][1] * d[1] + world_rot[from].m[k][2] * d[2];
+}
+
+/* Which of a kind's bones a chain runs (built on first use). */
+static unsigned char bone_free[ENEMY_KIND_COUNT][ENEMY_MAX_BONES], bone_free_built[ENEMY_KIND_COUNT];
+
+/* The parts' bones after the body's (FUN_003b38e0's frame): those linked to a body bone take its matrix; the chains
+ * step (cloth.c, at 60 fps of game time) from where their parents are now; the rest ride on their parents. */
+static void pose_parts(void) {
+    const EnemyModel *m = &enemy_models[e->kind];
+    const int body = m->body_bone_count;
+    unsigned char *is_free = bone_free[e->kind];
+    int i, c, b, k, steps;
+    if (m->bone_count == body) return;
+    if (!bone_free_built[e->kind]) {
+        for (c = 0; c < m->cloth_count; ++c)
+            for (b = 0; b < m->cloths[c].bone_count; ++b) is_free[m->cloths[c].bones[b]] = 1;
+        bone_free_built[e->kind] = 1;
+    }
+    /* Linked and rigid first, so every chain's anchors are where the body is now. */
+    for (i = body; i < m->bone_count; ++i) {
+        int link = m->bone_link[i], p = m->bone_parent[i];
+        if (link >= 0) hang_from(i, link);
+        else if (p >= 0) hang_from(i, p);
+        else { m_identity(&world_rot[i]); world_pos[i][0] = world_pos[i][1] = world_pos[i][2] = 0.0f; }
+    }
+    if (!m->cloth_count) return;
+    if (!e->cloth) {
+        e->cloth = memalign(16, sizeof(ClothJoint) * ENEMY_MAX_EXTRA_BONES);
+        if (!e->cloth) return;
+        e->cloth_ready = 0;
+    }
+    if (!e->cloth_ready) {
+        for (i = body; i < m->bone_count; ++i) {
+            ClothJoint *j = &e->cloth[i - body];
+            memcpy(j->pos, world_pos[i], sizeof(j->pos));
+            memset(j->vel, 0, sizeof(j->vel));
+            memcpy(&j->rot, &world_rot[i], sizeof(j->rot));
+        }
+        e->cloth_ready = 1;
+        e->cloth_frames = 0.0f;
+    }
+    steps = (int)e->cloth_frames;
+    e->cloth_frames -= (float)steps;
+    while (steps-- > 0) {
+        for (c = 0; c < m->cloth_count; ++c) {
+            const EnemyCloth *cl = &m->cloths[c];
+            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness};
+            ClothCapsule caps[4];
+            int n = cl->capsule_count < 4 ? cl->capsule_count : 4;
+            for (k = 0; k < n; ++k) {
+                const EnemyClothCapsule *s = &cl->capsules[k];
+                const float (*r)[3] = world_rot[s->bone].m;
+                const float *o = world_pos[s->bone];
+                const float a[3] = {s->a.x, s->a.y, s->a.z}, bb[3] = {s->b.x, s->b.y, s->b.z};
+                int q;
+                for (q = 0; q < 3; ++q) {
+                    caps[k].a[q] = o[q] + r[q][0] * a[0] + r[q][1] * a[1] + r[q][2] * a[2];
+                    caps[k].b[q] = o[q] + r[q][0] * bb[0] + r[q][1] * bb[1] + r[q][2] * bb[2];
+                }
+                caps[k].radius = s->radius;
+            }
+            for (b = 0; b < cl->bone_count; ++b) {
+                int bone = cl->bones[b], p = m->bone_parent[bone];
+                const float rest[3] = {m->bone_rest[bone].x - m->bone_rest[p].x, m->bone_rest[bone].y - m->bone_rest[p].y,
+                                       m->bone_rest[bone].z - m->bone_rest[p].z};
+                const float *pp = is_free[p] ? e->cloth[p - body].pos : world_pos[p];
+                const ClothM3 *pr = is_free[p] ? &e->cloth[p - body].rot : (const ClothM3 *)&world_rot[p];
+                cloth_step(&e->cloth[bone - body], pp, pr, rest, &params, caps, n);
+            }
+        }
+    }
+    /* The chains' bones where they hang, and whatever rides on them. */
+    for (i = body; i < m->bone_count; ++i) {
+        int p = m->bone_parent[i];
+        if (is_free[i]) {
+            memcpy(world_pos[i], e->cloth[i - body].pos, sizeof(world_pos[i]));
+            memcpy(&world_rot[i], &e->cloth[i - body].rot, sizeof(world_rot[i]));
+        } else if (m->bone_link[i] < 0 && p >= body) hang_from(i, p);
+    }
 }
 
 /* Sample motion -> local rotations/offsets -> world transforms. */
@@ -2294,7 +2431,7 @@ static void evaluate_pose(void) {
     }
     if (e->fade > 0.0f && e->prev_motion >= 0) motion_sample(motion_get(e->prev_motion), e->prev_frame, &b);
     const EnemyModel *m = &enemy_models[e->kind];
-    for (i = 0; i < m->bone_count; ++i) {
+    for (i = 0; i < m->body_bone_count; ++i) {
         float r[3], t[3] = {m->bone_local[i].x, m->bone_local[i].y, m->bone_local[i].z};
         int p = m->bone_parent[i];
         for (k = 0; k < 3; ++k) {
@@ -2320,6 +2457,7 @@ static void evaluate_pose(void) {
                 world_pos[i][k] = world_pos[p][k] + world_rot[p].m[k][0] * t[0] + world_rot[p].m[k][1] * t[1] + world_rot[p].m[k][2] * t[2];
         }
     }
+    pose_parts();
 }
 
 static void skin(void) {
@@ -2406,6 +2544,16 @@ static void draw_one(void) {
             sceGuClutLoad(256 / 8, set->palettes[bound]);
             sceGuTexImage(0, set->textures[bound].width, set->textures[bound].height, set->textures[bound].width, tex[bound]);
             sceGuTexFlush();
+        }
+        if (m->object_scroll[i] >= 0) {
+            /* A .TSC scroll (FUN_0019daf0): the texture slides, wrapping. */
+            const float *uv = scroll_uv[e->kind][m->object_scroll[i]];
+            sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+            sceGuTexOffset(uv[0], uv[1]);
+            sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[e->kind] + o->index_start, e->vertices);
+            sceGuTexOffset(0.0f, 0.0f);
+            sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+            continue;
         }
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[e->kind] + o->index_start, e->vertices);
     }

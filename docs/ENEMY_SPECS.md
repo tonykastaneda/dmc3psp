@@ -922,13 +922,37 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
 - **Hits** (`003bb150` → flags +0x5188-0x518f, `003bbcf0`): a reaction id 0/1/4/7/8/10-12 asks a light reel, 2/3 a
   heavy one, 0x14/0x15 the fall (21). None while she teleports (7-9) or in 33 / 34. Light: from 10 → 11, 11 → 10,
   13-15 → 13, 12 none, else 10 or 11; heavy: 13-15 → 14, 10 → 11, 11 → 10, 12 none, else 12.
+- **Hair, dress, sleeves** (`003b26a0`; model objects +0x880 body [1], +0xe80 [4], +0x1480 [5], +0x1a80 [6], their bone
+  arrays +0x718, +0x778, +0x7d8, +0x814). A rig bone's +0xfc link record (+0x18 = a body bone's world matrix) ties it
+  to the body: **[4] her hair** (texture 0), rig bones 0/1/2 on body bones 3/4/5, four strands of five from bone 2;
+  **[5] her dress** (textures 2 and 3), 0/1/2/3 on body 1/14/2/3, one chain of ten hanging 268 cm from the pelvis;
+  **[6] her sleeves and back pieces** (texture 2), 0/1/2/6/7 on body 14/7/8/11/12, no chain. Chains (CCnsChain,
+  `FUN_0022fbd0` reading the .clt, `FUN_0022f270` a bone a frame): [4] by em028_01.clt ([7]: bones 4-7, 9-12, 14-17,
+  19-22, gravity -0.02, spring 0.02, top speed 50, stiffness 0.3) against three capsules (`FUN_00230130`: list
+  `0x5bc030`, shapes `0x5bc040` stride 0x30): body bone 5 ±4.65 r 9.3, bone 4 ±6 r 12, bone 3 ±9.5 r 19; [5] by
+  em028_02.clt ([8]: bones 5-13, gravity -0.07, the rest the same), no capsules. No floor: only a script's key at
+  `0x591280` sets +0x50, and hers don't. Each frame (`003b38e0`) `FUN_00230150` moves a chain's bones by her root's
+  change (her root's new matrix after the old one's inverse), so the chains swing only with her body's motion and
+  gravity, never with her travel or her turns.
+- **Texture scrolls** ([13], a .TSC: `FUN_0019d4a0` / `FUN_0019d620` parse it, `FUN_0019daf0` → `FUN_0019ddb0` run
+  it a frame; set up on [5]'s and [6]'s scrollers, +0x2080 and +0x209c). Keywords and fields (0x74-byte records): TexNo
+  +8, JntNo +7, DirUV +0x58/+0x5a (left and up +1, right and down -1), RateUV [8]/[10], TimeUV [0xc]/[0xe], InterUV
+  [0x10]/[0x12], TurnTimeUV [0x11]/[0x13], MinimumUV [9]/[0xb] (flag 4), RndUV [0x18-0x1b] (flag 2); the step is the
+  owner's speed (+0x1b0). Type 1 (`FUN_0019e740` → `FUN_0019e360`): the phase moves step / TimeUV along DirUV,
+  wrapping, and is the offset. Type 3 (`FUN_0019df50` → `FUN_0019e840`): the same phase, drawn eased as (cos((1 -
+  phase)·π) + 1) / 2, plus MinimumUV's drift. Hers: scroll 0, type 1, texture 3 (the lightning) up a texture every
+  90 frames; scroll 1, type 3, texture 2 (the dark cloth) left over 400 frames, drifting 0.0001.
 
 **In the port** (`psp/testroom/nevan_boss.c`): the patterns, moves, phases, movement, teleports, scripts' motions
 and event frames, bats and reels above, at rank 0. Stand-ins: what events 23-25, 29, 30, 32, 35 and 38 make (shell
 classes `0x45d720`, `0x468580`, `0x43df80`, `0x417340`, `0x4179a0`, `0x4181a0` and the kiss's hold, not decoded) is a
 bolt on Dante's spot after 30 frames or, for 32, a sweep about her, at the bats' 300; 23 also lets out bats [inferred:
 `003ba470` keeps the bats' count]; move 9's place (her starting spot); which way she circles (+0x4e1f) is random; her
-fades hide her below a third rather than blending; the bats are drawn as glows.
+fades hide her below a third rather than blending; the bats are drawn as glows. Her hair, dress and sleeves are the
+game's (above): their rigs are appended to her skeleton (`tools/prepare_skinned_model.py`, EXTRA_CHAINS), linked
+bones follow her body, the chains step in her model space (`psp/testroom/cloth.c`, coat.c's FUN_0022f270 port), and
+the scrolls run (`enemy.c`, scrolls_update). Not ported: RateUV, InterUV, TurnTimeUV and RndUV (her script doesn't
+use them), and the lightning texture's blend (drawn as the others).
 
 ---
 

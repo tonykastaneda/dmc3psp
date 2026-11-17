@@ -381,10 +381,84 @@ AR_SLOT = 131
 JESTER_SLOT = 140
 # More MODs rigged to a kind's own body skeleton, drawn as part of it: Nevan's [4] (23 bones, as her body; her dress).
 EXTRA_SKINS = {}
-# Parts on their own rigs that the game hangs from a body bone and runs as chains (FUN_00230150 / CCnsChain, its .clt):
-# here drawn rigid, at their rest pose, skinned wholly to that bone. Nevan (FUN_003b38e0 / FUN_003b26a0): [4] and [5]
-# from bone 4 (her neck), [6] on her root. (pack index, body bone)
-EXTRA_RIGID = {"nevan": ((4, 4), (5, 4), (6, 0))}
+# Parts on their own rigs, drawn with the body. The class's set-up links some of a part's bones to body bones (a rig
+# bone's +0xfc link record carries a body bone's world matrix, +0x18), and the part's .clt names the bones a chain runs
+# (CCnsChain: FUN_0022fbd0 reads the script, FUN_0022f270 steps a bone); the rest ride rigidly on their parents. Their
+# bones are appended to the body's, so they skin as part of it (psp/testroom/enemy.c poses them, cloth.c steps them).
+# Nevan's (FUN_003b26a0): [4] her hair, rig bones 0/1/2 on body bones 3/4/5, its four strands run by em028_01.clt ([7]),
+# against the three capsules her set-up hands it (FUN_00230130: list 0x5bc030, shapes 0x5bc040, stride 0x30); [5] her
+# dress, rig bones 0/1/2/3 on body bones 1/14/2/3, its one long chain run by em028_02.clt ([8]), no capsules; [6] her
+# sleeves and back pieces, rig bones 0/1/2/6/7 on body bones 14/7/8/11/12, no chain.
+# (pack index, {rig bone: body bone}, cloth script pack index or None, (capsule list, shape table, count) or None)
+EXTRA_CHAINS = {"nevan": ((4, {0: 3, 1: 4, 2: 5}, 7, (0x5BC030, 0x5BC040, 3)),
+                          (5, {0: 1, 1: 14, 2: 2, 3: 3}, 8, None),
+                          (6, {0: 14, 1: 7, 2: 8, 6: 11, 7: 12}, None, None))}
+
+
+# Texture scrolls (.TSC, parsed by FUN_0019d4a0 / FUN_0019d620, run by FUN_0019daf0 each frame) and the parts they
+# move: Nevan's [13], handed to the scrollers of [5] and [6] (FUN_003b26a0: +0x2080 and +0x209c).
+TEXTURE_SCROLLS = {"nevan": (13, (5, 6))}
+
+
+def parse_tsc(text: str):
+    """The RELATIVE section's <Start ... End> records: ScrlNo, ScrlType, TexNo, DirUV (left/up +1, right/down -1),
+    TimeUV (frames per cycle), MinimumUV (a drift a cycle step, type 3's flag 4). Types ported: 1 (linear) and 3
+    (eased); InterUV, TurnTimeUV and RndUV aren't used by the scripts ported, and refuse."""
+    scrolls, current, relative = [], None, False
+    for raw in text.splitlines():
+        line = raw.split("#")[0].replace(",", " ").split()
+        if "RELATIVE" in raw:
+            relative = True
+        if "ABSOLUTE" in raw:
+            relative = False
+        if not line or not relative:
+            continue
+        key, values = line[0], line[1:]
+        if key == "<Start":
+            current = {"type": 0, "texture": 0, "dir": (0, 0), "time": (0.0, 0.0), "minimum": (0.0, 0.0)}
+        elif key == "End>":
+            scrolls.append(current)
+            current = None
+        elif current is not None:
+            if key == "ScrlType":
+                current["type"] = int(values[0])
+            elif key == "TexNo":
+                current["texture"] = int(values[0])
+            elif key == "DirUV":
+                current["dir"] = ({"stay": 0, "left": 1, "right": -1}[values[0]], {"stay": 0, "up": 1, "down": -1}[values[1]])
+            elif key == "TimeUV":
+                current["time"] = (float(values[0]), float(values[1]))
+            elif key == "MinimumUV":
+                current["minimum"] = (float(values[0]), float(values[1]))
+            elif key not in ("ScrlNo", "JntNo"):
+                raise ValueError(f".TSC key {key} isn't ported")
+    for s in scrolls:
+        if s["type"] not in (1, 3):
+            raise ValueError(f".TSC scroll type {s['type']} isn't ported")
+    return scrolls
+
+
+def elf_reader(executable: bytes):
+    """Reads the executable's memory by address (its one loadable segment)."""
+    phoff = struct.unpack_from("<I", executable, 0x1C)[0]
+    offset, vaddr = struct.unpack_from("<II", executable, phoff + 4)
+    return lambda address, size: executable[address - vaddr + offset:address - vaddr + offset + size]
+
+
+def read_capsules(read, spec):
+    """A chain's capsules (FUN_0022f270): 4-byte entries (flags, 8 = on; body bone; shape index), each shape both ends
+    in the bone's space then the radius."""
+    if spec is None:
+        return []
+    list_at, shapes_at, count = spec
+    capsules = []
+    for i in range(count):
+        flags, bone, shape = struct.unpack("<BBH", read(list_at + i * 4, 4))
+        if not flags & 8:
+            continue
+        values = struct.unpack("<9f", read(shapes_at + shape * 0x30, 36))
+        capsules.append((bone, values[0:3], values[4:7], values[8]))
+    return capsules
 PAWN_SLOT = 127
 JESTER_MOTION_CHUNKS = (3, 4, 5, 6, 19, 28, 29)
 GOYLE_SLOT = 125
@@ -461,7 +535,7 @@ def enemy_mesh(body: bytes, ratio=None):
     return skel, mesh
 
 
-def write_enemy(output: Path, packs: dict) -> None:
+def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
     """Every kind in ENEMY_KINDS: skinned body + rigid weapon, with one 8-bit texture set per pack
     -> enemy_runtime.h. packs maps a GDATA slot to its entries."""
     tuple3 = lambda t: "{" + ",".join(str(x) for x in t) + "}"
@@ -470,6 +544,13 @@ def write_enemy(output: Path, packs: dict) -> None:
         "#define DMC3_ENEMY_RUNTIME_H",
         "/* Generated by tools/prepare_skinned_model.py: the enemy kinds (bodies, weapons, texture sets). */",
         "typedef struct { const Dmc3Texture *textures; const unsigned int *const *palettes; int count; } EnemyTextureSet;",
+        "/* A chain's capsule: both ends in a body bone's space, then the radius (FUN_0022f270 pushes its bones out). */",
+        "typedef struct { int bone; Dmc3Vec3 a, b; float radius; } EnemyClothCapsule;",
+        "/* One CCnsChain: its bones (the model's, parents first) and its .clt's values (per 60 fps frame). */",
+        "typedef struct EnemyCloth { const unsigned char *bones; int bone_count; float gravity, spring, max_speed, stiffness;",
+        "    const EnemyClothCapsule *capsules; int capsule_count; } EnemyCloth;",
+        "/* A .TSC scroll (FUN_0019d620): type (1 linear, 3 eased), DirUV, TimeUV (frames a cycle), MinimumUV. */",
+        "typedef struct EnemyScroll { int type, dir_u, dir_v; float time_u, time_v, minimum_u, minimum_v; } EnemyScroll;",
         "typedef struct {",
         "    const char *name;",
         "    const signed char *bone_parent; const Dmc3Vec3 *bone_local, *bone_rest;",
@@ -481,6 +562,12 @@ def write_enemy(output: Path, packs: dict) -> None:
         "    int weapon_vertex_count, weapon_index_count, weapon_texture;",
         "    int texture_set;",
         "    float height;",
+        "    /* Bones past body_bone_count are parts' rigs: on a body bone (bone_link), on their parent, or run by a",
+        "     * chain (cloths; CCnsChain, its .clt). */",
+        "    int body_bone_count; const signed char *bone_link;",
+        "    const struct EnemyCloth *cloths; int cloth_count;",
+        "    /* Each object's texture scroll (-1 none), and the model's .TSC scrolls. */",
+        "    const signed char *object_scroll; const struct EnemyScroll *scrolls; int scroll_count;",
         "} EnemyModel;",
     ]
     sets = {}
@@ -500,7 +587,8 @@ def write_enemy(output: Path, packs: dict) -> None:
                      ",".join(f"{n}_palette_{i}" for i in range(len(textures))) + "};")
         sets[slot] = (len(sets), n, len(textures))
     table = []
-    max_vertices = max_bones = 0
+    max_vertices = max_bones = max_extra = 0
+    read_exe = elf_reader(executable)
     for kind, (name, slot, body_index, weapon_index) in enumerate(ENEMY_KINDS):
         body = packs[slot][body_index]
         if body[:4] == b"EFM ":
@@ -517,18 +605,52 @@ def write_enemy(output: Path, packs: dict) -> None:
                 mesh[key] = list(mesh[key]) + list(more[key])
             mesh["indices"] = list(mesh["indices"]) + [i + base for i in more["indices"]]
             mesh["objects"] = list(mesh["objects"]) + [{**o, "index_start": o["index_start"] + start} for o in more["objects"]]
-        for extra_index, bone in EXTRA_RIGID.get(name, ()):
-            extra = packs[slot][extra_index]
-            more = build_mesh(extra, parse_skeleton(extra)["count"])
-            bx, by, bz = skel["world"][bone]
-            base, start = len(mesh["positions"]), len(mesh["indices"])
-            mesh["positions"] = list(mesh["positions"]) + [(x + bx, y + by, z + bz) for x, y, z in more["positions"]]
+        body_count, body_vertices = skel["count"], len(mesh["positions"])
+        parents, local, world = list(skel["parents"]), list(skel["local"]), list(skel["world"])
+        bone_link, cloths = [-1] * body_count, []
+        object_part = [None] * len(mesh["objects"])
+        for part_index, links, clt_index, capsule_spec in EXTRA_CHAINS.get(name, ()):
+            part = packs[slot][part_index]
+            rig = parse_skeleton(part)
+            base = len(parents)
+            # The rig sits where its linked bones meet the body's: the offset of its first link.
+            first = min(links)
+            offset = [w - r for w, r in zip(world[links[first]], rig["world"][first])]
+            for b in range(rig["count"]):
+                p = rig["parents"][b]
+                parents.append(-1 if p < 0 else base + p)
+                world.append(tuple(r + o for r, o in zip(rig["world"][b], offset)))
+                local.append(tuple(a - c for a, c in zip(world[-1], world[base + p])) if p >= 0 else world[-1])
+                bone_link.append(links.get(b, -1))
+            for rb, bb in links.items():
+                if max(abs(a - c) for a, c in zip(world[base + rb], world[bb])) > 0.5:
+                    raise ValueError(f"{name} [{part_index}] bone {rb} isn't at body bone {bb}'s rest")
+            more = build_mesh(part, rig["count"])
+            vbase, start = len(mesh["positions"]), len(mesh["indices"])
+            mesh["positions"] = list(mesh["positions"]) + [tuple(v + o for v, o in zip(p3, offset)) for p3 in more["positions"]]
             mesh["normals"] = list(mesh["normals"]) + list(more["normals"])
             mesh["uvs"] = list(mesh["uvs"]) + list(more["uvs"])
-            mesh["bones"] = list(mesh["bones"]) + [(bone, 0, 0)] * len(more["positions"])
-            mesh["weights"] = list(mesh["weights"]) + [(31, 0, 0)] * len(more["positions"])
-            mesh["indices"] = list(mesh["indices"]) + [i + base for i in more["indices"]]
+            mesh["bones"] = list(mesh["bones"]) + [tuple(b + base for b in bs) for bs in more["bones"]]
+            mesh["weights"] = list(mesh["weights"]) + list(more["weights"])
+            mesh["indices"] = list(mesh["indices"]) + [i + vbase for i in more["indices"]]
             mesh["objects"] = list(mesh["objects"]) + [{**o, "index_start": o["index_start"] + start} for o in more["objects"]]
+            object_part += [part_index] * len(more["objects"])
+            if clt_index is None:
+                continue
+            script = packs[slot][clt_index].replace(b"\0", b"").decode("ascii", "replace")
+            cloth = parse_cloth(script)
+            if any(line.split()[2:3] != ["Y"] for line in script.splitlines() if line.split()[:1] == ["Bone"]):
+                raise ValueError(f"{name} [{clt_index}]: a bone's axis isn't Y (only Y is ported)")
+            free = [base + b for b in cloth["bones"]]
+            for b in free:
+                if bone_link[b] >= 0 or parents[b] < 0 or parents[b] > b:
+                    raise ValueError(f"{name} [{clt_index}]: chain bone {b - base} is linked or out of order")
+            capsules = read_capsules(read_exe, capsule_spec)
+            cloths.append({"bones": free, "gravity": cloth.get("Gravity", [0.0, -0.2, 0.0])[1],
+                           "spring": cloth.get("SpringForce", [0.05])[0], "max_speed": cloth.get("MaxSpeed", [50.0])[0],
+                           "stiffness": cloth.get("Stiffness", [0.3])[0], "capsules": capsules})
+            print(f"  {name} [{part_index}] chain: bones {[b - base for b in free]}, gravity {cloths[-1]['gravity']}, "
+                  f"stiffness {cloths[-1]['stiffness']}, capsules {capsules}")
         if weapon_index is None:
             # No weapon: one degenerate triangle keeps the tables the same shape.
             wmesh = {"positions": [(0.0, 0.0, 0.0)], "normals": [(0.0, 1.0, 0.0)], "uvs": [(0.0, 0.0)],
@@ -542,12 +664,14 @@ def write_enemy(output: Path, packs: dict) -> None:
                 hx, hy, hz = skel["world"][5]
                 wmesh["positions"] = [(x - hx, y - hy, z - hz) for x, y, z in wmesh["positions"]]
         n = f"ek{kind}"
-        height = max(v[1] for v in mesh["positions"])
+        height = max(v[1] for v in mesh["positions"][:body_vertices])
+        bone_count = len(parents)
         lines += [
-            f"/* {name}: {len(mesh['positions'])} vertices, {len(mesh['indices']) // 3} triangles, {skel['count']} bones */",
-            f"static const signed char {n}_bone_parent[] = {{", array_lines(skel["parents"], str, 24), "};",
-            f"static const Dmc3Vec3 {n}_bone_local[] = {{", array_lines(skel["local"], vec, 4), "};",
-            f"static const Dmc3Vec3 {n}_bone_rest[] = {{", array_lines(skel["world"], vec, 4), "};",
+            f"/* {name}: {len(mesh['positions'])} vertices, {len(mesh['indices']) // 3} triangles, {bone_count} bones */",
+            f"static const signed char {n}_bone_parent[] = {{", array_lines(parents, str, 24), "};",
+            f"static const signed char {n}_bone_link[] = {{", array_lines(bone_link, str, 24), "};",
+            f"static const Dmc3Vec3 {n}_bone_local[] = {{", array_lines(local, vec, 4), "};",
+            f"static const Dmc3Vec3 {n}_bone_rest[] = {{", array_lines(world, vec, 4), "};",
             f"static const Dmc3Vec3 {n}_positions[] = {{", array_lines(mesh["positions"], vec, 4), "};",
             f"static const Dmc3Vec3 {n}_normals[] = {{", array_lines(mesh["normals"], vec, 4), "};",
             f"static const Dmc3Uv {n}_uvs[] = {{", array_lines(mesh["uvs"], vec, 6), "};",
@@ -561,19 +685,45 @@ def write_enemy(output: Path, packs: dict) -> None:
             f"static const Dmc3Uv {n}_weapon_uvs[] = {{", array_lines(wmesh["uvs"], vec, 6), "};",
             f"static const unsigned short {n}_weapon_indices[] = {{", array_lines(wmesh["indices"], str, 12), "};",
         ]
+        for c, cloth in enumerate(cloths):
+            lines += [
+                f"static const unsigned char {n}_cloth{c}_bones[] = {{{','.join(map(str, cloth['bones']))}}};",
+                f"static const EnemyClothCapsule {n}_cloth{c}_capsules[] = {{" +
+                (",".join(f"{{{b},{vec(a)},{vec(e)},{c_float(r)}}}" for b, a, e, r in cloth["capsules"]) or "{0}") + "};",
+            ]
+        scrolls, object_scroll = [], [-1] * len(mesh["objects"])
+        if name in TEXTURE_SCROLLS:
+            tsc_index, scrolled_parts = TEXTURE_SCROLLS[name]
+            scrolls = parse_tsc(packs[slot][tsc_index].replace(b"\0", b"").decode("ascii", "replace"))
+            for k, o in enumerate(mesh["objects"]):
+                if object_part[k] in scrolled_parts:
+                    object_scroll[k] = next((s for s, sc in enumerate(scrolls) if sc["texture"] == o["texture"]), -1)
+            print(f"  {name} scrolls {scrolls}, objects {object_scroll}")
+            lines.append(f"static const EnemyScroll {n}_scrolls[] = {{" + ",".join(
+                f"{{{sc['type']},{sc['dir'][0]},{sc['dir'][1]},{c_float(sc['time'][0])},{c_float(sc['time'][1])},"
+                f"{c_float(sc['minimum'][0])},{c_float(sc['minimum'][1])}}}" for sc in scrolls) + "};")
+        lines.append(f"static const signed char {n}_object_scroll[] = {{{','.join(map(str, object_scroll))}}};")
+        if cloths:
+            lines.append(f"static const EnemyCloth {n}_cloths[] = {{" + ",".join(
+                f"{{{n}_cloth{c}_bones,{len(cl['bones'])},{c_float(cl['gravity'])},{c_float(cl['spring'])},"
+                f"{c_float(cl['max_speed'])},{c_float(cl['stiffness'])},{n}_cloth{c}_capsules,{len(cl['capsules'])}}}"
+                for c, cl in enumerate(cloths)) + "};")
         table.append(
             f'    {{"{name}",{n}_bone_parent,{n}_bone_local,{n}_bone_rest,{n}_positions,{n}_normals,{n}_uvs,'
             f'{n}_bones,{n}_weights,{n}_indices,{n}_objects,{n}_weapon_positions,{n}_weapon_normals,{n}_weapon_uvs,'
-            f'{n}_weapon_indices,{len(mesh["positions"])},{len(mesh["indices"])},{len(mesh["objects"])},{skel["count"]},'
+            f'{n}_weapon_indices,{len(mesh["positions"])},{len(mesh["indices"])},{len(mesh["objects"])},{bone_count},'
             f'{len(wmesh["positions"])},{len(wmesh["indices"])},{wmesh["objects"][0]["texture"] if wmesh["objects"] else 0},'
-            f'{sets[slot][0]},{height:.1f}f}},')
+            f'{sets[slot][0]},{height:.1f}f,{body_count},{n}_bone_link,{n + "_cloths" if cloths else "0"},{len(cloths)},'
+            f'{n}_object_scroll,{n + "_scrolls" if scrolls else "0"},{len(scrolls)}}},')
         max_vertices = max(max_vertices, len(mesh["positions"]))
-        max_bones = max(max_bones, skel["count"])
+        max_bones = max(max_bones, bone_count)
+        max_extra = max(max_extra, bone_count - body_count)
         print(f"Enemy {name}: {len(mesh['positions'])} vertices, {len(mesh['indices']) // 3} triangles, "
               f"{skel['count']} bones, weapon {len(wmesh['positions'])} vertices, height {height:.0f}")
     lines += [f"#define ENEMY_KIND_COUNT {len(ENEMY_KINDS)}",
               f"#define ENEMY_MAX_VERTICES {max_vertices}",
               f"#define ENEMY_MAX_BONES {max_bones}",
+              f"#define ENEMY_MAX_EXTRA_BONES {max(max_extra, 1)}",
               f"#define ENEMY_TEXTURE_SET_COUNT {len(sets)}",
               "static const EnemyTextureSet enemy_texture_sets[] = {" +
               ",".join(f"{{{n}_textures,{n}_palettes,{count}}}" for _, n, count in sorted(sets.values())) + "};",
@@ -755,7 +905,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 118: abyss_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack})
+    write_enemy(args.output, {117: enemy_pack, 118: abyss_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack}, executable)
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack, abyss_pack)
     write_devils(args.output, devil_packs)
 
