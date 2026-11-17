@@ -885,6 +885,20 @@ cutscene). One boss bar for both.
   50 (charge) or 47 / 1-in-4 52, then 50 or 52; Rudra's 44 or 45 / 1-in-4 53, then 51 or 49 / 1-in-4 53, then 51 or
   56; both swords 45 / 43 with 1-in-8 54, then 49 / 47 with 1-in-4 54, then 56 / 54. Beyond 1000 none. Dante 300
   above them for 88 frames (`003afbe0`) → 55. After a guard (permission 2 or 4) a second table, not ported.
+- **The opening** (`003aedd0`: with +0x2de7 set, two brothers, and neither in state 0x24 nor flagged, state 64).
+  State 64 (`003ab250`, steps +5): 0 beyond 100 of Dante script 26 (else straight to 0x14); 1 five frames; 2 turning
+  0x888 until both layers' scripts end; 0xa script 2 (take-off); 0xb its end, script 3 (rise), velocity (0, 3, 0) and
+  +0x2e08 = 16; 0xc turning 0x800, then script 4 (air) with a 420-frame clock; 0xd in the air (turning 0x800,
+  `003b0050`) until the clock or within 100; 0x14 script 26; 0x15 five frames; 0x16 turning until done; 0x1e script 0
+  and 300 frames; 0x1f waiting (turning 0x100) for his brother to be in state 64 past step 0x1d (or to have no opening
+  flag), or the 300 to run out (then idle); 0x28 a wait of 60 × the brothers' count (+0x2ee0); 0x32 script 2; 0x33
+  script 3 at (0, 3, 0) and 16; 0x34 script 4 with 300 frames; 0x35 at him (turning 0x800), landing or zone under 2
+  ends it (zone under 4 by its clock: state 0x41); 0x36 twenty frames still; 0x37 back to idle (state 2). State 63
+  (`003aad50`): the same start, then (`003b09c0(5)`) up to y 960 onto his pedestal: state 59 at (3065, 960, 1780)
+  (Agni) or 60 at (1930, 960, 1778) (Rudra), setting the room's flag bit 1 / 2 (+0x18 +0x5c).
+- **Guard** (`003a1a50`, a hit while a script's guard is up): by the hit's kind and Dante's sector, turned (vtable
+  +0x34 on the hit, +0xe8, effect by the record) or taken (+0x38, effect +0x34's id); 0x2ec4 counts, past +0x2ec5 the
+  hit gets through. Needs Dante's hit records, which the port doesn't model.
 - **Moves** (`003ad180` alone): beyond 1000 leap (11) unless role ≥ 3, then on a 12-frame wait 12; 650-1000 → 12, or
   3, or 14/15 at random; 350-650 → 12, 4, 14/15, or 13 when role ≥ 4; nearer → 4 or 13. Paired (`003ad5d0`) adds the
   flank: 14 / 6-7 / 15 / 9-10 / 3-4 for flank 4 / 3 / 2 / 1 / 0.

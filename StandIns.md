@@ -55,8 +55,12 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   +0x481d, the 5-way pick with 0x7f / 0x80 and the float 0x7b) never runs; his idle actions (0x64, the walks) are the
   stand-in's; the throws are motes; a bullet's stun value 8 [estimate]; the arena clamp is the stand-in's.
   `enemy.c` ~3428-3650, `jester.c`, PortJobs.
-- **Agni & Rudra**: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects
-  (0x311 / 0x312 a burst within 300 as record 12 [estimate]). `agni_rudra.c`, `enemy.c` ~3883, PortJobs.
+- **Agni & Rudra**: the pair's opening (state 64) and pedestal climb (63 → 59 / 60) are decoded (ENEMY_SPECS F) but
+  play as S(2, 26) without their leaps or the brothers' sync; the guard stances (FUN_003a1a50, needs Dante's hit
+  records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300
+  as record 12 [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
+- **Arachne** (more): its class is built like a player (60+ actions by id, FUN_003f6eb0; per-frame FUN_003f3e40,
+  wall-crawling): a full decode, not started.
 - **Nevan**: 23's bats are let out as 22's (her swarm +0x4db0 isn't ported); the kiss's hold (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
