@@ -26,4 +26,16 @@ extern float camera_boss_at[3];   /* the boss's feet, for the bosses' cameras th
 /* Index of the room's zone in use (-1: the follow camera). */
 int camera_zone(void);
 
+/* The event scripts' camera (messages.c runs the ops). A cut of the room's DCA chunk (the data PAC's entry 8):
+ * eye and target splines with FOV and roll per point, played over its frame count. hold: 4e, the cut stays on
+ * its first frame. Returns 0 if the room hasn't that cut. */
+int camera_event_cut(int cut, int hold);
+int camera_event_done(void);
+int camera_start_count(void);     /* the room's POS records (up to 8) */      /* 4f: the cut has reached its last frame (or none is up) */
+int camera_event_on(void);
+void camera_event_end(const Player *player);   /* 4c: back to the zones and the follow camera */
+void camera_zone_enable(int zone, int off);    /* 75 zone 1 turns it off, 0 back on (until the next room) */
+void camera_follow_set(float pitch_deg, float len, float battle, float aov_deg);   /* 77 */
+void camera_follow_turn(const Player *player, float deg);                         /* 76: Dante's yaw + deg */
+
 #endif

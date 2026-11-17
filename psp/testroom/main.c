@@ -1404,7 +1404,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
-    if (!anim.viewer) {
+    if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         hud_draw(player);
         {
             float hp, maximum;
@@ -1942,7 +1942,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
-static int cmp_fastwaves, cmp_clear_minions;
+static int cmp_fastwaves, cmp_clear_minions, cmp_events_play;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
@@ -2025,6 +2025,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
+        else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
         else if (strncmp(line, "gigaorb ", 8) == 0) { if (cmp_orb_count < 8) cmp_orb_at[cmp_orb_count++] = atoi(line + 8); }
@@ -2393,6 +2394,39 @@ static void items_reset(int mission) {
 }
 static int item_is(int id, int state) { return id >= 0 && id < ITEM_ID_MAX && item_state[id] == state; }
 static int msg_item_got(int id) { return item_is(id, 1); }   /* messages.c asks */
+/* The event blocks' side (messages.c): the room he came from, whether a fight was on in this visit, and the
+ * warps an event makes (59: to a POS record; 5b: to a spot). */
+static int msg_prev_room = -1, msg_room_fought;
+static Player *msg_player;
+static void msg_place(float x, float y, float z, float yaw_deg) {
+    float g;
+    if (!msg_player) return;
+    msg_player->x = x; msg_player->z = z;
+    msg_player->y = stage_floor(x, y + 50.0f, z, 0.0f, &g) && fabsf(g - y) < 200.0f ? g : y;
+    msg_player->yaw = yaw_deg * 0.0174532925f;
+    msg_player->vy = 0.0f;
+    msg_player->on_ground = 1;
+    combat_reset(&combat);
+}
+static void msg_warp_pos(int pos) {
+    if (mission_room == ROOM_NONE || pos < 0 || pos >= camera_start_count()) return;
+    msg_place(rooms[mission_room].starts[pos][0], rooms[mission_room].starts[pos][1], rooms[mission_room].starts[pos][2],
+              rooms[mission_room].starts[pos][3]);
+}
+static void msg_fill_env(MsgEnv *env, Player *player, int examine, int fight_done) {
+    memset(env, 0, sizeof *env);
+    env->x = player->x; env->y = player->y; env->z = player->z;
+    env->examine = examine;
+    env->enemies_left = enemy_alive_count();
+    env->item_got = msg_item_got;
+    /* Op 17 (FUN_0020e510): no enemy left and the group's count killed, and only once a group has been
+     * started (enemy manager +0x1b); the port's own waves stand for the groups. */
+    env->cleared = msg_room_fought && fight_done && env->enemies_left == 0;
+    env->prev_room = msg_prev_room;
+    env->player = player;
+    env->warp_pos = msg_warp_pos;
+    env->warp = msg_place;
+}
 /* Inside an EVE area: its four corners (either winding), and from its floor up its height (FUN_001c1510). */
 static int item_area_inside(const RoomItemUse *u, float x, float y, float z) {
     int k, pos = 0, neg = 0;
@@ -2985,6 +3019,8 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     stage_load(path);
     breakables_enter(room);
     seal_enter(room);
+    msg_prev_room = mission_room != ROOM_NONE ? room_number(mission_room) : -1;   /* op 1e */
+    msg_room_fought = 0;
     mission_room = room;
     if(mission_choice.mission==8) {
         int number=atoi(rooms[room].file+5);
@@ -3377,8 +3413,14 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     }
     {
         /* The event scripts' messages (messages.c): examine texts and the like, in their text box. */
-        MsgEnv env = {player->x, player->y, player->z, (pressed & PSP_CTRL_CIRCLE) != 0, enemy_alive_count(), msg_item_got};
+        MsgEnv env;
+        if (enemy_alive_count() > 0) msg_room_fought = 1;
+        msg_player = player;
+        msg_fill_env(&env, player, (pressed & PSP_CTRL_CIRCLE) != 0, done);
         if (msg_update(dt, pressed, &env)) pressed &= ~(PSP_CTRL_CIRCLE | PSP_CTRL_CROSS);
+        /* Test runs don't wait for the events (their inputs are timed): each is skipped as START would, unless
+         * the scene asks to see them (events=1). */
+        if (focus_cmp && !cmp_events_play && msg_event_on()) { msg_event_skip(&env, 1); msg_update(0.0f, 0, &env); }
     }
     if (info->goal_room == mission_room && room_is_cleared(info->goal_after) && done && enemy_alive_count() == 0) {
         /* The mission's item: walk up to it and press O. */
@@ -3953,6 +3995,12 @@ int main(int argc, char *argv[]) {
                     draw_buffer = menu_draw_buffer;
                     last_time = sceKernelGetSystemTimeLow();
                 }
+            } else if (mission_mode && !debug_open && (debug_pressed & PSP_CTRL_START) && msg_event_skippable()) {
+                /* START skips an event the script lets him skip (FUN_0020b8d0 -> FUN_0020f880). */
+                MsgEnv env;
+                msg_fill_env(&env, &player, 0, 0);
+                msg_event_skip(&env, 0);
+                debug_pressed &= ~PSP_CTRL_START;
             } else if (mission_mode && !debug_open && (debug_pressed & PSP_CTRL_START)) {
                 pause_open();
                 pause_active = 1;
@@ -4215,7 +4263,8 @@ int main(int argc, char *argv[]) {
                     camera_boss_at[0] = at[0][0]; camera_boss_at[1] = at[0][1]; camera_boss_at[2] = at[0][2];
                 }
             }
-            if (mission_mode && msg_busy()) { memset(&input, 0, sizeof(input)); input.style = -1; }   /* reading a message */
+            /* Reading a message, or an event on (FUN_0021fd50(player, 1)): no input reaches him. */
+            if (mission_mode && (msg_busy() || msg_event_on())) { memset(&input, 0, sizeof(input)); input.style = -1; }
             player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame
              * covers more than his radius, and pushing out from the end alone lets him through a wall (Mission
@@ -4242,7 +4291,10 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 vergil_boss_dante(combat.action, player.yaw);
-                enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+                /* During a script's event the enemies wait (a stand-in: what the game's event mode stops in
+                 * them isn't decoded), so they don't set on a Dante who can't move. */
+                if (!(mission_mode && msg_event_on()))
+                    enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
                 if(leviathan_boss_drain_trigger(dt*60,player.devil))player.devil=0;
                 orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);
                 enemy_clamp_player(&player.z);

@@ -287,12 +287,15 @@ Order the script supports: 100 → 101 → 102 → 103 → (lift) 110 → 100 (2
 | 7 | 111 Gigapede dead | Giantwalker done |
 | 32–34 | 103 (room-local) | seal print lit / lift raised / latch |
 
-## Messages in the port
+## Messages and event cameras in the port
 
 `tools/gen_messages.py` reads the text from the disc's `msg_eng.pac` (GDATA 221: "# Msg id" blocks, tags
-`<BR>` line, `<WI>` wait, `<CL>` new page, `<FC r g b>` colour, `<PS x y>` place) and keeps every BLOCK of a ROOM
-section that has a `message` (6e) op, op for op, in `build/testroom/generated/messages_runtime.h` (local, never
-committed: 61 texts, 48 blocks in Missions 3-19). `psp/testroom/messages.c` runs them as the interpreter does:
+`<BR>` line, `<WI>` wait, `<CL>` new page, `<FC r g b>` colour, `<PS x y>` place) and keeps every BLOCK of every
+ROOM section, op for op, in `build/testroom/generated/messages_runtime.h` (local, never committed: 61 texts, 495
+blocks): those with a `message` (6e) or a camera op (49, 4d, 4e, 75, 76, 77) for what they show, the rest for the
+flags and counters they set, which the others test. A
+room section's first block is marked as the on-enter block: it runs once, on the first frame in the room
+(`FUN_0020b7a0`), whatever its type. `psp/testroom/messages.c` runs them as the interpreter does:
 each frame a block that isn't done runs from its start, switches pick a case, `end_block 0` stops it for the
 frame, `end_block 1` or its end finishes it (type 0 once a mission, type 1 once a visit). `message` opens the
 text box at the bottom of the screen (O or X turns the page, the last closes it; Dante doesn't move while it's
@@ -304,8 +307,26 @@ item uses and shops haven't taken it), `sw_item_got`/`sw_item_count` (held, item
 `set_flag`/counter ops; flags the missions' C code keeps (a seal lit, a trial done, 300's tusks) aren't linked,
 so a message gated on one reads it as clear: 003's seal text (10003, flag 33 set) and 300's tusk count
 (10353-10357, flag 6) don't show, and 003's switch text (10004, flag 32 clear) still shows once the switch is
-lit. Cameras, sounds, gimmicks and items given or taken in these blocks are skipped (the missions' code does
-those). A Divinity Statue's shop takes the O press first, so 005's statue text (10010) doesn't show.
+lit. Sounds, effects, enemy groups, doors, gimmicks and items given or taken in these blocks are skipped (the
+missions' code does those). A Divinity Statue's shop takes the O press first, so 005's statue text (10010) doesn't show.
+
+**Events** (49 .. 4c): while one is on, Dante takes no input, the enemies wait (a stand-in: what the game's event
+mode stops in them isn't decoded) and, while a cut is up, the HUD is hidden. The cuts (4d / 4e, waited on by 4f),
+zones on and off (75), the follow camera's settings and turn (77, 76) and Dante's warps (59 to a POS record, 5b to
+a spot) run as docs/CAMERA.md "Event cameras" describes. START skips an event the script lets him skip (49's second
+argument, 4a's 0x100 / 0x200): the block jumps to its 4c, keeping on the way only what changes state (flags,
+counters, zones, warps), as `FUN_0020f880` replays. Test runs (FOCUS cmp) skip every event at once unless the
+scene says `events 1`, so their timed inputs stay right.
+
+Op 17 / 18 (the encounter cleared) is true only once a fight has been on in this visit and is over (the PS2's
+enemy manager needs a group started, +0x1b), so a victory camera doesn't play on entering a quiet room; the
+port's own waves stand for the groups. Op 1e is the room he came from; op 13 (the Gigapede's death bit) reads as
+the fight over. Because the port starts its waves its own way (on entering, not at the script's area), an event
+that starts a group shows the enemies that are already there.
+
+Tested in PPSSPP: Mission 4's opening in 100 (cuts 0 then 2, then the room's camera and the HUD back:
+`analysis/testroom/evcam_m4_100_*.png`) and Mission 3's Love Planet (004, area 1: the warp, cuts 6, 8, 10 and 9 on
+the Sloths' balcony, then the fight: `evcam_m3_004_*.png`).
 
 Tested in PPSSPP: Mission 4's 100 areas 0 and 2 (10150; 10151 with its coloured words) and Mission 16's 106
 area 1 (10750, two pages): `analysis/testroom/messages_m4_100_105.png`, `messages_m4_100b_105.png`,

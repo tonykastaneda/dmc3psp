@@ -129,6 +129,36 @@ uses that camera instead of the zones, and 0x61ac1c picks the boss's own camera 
 behind the target, 3 degrees up. When the boss camera is done it sets 0x61ac1c to 0x80, which makes
 CCameraCtrl put the zones' camera back (`FUN_002bd310(ctrl, 1)`).
 
+## Event cameras (the scripts' cuts)
+
+The event scripts' camera moves (docs/EVENT_SCRIPTS.md, ops 49-4f) run on a third camera at scene `+0x4a80`.
+Its data is the room data PAC's **entry 8, the `DCA` chunk**, handed over on room entry by `FUN_00239b60`
+(`FUN_003201d0`: data at +0x90, cuts from data + 0x10).
+
+`"DCA\0"`, u16 cut count at +6, cuts from +0x10, **0x410 bytes each**: eye points (32 × xyz) at +0, target
+points (32 × xyz) at +0x180, FOV per point (radians) at +0x300, roll per point at +0x380, point count (byte) at
++0x400, frame count (s32) at +0x404. 458 cuts in 141 rooms.
+
+| op | function | what |
+|---|---|---|
+| 4d n | `FUN_0023e790` → `FUN_003201f0` | start cut n (ignored if the room hasn't it): both splines built as the rails' (`FUN_002cb300`), time 0, end = frames − 1; scene +0x5be0 = 1 puts this camera up |
+| 4e n | `FUN_0023e7c0` → `FUN_00320490` | the same, held (+0x1154): the cut stays on its first frame |
+| 4f | `FUN_0023e7f0` → `FUN_00320450` | the script waits until time ≥ end |
+| 4c | `FUN_0023e6e0` | the event ends: +0x5be0 = 0, the follow camera reset (`FUN_0024e740`), the zones' camera again |
+| 75 z v | `FUN_0023e850` | the zone's byte at ctrl +0xa0 + 16 z: 1 turns zone z off (`FUN_002bcbd0` never picks it), 0 back on |
+| 76 a | `FUN_0023e8b0` | the follow camera put at Dante's yaw + a degrees (`FUN_0024e7d0`) |
+| 77 p l b f | `FUN_0023e860` | the follow camera's pitch, distance, battle distance, FOV, as a room's CONFIG (`FUN_0024e6a0`) |
+| 59 n | `FUN_0023e3d0` | Dante to the room's POS record n |
+
+Per frame (`FUN_003202b0`): t = time / end (time clamped to end); with n points, segment s = floor((n − 1) t) (the
+last segment at t = 1) and u the fraction within it, so the points are evenly spaced **in time**, not by length;
+eye and target are the two splines at (s, u) (`FUN_002cb410`), FOV and roll lerped between points s and s + 1.
+Then, unless held, time += the game speed (1 a frame). Eye and target are placed exactly, no easing.
+
+In the port: `tools/gen_cameras.py` writes the cuts (`cam_cuts`, their points in `cam_points` with the target as
+`path`), camera.c plays them (`camera_event_cut`, `camera_event_done`, `camera_event_end`, `camera_zone_enable`,
+`camera_follow_set`, `camera_follow_turn`), and messages.c runs the scripts' ops (docs/EVENT_SCRIPTS.md).
+
 ## Checked against the PS2
 
 `tools/ps2_camera.py` (PCSX2, Mission 3, Dante held at a spot) against the port's camera.c at the same spot.

@@ -50,6 +50,13 @@ static float r_t, r_len[MAX_RAIL], r_len_eye[MAX_RAIL];   /* r_len: the path's s
 static float r_eye[MAX_RAIL][4][3], r_path[MAX_RAIL][4][3];
 static float frame_accum;
 static float written[6];   /* what camera_update last left in the FollowCamera */
+#define MAX_ZONES 64
+static unsigned char zone_off[MAX_ZONES];   /* op 75: zones the script has turned off */
+/* The event camera (scene +0x4a80, FUN_003201f0 / FUN_003202b0): one cut of the room's DCA chunk playing. */
+static int ev_on, ev_hold, ev_count;
+static float ev_time, ev_last;
+static float ev_eye[MAX_RAIL][4][3], ev_tgt[MAX_RAIL][4][3], ev_len_eye[MAX_RAIL], ev_len_tgt[MAX_RAIL];
+static float ev_fov[MAX_RAIL], ev_roll[MAX_RAIL];
 
 static float wrap(float a) {
     while (a > PI_F) a -= 2.0f * PI_F;
@@ -142,6 +149,8 @@ void camera_room(const char *room_file, int start) {
     len = room && room->len >= 0.0f ? room->len : FOLLOW_LEN;
     lock_len = room && room->battle >= 0.0f ? room->battle : 400.0f;
     fov_follow = room && room->aov > 0.0f ? room->aov * DEG : FOLLOW_FOV;
+    memset(zone_off, 0, sizeof zone_off);   /* FUN_002bc890 indexes the zones afresh */
+    ev_on = 0;
 }
 
 int camera_zone(void) { return fixed_on ? cam_zone : -1; }
@@ -571,6 +580,93 @@ static void boss_vergil(const Player *player) {
     out_fov = 50.0f * DEG;
 }
 
+/* ---- The event camera: the scripts' cuts (ops 4d/4e/4f, docs/CAMERA.md "Event cameras"). ---- */
+int camera_event_cut(int cut, int hold) {
+    const CamCut *c;
+    float eyes[MAX_RAIL][3], tgts[MAX_RAIL][3];
+    int i;
+    if (!room || cut < 0 || cut >= room->cut_count) return 0;   /* FUN_003201f0 ignores a cut it hasn't got */
+    c = &cam_cuts[room->cut_first + cut];
+    ev_count = c->point_count > MAX_RAIL ? MAX_RAIL : c->point_count;
+    if (ev_count < 1) return 0;
+    for (i = 0; i < ev_count; ++i) {
+        const CamPoint *p = &cam_points[c->point_first + i];
+        copy3(eyes[i], p->eye); copy3(tgts[i], p->path);
+        ev_fov[i] = p->fov; ev_roll[i] = p->roll;
+    }
+    for (i = 0; i < ev_count - 1; ++i) {
+        /* FUN_002cb300, as the rails: each spline's segments by their own lengths in metres. */
+        float l = dist3(eyes[i + 1], eyes[i]) / 100.0f, lt = dist3(tgts[i + 1], tgts[i]) / 100.0f;
+        ev_len_eye[i] = l > 1e-3f ? l : 1e-3f;
+        ev_len_tgt[i] = lt > 1e-3f ? lt : 1e-3f;
+    }
+    if (ev_count >= 2) {
+        build_spline(ev_eye, (const float (*)[3])eyes, ev_count, ev_len_eye);
+        build_spline(ev_tgt, (const float (*)[3])tgts, ev_count, ev_len_tgt);
+    } else {
+        copy3(ev_eye[0][3], eyes[0]); copy3(ev_tgt[0][3], tgts[0]);
+    }
+    ev_last = (float)(c->frames - 1);   /* +0x1148 */
+    ev_time = 0.0f;                      /* +0x114c */
+    ev_hold = hold;                      /* +0x1154: 4e's cut stays on its first frame */
+    ev_on = 1;                           /* scene +0x5be0: CCameraCtrl shows the event camera */
+    return 1;
+}
+
+int camera_start_count(void) { return room ? room->start_count : 0; }
+
+int camera_event_done(void) { return !ev_on || !(ev_time < ev_last); }   /* FUN_00320450 */
+int camera_event_on(void) { return ev_on; }
+
+void camera_event_end(const Player *player) {
+    /* 4c (FUN_0023e6e0): the zones' camera again, chosen afresh; the follow camera from where the eye was. */
+    if (!ev_on) return;
+    ev_on = 0;
+    follow_place(player, atan2f(out_eye[0] - player->x, out_eye[2] - player->z));
+    f_frozen = 0;
+    zone = zone_prev = cam_zone = -1;
+    fixed_on = 0;
+    blend_n = 0;
+}
+
+void camera_zone_enable(int z, int off) { if (z >= 0 && z < MAX_ZONES) zone_off[z] = (unsigned char)(off != 0); }
+
+void camera_follow_set(float pitch_deg, float length, float battle, float aov_deg) {
+    /* 77 (FUN_0023e860 -> FUN_0024e6a0): the follow camera's settings, as a room's CONFIG gives them. */
+    if (pitch_deg >= 0.0f) pitch = pitch_deg * DEG;
+    if (length >= 0.0f) len = length;
+    if (battle >= 0.0f) lock_len = battle;
+    if (aov_deg > 0.0f) fov_follow = aov_deg * DEG;
+}
+
+void camera_follow_turn(const Player *player, float deg) {
+    /* 76 (FUN_0023e8b0 -> FUN_0024e7d0): the follow camera put at Dante's yaw plus deg. */
+    follow_place(player, player->yaw + deg * DEG);
+    if (!fixed_on) { copy3(out_eye, f_eye); copy3(out_target, f_target); }
+}
+
+/* One frame of the cut (FUN_003202b0): by time, not distance; the points are evenly spaced in time. */
+static void event_frame(void) {
+    float f, f0, u;
+    int last = ev_count - 1, seg, nxt;
+    if (ev_time > ev_last) ev_time = ev_last;
+    f = ev_last > 0.0f ? ev_time / ev_last : 1.0f;
+    if (ev_count < 2) {
+        copy3(out_eye, ev_eye[0][3]); copy3(out_target, ev_tgt[0][3]);
+        out_fov = ev_fov[0]; out_roll = ev_roll[0];
+    } else {
+        seg = (int)((float)last * f);
+        if (seg >= last) { seg = last - 1; nxt = last; } else nxt = seg + 1;
+        f0 = (float)seg / (float)last;
+        u = (f - f0) / ((float)nxt / (float)last - f0);
+        spline_at(ev_eye, ev_len_eye, seg, u, out_eye);
+        spline_at(ev_tgt, ev_len_tgt, seg, u, out_target);
+        out_fov = ev_fov[nxt] * u + ev_fov[seg] * (1.0f - u);
+        out_roll = ev_roll[nxt] * u + ev_roll[seg] * (1.0f - u);
+    }
+    if (!ev_hold) ev_time += 1.0f;
+}
+
 static int area_inside(const CamArea *a, const float p[3]) {
     int i, pos = 0, neg = 0;
     if (p[1] < a->c[0][1] || p[1] > a->c[0][1] + a->height) return 0;
@@ -611,12 +707,13 @@ static int zone_inside(const CamZone *z, const float p[3]) {
 static int choose_zone(const float p[3]) {
     const CamZone *zs = room ? &cam_zones[room->zone_first] : 0;
     int n = room ? room->zone_count : 0, cur = -1, best = 0x100, kept = 0, i;
-    if (zone >= 0 && zone < n && (!zs[zone].battle || camera_battle) && zone_inside(&zs[zone], p)) {
+    /* A zone the script has turned off (op 75, the byte at ctrl +0xa0 + 16 n) is never chosen. */
+    if (zone >= 0 && zone < n && !zone_off[zone] && (!zs[zone].battle || camera_battle) && zone_inside(&zs[zone], p)) {
         cur = zone; best = zs[zone].pri; kept = 1;
     }
     for (i = 0; i < n; ++i) {
         const CamZone *z = &zs[i];
-        if (i == zone || !zone_inside(z, p)) continue;
+        if (i == zone || (i < MAX_ZONES && zone_off[i]) || !zone_inside(z, p)) continue;
         if (z->battle) {
             if (camera_battle && (!kept || !zs[cur].battle)) { cur = i; best = z->pri; }
         } else if (z->pri == best) {
@@ -631,6 +728,17 @@ static int choose_zone(const float p[3]) {
 static void frame(const Player *player, FollowCamera *camera, int reset_pressed) {
     float feet[3] = {player->x, player->y, player->z};
     int next = choose_zone(feet), cut = 0;
+    if (ev_on) {
+        /* An event's cut is up (scene +0x5be0): it alone places the camera. */
+        event_frame();
+        camera->x = out_eye[0]; camera->y = out_eye[1]; camera->z = out_eye[2];
+        camera->tx = out_target[0]; camera->ty = out_target[1]; camera->tz = out_target[2];
+        camera->fov = out_fov; camera->roll = out_roll;
+        camera->yaw = atan2f(camera->tx - camera->x, camera->tz - camera->z);
+        camera->stick_hold = 2;
+        was_on_ground = player->on_ground;
+        return;
+    }
     if (camera_boss == 3 || camera_boss == 9) {
         if (!boss_on) boss_begin(player);
         if (camera_boss == 3) boss_cerberus(player); else boss_vergil(player);
