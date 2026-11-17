@@ -1,7 +1,7 @@
 # Port jobs
 
 - [x] Soul Eaters: Missions 11 and 15 run their own class (ENEMY_SOUL: model, wing chains, scripts, action table, sight and showing, approach, bite, hold draining DT, burst, death; docs/ENEMY_SPECS.md H); stand-ins: Dante isn't held (it clings, his hits free him), the rank-0 teleport's angle, the dodge's trigger
-- [ ] The Abyss: its own body, scythe, scripts, caps and health (1500) run on the Hells' machinery (Missions 17, 19); not yet: its own decision table (it decides with the Pride's), docs/ENEMY_SPECS.md H
+- [x] The Abyss: its own body, scythe, scripts, caps, health (1500) and now its own decision table (0x5ce910: bands, zones, rows) and plans 40 / 58 / 59 (its taunt, sweep, and sink-and-rise, scripts 100-102 and PAC [36]'s motions) run on the Hells' machinery (Missions 17, 19), docs/ENEMY_SPECS.md H; stand-in: the Pride's hit-script list
 - [ ] Jester: his attacks, throws, defence and stun meter are the game's; not yet: his second set of moves (later encounters and the health threshold), his idle actions, the throws' effects, a bullet's stun value (estimate)
 - [ ] Agni & Rudra: brain, attacks, reactions to Dante's moves, turns and knockbacks are the game's; not yet: the pair's opening and team moves, the scripts' guard stances, the hops' records, the effects
 - [ ] Nevan: her patterns, moves, movement (with its slowing), teleports (their steps, fades and places), motions, bats, reels, hair and dress (cloth chains, texture scrolls), action 24's strikes, 25's lightning balls (pillars and bars) and 29 / 38's floor lightning are the game's (docs/ENEMY_SPECS.md G); not yet: 23's circling bats, the kiss's hold

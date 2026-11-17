@@ -10,9 +10,10 @@ SCRIPT_CHUNK, CAP_CHUNK, SHAPE_CHUNK = 38, 39, 40
 AI_TABLE = 0x5A8300
 # Per class, from their set-ups (build/hdref/enemy_specs.md): the Pride, the Gluttony (CEm001), the Sloth (CEm003).
 CLASS_TABLES = (("pride", 0x5A8300), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60), ("envy", 0x5CF5B0), ("greed", 0x5B0330),
-                ("abyss", 0x5A8300))   # the Abyss (CEm006): its AI code is a clone of the Hells'; its own decision data
-                                       # (block 0x61a678: per-rank pointer lists at 0x5ceef0-0x5cf500) isn't laid out
-                                       # as theirs and isn't decoded, so it decides with the Pride's table [stand-in]
+                ("abyss", 0x5CE910))   # the Abyss (CEm006): its AI code is a clone of the Hells' (CComEm006); its set-up
+                                       # (FUN_0041c240) hands FUN_004a8f00 its block's +0x10, 0x5ce910, laid out as
+                                       # theirs: three bands (300, 600), its own zones and rows, plans 40 / 58 / 59 too
+ABYSS_GROUP1 = 100   # the Abyss's own scripts (its bank's group 1) answer to 100 + n, playing PAC [36]'s motions (100+)
 HIT_SCRIPTS = 0x5A7A80   # the list states name their hit reactions through
 HIT_SCRIPT_COUNT = 28
 SCRIPT_COUNT = 100
@@ -43,12 +44,15 @@ class Elf:
         return struct.unpack_from("<f", self.data, self._at(address))[0]
 
 
-def compile_scripts(chunk, caps):
-    """Flatten the bytecode the game's motion player runs (FUN_00254f10) into a simple op list."""
+def compile_scripts(chunk, caps, group=0, script_count=None, motion_limit=100):
+    """Flatten the bytecode the game's motion player runs (FUN_00254f10) into a simple op list. group: which of the
+    bank's script groups (a script id's hundreds); motion_limit: motion ids under it are kept (the hundreds pick the
+    PAC: 0-99 PAC [35], 100-199 [36], ...), the rest play nothing."""
     u16 = lambda o: struct.unpack_from("<H", chunk, o)[0]
     i16 = lambda o: struct.unpack_from("<h", chunk, o)[0]
     script_base, map_base = u16(0), u16(2)
-    scripts = script_base + u16(script_base)
+    scripts = script_base + u16(script_base + group * 2)
+    count = SCRIPT_COUNT if script_count is None else min(script_count, u16(scripts) // 2)
 
     def motion_entry(group, index):
         entry = map_base + u16(map_base + group * 2)
@@ -56,17 +60,17 @@ def compile_scripts(chunk, caps):
 
     def motion_slot(group, index):
         entry = motion_entry(group, index)
-        if not chunk[entry]:
+        if entry + 8 > len(chunk) or not chunk[entry]:
             return 255
-        motion = u16(entry + 2 + 4)  # hundreds pick the PAC; only the first is exported
-        return motion if motion < 100 else 255
+        motion = u16(entry + 2 + 4)  # hundreds pick the PAC
+        return motion if motion < motion_limit else 255
 
     def motion_loops(group, index):
         entry = motion_entry(group, index)
-        return 1 if chunk[entry] and chunk[entry + 2 + 1] == 1 else 0
+        return 1 if entry + 8 <= len(chunk) and chunk[entry] and chunk[entry + 2 + 1] == 1 else 0
 
     ops, starts = [], []
-    for n in range(SCRIPT_COUNT):
+    for n in range(count):
         offset = u16(scripts + n * 2)
         # The table has no count: entries past its end read as junk, so they fall off the chunk.
         if offset == 0xFFFF or scripts + offset >= len(chunk):
@@ -256,7 +260,13 @@ def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
         # Its block's +0x10 (0x5ce910) is a list of pointers, not the hit-script list the Hells have there: the Pride's
         # (which the Envy's matches byte for byte) stands in [inferred].
         abyss_caps = read_caps(abyss_pack)
-        abyss_ops, abyss_starts = compile_scripts(abyss_pack[SCRIPT_CHUNK], abyss_caps)
+        abyss_ops, abyss_starts = compile_scripts(abyss_pack[SCRIPT_CHUNK], abyss_caps, motion_limit=200)
+        # Its own scripts (group 1, ids 100+: 100 the rise, 101 the sink, 102 the sweep), after the shared ones.
+        own_ops, own_starts = compile_scripts(abyss_pack[SCRIPT_CHUNK], abyss_caps, group=1, script_count=10, motion_limit=200)
+        base = len(abyss_ops)
+        abyss_ops += [(o, a, b + base if o == OP_GOTO else b, c) for o, a, b, c in own_ops]
+        abyss_starts = abyss_starts[:ABYSS_GROUP1] + [-1] * (ABYSS_GROUP1 - len(abyss_starts)) + \
+            [s + base if s >= 0 else -1 for s in own_starts]
         lines += ["static const EnemyAiOp abyss_ai_ops[] = {" +
                   ",".join("{%d,%d,%d,%d}" % op for op in abyss_ops) + "};",
                   "static const short abyss_ai_scripts[] = {" + ",".join(map(str, abyss_starts)) + "};",

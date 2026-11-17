@@ -42,6 +42,7 @@
  *   script  the motion data's own list of what plays and when attacks are live.
  * Angles in the comments are the game's, 65536 to the circle; frames are 1/60 s. */
 #define HL_MOTIONS 71
+#define AB_MOTIONS 10   /* the Abyss's own, PAC [36] */
 #define ANGLE(u) ((float)(u) * 6.2831853f / 65536.0f)
 #define PI 3.1415927f
 #define GRAVITY_STEP 0.54f
@@ -52,13 +53,19 @@ enum {  /* The actions this enemy uses, by the game's numbers. */
     A_STEP_LEFT = 22, A_STEP_RIGHT = 23, A_STEP_BACK = 24, A_TAUNT_A = 58, A_TAUNT_B = 59,
     /* The Sloth's and the Gluttony's (build/hdref/enemy_specs.md): warps to 900, 600 and 300 cm from Dante,
      * the warp strike, the Gluttony's wind-up and its spew. */
-    A_WARP_FAR = 41, A_WARP_MID = 42, A_WARP_NEAR = 43, A_WARP_STRIKE = 57, A_WIND_UP = 56, A_SPEW = 31
+    A_WARP_FAR = 41, A_WARP_MID = 42, A_WARP_NEAR = 43, A_WARP_STRIKE = 57, A_WIND_UP = 56, A_SPEW = 31,
+    /* The Abyss's (its AI clone's handlers, vtable 0x612220): 35 a taunt (FUN_004b5470), 74 its sweep (FUN_004bafe0),
+     * 75 its sink and rise (FUN_004bb2d0). */
+    A_AB_TAUNT = 35, A_AB_SWEEP = 74, A_AB_SINK = 75
 };
 enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't attack. */
     P_FLINCH_FRONT = 0, P_FLINCH_BACK = 1, P_LAUNCHED = 2, P_LAUNCHED_BACK = 3, P_LAUNCH_UP = 7, P_AIR_HIT_HEAVY = 8, P_AIR_HIT = 9,
     P_DEATH = 20, P_DECIDE = 23, P_WATCH = 24, P_SWING = 27, P_SWING_WIDE = 28, P_LEAP = 32, P_STEP_LEFT = 33, P_STEP_RIGHT = 34,
     P_STEP_BACK = 35, P_TAUNT_A = 51, P_TAUNT_B = 52, PLAN_STAND = 200,
-    P_SPEW = 37, P_SPEW_WOUND = 45, P_WARP_STRIKE = 46, P_WARP_FAR = 47, P_WARP_MID = 48, P_WARP_NEAR = 49
+    P_SPEW = 37, P_SPEW_WOUND = 45, P_WARP_STRIKE = 46, P_WARP_FAR = 47, P_WARP_MID = 48, P_WARP_NEAR = 49,
+    /* The Abyss's own picks (0x5ce910's rows): plans 40, 58, 59 run actions 35, 74, 75 (FUN_004abfc0, FUN_004ac980,
+     * FUN_004aca20). */
+    P_AB_TAUNT = 40, P_AB_SWEEP = 58, P_AB_SINK = 59
 };
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 
@@ -925,8 +932,22 @@ static void script_play_op(const EnemyAiOp *op) {
         m = op->a < k->motion_count ? k->motions[op->a] : -1;
         if (m < 0) return;   /* an empty or unexported motion slot */
     } else {
-        if (op->a >= HL_MOTIONS) return;  /* a motion from a pack the port doesn't export */
-        m = hl_motion[op->a];
+        if (e->kind == ENEMY_ABYSS && op->a >= 100 && op->a < 100 + AB_MOTIONS) {
+            /* The Abyss's own motions, its scripts' ids 100+ (PAC [36]: "abNN"). */
+            static int ab_motion[AB_MOTIONS] = {-2};
+            if (ab_motion[0] == -2) {
+                int k;
+                for (k = 0; k < AB_MOTIONS; ++k) {
+                    char name[5] = {'a', 'b', (char)('0' + k / 10), (char)('0' + k % 10), 0};
+                    ab_motion[k] = motion_find(name);
+                }
+            }
+            m = ab_motion[op->a - 100];
+            if (m < 0) return;
+        } else {
+            if (op->a >= HL_MOTIONS) return;  /* a motion from a pack the port doesn't export */
+            m = hl_motion[op->a];
+        }
     }
     if (blend > 0 && e->motion >= 0) {
         e->prev_motion = e->motion;
@@ -1116,6 +1137,9 @@ static void action_enter(int a) {
     case A_WARP_NEAR: script_play(68); e->timer = 0.0f; break;   /* hl-46 */
     case A_WARP_STRIKE: script_play(66); e->timer = 0.0f; break; /* hl-60 */
     case A_WIND_UP: script_play(71); break;                      /* hl-10 */
+    case A_AB_TAUNT: script_play(38 + (int)(ai_random() & 1u)); break;   /* FUN_004b5470: 38 or 39 at random */
+    case A_AB_SWEEP: script_play(102); break;                            /* FUN_004bafe0 */
+    case A_AB_SINK: script_play(101); e->timer = 0.0f; break;            /* FUN_004bb2d0 */
     case A_SPEW: script_play(52); e->timer = 0.0f; break;        /* hl-52 */
     default: break;
     }
@@ -1290,6 +1314,26 @@ static int action_update(float px, float pz, float f) {
     case A_TAUNT_B:
         if (e->done) action_enter(A_NONE);
         return 1;
+    case A_AB_TAUNT:
+        /* FUN_004b5570: turning to him at most 0x100 a frame. */
+        turn(px, pz, 0x100, f);
+        if (e->done) action_enter(A_NONE);
+        return 1;
+    case A_AB_SWEEP:
+        /* FUN_004bb030: turning 2 degrees a frame over its motion's frames 0-30 (0x5a835c-0x5a8364). */
+        if (e->frame <= 30.0f) turn(px, pz, 364, f);
+        if (e->done) action_enter(A_NONE);
+        return 1;
+    case A_AB_SINK:
+        /* FUN_004bb3a0: its sink (101) played out, it's under, 300 cm from him at a random angle, facing him; 50
+         * frames later it rises there (100). [Hidden while under: the game doesn't hide it, it's below the floor.] */
+        if (e->step == 0) {
+            if (e->done) { warp_to(px, pz, 300.0f); e->hidden = 1; e->timer = 0.0f; e->step = 1; }
+        } else if (e->step == 1) {
+            e->timer += f;
+            if (e->timer >= 50.0f) { e->hidden = 0; script_play(100); e->step = 2; }
+        } else if (e->done) action_enter(A_NONE);
+        return 1;
     case A_WARP_FAR:
     case A_WARP_MID:
     case A_WARP_NEAR:
@@ -1347,7 +1391,10 @@ static int action_update(float px, float pz, float f) {
 
 /* ---- Plans. ---- */
 
-static void plan_set(int p) { e->plan = (unsigned char)p; e->plan_step = 0; }
+static void plan_set(int p) {
+    if (e->kind == ENEMY_ABYSS && p != e->plan && p != P_DECIDE && p != P_WATCH) giga_note("abyss", p, (float)(e - enemies));   /* for tests */
+    e->plan = (unsigned char)p; e->plan_step = 0;
+}
 
 /* Pick from the game's lists: which list by whether it may attack, which row by how far Dante is. */
 static void decide(float distance) {
@@ -1451,6 +1498,9 @@ static void plan_update(float px, float pz, float f) {
     case P_WARP_MID: plan_run_action(A_WARP_MID); break;
     case P_WARP_NEAR: plan_run_action(A_WARP_NEAR); break;
     case P_SPEW: plan_run_action(A_SPEW); break;
+    case P_AB_TAUNT: plan_run_action(A_AB_TAUNT); break;
+    case P_AB_SWEEP: plan_run_action(A_AB_SWEEP); break;
+    case P_AB_SINK: plan_run_action(A_AB_SINK); break;
     case P_SPEW_WOUND:
         /* Winds up, then spews. */
         if (e->plan_step == 0) { action_enter(A_WIND_UP); e->plan_step = 1; }

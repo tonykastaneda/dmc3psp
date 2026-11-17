@@ -1058,6 +1058,12 @@ def main() -> None:
             print(f"Blood-goyle gb{slot:02d}: not a MOT ({error}), skipped")
             continue
         motions.append({"name": f"gb{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    # The Abyss's own (its scripts' motion ids 100+, PAC [36] slot id - 100): "abNN". Its [35] is the Hells'.
+    for slot, raw in enumerate(pac_list(abyss_pack[36])):
+        if not raw:
+            continue
+        parsed = parse_mot(raw)
+        motions.append({"name": f"ab{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     # The Soul Eater's: "seNN" from [8].
     soul_motions = pac_list(soul_pack[8])
     for slot in SOUL_MOTIONS:

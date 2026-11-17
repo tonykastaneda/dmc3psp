@@ -1008,10 +1008,17 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   motions (its [35] is theirs byte for byte), health **1500** (block `0x5ce060` +0x2c, from its pointer block
   `0x61a678`, laid out as the Pride's `0x618c28`: records `0x5cdde0`, blocks `0x5ce060` / `0x5ce110`, script map
   `0x5ce1f0`). Its AI object (`004a8e30`, vtable `0x612220`, RTTI CComEm006) is a clone of the Hells' (`0x607b20`):
-  the same slots, the same function spacing. But its block's +0x10 is a list of pointers and +0x14 the 0x003-tagged
-  pairs that follow the Hells' table, and its decision data (per-rank pointer lists, `0x5ceef0`-`0x5cf500`) isn't
-  laid out as the Hells' band and row tables: not decoded. Stand-ins: it decides with the Pride's table and the
-  Pride's hit-script list, playing its own scripts by the same numbers.
+  the same slots, the same function spacing. **Its decision table is its block's +0x10, `0x5ce910`**: its set-up
+  (`0041c240`) hands it to the AI's init (`004a8f00`, the AI's +8, where the Hells' `FUN_0032b7b0` picks from), laid
+  out as the Hells' `0x5a8300`: bands 300 and 600, zones (300 cm / 60 degrees / 10 a frame, 600 / 30 / 2, 3000 / 5 /
+  0.5), thresholds and times as theirs, and rows of its own. Rank 0: with the token, under 300 swing 25, wide swing
+  25, plan 59 50; 300-600 plan 58 30, 59 70; beyond, 58; without it, leap 60 and the steps 20 each under 300, else
+  leap 60, plan 40 40. Its own plans (its AI vtable `0x612220`): 40 → action 35 (`004abfc0` → `004b5470`: script 38
+  or 39, turning 0x100 a frame), 58 → 74 (`004ac980` → `004bafe0` / `004bb030`: script 102, turning 2 degrees a frame
+  over its motion's frames 0-30), 59 → 75 (`004aca20` → `004bb2d0` / `004bb3a0`: script 101 sinks it, then 300 cm
+  from Dante at a random angle facing him, 50 frames later script 100 brings it up, +0xcd set from its frame 45 to
+  95). Its scripts 100+ are its bank's group 1, playing its own motions (ids 100+: PAC [36]; the hundreds pick the
+  PAC). The block's +0x14 (0x003-tagged pairs) is still unread; the Pride's hit-script list stands in.
 - **Soul Eater in the port** (`ENEMY_SOUL`, enemy.c's soul_*; `tools/prepare_soul_eater.py`): its body, motions (seNN,
   PAC [8]), six wing chains (em016_00.clt: X / NX axes, no gravity, stiffness 0.1, no length limit; cloth.c), scripts
   ([6], one per action; a wait to the motion's end ends one), caps, records (500, 3000), action table (`0x5c14f0`,
