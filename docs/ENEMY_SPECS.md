@@ -991,3 +991,33 @@ game's; the choice, phases and roar above. Stand-ins: his idle before choosing (
 turn rates, the stagger after 12 heavy hits (action 8), the volley's feathers (action 15: one on each of its script's
 events, record 12's 300, flying straight at 25 cm a frame), and the movement handlers' own tables (`0x5b8c64`,
 `0x5b8cb4`-`0x5b8d00`, `0x5b8660`, not read): he moves by his motions' root travel.
+
+---
+
+## J. Lady (class 37, CEm037; EST 55): Mission 16, room 115
+
+Pack 25 → GDATA 138 (em034.pac): [1] body, motion PACs [2]-[6] (60, 30, 4, 40, 70), script banks [12] / [13], caps
+[14] / [15]; shot classes CEm037Shl00-Shl07, Ball, and their controllers. Code 0x443140-0x450000: new `00442610`,
+constructor `00443140`, vtable `0x60e670`, set-up `00443520` / `00443830`, per-frame `00443490` → `0044b9f0`, mode
+dispatch `00444c90` (+0x47c0: modes 0-0x17 her walk `00445210`, 0x18 `004455d0`, 0x19 `00445a20`, 0x1a `00445e30`,
+... 0x31 `00448650`), action set `0044afc0` (+0x47c2), mode set vtable +0x2f4 (`00449560`). Health **4000** (`0x5cbe40`
++0x2c). Attack records `0x5cbc40`: 80, 500, 1500, 1000, 500, 30, 500, 50.
+
+- **Action → motion** (`0044afc0` → `0044bda0(group, slot)`): 0-0x0e PAC [2] slot a; 0x0f-0x29 [3] a-0x0f; 0x2a-0x2d
+  [4] a-0x2a; 0x2e-0x52 [5] a-0x2e (0x37 on add an upper-body layer: [2] 1, [5] 0x10 / 0x17 / 0x1e); 0x53 on [6]
+  a-0x53. Shot actions 0x31, 0x34, 0x37 ... 0x58 take +1 / +2 with Dante above / below her by 15° (`0044ad40`).
+- **Her walk** (`00445210`): with him in sight (`00449450`, a ray), to mode 0x18 while her bursts (+0x47cc) are under
+  3; then to 0x28 if the magazine (+0x47e0) is empty or her last mode (+0x47c1) was 0x1a, else 0x1a. Out of sight:
+  her waypoints (`00448df0` / `00448920`, tables `0x5cc1d0` / `0x5cc290`), or 0x2d (empty), or 0x2c (3 bursts).
+- **The gun** (mode 0x18, `004455d0`, entered with action 0x30): Dante under 300 → 0x1d (her escape); under 500 →
+  0x28; under 800 → 0x19 while bursts < 3, else 0x28 / 0x1a as above; beyond: in sight, within ±45° (`0x61a500`
+  offset 0, half 0x2000, reach 10000) she shoots (0x34 +variant), else turns (0x31); she turns 1820 a frame
+  (`0x61a4f4`, 10°). Mode 0x19 (`00445a20`) is the same with actions 0x3e, 0x3f, 0x42.
+- **Magazine** 50 (`0x61a514`, refilled by mode 0x2d, action 0x2b); a shot takes one (`0044d3e0`). Mode 0x2c
+  (action 0x2a) waits 32 (`0x61a510`) and resets the bursts.
+
+**In the port** (`psp/testroom/lady_boss.c`): the modes above at rank 0, each action's own motion, her turn rate,
+magazine and burst count, and her records' damage. Stand-ins: what mode 0x1a does (here a grenade or Kalina Ann by
+turns), her escape (0x1d), where 0x28 takes her (she keeps 500-800 from him; her waypoints aren't read), her line of
+sight (always clear), shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun
+500, grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.

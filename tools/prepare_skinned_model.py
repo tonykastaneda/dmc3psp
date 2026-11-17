@@ -399,7 +399,10 @@ BEOWULF_MOTIONS = tuple(range(43))   # every slot of PAC [2]: his scripts (em030
 # 2-10 / 2-11 sideways 467 (strafe), 2-09 back 412 (backstep), 5-02 80 frames in place (shooting), 6-10 (a grenade),
 # 6-30 158 in place (Kalina Ann), 3-04 back 704 (the repel gun's escape), 6-41 (flinch), 6-44 back 593 (knocked
 # back), 4-01 290 in place (beaten).
-LADY_MOTIONS = ((2, 0), (2, 2), (2, 10), (2, 11), (2, 9), (5, 2), (6, 10), (6, 30), (3, 4), (6, 41), (6, 44), (4, 1))
+# Since her class was read (psp/testroom/lady_boss.c): action a plays PAC [2]-[6] by FUN_0044afc0's ranges; these are
+# lady_motion_names' order.
+LADY_MOTIONS = ((2, 0), (2, 10), (2, 11), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8), (5, 16), (5, 17), (5, 20), (5, 21), (5, 22),
+                (5, 23), (5, 30), (4, 0), (4, 1), (6, 10), (6, 30), (3, 4), (6, 41), (6, 44))
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 

@@ -4931,11 +4931,15 @@ static void lady_update_glue(float f, float px, float py, float pz) {
     }
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done;
-    lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+    {
+        int before = b->action;
+        lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+        if (b->action != before) giga_note("lady", b->action, (float)b->magazine);
+    }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
     if (b->restart || lady_motion_id[b->want] != e->motion) { lady_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) land_attack(b->land == 2);
+    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* her attack record's damage */
     lady_draw_fx(b);
     if (e->plan == P_DEATH) { e->timer += f; if (e->timer > 300.0f) e->active = 0; }
 }

@@ -1,10 +1,13 @@
 #ifndef DMC3PSP_TESTROOM_LADY_BOSS_H
 #define DMC3PSP_TESTROOM_LADY_BOSS_H
 /* Lady (class 37, EST 55; em034.pac), Mission 16's boss in 115, the Divine Library. enemy.c keeps her body (model,
- * motion, pose, health bar); this is what she does. See lady_boss.c. */
+ * motion, pose, health bar); this is what she does (docs/ENEMY_SPECS.md J). See lady_boss.c. */
 
-enum { LADY_M_IDLE, LADY_M_RUN, LADY_M_STRAFE_R, LADY_M_STRAFE_L, LADY_M_BACK, LADY_M_SHOOT, LADY_M_GRENADE,
-       LADY_M_KALINA, LADY_M_ESCAPE, LADY_M_FLINCH, LADY_M_KNOCK, LADY_M_DOWN, LADY_M_COUNT };
+/* Her motions, "ldCNN": action a plays PAC [C] slot NN by FUN_0044afc0's ranges (lady_boss.c). */
+enum { LADY_M_IDLE, LADY_M_STRAFE_R, LADY_M_STRAFE_L, LADY_M_GUN, LADY_M_TURN, LADY_M_SHOT, LADY_M_SHOT_UP,
+       LADY_M_SHOT_DOWN, LADY_M_GUN2, LADY_M_TURN2, LADY_M_SHOT2, LADY_M_SHOT2_UP, LADY_M_SHOT2_DOWN, LADY_M_WALK,
+       LADY_M_RUN, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_ESCAPE, LADY_M_FLINCH,
+       LADY_M_KNOCK, LADY_M_COUNT };
 extern const char *const lady_motion_names[LADY_M_COUNT];   /* tools/prepare_skinned_model.py LADY_MOTIONS */
 
 #define LADY_SHOTS 16
@@ -16,8 +19,10 @@ typedef struct {
     int done;                    /* in */
     float timer, gauge;
     int action, step, health;
+    int magazine, bursts, last_mode;   /* +0x47e0 shots left, +0x47cc bursts since a pause, +0x47c1 */
     int want, restart;           /* out */
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
+    float land_damage;           /* out: its attack record's damage */
     LadyShot shots[LADY_SHOTS];
 } LadyBrain;
 
