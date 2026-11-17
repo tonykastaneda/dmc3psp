@@ -930,6 +930,14 @@ Health **7000** (`0x5bc32c`). Rank +0x4e17 from the game's difficulty value (und
 - **Scripts** (action: motion, event frame): 22 m40 @82, 23 m41 @67, 24 m42 @165, 25 m46 @126, 29 m25 @90, 30 m44
   @77 (looped to 134), 32 m45 @24, 33-35 m49 @107 and @240 (the kiss), 38 m25 @90; 10-14 the reels (m10-m14), 21 the
   fall (m24), 28 m30.
+- **The swarm** (action 23's event, `003ba470`): of her 16 swarm bats (+0x4db0, a flocking class: per-mode handlers
+  `003c7fd0` / `003c80e0` / `003c8310`, step `003c8580`), `0x5bc8e0`[rank × 3 + phase] (3 / 5 / 8) are let go
+  (`003c9080`: mode 1), `0x5bc930` (20 / 15 / 12) frames apart, each with a random vector from `0x5bc7d0` (16 of
+  them, (100, 0, 20) round to (-100, 0, 20) through (0, 100, 20)). Mode 1 (`003c80e0`): it keeps to her formation
+  point (`003b9c40`) until its wait's out, then aims 300 beyond Dante + 150 (`003c9140`) and steers (`00512f20`) by
+  `0x5bc360`: 25 a frame, 180 frames at most, done within 50; its first heading is its vector, and the block's turn
+  limit reads 0 (straight). Speeds in the formation: `0x5b7d40` + mode × 0x28 (the speed rising by [rank] to its
+  top, squared over 1). Not ported: the swarm is let out as action 22's bats.
 - **Bats** (action 22, `003b6c90`): 2 / 3 / 4 by phase (`0x5bce38`), 8 frames apart, made 150 before her and 100
   up (`004187f0` → class `00418970`, vtable `0x60d210`). Each (`00418a50`, `00418bf0`) aims once at Dante + 150 and
   flies straight: speed +0.2 a frame to 18 (`0x5be780`, rank 0), moving its square, for 360 frames; an 80 cm
