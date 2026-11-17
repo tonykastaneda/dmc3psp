@@ -827,8 +827,11 @@ flinch js05, stun js14, launched js04, death js16.
   each throw starts the emitter its no-repeat pick names (`jester_projectiles_begin`, AI rank 0), the attack holds
   its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;
   what lands (the ball 1200 heavy, a trap 650, the cross 800) hurts Dante with that damage. They're drawn as motes
-  (`jester_projectiles_draw`): the effects themselves aren't ported. Between attacks he idles or walks (his idle
-  actions aren't decoded). His defence, stun meter, flinch and vanish are the game's (above; a bullet's value is
+  (`jester_projectiles_draw`): the effects themselves aren't ported. Between attacks he idles as the game: 0x64
+  (`00534d10`) goes at once to 0x66 (`00535140`), one of `0x5e2e10`'s five motions (js21, js24, js23, js27, js28 by
+  `0x5e2db0`) at random but never the last again (the next instead); for its first 60 frames he turns to Dante
+  (`0053ed60(10)`, the port's rate [inferred]), js27 and js28 walk him by their root (`00535310`), and at its end 0x64
+  again (0x7b in his second set off the floor). His defence, stun meter, flinch and vanish are the game's (above; a bullet's value is
   the port's 8, an estimate); the arena clamp stays the stand-in's. The old cane swings and taunt are no longer
   chosen: the game's first encounter has no such attacks in its picker.
 

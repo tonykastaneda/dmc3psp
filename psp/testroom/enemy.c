@@ -3538,6 +3538,10 @@ static int ar_force;   /* tests (defined with Agni & Rudra's) */
 static const signed char jester_motion_index[] = {21, 3, 8, 9, 10, 12, 26, 31, 6, 10, 4, 16, 32, 33, 30, 31,
                                                   25, 1, 1, 29, 3};   /* FUN_0053bd90's 0x19, 1, 1, 0x1d, 3 */
 static int jester_motion[sizeof(jester_motion_index)];
+/* His idle (0x66, FUN_00535140): one of 0x5e2e10's five, js21, js24, js23, js27, js28 (0x5e2db0 maps them), picked at
+ * random but never the last again (the next instead); js27 / js28 walk him by their root (FUN_00535310). */
+static const signed char jester_idle_index[5] = {21, 24, 23, 27, 28};
+static int jester_idle_motion[5], jester_idle_last = -1, jester_idle_pick;
 
 static int jester_init(void) {
     unsigned int i;
@@ -3546,11 +3550,22 @@ static int jester_init(void) {
         jester_motion[i] = motion_find(name);
         if (jester_motion[i] < 0) return 0;
     }
+    for (i = 0; i < 5; ++i) {
+        char name[5] = {'j', 's', (char)('0' + jester_idle_index[i] / 10), (char)('0' + jester_idle_index[i] % 10), 0};
+        jester_idle_motion[i] = motion_find(name);
+        if (jester_idle_motion[i] < 0) return 0;
+    }
     return 1;
 }
 
 static void jester_state(int s) {
     int m = jester_motion[s];
+    if (s == J_IDLE) {   /* 0x64 then 0x66: the next idle */
+        int k = (int)(ai_unit() * 5.0f) % 5;
+        if (k == jester_idle_last) k = (k + 1) % 5;
+        jester_idle_last = jester_idle_pick = k;
+        m = jester_idle_motion[k];
+    }
     /* The attack's end (however it ends) destroys its emitter (+0x4cec-+0x4cf4); what it threw finishes its life. */
     if (e->action >= J_ATK0 && e->action <= J_ATK2 && (s < J_ATK0 || s > J_ATK2)) jester_projectiles_stop(&jester_world);
     e->action = (unsigned char)s;
@@ -3607,9 +3622,10 @@ static void jester_hop(float px, float pz) {
     e->pos[1] = JESTER_FLOOR + 0.01f;
 }
 
-/* Between attacks: the stand-in's idling (his own idle actions, 0x64 and the walks, aren't decoded). */
+/* Between attacks: his idle (0x64, FUN_00534d10, at once 0x66). */
 static void jester_decide(float d) {
-    jester_state(d > 400.0f && ai_unit() < 0.5f ? J_WALK : J_IDLE);
+    (void)d;
+    jester_state(J_IDLE);
 }
 
 static void jester_update(float f, float px, float py, float pz) {
@@ -3621,7 +3637,7 @@ static void jester_update(float f, float px, float py, float pz) {
     e->timer += f;
     if (e->frame >= m->end_frame) {
         e->done = 1;
-        e->frame = (e->action == J_IDLE || e->action == J_WALK || e->action == J_TAUNT) ? motion_wrap(m, e->frame) : m->end_frame;
+        e->frame = (e->action == J_WALK || e->action == J_TAUNT) ? motion_wrap(m, e->frame) : m->end_frame;
     }
     if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
     if (e->plan == P_DEATH) {
@@ -3790,8 +3806,18 @@ static void jester_update(float f, float px, float py, float pz) {
         if (e->timer >= 60.0f || e->done) jester_state(J_IDLE);
         break;
     case J_IDLE:
-        goyle_turn_to(px, pz, 0.08f, f);
-        if (e->timer > 50.0f) jester_decide(d);
+        /* FUN_00535310: his first 60 frames turn him to Dante (FUN_0053ed60(10) [its rate: inferred]); js27 / js28
+         * carry him by their root; at the motion's end, 0x64 again (or 0x7b, the fall, in his second set off the
+         * floor: taken by the attack choice here). */
+        if (e->timer < 60.0f) goyle_turn_to(px, pz, 0.08f, f);
+        if (jester_idle_pick >= 3) {
+            float a[3], b[3], from = e->frame - f < 0.0f ? 0.0f : e->frame - f;
+            motion_root(m, from, a);
+            motion_root(m, e->frame, b);
+            e->pos[0] += (b[0] - a[0]) * c + (b[2] - a[2]) * s;
+            e->pos[2] += (b[2] - a[2]) * c - (b[0] - a[0]) * s;
+        }
+        if (e->done) jester_state(J_IDLE);
         break;
     case J_WALK:
         goyle_turn_to(px, pz, 0.1f, f);
