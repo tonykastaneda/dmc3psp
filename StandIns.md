@@ -43,8 +43,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Hell Greeds**: when they summon is an estimate. `greed.inc`.
 - **Blood-goyle**: its bullets fly at 25 a frame for 120 frames [estimate]; the split timing [estimate]; its rest
   value 5 and stone's triple damage [inferred]; stone drawn untextured grey. ENEMY_SPECS.md D.
-- **Arachne**: its decision tables aren't decoded (it runs, lunges and leaps by the walkthrough); no web shot or
-  spiderlings; which motion is which read from root paths [inferred]. `arachne.c`, PortJobs.
+- **Arachne**: its class is ported (ENEMY_SPECS H); stand-ins: its hits' bones (a sphere 100 ahead), flag 4 taken as
+  its scripts' first event, the wall's normal (the ray back, flattened) and its pose there (turned 90 degrees), 0x6d's
+  web-line swing (a leap), 0x6f's speed (8), the web's struggle count (35 [inferred]), its fall when struck on a wall,
+  root motion x1.5 [inferred]; webs drawn as motes; spiderlings (0x76) and the charge (0x78) never chosen at rank 0.
+  `enemy.c` The Arachne, PortJobs.
 - **Fallen**: its damage handler isn't decoded [estimates]; facing taken from Dante, not his facing; on the ground it
   closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
   [estimate]; its spear is straight at his chest (the shell isn't decoded). `fallen.c`, `enemy.c` ~5383.
@@ -60,8 +63,6 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit
   records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300
   as record 12 [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
-- **Arachne** (more): its class is built like a player (60+ actions by id, FUN_003f6eb0; per-frame FUN_003f3e40,
-  wall-crawling): a full decode, not started.
 - **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; the kiss's hold's pose (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed

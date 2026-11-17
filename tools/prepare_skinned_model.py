@@ -511,7 +511,9 @@ GOYLE_SLOT = 125
 # The Arachne's motions the port plays, "anCNN" (chunk C, slot NN). Which is which is read from their root paths
 # [inferred]: 7-10 still (idle), 7-01 forward 1120 in 63 frames (run), 10-11 lunge 274, 10-08 leap 704 (pounce),
 # 8-01 short (flinch), 8-00 back 210 (knocked back), 8-15 330 frames (death).
-ARACHNE_MOTIONS = ((7, 10), (7, 1), (10, 11), (10, 8), (8, 1), (8, 0), (8, 15))
+# The Arachne's: every motion its script groups 0-3 play (motion id g*100+n is PAC [7+g] slot n; em010 [16]).
+ARACHNE_MOTIONS = tuple((7, n) for n in range(14)) + tuple((8, n) for n in range(19)) + tuple((9, n) for n in range(7)) + \
+    tuple((10, n) for n in range(12))
 # Nevan's, "nvCNN": every motion her action scripts (em028 [10], one per action, docs/ENEMY_SPECS.md G) play,
 # PAC [2] slot NN.
 NEVAN_MOTIONS = tuple((2, n) for n in (0, 10, 11, 12, 13, 14, 16, 17, 24, 25, 30, 40, 41, 42, 43, 44, 45, 46, 47, 48,

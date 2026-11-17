@@ -1065,6 +1065,22 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   10), its hit record `0x5c37b0`. Not ported.
   The web shot (CEm010Shl00 / Shl01) isn't made by any action handler: inferred from its
   script events, not traced.
+- **The Arachne in the port** (`enemy.c`, "The Arachne"; `tools/prepare_arachne.py`): its scripts (em010 [16], groups
+  0-3 on motion PACs [7]-[10], motion id g*100+n), caps ([17] / [18]) and records (`0x5c3570`: 600, 100, 100, 600, 1000,
+  600, 1000, 800, 400, ...) on the shared runner, its motion table (`0x5bd0d0`: index -> group, script) and its class
+  (actions `003f6eb0`, states `003f7710`): the decision `003f9650` (gate `0x5c6bb0`, zones under 400 / 700, the
+  move tables `0x5c3c90` / `0x5c3dd0` / `0x5c3f20`, attacks `0x5c4f10` with the shared token or `0x5c5cc0`, the
+  wall's `0x5c6200` / `0x5c6740`, health bands at 20 / 50%), idle 0x65 (45 ± 10 frames), walk 0x66 / run 0x6b /
+  strafes 0x67 / 0x68 (15 a frame) / turn 0x6c with their turn rates (0.04 / 0.03 / 0.15 / 0.1 rad a frame) and 20-frame
+  pause, 0x6d's crouch (5 / 10 / 15 frames) and pounce, 0x6e / 0x6f, 0x70 (a ray for a wall 300-800 up and 1000 ahead,
+  three tries, then 0x77), the leaps 0x71 / 0x72 (up 25-32, 1.6 a frame), 0x77 (record 0 on its script's flag),
+  0x7a (by distance, 0-12.5 a frame; landing records 5 / 8), the wall's 0x73, 0x79 (four web shots ringing Dante at
+  150, `004f46d0` / `004f4a60`: falling 0.8, 100 cm, holding him 300 frames) and 0x7b (the drop, 2 a frame), 0x88,
+  its reaction (40% of hits, `0x5c6aa0`: motion 10 / 11 and back 23, or 6 and back 7) and death (0x14, motion 0x1e).
+  Stand-ins: its hits' bones (a sphere 100 ahead), the flag 4 taken as its scripts' first event, the wall's normal (the
+  ray's way back, flattened) and its pose on a wall (turned 90 degrees, facing it), 0x6d's swing on its web line (a
+  leap), 0x6f's sideways speed (8), the struggle against a web (35 [inferred]), its hit-on-a-wall fall (0x7d unread),
+  root motion ×1.5 (+0x1fc9 [inferred]); 0x76's spiderlings and 0x78's charge have weight 0 at rank 0 (not ported).
 - **Abyss in the port** (`ENEMY_ABYSS`; EST 24): its own body ([1], 23 bones, the Hells' skeleton) and scythe ([4]
   [inferred]), its own scripts [38] and caps [39] / [40] (`tools/gen_enemy_ai.py`: `abyss_ai_ops`), the Hells'
   motions (its [35] is theirs byte for byte), health **1500** (block `0x5ce060` +0x2c, from its pointer block

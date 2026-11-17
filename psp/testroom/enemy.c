@@ -33,6 +33,7 @@
 #include "agni_rudra.h"
 #include "beowulf_scripts.h"
 #include "soul_eater_scripts.h"
+#include "arachne_scripts.h"
 #include "jester.h"
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
@@ -111,6 +112,7 @@ typedef struct {
     int active;
     int kind;                       /* EnemyKind: which model and logic */
     float pos[3], yaw, floor_y, frame, fall;
+    float tilt;                     /* about its own X after its yaw: the Arachne on a wall */
     int motion;
     /* Cross-fade between motions, over as many frames as the script says. */
     int prev_motion;
@@ -977,13 +979,16 @@ static int ar_motion_map[AR_SCRIPTS];
 static int bw_motion_map[BW_MOTIONS];
 #define SE_MOTIONS 14
 static int se_motion_map[SE_MOTIONS];
+#define AN_MOTION_IDS 312   /* the Arachne's script motion ids, g * 100 + n */
+static int an_motion_map[AN_MOTION_IDS];
 static const ScriptBank *script_bank(void) {
     static const ScriptBank agni = {ar_ops_0, ar_starts_0, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
     static const ScriptBank rudra = {ar_ops_1, ar_starts_1, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
     static const ScriptBank beowulf = {bw_ops, bw_starts, BW_SCRIPTS, bw_caps, BW_CAPS, bw_attacks, BW_ATTACKS, bw_motion_map, BW_MOTIONS};
     static const ScriptBank soul = {se_ops, se_starts, SE_SCRIPTS, se_caps, SE_CAPS, se_attacks, SE_ATTACKS, se_motion_map, SE_MOTIONS};
+    static const ScriptBank arachne = {an_ops, an_starts, AN_SCRIPTS, an_caps, AN_CAPS, an_attacks, AN_ATTACKS, an_motion_map, AN_MOTION_IDS};
     return e->kind == ENEMY_AGNI ? &agni : e->kind == ENEMY_RUDRA ? &rudra : e->kind == ENEMY_BEOWULF ? &beowulf :
-           e->kind == ENEMY_SOUL ? &soul : 0;
+           e->kind == ENEMY_SOUL ? &soul : e->kind == ENEMY_ARACHNE ? &arachne : 0;
 }
 static int script_event;   /* the last script event the runner met this frame, + 1 (0: none) */
 static const EnemyAiOp *script_ops(void) { const ScriptBank *k = script_bank(); return k ? k->ops : e->kind == ENEMY_ENVY ? envy_ai_ops : e->kind == ENEMY_ABYSS ? abyss_ai_ops : enemy_ai_ops; }
@@ -2659,6 +2664,7 @@ static void draw_one(void) {
         ScePspFVector3 p = {e->pos[0], e->pos[1], e->pos[2]};
         sceGumTranslate(&p);
         sceGumRotateY(e->yaw);
+        if (e->tilt != 0.0f) sceGumRotateX(e->tilt);
     }
     if (test_no_texture) sceGuDisable(GU_TEXTURE_2D); else sceGuEnable(GU_TEXTURE_2D);
     if (test_no_lighting) sceGuDisable(GU_LIGHTING); else sceGuEnable(GU_LIGHTING);
@@ -4874,64 +4880,402 @@ int enemy_giga_focus(float out[3]) {
 float enemy_giga_health(void) { return giga.health; }
 float enemy_giga_max_health(void) { return GIGA_HEALTH; }
 
-/* ---- The Arachne (arachne.c decides; here its body: motion, pose, floor, attacks). */
-#include "arachne.h"
-static ArachneBrain arachne_brain[ENEMY_MAX];
-static int arachne_motion_id[ARACHNE_M_COUNT] = {-2};
-static void arachne_play(int m, int restart) {
-    int id;
-    if (arachne_motion_id[0] == -2) { int k; for (k = 0; k < ARACHNE_M_COUNT; ++k) arachne_motion_id[k] = motion_find(arachne_motion_names[k]); }
-    id = arachne_motion_id[m];
-    if (id < 0) return;
-    if (id != e->motion || restart) {
-        e->prev_motion = e->motion; e->prev_frame = e->frame;
-        e->fade = e->motion >= 0 ? 1.0f : 0.0f; e->fade_rate = 1.0f / 8.0f;
-        e->motion = id; e->frame = 0.0f; e->done = 0;
+/* ---- The Arachne (class 10, CEm010; em010.pac at GDATA 121), Mission 9 (docs/ENEMY_SPECS.md H), at rank 0.
+ * Built like Dante: actions (+0x3430, entered by FUN_003f6eb0) set states (+0x342c, run by FUN_003f7710), each playing
+ * a motion index (FUN_003f6460) whose script (0x5bd0d0: group, n; em010 [16], motion PACs [7]-[10]) runs here on the
+ * shared script runner with its caps and records (tools/prepare_arachne.py). Its decision (FUN_003f9650): with its
+ * attack gate (+0x130, block 0x5c6bb0: past 150; 2 a frame within 500 and 30 degrees, 1 within 800 and 30, 0.5 within
+ * 2000 and 10) shut, a move from its zone's table (Dante under 400 / 700 / beyond: 0x5c3c90 / 0x5c3dd0 / 0x5c3f20); open,
+ * an attack from 0x5c4f10 with the shared token, else 0x5c5cc0 (by zone, and health band: all alike at rank 0), turning
+ * to him first (0x6c) if he's behind. On a wall (after 0x70) it decides from 0x5c6200 / 0x5c6740: the web shot (0x79),
+ * a crawl (0x73), a drop onto him (0x7b) or a leap down (0x72). A hit makes it react 40% of the time (0x5c6aa0): 0x10.
+ * Root motion is x1.5 (FUN_00402ba0: +0x1fc9 isn't 1 for this, the 1400-health block [inferred]). */
+#define AN_TURN(deg_rate) (deg_rate)   /* its turn rates are radians a frame (FUN_00402a30 -> FUN_00105760) */
+#define AN_WEBS 8
+typedef struct { int on, owner, holding; float pos[3], vel[3], life, hold; } AnWeb;
+static AnWeb an_webs[AN_WEBS];
+static float an_gate[ENEMY_MAX], an_wall[ENEMY_MAX][3], an_target[ENEMY_MAX][3];
+static unsigned char an_loops[ENEMY_MAX], an_on_wall[ENEMY_MAX], an_tries[ENEMY_MAX], an_shot[ENEMY_MAX];
+static float an_hit_frames[ENEMY_MAX], an_hit_damage[ENEMY_MAX];   /* a hit its state armed (FUN_00294480) */
+/* Its state code arms its hits on script event 4 (FUN_00294480(set, 9, frames, bone)): a sphere of 64 (+0x2258)
+ * at a front bone [placed 100 ahead, 60 up: the bones (+0x818 / +0x8c8) aren't mapped]. */
+static void an_arm(int record, float frames) { an_hit_frames[e - enemies] = frames; an_hit_damage[e - enemies] = an_attacks[record].damage; }
+static void an_hits(float px, float py, float pz, float f) {
+    int me = (int)(e - enemies);
+    float at[3], dx, dy, dz;
+    if (an_hit_frames[me] <= 0.0f) return;
+    an_hit_frames[me] -= f;
+    at[0] = e->pos[0] + sinf(e->yaw) * 100.0f; at[1] = e->pos[1] + 60.0f; at[2] = e->pos[2] + cosf(e->yaw) * 100.0f;
+    dx = px - at[0]; dy = py + 100.0f - at[1]; dz = pz - at[2];
+    if (attacks_on && dx * dx + dy * dy + dz * dz < (64.0f + DANTE_RADIUS + 60.0f) * (64.0f + DANTE_RADIUS + 60.0f)) {
+        land_attack(0); landed_damage = an_hit_damage[me]; landed_x = e->pos[0]; landed_z = e->pos[2];
+        an_hit_frames[me] = 0.0f;
     }
 }
+typedef struct { unsigned char action, weight; } AnPick;
+/* Rank 0's weights (the tables' first column). */
+static const AnPick an_move[3][8] = {
+    {{0x65, 8}, {0x6b, 10}, {0x67, 30}, {0x68, 30}, {0x70, 20}, {0x88, 2}},
+    {{0x6f, 5}, {0x65, 8}, {0x66, 25}, {0x6b, 5}, {0x67, 20}, {0x68, 20}, {0x70, 15}, {0x88, 2}},
+    {{0x6f, 15}, {0x65, 8}, {0x66, 35}, {0x67, 20}, {0x68, 20}, {0x88, 2}}};
+static const AnPick an_attack[3][6] = {{{0x70, 10}, {0x77, 60}, {0x7a, 30}},
+    {{0x71, 5}, {0x70, 20}, {0x6d, 25}, {0x7a, 50}},
+    {{0x6e, 30}, {0x66, 15}, {0x71, 10}, {0x6d, 25}, {0x7a, 20}}};
+static const AnPick an_no_token[3][6] = {{{0x6f, 30}, {0x65, 30}, {0x6b, 20}, {0x70, 20}},
+    {{0x6f, 30}, {0x65, 30}, {0x66, 10}, {0x72, 10}, {0x70, 20}},
+    {{0x65, 10}, {0x6e, 40}, {0x66, 5}, {0x71, 30}, {0x70, 15}}};
+static const AnPick an_wall_attack[3][4] = {{{0x73, 25}, {0x79, 75}}, {{0x73, 25}, {0x79, 60}, {0x7b, 15}},
+                                            {{0x72, 55}, {0x7b, 45}}};
+
+static int an_init(void) {
+    static const unsigned char counts[4] = {14, 19, 7, 12};
+    int g, n, found = 0;
+    for (g = 0; g < 4; ++g)
+        for (n = 0; n < counts[g]; ++n) {
+            char name[8];
+            snprintf(name, sizeof name, "an%d%02d", 7 + g, n);
+            an_motion_map[g * 100 + n] = motion_find(name);
+            found += an_motion_map[g * 100 + n] >= 0;
+        }
+    return found > 0;
+}
+static int an_pick(const AnPick *t, int n) {
+    int i, total = 0, r;
+    for (i = 0; i < n && t[i].action; ++i) total += t[i].weight;
+    if (total <= 0) return 0x65;
+    r = (int)(ai_unit() * (float)total);
+    for (i = 0; i < n && t[i].action; ++i) { if (r < t[i].weight) return t[i].action; r -= t[i].weight; }
+    return t[0].action;
+}
+static void an_play(int index) { script_play(an_motion_script[index]); }
+/* FUN_00402a30: toward Dante at this rate a frame, unless he's within 15 degrees of its facing. */
+static void an_turn(float px, float pz, float rate, float f) {
+    float rel = wrap_angle(atan2f(px - e->pos[0], pz - e->pos[2]) - e->yaw);
+    if (fabsf(rel) < 15.0f * PI / 180.0f) return;
+    e->yaw += (rel > 0.0f ? rate : -rate) * f;
+}
+static void an_go(int action, float px, float py, float pz);
+static void an_decide(float px, float py, float pz);
+
+static void an_webs_launch(float px, float py, float pz) {
+    /* 0x79's four shots (004f4430(i, 4) -> FUN_004f46d0): from its mouth, each at a point 150 from Dante round a ring
+     * (i / 4 of a turn), falling 0.8 a frame from rest (20 frames when the point's higher), at most 800 along. */
+    int i, k = 0;
+    float from[3] = {e->pos[0] + sinf(e->yaw) * 80.0f, e->pos[1] + 60.0f, e->pos[2] + cosf(e->yaw) * 80.0f};
+    if (an_on_wall[e - enemies]) for (i = 0; i < 3; ++i) from[i] = e->pos[i] + an_wall[e - enemies][i] * 60.0f;
+    for (i = 0; i < AN_WEBS && k < 4; ++i) {
+        AnWeb *w = &an_webs[i];
+        float a = (float)k / 4.0f * 2.0f * PI, tx = px + sinf(a) * 150.0f, tz = pz + cosf(a) * 150.0f, t, dx, dz, l;
+        if (w->on) continue;
+        w->on = 1; w->owner = (int)(e - enemies); w->holding = 0; w->life = 1000.0f; w->hold = 0.0f;
+        w->pos[0] = from[0]; w->pos[1] = from[1]; w->pos[2] = from[2];
+        t = from[1] < py ? 20.0f : sqrtf((from[1] - py) * 1.6f) / 0.8f;
+        if (t < 1.0f) t = 1.0f;
+        dx = tx - from[0]; dz = tz - from[2]; l = sqrtf(dx * dx + dz * dz);
+        if (l > 800.0f) { dx *= 800.0f / l; dz *= 800.0f / l; }
+        w->vel[0] = dx / t; w->vel[1] = 0.0f; w->vel[2] = dz / t;
+        ++k;
+    }
+}
+/* The shots (FUN_004f4a60): falling 0.8 a frame, a 100 cm sphere (0x310), 1000 frames; on Dante, he's held
+ * (FUN_0021f2e0) for up to 300 frames (+0x224), his struggle 35 (0x5c6b50 [inferred]). */
+static void an_webs_update(float f, float px, float py, float pz) {
+    int i, me = (int)(e - enemies);
+    for (i = 0; i < AN_WEBS; ++i) {
+        AnWeb *w = &an_webs[i];
+        float dx, dy, dz;
+        if (!w->on || w->owner != me) continue;
+        if (w->holding) {
+            w->pos[0] = px; w->pos[1] = py + 40.0f; w->pos[2] = pz;
+            if (hold_freed() || (w->hold -= f) < 0.0f) { hold_let_go(1); w->on = 0; }
+            else { float v[3] = {0.0f, 0.0f, 0.0f}; fx_mote(w->pos, v, 90.0f, 90.0f, 0.05f, 0xc0f0f0f0u); }
+            continue;
+        }
+        w->pos[0] += w->vel[0] * f; w->pos[1] += w->vel[1] * f; w->pos[2] += w->vel[2] * f;
+        w->vel[1] -= 0.8f * f;
+        dx = px - w->pos[0]; dy = py + 100.0f - w->pos[1]; dz = pz - w->pos[2];
+        if (attacks_on && !hold_owner && dx * dx + dy * dy + dz * dz < (100.0f + DANTE_RADIUS) * (100.0f + DANTE_RADIUS)) {
+            hold_take(35);
+            w->holding = 1; w->hold = 300.0f;
+            continue;
+        }
+        if ((w->life -= f) < 0.0f || w->pos[1] < e->floor_y - 50.0f) { w->on = 0; continue; }
+        { float v[3] = {0.0f, 0.0f, 0.0f}; fx_mote(w->pos, v, 40.0f, 40.0f, 0.05f, 0xc0f0f0f0u); }   /* its look (effects 0x29e / 0x2a3 aren't converted) */
+    }
+}
+
+/* FUN_003fa0a0 (0x70): a ray up and ahead (0, 300-800, 1000 in its frame) for a wall; found, it leaps there (5). */
+static int an_find_wall(float *at, float *normal) {
+    float s = sinf(e->yaw), c = cosf(e->yaw), up = 300.0f + ai_unit() * 500.0f;
+    float from[3] = {e->pos[0], e->pos[1] + 50.0f, e->pos[2]}, to[3] = {from[0] + s * 1000.0f, from[1] + up, from[2] + c * 1000.0f}, t;
+    int k;
+    if (!stage_loaded() || !stage_raycast(from, to, &t)) return 0;
+    for (k = 0; k < 3; ++k) at[k] = from[k] + (to[k] - from[k]) * t;
+    /* The surface's normal isn't returned by the stage ray: the way back along it, flattened (a wall). */
+    normal[0] = -s; normal[1] = 0.0f; normal[2] = -c;
+    for (k = 0; k < 3; ++k) at[k] += normal[k] * 30.0f;
+    return t * 1000.0f > 400.0f;
+}
+/* A leap (FUN_003fb240): up at 25-32, falling 1.6 a frame, toward a point (at most 1000 along). */
+static void an_leap_to(float tx, float ty, float tz) {
+    float v = 25.0f + ai_unit() * 7.0f, dy = e->pos[1] - ty, disc = v * v + 3.2f * dy, t, dx, dz, l;
+    if (disc < 0.0f) disc = 0.0f;
+    t = (v + sqrtf(disc)) / 1.6f;
+    if (t < 1.0f) t = 1.0f;
+    dx = tx - e->pos[0]; dz = tz - e->pos[2]; l = sqrtf(dx * dx + dz * dz);
+    if (l > 1000.0f) { dx *= 1000.0f / l; dz *= 1000.0f / l; }
+    e->vel[0] = dx / t; e->vel[1] = v; e->vel[2] = dz / t; e->acc[1] = -1.6f;
+}
+
+static void an_go(int action, float px, float py, float pz) {
+    int me = (int)(e - enemies);
+    giga_note("arachne", action, (float)e->health);
+    e->action = (unsigned char)action;
+    e->step = 0; e->timer = 0.0f; e->wake = 0.0f;
+    e->vel[0] = e->vel[1] = e->vel[2] = 0.0f; e->acc[1] = 0.0f;
+    switch (action) {
+    case 0x65: an_play(0); e->gauge = 45.0f + (ai_unit() * 2.0f - 1.0f) * 10.0f; break;   /* 0x5c6a10 / 0x5c6a30 */
+    case 0x66: an_play(2); an_loops[me] = 2; break;     /* 0x5c6790's pick (always 1 at rank 0) + 1 */
+    case 0x67: an_play(0xd); an_loops[me] = 2; break;
+    case 0x68: an_play(0xc); an_loops[me] = 2; break;
+    case 0x6b: an_play(3); an_loops[me] = 1; break;
+    case 0x6c: an_play(9); break;
+    case 0x6d: {   /* 0x5c68e0: 5 / 10 / 15 frames, 20 / 30 / 50% */
+        float r = ai_unit() * 100.0f;
+        an_play(0); e->gauge = r < 20.0f ? 5.0f : r < 50.0f ? 10.0f : 15.0f;
+        break;
+    }
+    case 0x6e: an_play(1); e->gauge = 10.0f; break;      /* 0x619a40 / 0x619a44 */
+    case 0x6f: an_play(1); e->gauge = 30.0f; e->vel[0] = ai_unit() < 0.5f ? 1.0f : -1.0f; break;
+    case 0x70: {
+        float at[3], n[3];
+        if (an_find_wall(at, n)) {
+            an_play(5);
+            an_target[me][0] = at[0]; an_target[me][1] = at[1]; an_target[me][2] = at[2];
+            an_wall[me][0] = n[0]; an_wall[me][1] = n[1]; an_wall[me][2] = n[2];
+            an_leap_to(at[0], at[1], at[2]);
+            e->step = 1;
+        } else if (++an_tries[me] < 3) { an_play(3); e->step = 9; }   /* 6: a short run, then it tries again */
+        else { an_tries[me] = 0; an_go(0x77, px, py, pz); }
+        break;
+    }
+    case 0x71: case 0x72:
+        an_play(5);
+        an_leap_to(px, e->floor_y, pz);
+        if (an_on_wall[me]) { an_on_wall[me] = 0; e->tilt = 0.0f; }
+        break;
+    case 0x73: an_play(0); e->gauge = 45.0f; break;
+    case 0x77: an_play(0x28); break;                  /* 0x5c6840: no wait at rank 0; then 0x4c */
+    case 0x79: an_play(0x2f); an_shot[me] = 0; break;
+    case 0x7a: {   /* 0x5bd530: its speed by distance, 0 at 0 to 12.5 at 700 */
+        float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz);
+        an_play(0x29);
+        e->vel[2] = (d < 700.0f ? d : 700.0f) / 700.0f * 12.5f;
+        break;
+    }
+    case 0x7b: {   /* FUN_00402510: off the wall onto Dante, falling 2 a frame (vy so it lands where he is) */
+        float dy = e->pos[1] - py, t = (40.0f + sqrtf(1600.0f + 4.0f * (dy > 0.0f ? dy : 0.0f))) / 2.0f, dx = px - e->pos[0], dz = pz - e->pos[2];
+        an_play(0x2d);
+        if (t < 1.0f) t = 1.0f;
+        e->vel[0] = dx / t; e->vel[1] = 40.0f; e->vel[2] = dz / t; e->acc[1] = -2.0f;
+        an_on_wall[me] = 0; e->tilt = 0.0f;
+        break;
+    }
+    case 0x88: an_play(0x23); break;
+    case 0x10: break;   /* set by an_hit */
+    case 0x14: an_play(0x1e); break;
+    default: an_play(0); break;
+    }
+}
+
+static void an_decide(float px, float py, float pz) {
+    int me = (int)(e - enemies), zone;
+    float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), rel;
+    zone = d < 400.0f ? 0 : d < 700.0f ? 1 : 2;
+    rel = wrap_angle(atan2f(dx, dz) - e->yaw);
+    if (an_on_wall[me]) {
+        if (an_gate[me] > 150.0f && attack_token <= 0.0f && attacks_on) {
+            attack_token = ATTACK_TOKEN_SECONDS;
+            an_gate[me] = 0.0f;
+            an_go(an_pick(an_wall_attack[zone], 4), px, py, pz);
+        } else an_go(0x72, px, py, pz);   /* 0x5c6740: the leap down, whatever the zone */
+        return;
+    }
+    if (an_gate[me] <= 150.0f || !attacks_on) { an_go(an_pick(an_move[zone], 8), px, py, pz); return; }
+    if (fabsf(rel) > PI * 0.75f) { an_go(0x6c, px, py, pz); return; }   /* behind: the turn first (dot < -0.707) */
+    an_gate[me] = 0.0f;
+    if (attack_token <= 0.0f) { attack_token = ATTACK_TOKEN_SECONDS; an_go(an_pick(an_attack[zone], 6), px, py, pz); }
+    else an_go(an_pick(an_no_token[zone], 6), px, py, pz);
+}
+
 static void arachne_spawn_glue(void) {
-    ArachneBrain *b = &arachne_brain[e - enemies];
+    static int ready = -1;
+    int me = (int)(e - enemies);
+    float g;
+    if (ready < 0) ready = an_init();
     e->motion = -1;
-    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
-    arachne_spawn(b, e->health);
-    arachne_play(b->want, 1);
-    b->restart = 0;
+    if (floor_under(e->pos[0], e->pos[1] + 300.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    e->plan = P_WATCH;
+    e->tilt = 0.0f;
+    an_gate[me] = 0.0f; an_on_wall[me] = 0; an_tries[me] = 0;
+    an_play(0);
+    e->action = 0x65; e->gauge = 45.0f;
     e->fade = 0.0f;
 }
+
 static void arachne_update_glue(float f, float px, float py, float pz) {
-    ArachneBrain *b = &arachne_brain[e - enemies];
-    const Motion *m;
-    float g;
-    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
-    if (e->motion >= 0) {
-        m = motion_get(e->motion);
-        e->frame += f;
-        if (e->frame >= m->end_frame) {
-            e->done = 1;
-            e->frame = arachne_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
-        }
+    int me = (int)(e - enemies), airborne;
+    float root[3], g, dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), rel = wrap_angle(atan2f(dx, dz) - e->yaw);
+    script_tick(f, root);
+    an_webs_update(f, px, py, pz);
+    e->timer += f;
+    if (e->plan == P_DEATH) {
+        if (e->done && e->timer > 180.0f) e->active = 0;
+        return;
     }
-    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
-    b->floor_y = e->floor_y;
-    b->frame = e->frame; b->done = e->done;
-    arachne_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
-    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
-    if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
-    if (b->restart || arachne_motion_id[b->want] != e->motion) { arachne_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; giga_note("arachne landed", b->land, (int)b->land_damage); }
-    if (b->remove) e->active = 0;
+    /* Its gate (FUN_00402fc0): the first row that holds him. */
+    if (d < 500.0f && fabsf(rel) < 30.0f * PI / 180.0f) an_gate[me] += 2.0f * f;
+    else if (d < 800.0f && fabsf(rel) < 30.0f * PI / 180.0f) an_gate[me] += 1.0f * f;
+    else if (d < 2000.0f && fabsf(rel) < 10.0f * PI / 180.0f) an_gate[me] += 0.5f * f;
+    airborne = e->acc[1] != 0.0f;
+    if (!an_on_wall[me] && !airborne) move_local(root[0] * 1.5f, 0.0f, root[2] * 1.5f);   /* FUN_00402ba0 */
+    switch (e->action) {
+    case 0x65: case 0x73:
+        if (!an_on_wall[me]) an_turn(px, pz, 0.01f, f);
+        if ((e->gauge -= f) < 0.0f || an_gate[me] > 150.0f) an_decide(px, py, pz);
+        break;
+    case 0x66: case 0x67: case 0x68: case 0x6b: {
+        static const float rate[4] = {0.04f, 0.15f, 0.15f, 0.03f};
+        int k = e->action == 0x66 ? 0 : e->action == 0x67 ? 1 : e->action == 0x68 ? 2 : 3;
+        an_turn(px, pz, rate[k], f);
+        if (k == 1 || k == 2) {   /* the strafes (FUN_003fbe20): 15 sideways (0x5c6820) */
+            float side = k == 1 ? -15.0f : 15.0f;
+            e->pos[0] -= cosf(e->yaw) * side * f; e->pos[2] += sinf(e->yaw) * side * f;
+        }
+        if (e->done) {
+            if (--an_loops[me] > 0) an_play(e->action == 0x66 ? 2 : e->action == 0x67 ? 0xd : e->action == 0x68 ? 0xc : 3);
+            else { e->action = 0x09; e->gauge = 20.0f; an_play(0); }   /* state 9: 20 frames (0x5c67a0) */
+        }
+        break;
+    }
+    case 0x6c:
+        an_turn(px, pz, 0.1f, f);
+        if (e->done) { e->action = 0x09; e->gauge = 20.0f; an_play(0); }
+        break;
+    case 0x09:
+        if ((e->gauge -= f) < 0.0f) an_decide(px, py, pz);
+        break;
+    case 0x6d:
+        an_turn(px, pz, 0.01f, f);
+        if (e->step == 0 && (e->gauge -= f) < 0.0f) {
+            /* FUN_003fcf80 -> 0x14 (motion 0x2a), then off along its web line at him (0x15, FUN_003f7d80): here a
+             * leap at him [the web line's swing isn't ported]. */
+            e->step = 1; an_play(0x2a);
+        } else if (e->step == 1 && e->done) { e->step = 2; an_play(5); an_leap_to(px, py, pz); }
+        break;
+    case 0x6e:
+        if (e->gauge > 10.0f) an_turn(px, pz, 0.1f, f);
+        if ((e->gauge -= f) < 0.0f) { e->action = 0x1a; e->gauge = 20.0f; }   /* 0x5c6778 */
+        break;
+    case 0x1a:
+        if ((e->gauge -= f) < 0.0f) an_decide(px, py, pz);
+        break;
+    case 0x6f:
+        e->pos[0] += cosf(e->yaw) * e->vel[0] * 8.0f * f; e->pos[2] -= sinf(e->yaw) * e->vel[0] * 8.0f * f;   /* [estimate] */
+        if ((e->gauge -= f) < 0.0f) an_decide(px, py, pz);
+        break;
+    case 0x70:
+        if (e->step == 9) { if (e->done) an_go(0x70, px, py, pz); break; }
+        break;
+    case 0x77:
+        an_turn(px, pz, 0.04f, f);
+        if (script_event) giga_note("an_event", script_event, d);   /* TEMP */
+        /* FUN_004016c0: record 0 (600), 4 frames, as its script opens flag 4 [taken as its first event] */
+        if (script_event && !e->step) { e->step = 1; an_arm(0, 4.0f); }
+        if (e->done) an_decide(px, py, pz);
+        break;
+    case 0x79:
+        if (!an_shot[me] && script_event) { an_shot[me] = 1; an_webs_launch(px, py, pz); }
+        if (e->done) an_go(0x7b, px, py, pz);   /* FUN_00401cc0: done, it drops onto him */
+        break;
+    case 0x7a:
+        an_turn(px, pz, 0.2f, f);
+        if (e->step == 0) { move_local(0.0f, 0.0f, e->vel[2] * f); if (e->done) { e->step = 1; an_play(0x30); } }
+        else {
+            /* FUN_00402200: records 5 (600) and 8 (400), 30 frames, on flag 4 [its first event] */
+            if (script_event && e->step == 1) { e->step = 2; an_arm(5, 30.0f); }
+            if (e->done) an_decide(px, py, pz);
+        }
+        break;
+    case 0x88:
+        if (e->done) an_decide(px, py, pz);
+        break;
+    case 0x10:
+        e->pos[0] -= sinf(e->yaw) * e->vel[2] * f; e->pos[2] -= cosf(e->yaw) * e->vel[2] * f;
+        e->vel[2] *= 0.9f;
+        if (e->done) an_decide(px, py, pz);
+        break;
+    default:
+        if (e->done && !airborne) an_decide(px, py, pz);
+        break;
+    }
+    if (airborne) {
+        int k;
+        for (k = 0; k < 3; ++k) e->pos[k] += e->vel[k] * f;
+        e->vel[1] += e->acc[1] * f;
+        if (e->action == 0x70 && e->step == 1) {
+            /* Onto the wall when it reaches the spot (or starts to fall short of it). */
+            float tx = an_target[me][0] - e->pos[0], tz = an_target[me][2] - e->pos[2];
+            if (tx * tx + tz * tz < 60.0f * 60.0f || (e->vel[1] < 0.0f && e->pos[1] < an_target[me][1])) {
+                e->pos[0] = an_target[me][0]; e->pos[1] = an_target[me][1]; e->pos[2] = an_target[me][2];
+                e->acc[1] = 0.0f; e->vel[0] = e->vel[1] = e->vel[2] = 0.0f;
+                an_on_wall[me] = 1;
+                e->yaw = atan2f(-an_wall[me][0], -an_wall[me][2]);
+                e->tilt = -PI * 0.5f;
+                an_go(0x73, px, py, pz);
+            }
+        } else if (e->vel[1] < 0.0f && floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g) && e->pos[1] <= g) {
+            e->pos[1] = e->floor_y = g; e->acc[1] = 0.0f; e->vel[0] = e->vel[1] = e->vel[2] = 0.0f;
+            if (e->action == 0x7b) {   /* 0x58: the landing (motion 0x32), its hit by the script */
+                float at[3] = {e->pos[0], e->pos[1] + 30.0f, e->pos[2]};
+                fx_dust(at);
+                e->action = 0x58; an_play(0x32);
+            } else an_decide(px, py, pz);
+        }
+    } else if (!an_on_wall[me] && floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
+    if (e->action == 0x58 && e->done) an_decide(px, py, pz);
+    an_hits(px, py, pz, f);
+    if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
 }
+
 static void arachne_hit_glue(HitKind kind, float from_x, float from_z) {
-    ArachneBrain *b = &arachne_brain[e - enemies];
+    int me = (int)(e - enemies), heavy = !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL);
     float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
     fx_hit_spark(at);
     if (e->plan == P_DEATH) return;
-    if (arachne_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
-        e->plan = P_DEATH;
-        died();
+    if (mortal) {
+        e->health -= heavy ? 2 : 1;
+        if (e->health <= 0) {
+            e->health = 0; e->plan = P_DEATH;
+            an_on_wall[me] = 0; e->tilt = 0.0f; e->acc[1] = 0.0f;
+            an_go(0x14, 0.0f, 0.0f, 0.0f);
+            e->timer = 0.0f;
+            died();
+            return;
+        }
     }
-    arachne_play(b->want, b->restart);
-    b->restart = 0;
+    /* FUN_003f53e0: 40% of hits (0x5c6aa0) make it react (0x10); on a wall it falls off [the port's: 0x7d isn't read]. */
+    if (ai_unit() * 100.0f >= 40.0f) return;
+    if (an_on_wall[me]) { an_on_wall[me] = 0; e->tilt = 0.0f; e->vel[0] = e->vel[2] = 0.0f; e->vel[1] = 0.0f; e->acc[1] = -1.6f; e->action = 0x10; an_play(6); return; }
+    if (e->acc[1] != 0.0f) return;
+    /* FUN_003fe0b0: heavy (over 100 damage) -> motion 10 or 11 at random, knocked back 23; else 6, back 7. */
+    e->action = 0x10; e->step = 0; e->timer = 0.0f;
+    if (heavy) { an_play(ai_unit() < 0.5f ? 10 : 11); e->vel[2] = 23.0f; }
+    else { an_play(6); e->vel[2] = 7.0f; }
+    {
+        float a = atan2f(from_x - e->pos[0], from_z - e->pos[2]);
+        e->yaw = a;
+    }
 }
 
 /* ---- Nevan (nevan_boss.c decides; here her body). Her health is the Enemy's own, for the boss bar. */

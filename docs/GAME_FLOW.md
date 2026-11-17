@@ -269,7 +269,7 @@ script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run t
 - **205's and 207's bladed pillars** hurt on touch from their COLLISION cylinders (`atk`, `platk`; `parse_hazards`),
   once a second; the 700 damage is an estimate and the blades don't turn.
 - Mission Clear comes as Nevan falls (`CLEAR_ROOMS`), not by 210's door 1 and demo 24. 206's item 31 isn't in.
-- **Arachnes** (em010, GDATA 121, pack 5 in the table at 0x58e740) have their own model and motions (`arachne.c`):
+- **Arachnes** (em010, GDATA 121, pack 5 in the table at 0x58e740) have their own model, motions and class (`enemy.c` The Arachne, ENEMY_SPECS H):
   they run at Dante, lunge and leap. Which motion is which is read from their root paths; their class's decision
   tables, the web shot and the spiderlings aren't in. Health is an estimate.
 - **Nevan** (em028, GDATA 133, pack 19) runs her class's code (`nevan_boss.c`, `docs/ENEMY_SPECS.md` G): her patterns,

@@ -21,6 +21,7 @@ from prepare_skinned_model import (array_lines, build_mesh, c_float, decode_text
 
 SLOT = 130
 SCRIPT_COUNT = 60
+MOTION_LIMIT = None   # motion ids allowed (None: under SCRIPT_COUNT); the Arachne's run to 300+ (PAC by hundreds)
 OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT = range(5)
 END_FRAME = 0x7FFF
 PARTS = (
@@ -78,7 +79,7 @@ def compile_bank(chunk, caps, group_index=0):
                     raise ValueError(f"Missing motion map in script {script}")
                 entry = motion_group + u16(motion_group + index * 2)
                 motion = u16(entry + 6)
-                if motion >= SCRIPT_COUNT:
+                if motion >= (MOTION_LIMIT or SCRIPT_COUNT):
                     raise ValueError(f"Unexpected motion {motion} in script {script}")
                 start = i16(p + 6)
                 loops = 1 if chunk[entry] and chunk[entry + 3] == 1 else 0
