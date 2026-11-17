@@ -528,7 +528,10 @@ BEOWULF_MOTIONS = tuple(range(43))   # every slot of PAC [2]: his scripts (em030
 # Since her class was read (psp/testroom/lady_boss.c): action a plays PAC [2]-[6] by FUN_0044afc0's ranges; these are
 # lady_motion_names' order.
 LADY_MOTIONS = ((2, 0), (2, 10), (2, 11), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8), (5, 16), (5, 17), (5, 20), (5, 21), (5, 22),
-                (5, 23), (5, 30), (4, 0), (4, 1), (6, 10), (6, 30), (3, 4), (6, 41), (6, 44))
+                (5, 23), (5, 30), (4, 0), (4, 1), (6, 10), (6, 30), (3, 4), (6, 41), (6, 44),
+                # Mode 0x1a's action 0x85; 0x1b's 0x5c, 0x56-0x58, 0x59; 0x1c's 0x72, 0x73 (FUN_00445e30 / 00445f00 /
+                # 004460c0; action a >= 0x53 plays PAC [6] slot a - 0x53).
+                (6, 50), (6, 3), (6, 4), (6, 5), (6, 6), (6, 31), (6, 32))   # [6] 9 (0x5c) is empty
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 

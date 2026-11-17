@@ -5443,7 +5443,12 @@ static void lady_update_glue(float f, float px, float py, float pz) {
     b->frame = e->frame; b->done = e->done;
     {
         int before = b->action;
-        lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
+        {
+            /* FUN_00449450: a ray from her (head height) to him; a wall or floor between means he's out of sight. */
+            float from[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]}, to[3] = {px, py + 100.0f, pz}, t;
+            int sight = !stage_loaded() || !stage_raycast(from, to, &t);
+            lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, sight);
+        }
         if (b->action != before) giga_note("lady", b->action, (float)b->magazine);
     }
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;

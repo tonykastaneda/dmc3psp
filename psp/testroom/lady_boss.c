@@ -27,13 +27,73 @@ const char *const lady_motion_names[LADY_M_COUNT] = {
     "ld516", "ld517", "ld520", "ld521", "ld522",   /* 0x3e, 0x3f, 0x42-0x44 */
     "ld523", "ld530",                              /* 0x45 her walk, 0x4c her run */
     "ld400", "ld401",                              /* 0x2a the pause, 0x2b the reload */
-    "ld610", "ld630", "ld304", "ld641", "ld644"};
+    "ld610", "ld630", "ld304", "ld641", "ld644",
+    /* 0x85; 0x5c (its slot, [6] 9, is empty: the gun's draw stands in), 0x56-0x59; 0x72, 0x73 */
+    "ld650", "ld502", "ld603", "ld604", "ld605", "ld606", "ld631", "ld632"};
 
 enum { L_IDLE, L_GUN, L_GUN2, L_TURN, L_SHOOT, L_SHOOT2, L_MOVE, L_PAUSE, L_RELOAD, L_GRENADE, L_KALINA, L_ESCAPE,
-       L_FLINCH, L_KNOCK, L_DOWN };
-static const unsigned char action_motion[] = {LADY_M_IDLE, LADY_M_GUN, LADY_M_GUN2, LADY_M_TURN, LADY_M_SHOT,
-    LADY_M_SHOT2, LADY_M_WALK, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_ESCAPE,
-    LADY_M_FLINCH, LADY_M_KNOCK, LADY_M_KNOCK};
+       L_FLINCH, L_KNOCK, L_DOWN, L_POSE, L_BIG, L_VOLLEY };
+static const unsigned char action_motion[] = {LADY_M_WALK, LADY_M_GUN, LADY_M_GUN2, LADY_M_TURN, LADY_M_SHOT,
+    LADY_M_SHOT2, LADY_M_RUN, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_ESCAPE,
+    LADY_M_FLINCH, LADY_M_KNOCK, LADY_M_KNOCK, LADY_M_POSE, LADY_M_AIM, LADY_M_KALINA};
+
+/* Her waypoints (FUN_00448df0 / FUN_00448920 / FUN_00445590): two rings of 16 about the room's middle (0x5cc350), the
+ * floor's (0x5cc1d0, radius about 1270, y 1) and the raised middle's (0x5cc290, about 680, y 101). She takes the nearer
+ * ring's nearest point, then the next one on round the side she's on (FUN_004494b0), jittered by +-150 (the floor's,
+ * 0x61a4ec) or +-100 (0x61a4f0). */
+static const float ring_floor[16][2] = {{2500, 1126}, {2014, 1226}, {1599, 1499}, {1326, 1914}, {1226, 2400}, {1326, 2886},
+    {1599, 3301}, {2014, 3574}, {2500, 3674}, {2986, 3574}, {3401, 3301}, {3674, 2886}, {3774, 2400}, {3674, 1914},
+    {3401, 1499}, {2986, 1226}};
+static const float ring_middle[16][2] = {{2500, 1723}, {2242, 1777}, {2022, 1922}, {1877, 2142}, {1823, 2400}, {1877, 2658},
+    {2022, 2878}, {2242, 3023}, {2500, 3077}, {2758, 3023}, {2978, 2878}, {3123, 2658}, {3177, 2400}, {3123, 2142},
+    {2978, 1922}, {2758, 1777}};
+#define MIDDLE_X 2500.0f
+#define MIDDLE_Z 2400.0f
+#define SPECIAL_GATE 600.0f   /* [estimate] how often the special gate (the manager at +0x130, +0x88) opens */
+
+static void waypoint_pick(LadyBrain *b, float (*unit)(void)) {
+    int r, i, best[2] = {0, 0};
+    float bd[2] = {1e12f, 1e12f};
+    for (r = 0; r < 2; ++r)
+        for (i = 0; i < 16; ++i) {
+            const float *p = r ? ring_floor[i] : ring_middle[i];
+            float dx = p[0] - b->pos[0], dz = p[1] - b->pos[2], d = dx * dx + dz * dz;
+            if (d < bd[r]) { bd[r] = d; best[r] = i; }
+        }
+    b->ring = bd[1] < bd[0];
+    /* FUN_004494b0: which way round the middle she's going (her last spot, +0x150, against now: the cross product's
+     * sign); FUN_00445590: the next point that way. Her last spot is taken as her last target. */
+    {
+        float ax = b->to[0] - MIDDLE_X, az = b->to[2] - MIDDLE_Z, bx = b->pos[0] - MIDDLE_X, bz = b->pos[2] - MIDDLE_Z;
+        b->side = az * bx - ax * bz < 0.0f;
+    }
+    b->spot = best[b->ring];
+    b->spot = b->side ? (b->spot > 0 ? b->spot - 1 : 15) : (b->spot < 15 ? b->spot + 1 : 0);
+    {
+        const float *p = b->ring ? ring_floor[b->spot] : ring_middle[b->spot];
+        float jitter = b->ring ? 300.0f : 200.0f;
+        b->to[0] = p[0] + jitter * (unit() - 0.5f);
+        b->to[2] = p[1] + jitter * (unit() - 0.5f);
+    }
+}
+
+static void waypoint_next(LadyBrain *b, float (*unit)(void)) {
+    b->spot = b->side ? (b->spot > 0 ? b->spot - 1 : 15) : (b->spot < 15 ? b->spot + 1 : 0);
+    {
+        const float *p = b->ring ? ring_floor[b->spot] : ring_middle[b->spot];
+        float jitter = b->ring ? 300.0f : 200.0f;
+        b->to[0] = p[0] + jitter * (unit() - 0.5f);
+        b->to[2] = p[1] + jitter * (unit() - 0.5f);
+    }
+}
+
+/* FUN_00359c00 toward a point. */
+static void face_point(LadyBrain *b, const float to[3], float rate, float f) {
+    float want = atan2f(to[0] - b->pos[0], to[2] - b->pos[2]), d = want - b->yaw;
+    while (d > 3.14159265f) d -= 6.2831853f;
+    while (d < -3.14159265f) d += 6.2831853f;
+    b->yaw += d > rate * f ? rate * f : d < -rate * f ? -rate * f : d;
+}
 
 #define DEG 0.0174532925f
 #define TURN (1820.0f / 65536.0f * 6.2831853f)   /* 0x61a4f4 a frame */
@@ -41,7 +101,7 @@ static const unsigned char action_motion[] = {LADY_M_IDLE, LADY_M_GUN, LADY_M_GU
 #define BURSTS 3
 #define WALK_SPEED (323.0f / 38.0f)
 #define ESCAPE_SPEED (704.0f / 106.0f)
-#define ROOM_RADIUS 1300.0f
+#define ROOM_RADIUS 1500.0f
 #define KNOCK_HITS 10.0f
 #define BULLET_SPEED 30.0f
 #define ROCKET_SPEED 16.0f
@@ -61,7 +121,10 @@ static void act(LadyBrain *b, int a) {
 
 void lady_spawn(LadyBrain *b, int health) {
     int i;
-    b->health = health;
+    b->health = b->max_health = health;
+    b->to[0] = b->pos[0]; b->to[1] = b->pos[1]; b->to[2] = b->pos[2];
+    b->ring = 1; b->spot = 0; b->side = 0; b->volleys = 0;
+    b->token = SPECIAL_GATE;
     b->land = 0;
     b->gauge = 0.0f;
     b->magazine = MAGAZINE;
@@ -166,19 +229,33 @@ static void decide(LadyBrain *b, float d, float off, int from_walk) {
         act(b, d < 800.0f ? L_SHOOT2 : L_SHOOT);
         return;
     }
-    if (b->magazine < 1 || b->last_mode == 0x1a) { b->last_mode = 0x28; act(b, b->magazine < 1 ? L_RELOAD : L_PAUSE); return; }
+    if (b->magazine < 1 || b->last_mode == 0x1a) { b->last_mode = 0x28; act(b, L_MOVE); return; }
     b->last_mode = 0x1a;
-    {
-        static int turn;   /* stand-in for mode 0x1a: a grenade and Kalina Ann by turns */
-        act(b, (turn ^= 1) ? L_GRENADE : L_KALINA);
-    }
+    act(b, L_POSE);   /* FUN_00445e30: action 0x85, turning to him till it's played */
 }
 
-void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks) {
+/* FUN_004492a0, when her special gate opens: by her health's thirds (FUN_00449230), full 0x1b (the big shot) if he's
+ * in sight, the middle third 0x1d (her escape), the last 0x1c (her volley). 1 if she took one. */
+static int special(LadyBrain *b, int sight) {
+    float h = (float)b->health / (float)(b->max_health > 0 ? b->max_health : 1);
+    if (b->token > 0.0f) return 0;
+    if (h >= 0.66f) {
+        if (!sight) return 0;
+        b->last_mode = 0x1b; act(b, L_BIG);
+    } else if (h >= 0.33f) {
+        b->last_mode = 0x1d; act(b, L_ESCAPE);
+    } else {
+        b->last_mode = 0x1c; act(b, L_VOLLEY);
+    }
+    b->token = SPECIAL_GATE;
+    return 1;
+}
+
+void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int sight) {
     float dx = px - b->pos[0], dz = pz - b->pos[2], d = sqrtf(dx * dx + dz * dz), off;
-    (void)unit;
     b->land = 0;
     b->timer += f;
+    if (b->token > 0.0f) b->token -= f;
     shots_update(b, f, px, py, pz, attacks);
     if (b->gauge > 0.0f) b->gauge -= 0.01f * f;
     off = atan2f(dx, dz) - b->yaw;
@@ -186,8 +263,61 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
     while (off < -3.14159265f) off += 6.2831853f;
     switch (b->action) {
     case L_IDLE:
+        /* Her walk (FUN_00445210): toward her next waypoint (picked as she starts), at 1 degree a frame. In sight:
+         * her special if its gate is open, else the guns (bursts under 3), a new spot (magazine empty or after 0x1a)
+         * or 0x1a. Out of sight: reload when empty, pause after 3 bursts, else on round her ring. */
+        if (b->step == 0) { waypoint_pick(b, unit); b->step = 1; }
+        if (b->timer > 10.0f && special(b, sight)) break;
+        if (sight && b->timer > 10.0f) { decide(b, d, off, 1); break; }
+        if (!sight) {
+            if (b->bursts >= BURSTS) { act(b, L_PAUSE); break; }
+            if (b->magazine < 1) { act(b, L_RELOAD); break; }
+        }
+        face_point(b, b->to, 182.0f / 65536.0f * 6.2831853f, f);
+        move(b, WALK_SPEED, 0.0f, f);
+        {
+            float tx = b->to[0] - b->pos[0], tz = b->to[2] - b->pos[2];
+            if (tx * tx + tz * tz <= 300.0f * 300.0f) waypoint_next(b, unit);
+        }
+        break;
+    case L_POSE:
+        face(b, px, pz, TURN, f);   /* 0x61a4f8: 1820 a frame */
+        if (b->done) act(b, L_IDLE);
+        break;
+    case L_BIG:
+        /* FUN_00445f00: 0x5c, then the big shot (0x56, or 0x57 / 0x58 with him above / below by 15 degrees), then 0x59,
+         * turning to him throughout. What the shot is [inferred]: Kalina Ann's rocket, on its motion's event. */
         face(b, px, pz, TURN, f);
-        if (b->timer > 20.0f) decide(b, d, off, 1);
+        if (b->done) {
+            if (b->step == 0) {
+                float up = atan2f(py - b->pos[1], d);
+                b->step = 1; b->done = 0; b->frame = 0.0f; b->restart = 1;
+                b->want = LADY_M_BIG + (up > 15.0f * DEG ? 1 : up < -15.0f * DEG ? 2 : 0);
+            } else if (b->step == 1) {
+                b->step = 3; b->done = 0; b->frame = 0.0f; b->restart = 1; b->want = LADY_M_BIG_END;
+            } else act(b, L_IDLE);
+        }
+        if (b->step == 1 && b->frame > 20.0f) {   /* the shot's frame [estimate] */
+            float at[3] = {b->pos[0] + sinf(b->yaw) * 80.0f, b->pos[1] + 130.0f, b->pos[2] + cosf(b->yaw) * 80.0f};
+            b->step = 2;
+            fx_explosion(at);
+            fire(b, 2, px, py, pz, 0.0f);
+        }
+        break;
+    case L_VOLLEY:
+        /* FUN_004460c0: 0x71, then 0x72 twice (0x5cc140), then 0x73, turning toward her next waypoint at 0x61a4f4. What
+         * each 0x72 sends [inferred]: a grenade at him. */
+        if (b->step == 0) { waypoint_pick(b, unit); b->volleys = 2; b->step = 1; }
+        face_point(b, b->to, TURN, f);
+        if (b->done) {
+            if (b->volleys > 0) {
+                --b->volleys;
+                b->done = 0; b->frame = 0.0f; b->restart = 1; b->want = LADY_M_VOLLEY;
+                fire(b, 1, px, py, pz, 0.0f);
+            } else if (b->want != LADY_M_VOLLEY_END) {
+                b->done = 0; b->frame = 0.0f; b->restart = 1; b->want = LADY_M_VOLLEY_END;
+            } else act(b, L_IDLE);
+        }
         break;
     case L_GUN: case L_GUN2: case L_TURN:
         /* Drawing the guns, or turning on him (0x30, 0x3e, 0x31). */
@@ -212,10 +342,16 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
         break;
     }
     case L_MOVE:
-        /* 0x28: to another spot; here, keeping 500-800 from him [stand-in]. */
-        face(b, px, pz, TURN, f);
-        move(b, d < 650.0f ? -WALK_SPEED * 0.6f : WALK_SPEED * 0.6f, 0.0f, f);
-        if (b->timer > 60.0f) act(b, L_IDLE);
+        /* 0x28 (FUN_00447850): running for her next waypoint (turning 1820 a frame); within 300 the next. She runs on
+         * while he's in sight and either she's had 3 bursts or he's within 800 (0x5cc128); else back to her walk. */
+        if (b->step == 0) { waypoint_pick(b, unit); b->step = 1; }
+        if (!sight || !(b->bursts >= BURSTS || d < 800.0f)) { act(b, L_IDLE); break; }
+        face_point(b, b->to, TURN, f);
+        move(b, 530.0f / 30.0f * 0.5f, 0.0f, f);   /* her run's root [estimate: ld530 isn't read for distance] */
+        {
+            float tx = b->to[0] - b->pos[0], tz = b->to[2] - b->pos[2];
+            if (tx * tx + tz * tz <= 300.0f * 300.0f) waypoint_next(b, unit);
+        }
         break;
     case L_PAUSE:
         if (b->timer > 32.0f || b->done) { b->bursts = 0; act(b, L_IDLE); }   /* 0x61a510 */
@@ -252,8 +388,9 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
         break;
     }
     {
-        float hx = b->pos[0] - b->home[0], hz = b->pos[2] - b->home[2], l = sqrtf(hx * hx + hz * hz);
-        if (l > ROOM_RADIUS) { b->pos[0] = b->home[0] + hx / l * ROOM_RADIUS; b->pos[2] = b->home[2] + hz / l * ROOM_RADIUS; }
+        /* Kept within the room about its middle, outside her floor ring [the room's walls, approximated]. */
+        float hx = b->pos[0] - MIDDLE_X, hz = b->pos[2] - MIDDLE_Z, l = sqrtf(hx * hx + hz * hz);
+        if (l > ROOM_RADIUS) { b->pos[0] = MIDDLE_X + hx / l * ROOM_RADIUS; b->pos[2] = MIDDLE_Z + hz / l * ROOM_RADIUS; }
     }
 }
 

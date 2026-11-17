@@ -7,7 +7,8 @@
 enum { LADY_M_IDLE, LADY_M_STRAFE_R, LADY_M_STRAFE_L, LADY_M_GUN, LADY_M_TURN, LADY_M_SHOT, LADY_M_SHOT_UP,
        LADY_M_SHOT_DOWN, LADY_M_GUN2, LADY_M_TURN2, LADY_M_SHOT2, LADY_M_SHOT2_UP, LADY_M_SHOT2_DOWN, LADY_M_WALK,
        LADY_M_RUN, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_ESCAPE, LADY_M_FLINCH,
-       LADY_M_KNOCK, LADY_M_COUNT };
+       LADY_M_KNOCK, LADY_M_POSE, LADY_M_AIM, LADY_M_BIG, LADY_M_BIG_UP, LADY_M_BIG_DOWN, LADY_M_BIG_END,
+       LADY_M_VOLLEY, LADY_M_VOLLEY_END, LADY_M_COUNT };
 extern const char *const lady_motion_names[LADY_M_COUNT];   /* tools/prepare_skinned_model.py LADY_MOTIONS */
 
 #define LADY_SHOTS 16
@@ -20,6 +21,11 @@ typedef struct {
     float timer, gauge;
     int action, step, health;
     int magazine, bursts, last_mode;   /* +0x47e0 shots left, +0x47cc bursts since a pause, +0x47c1 */
+    int max_health;
+    int ring, spot, side;        /* her waypoint ring (+0x4859: 1 the floor's, 0 the middle's), its point (+0x47e4), +0x4858 */
+    float to[3];                 /* where she's going (+0x47f0) */
+    int volleys;                 /* mode 0x1c's shots left (+0x4848) */
+    float token;                 /* frames until her next special (the manager +0x130's gate isn't read) */
     int want, restart;           /* out */
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
     float land_damage;           /* out: its attack record's damage */
@@ -27,7 +33,8 @@ typedef struct {
 } LadyBrain;
 
 void lady_spawn(LadyBrain *b, int health);
-void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks);
+/* sight: Dante's in her line of sight (FUN_00449450, a ray from her to him). */
+void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int sight);
 int lady_hit(LadyBrain *b, int heavy, int mortal);   /* 1 if she's beaten */
 int lady_loops(int motion);
 void lady_draw_fx(const LadyBrain *b);

@@ -7,7 +7,7 @@
 - [ ] Nevan: her patterns, moves, movement (with its slowing), teleports (their steps, fades and places), motions, bats, reels, hair and dress (cloth chains, texture scrolls), action 24's strikes, 25's lightning balls (pillars and bars) and 29 / 38's floor lightning are the game's (docs/ENEMY_SPECS.md G); not yet: 23's circling bats, the kiss's hold
 - [ ] Arachne: no web shot or spiderlings (where they come from: docs/ENEMY_SPECS.md H); its health, 1400, is the game's
 - [ ] Beowulf: his scripts, attacks, damage, choices and phases are the game's (docs/ENEMY_SPECS.md I); not yet: his movement handlers' tables, the feather volley's flight, his stagger rule
-- [ ] Lady: her gun modes, ranges, turn rate, magazine, bursts, motions and damage are the game's (docs/ENEMY_SPECS.md J); not yet: mode 0x1a (grenade / Kalina Ann stand-in), her escape, her waypoints and line of sight
+- [ ] Lady: her gun modes, ranges, turn rate, magazine, bursts, motions, damage, waypoint rings, walk, mode 0x28, mode 0x1a, specials 0x1b / 0x1c and line of sight are the game's (docs/ENEMY_SPECS.md J); not yet: her grapple escape (0x1d, decoded, not ported) and the special gate's timing
 - [ ] Arkham: one fight runs both rounds, and Vergil doesn't join
 - [ ] Mission 11: the wagon ride (216) is skipped; a door takes Dante straight to the far platform
 - [x] Mission 16: 146's shelled sphere and 109's pair swing, lower on their switches, wear and knock as decoded; stand-ins: plain spheres, gravity and damage estimates, and the items aren't held back by them yet (finishing them wasn't shown in PPSSPP)

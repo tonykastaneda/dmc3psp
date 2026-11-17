@@ -1088,8 +1088,25 @@ dispatch `00444c90` (+0x47c0: modes 0-0x17 her walk `00445210`, 0x18 `004455d0`,
 - **Magazine** 50 (`0x61a514`, refilled by mode 0x2d, action 0x2b); a shot takes one (`0044d3e0`). Mode 0x2c
   (action 0x2a) waits 32 (`0x61a510`) and resets the bursts.
 
+- **Her waypoints**: two rings of 16 about the middle (2500, 2400) (`0x5cc350`): the floor's `0x5cc1d0` (radius about
+  1270, y 1) and the raised middle's `0x5cc290` (about 680, y 101). `00448df0` takes the nearer ring's nearest point,
+  `00445590` the next one on round the way she's going (`004494b0`, the cross product of her last spot and now about
+  the middle), `00448920` jitters it ±150 (`0x61a4ec`, 300) or ±100 (`0x61a4f0`, 200). Within 300 of it, the next.
+- **Her walk out of sight** (`00445210`): reload when empty (0x2d), pause after 3 bursts (0x2c), else on round her ring
+  (actions 0x45 walk / 0x4c run), turning 182 a frame. **Mode 0x28** (`00447850`): running for her waypoints while he's
+  in sight and she's had 3 bursts or he's within 800 (`0x5cc128`); within 200 of her spot (`004491b0`) the escape.
+- **Mode 0x1a** (`00445e30`): action 0x85 ([6] 50), turning to him at `0x61a4f8` (1820), then her walk.
+- **Specials** (`004492a0`, from the walk when the gate at +0x130 / +0x88 opens): by her health's thirds (`00449230`:
+  over 0.66, 0.33-0.66, under): 0x1b if he's in sight, 0x1d, 0x1c. **0x1b** (`00445f00`): 0x5c, then 0x56 (0x57 /
+  0x58 by his height, `0044ad40`), its event 1, then 0x59. **0x1c** (`004460c0`): 0x71, 0x72 `0x5cc140`'s times (2),
+  0x73, turning toward her next waypoint at 1820. **0x1d** (`00446330`): her grapple: 0x5d, then turned to it 0x5e,
+  a wire (`0049e4f0`) up at `0x61a520`, rising to `0x61a530` while dropping `0x5cc150` grenades, onto the nearest of
+  five ledges at y 501 (`0x5cc360`) or a waypoint, 0x62, 0x61 landing, then mode 0x1e or her walk.
+- **Line of sight** (`00449450`): a ray from her to him (`FUN_00201da0`).
+
 **In the port** (`psp/testroom/lady_boss.c`): the modes above at rank 0, each action's own motion, her turn rate,
-magazine and burst count, and her records' damage. Stand-ins: what mode 0x1a does (here a grenade or Kalina Ann by
+magazine and burst count, and her records' damage; her waypoints, walk, 0x28, 0x1a, the special picker, 0x1b and
+0x1c, and her line of sight (a stage ray), as decoded above. Stand-ins: what mode 0x1a does (here a grenade or Kalina Ann by
 turns), her escape (0x1d), where 0x28 takes her (she keeps 500-800 from him; her waypoints aren't read), her line of
 sight (always clear), shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun
 500, grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.
