@@ -1147,16 +1147,25 @@ bank (groups 0, 1, 3 used), [11] / [12] caps and shapes. Code: new `002d7e60`, c
   to its limit (100000, `0x61966c`): action 5; shots add their damage to +0x38d4 and past 1500 (`0x619668`) give 6 unless
   in phase 2; his first shot hit gives 10 (+0x3903), later ones 50% (`0x619724`). Each hit adds 0.3 × its damage to
   +0x168 (`0x619720`). In the port: all of it, the port's heavy / slam / launch taken as the kind-4 record [inferred].
-- **Volley** (15, `002dcf00`): event 1 lets `0x5b8650`[rank] + 1 feathers go (7), the next event 1 `0x5b8660`[rank]
-  + 1 (3) (the feather actor `0040cef0`, not read); event 4 a wind pushing Dante away 4.7 a frame for 190 frames
-  (gp-0x6a48, gp-0x6a40); effect 0xc1 on event 3.
+- **Volley** (15, `002dcf00`, his body script 3/3): it reads the body player's flag set 0 (+0x5d, five bytes that
+  each op3 copies whole, `FUN_00255640`; `FUN_00255af0(player, set, n)` reads flag n). Flag 1 = 1 (frames 41 and 188)
+  lets `0x5b8650`[rank] + 1 feathers go from his bone list's slots 6 on (7), then `0x5b8660`[rank] + 1 from 14 (3);
+  flag 4 a wind pushing Dante away 4.7 a frame for 190 frames (gp-0x6a48, gp-0x6a40); effect 0xc1 on flag 3. It also
+  starts a second script player (+0x31e0, group 0 script 1).
+- **Feathers** (`0040cef0`, vtable `0x60c750`; set up by `0040d160`, run by `0040d380`): each starts at its wing bone,
+  heading out from his body, waits index x 3 frames (`0040d130`), then moves by `0x5b8610` (speed 2, steering 0xb4 a
+  frame toward Dante's chest for 300 frames or until within 300, life 1000: `FUN_0025a780` copies {speed, , , homing
+  frames, retarget, turn (short), stop distance, life}; `FUN_0025a7d0` steps it, `FUN_0025ad70` ends the homing).
+  It waits on his flags: flag 1 = 1, or flag 0 no longer 10 (the volley over), then index x 10 frames (gp-0x6860),
+  and flies by `0x5b8630` (speed 40, turn 0x258 for 80 frames or until within 300, life 120); a touch (flags
+  0x30400) bursts it (state 3, 0x142 and sound 0x19). Its record is 8 (360).
 
 **In the port** (`enemy.c`, "Beowulf"): his scripts, caps and records run on the shared script runner
 (`tools/prepare_beowulf.py`; group g script n is entry 16 g + n), so his motions, hit windows and damage are the
-game's; the choice, phases, roar, the movement rules, stagger's end and the volley's counts and wind above.
-Stand-ins: his idle before choosing (40 frames: the gate at +0x130 isn't read), what sets off the stagger (12 heavy
-hits), the feathers' flight (straight at 25 cm a frame, record 12's 300), the run's stop at once rather than at a
-stride's event, and his charge (4) from the run isn't taken.
+game's; the choice, phases, roar, the movement rules, stagger's end, the volley's flags, counts and wind, and the
+feathers' flight above (the runner now keeps each enemy's flag set 0: `tools/prepare_cerberus.py` packs an op3's
+flags 2-4 into its c). Stand-ins: the run's stop at once rather than at a stride's event, his charge (4) from the run
+isn't taken, a feather's start heading from his body's centre 200 up [inferred], their burst effect.
 
 ---
 

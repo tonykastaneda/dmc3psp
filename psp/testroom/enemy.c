@@ -131,6 +131,7 @@ typedef struct {
     unsigned char shoot_fan, shoot_phase;
     short health;                   /* units of a light hit (42); bosses run past 127 */
     short script_at, stop;
+    unsigned char flags[5];         /* the script player's flag set 0 (+0x5d), set by its op3s (FUN_00255640) */
     float gauge, timer, wake;
     float vel[3], acc[3];
     float yaw_rate;
@@ -1044,7 +1045,14 @@ static void script_run(void) {
             e->hit_done = 0;
             break;
         }
-        case 4: script_event = op->a + 1; break;   /* a script event: Beowulf's volley follows them; the others' aren't */
+        case 4:   /* a script event; op3 copies its 5 bytes into flag set 0 (FUN_00255640) */
+            script_event = op->a + 1;
+            if ((op->c & 0xF) == 3) {
+                e->flags[0] = (unsigned char)op->a; e->flags[1] = (unsigned char)op->b;
+                e->flags[2] = (unsigned char)((op->c >> 4) & 0xF); e->flags[3] = (unsigned char)((op->c >> 8) & 0xF);
+                e->flags[4] = (unsigned char)((op->c >> 12) & 0xF);
+            }
+            break;
         default: e->script_at = op->b; break;
         }
     }
@@ -1053,6 +1061,7 @@ static void script_run(void) {
 static void script_play(int n) {
     e->hit_left[0] = e->hit_left[1] = 0.0f;
     e->done = 0;
+    memset(e->flags, 0, sizeof e->flags);
     {
         const ScriptBank *k = script_bank();
         int start = k ? (n >= 0 && n < k->scripts ? k->starts[n] : -1) : (e->kind == ENEMY_ENVY ? envy_ai_scripts : e->kind == ENEMY_ABYSS ? abyss_ai_scripts : enemy_ai_scripts)[n];
@@ -5189,7 +5198,6 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
         break;
     case 0x77:
         an_turn(px, pz, 0.04f, f);
-        if (script_event) giga_note("an_event", script_event, d);   /* TEMP */
         /* FUN_004016c0: record 0 (600), 4 frames, as its script opens flag 4 [taken as its first event] */
         if (script_event && !e->step) { e->step = 1; an_arm(0, 4.0f); }
         if (e->done) an_decide(px, py, pz);
@@ -5487,7 +5495,7 @@ static void bishop_hit_glue(HitKind kind, float from_x, float from_z) {
  * his motions, hit windows and damage are the game's. From idle he picks by sector (FUN_002da860, tables 0x5b8c50 by
  * phase: the first sector Dante stands in names a weighted list of actions), never the action he last took again
  * (FUN_002da7b0). His phase (+0x38d0) steps up below 73% and 47% of his health (0x619718), with a roar (action 0x16).
- * Health 10000 (0x5b84e0 +0x2c). His gate, movement and hit reactions are the game's (below); stand-in: the feathers' flight (300 damage, record 12). */
+ * Health 10000 (0x5b84e0 +0x2c). His gate, movement and hit reactions are the game's (below); his feathers' flight is too (record 8). */
 #define BW_SCRIPT_OF(group, script) ((group) * 16 + (script))
 static const signed char bw_action_script[28] = {
     BW_SCRIPT_OF(0, 0), BW_SCRIPT_OF(0, 1), BW_SCRIPT_OF(0, 7), BW_SCRIPT_OF(0, 8), BW_SCRIPT_OF(0, 9),
@@ -5506,7 +5514,7 @@ static const BwSector bw_sectors[3][3] = {
      {0.0f, 0.0f, 0.0f, {{2, 20}, {15, 50}, {27, 30}}}}};
 static const float bw_phase_at[2] = {0.73f, 0.47f};
 #define BW_FEATHERS 12
-static struct { int on; float pos[3], vel[3], life; } bw_feathers[BW_FEATHERS];
+static struct { int on, state, index, homing, turn; float pos[3], dir[3], speed, wait, home, life, born; } bw_feathers[BW_FEATHERS];
 static int bw_phase, bw_last, bw_gauge;
 static float bw_shots;   /* his shot tally (+0x38d4) */
 static int bw_shot_once;             /* his first shot hit (+0x3903) */
@@ -5572,23 +5580,75 @@ static int bw_choose(float d, float rel_deg) {
     return pick;
 }
 
+/* The feathers (CEm025's feather, vtable 0x60c750: FUN_0040cef0 made by FUN_002dcf00 at his wing bones, slots 6-12 then
+ * 14-16 of his bone list; set up by FUN_0040d160, run by FUN_0040d380). Each waits its index x 3 frames (FUN_0040d130),
+ * then drifts out from his body at 0x5b8610's speed 2, steering 0xb4 a frame toward Dante (FUN_0025a7d0); once he lets
+ * them go [his next event, or his volley's end: inferred], its index x 10 frames (0x619910), then 0x5b8630's flight:
+ * 40 a frame, steering 0x258 a frame for 80 frames or until within 300 of him, gone after 120. Record 8 (360) on a
+ * touch (its spheres 20 / 30). */
+static float bw_wing_released;
+static int bw_wing_bone(int bone, float out[3]) {
+    float l[3], c = cosf(e->yaw), s = sinf(e->yaw);
+    if (bone >= enemy_models[e->kind].bone_count) return 0;
+    evaluate_pose();
+    l[0] = world_pos[bone][0]; l[1] = world_pos[bone][1]; l[2] = world_pos[bone][2];
+    out[0] = e->pos[0] + l[0] * c + l[2] * s;
+    out[1] = e->pos[1] + l[1];
+    out[2] = e->pos[2] + l[2] * c - l[0] * s;
+    return 1;
+}
+
+/* Turn dir toward want by up to a radians (FUN_0025a9d0's steer). */
+static void bw_steer(float dir[3], const float want[3], float a) {
+    float d = dir[0] * want[0] + dir[1] * want[1] + dir[2] * want[2], ang, perp[3], l;
+    int k;
+    if (d > 1.0f) d = 1.0f;
+    if (d < -1.0f) d = -1.0f;
+    ang = acosf(d);
+    if (ang <= a) { for (k = 0; k < 3; ++k) dir[k] = want[k]; return; }
+    for (k = 0; k < 3; ++k) perp[k] = want[k] - dir[k] * d;
+    l = sqrtf(perp[0] * perp[0] + perp[1] * perp[1] + perp[2] * perp[2]);
+    if (l < 1e-5f) return;
+    for (k = 0; k < 3; ++k) dir[k] = dir[k] * cosf(a) + perp[k] / l * sinf(a);
+}
+
 static void bw_feathers_update(float f, float px, float py, float pz) {
-    int i;
+    int i, k;
     for (i = 0; i < BW_FEATHERS; ++i) {
-        float dx, dy, dz;
+        float want[3], dist, dx, dy, dz, near_y, r;
         if (!bw_feathers[i].on) continue;
-        bw_feathers[i].pos[0] += bw_feathers[i].vel[0] * f;
-        bw_feathers[i].pos[1] += bw_feathers[i].vel[1] * f;
-        bw_feathers[i].pos[2] += bw_feathers[i].vel[2] * f;
-        dx = px - bw_feathers[i].pos[0]; dy = py + 100.0f - bw_feathers[i].pos[1]; dz = pz - bw_feathers[i].pos[2];
-        if (attacks_on && dx * dx + dy * dy + dz * dz < 110.0f * 110.0f) {
+        if (bw_feathers[i].state == 0) {   /* FUN_0040d130 */
+            if ((bw_feathers[i].wait -= f) < 0.0f) { bw_feathers[i].state = 1; bw_feathers[i].speed = 2.0f; bw_feathers[i].turn = 0xb4;
+                bw_feathers[i].home = 300.0f; bw_feathers[i].life = 1000.0f; bw_feathers[i].homing = 1; }
+            continue;
+        }
+        if ((bw_feathers[i].life -= f) < 0.0f) { bw_feathers[i].on = 0; continue; }
+        if (bw_feathers[i].state == 1 && (bw_wing_released > bw_feathers[i].born || e->action != 15 || e->flags[0] != 10)) {
+            bw_feathers[i].state = 2; bw_feathers[i].wait = (float)bw_feathers[i].index * 10.0f;
+        } else if (bw_feathers[i].state == 2 && (bw_feathers[i].wait -= f) < 0.0f) {
+            bw_feathers[i].state = 3; bw_feathers[i].speed = 40.0f; bw_feathers[i].turn = 0x258;   /* 0x5b8630 */
+            bw_feathers[i].home = 80.0f; bw_feathers[i].life = 120.0f;
+        }
+        want[0] = px - bw_feathers[i].pos[0]; want[1] = py + 100.0f - bw_feathers[i].pos[1]; want[2] = pz - bw_feathers[i].pos[2];
+        dist = sqrtf(want[0] * want[0] + want[1] * want[1] + want[2] * want[2]);
+        bw_feathers[i].home -= f;
+        if (bw_feathers[i].homing && (bw_feathers[i].home <= 0.0f || dist <= 300.0f)) bw_feathers[i].homing = 0;   /* FUN_0025ad70 */
+        if (bw_feathers[i].homing && dist > 1.0f) {
+            for (k = 0; k < 3; ++k) want[k] /= dist;
+            bw_steer(bw_feathers[i].dir, want, (float)bw_feathers[i].turn * (2.0f * PI / 65536.0f) * f);
+        }
+        for (k = 0; k < 3; ++k) bw_feathers[i].pos[k] += bw_feathers[i].dir[k] * bw_feathers[i].speed * f;
+        if (bw_feathers[i].pos[1] < e->floor_y) { bw_feathers[i].on = 0; continue; }
+        near_y = bw_feathers[i].pos[1] < py + DANTE_LOW ? py + DANTE_LOW : bw_feathers[i].pos[1] > py + DANTE_HIGH ? py + DANTE_HIGH : bw_feathers[i].pos[1];
+        dx = bw_feathers[i].pos[0] - px; dy = bw_feathers[i].pos[1] - near_y; dz = bw_feathers[i].pos[2] - pz;
+        r = 30.0f + DANTE_RADIUS;
+        if (attacks_on && dx * dx + dy * dy + dz * dz < r * r) {
             bw_feathers[i].on = 0;
             land_attack(0);
-            landed_damage = bw_attacks[12].damage;
+            landed_damage = bw_attacks[8].damage;
             landed_x = bw_feathers[i].pos[0]; landed_z = bw_feathers[i].pos[2];
             continue;
         }
-        if ((bw_feathers[i].life -= f) <= 0.0f) bw_feathers[i].on = 0;
         {
             float still[3] = {0.0f, 0.0f, 0.0f};
             fx_mote(bw_feathers[i].pos, still, 50.0f, 6.0f, 0.1f, 0xffc0f0ffu);
@@ -5596,24 +5656,27 @@ static void bw_feathers_update(float f, float px, float py, float pz) {
     }
 }
 
-static void bw_feather(float px, float py, float pz) {
-    int i;
+/* FUN_0040cef0(bone, index, him): at his bone, heading out from his body. */
+static void bw_feather(int bone, int index) {
+    int i, k;
     for (i = 0; i < BW_FEATHERS; ++i) {
-        float d[3], l;
+        float l;
         if (bw_feathers[i].on) continue;
+        if (!bw_wing_bone(bone, bw_feathers[i].pos)) return;
         bw_feathers[i].on = 1;
-        bw_feathers[i].life = 120.0f;
-        bw_feathers[i].pos[0] = e->pos[0] + (ai_unit() - 0.5f) * 200.0f;
-        bw_feathers[i].pos[1] = e->pos[1] + 280.0f + ai_unit() * 80.0f;
-        bw_feathers[i].pos[2] = e->pos[2] + (ai_unit() - 0.5f) * 200.0f;
-        d[0] = px - bw_feathers[i].pos[0]; d[1] = py + 100.0f - bw_feathers[i].pos[1]; d[2] = pz - bw_feathers[i].pos[2];
-        l = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-        if (l < 1.0f) l = 1.0f;
-        bw_feathers[i].vel[0] = d[0] / l * 25.0f; bw_feathers[i].vel[1] = d[1] / l * 25.0f; bw_feathers[i].vel[2] = d[2] / l * 25.0f;
+        bw_feathers[i].state = 0;
+        bw_feathers[i].index = index;
+        bw_feathers[i].wait = (float)index * 3.0f;
+        bw_feathers[i].born = bw_wing_released;
+        bw_feathers[i].dir[0] = bw_feathers[i].pos[0] - e->pos[0];
+        bw_feathers[i].dir[1] = bw_feathers[i].pos[1] - (e->pos[1] + 200.0f);
+        bw_feathers[i].dir[2] = bw_feathers[i].pos[2] - e->pos[2];
+        l = sqrtf(bw_feathers[i].dir[0] * bw_feathers[i].dir[0] + bw_feathers[i].dir[1] * bw_feathers[i].dir[1] + bw_feathers[i].dir[2] * bw_feathers[i].dir[2]);
+        if (l < 1.0f) { bw_feathers[i].dir[0] = 0.0f; bw_feathers[i].dir[1] = 1.0f; bw_feathers[i].dir[2] = 0.0f; }
+        else for (k = 0; k < 3; ++k) bw_feathers[i].dir[k] /= l;
         return;
     }
 }
-
 static void beowulf_update_glue(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, root[3], rel;
     int a = e->action;
@@ -5643,6 +5706,7 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
     }
     switch (a) {
     case 0: case 1:
+        if (ar_force >= 0) { int st = ar_force; ar_force = -1; bw_go(st); return; }   /* tests: "arforce frame state" */
         /* 1 (FUN_002daa00) turns to him at 0x619680 (1274 a frame) and lasts at least 300 frames (0x619674). */
         if (a == 1) {
             goyle_turn_to(px, pz, BW_TURN_FAST, f);
@@ -5673,13 +5737,18 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
     default:
         if (e->timer < 20.0f) goyle_turn_to(px, pz, 0.06f, f);
         move_local(root[0], 0.0f, root[2]);
-        if (a == 15 && script_event) {
-            /* FUN_002dcf00: its first event lets 0x5b8650's + 1 feathers go (7 at rank 0), its next 0x5b8660's + 1
-             * (3); its event 4 a wind that pushes Dante away 4.7 a frame for 190 frames. */
-            int k, n = script_event == 2 ? (e->step ? 3 : 7) : 0;   /* the runner keeps an event's id + 1 */
-            if (script_event == 2) e->step = 1;
-            for (k = 0; k < n; ++k) bw_feather(px, py, pz);
-            if (script_event == 5) bw_wind = 190.0f;
+        if (a == 15) {
+            /* FUN_002dcf00 reads his body player's flags: flag 1 lets 0x5b8650's + 1 feathers go from wing bones 6 on
+             * (7 at rank 0), then again 0x5b8660's + 1 from 14 (3); flag 4 a wind that pushes Dante away 4.7 a frame
+             * for 190 frames. A feather waiting to fly goes at flag 1, or when flag 0 isn't 10 (his volley over). */
+            if (e->flags[1] == 1) {
+                int k, n = e->step ? 3 : 7, first = e->step ? 14 : 6;
+                e->flags[1] = 0;
+                bw_wing_released += 1.0f;
+                for (k = 0; k < n; ++k) bw_feather(first + k, k);
+                e->step = 1;
+            }
+            if (e->flags[4] == 1) { e->flags[4] = 0; bw_wind = 190.0f; }
         }
         if (a == BW_STAGGER && e->done) { bw_go(bw_phase ? 1 : BW_IDLE); return; }   /* 0x619670[phase]: 0, 1, 1 */
         if (e->done) { bw_go(BW_IDLE); return; }

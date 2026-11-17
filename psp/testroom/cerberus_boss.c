@@ -1294,7 +1294,7 @@ static void process_body_events(float px, float py, float pz) {
     int i;
     (void)px; (void)py; (void)pz;
     for (i = 0; i < cb.body.event_count; ++i) {
-        int event = cb.body.events[i][0], sub = cb.body.events[i][1], op = cb.body.events[i][2];
+        int event = cb.body.events[i][0], sub = cb.body.events[i][1], op = cb.body.events[i][2] & 0xF;
         if (op != 3) continue;
         if ((cb.body.script == 50 || cb.body.script == 51) && event == 3) spawn_punch_spikes();
         else if ((cb.body.script == 50 || cb.body.script == 51) && event == 1) {

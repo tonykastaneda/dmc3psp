@@ -93,7 +93,10 @@ def compile_bank(chunk, caps, group_index=0):
                 ops.append((OP_GOTO, 0, seen[target], 0))
                 break
             elif op in (3, 4):
-                ops.append((OP_EVENT, chunk[p + 1], chunk[p + 2], op))
+                # op3 / op4 copy their 5 bytes into the player's flag set 0 / 1 (FUN_00255640): a, b and (c >> 4,
+                # >> 8, >> 12) are flags 0-4; c & 15 is the op.
+                ops.append((OP_EVENT, chunk[p + 1], chunk[p + 2],
+                            op | min(chunk[p + 3], 15) << 4 | min(chunk[p + 4], 15) << 8 | min(chunk[p + 5], 7) << 12))
                 p += 6
             elif op in (5, 0x21, 0x23):
                 p += 2
