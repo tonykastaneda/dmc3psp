@@ -2025,6 +2025,7 @@ static int cmp_mirror_at, cmp_mirror_k;
 static int cmp_demo = -1;   /* tests: a demo to play at frame 2 */
 static int pending_room_demo = -1;   /* a demo a mission's own code asks for (12's bridge, 33), played as play goes on */
 static int cmp_force_clear;   /* tests: "forceclear n", the mission cleared at frame n */
+static int cmp_no_demo;   /* "nodemo": a test skips the cutscenes */
 static int cmp_item[8][2], cmp_item_count, cmp_trim_at, cmp_trim_keep, cmp_force_at, cmp_force_state;      /* "item id state": for a test, a key item starts got (1) or used (2) */
 static void cmp_load(void) {
     char path[320], line[64];
@@ -2082,6 +2083,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "mirrorlit ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_mirror_at, &cmp_mirror_k);   /* "mirrorlit frame k": 405's mirror k lit */
         else if (strncmp(line, "demo ", 5) == 0) cmp_demo = atoi(line + 5);
         else if (strncmp(line, "forceclear ", 11) == 0) cmp_force_clear = atoi(line + 11);   /* "demo n": play demo n from the start (demo.c) */
+        else if (strncmp(line, "nodemo", 6) == 0) cmp_no_demo = 1;
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
@@ -3678,7 +3680,8 @@ static int queue_room_demo(int mission, int room, int cleared) {
     }
     return 0;
 }
-static void queue_demo(int id) { if (demo_queue_len < 8) demo_queue[demo_queue_len++] = id; }
+/* "nodemo": a test skips the cutscenes (cmp_no_demo) */
+static void queue_demo(int id) { if (!cmp_no_demo && demo_queue_len < 8) demo_queue[demo_queue_len++] = id; }
 
 /* Each mission's opening, from its event script's first op and the AFTER_DEMO sections it chains through to the
  * mission-start screen (tools/event_dump.py; docs/CUTSCENES.md): the real-time demos among them. Movies (ids 318

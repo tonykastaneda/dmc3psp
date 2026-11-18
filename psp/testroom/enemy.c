@@ -4210,8 +4210,10 @@ static void ar_update(float f, float px, float py, float pz) {
         float hx = e->hand_pos[0], hz = e->hand_pos[2], sn = sinf(e->yaw), cs = cosf(e->yaw);
         float hand[3] = {e->pos[0] + hx * cs + hz * sn, e->pos[1] + e->hand_pos[1], e->pos[2] + hz * cs - hx * sn};
         if (e->action >= 52 && e->action <= 54 && e->step == 3 && e->frame >= 165.0f && e->vel[1] == 0.0f) {
-            /* The slam's burst where the blade meets the floor (FUN_003a8200 phase 0x1f). The game's effects 0x311 /
-             * 0x312 aren't converted: a stand-in burst, hurting within 300 cm as attack record 12 [estimate]. */
+            /* The slam's burst where the blade meets the floor (FUN_003a8200 phase 0x1f): the game plays V785 (Agni's
+             * sword) / V786 (Rudra's) from em026 [18], whose E part (E0) shows nothing on its own in the port's effect
+             * runtime and the rest is P particles (not ported). A stand-in burst, hurting within 300 cm as attack record
+             * 12 [estimate]. */
             float at[3] = {e->pos[0] + sn * 150.0f, e->floor_y + 40.0f, e->pos[2] + cs * 150.0f};
             float ddx = px - at[0], ddz = pz - at[2];
             e->vel[1] = 1.0f;
@@ -4222,7 +4224,8 @@ static void ar_update(float f, float px, float py, float pz) {
             }
         }
         if (b->charged > 0.0f && ((int)e->timer & 7) == 0) {
-            /* The charged blade (effects 0x24c / 0x24d, not converted): motes of its element. */
+            /* The charged blade (FUN_003ac280: V588 / V589 looping on the sword): their E elements (E142, E508 / E381,
+             * E1275) draw nothing without the G generators that drive them (not ported). A stand-in: motes of its element. */
             float v[3] = {0.0f, 40.0f, 0.0f};
             fx_mote(hand, v, 60.0f, 10.0f, 0.4f, b->set == 1 ? 0xffffd080u : 0xff2080ffu);
         }
