@@ -67,6 +67,7 @@ void ar_brain_reset(ArBrain *b, int set) {
     b->move_wait = 0.0f;
     b->high = 0.0f;
     b->charged = 0.0f;
+    b->charge_fx = 0;
     b->flags = 0x12;
 }
 

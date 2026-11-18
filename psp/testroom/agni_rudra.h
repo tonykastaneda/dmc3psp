@@ -23,6 +23,8 @@ typedef struct {
     int may_attack;      /* +0x2de6 */
     float move_wait;     /* +0x2e24 / +0x2e28: frames before another move */
     float high;          /* +0x2f38: frames Dante's been 300 above */
+    int charge_fx;       /* +0x2ef8 / +0x2efc: the charged blade's effect (enemy.c), 0 none */
+    int charge_sword;    /* the sword charged: 0 Agni's (state 50), 1 Rudra's (51) */
     float charged;       /* +0x2eec: frames left on the charged sword (+0x2ee4) */
     unsigned short flags; /* +0x2ede, from the pair's formation (0x5cf6a0): role in bits 0-3, 0x10 / 0x20 which way
                             to flank, 0x100 / 0x200 no attack permission, 0x1000 stand */

@@ -4,6 +4,8 @@
 Two banks, read straight from the user's disc:
   0 static_effect.pac (GDATA 167): the red orbs. CItemOrb (FUN_002f2690) plays V45/V186-V189 for its five
     sizes and E185 when one is collected (FUN_002f3750).
+  4 em026's effect pack (GDATA 131, PNST chunk 18): Agni & Rudra's charged blades, V588 / V589 (FUN_003ac280).
+    (Bank 3 is a cutscene's own, loaded by demo.c.)
   1 em025's effect pack (GDATA 130, PNST chunk 23): Cerberus's ice. Its shells play V117 (icicle), V89 and V101
     (sphere), V48 (shard); its moves play the ids listed in CERBERUS_V below (FUN_00208590 call sites).
 
@@ -31,6 +33,8 @@ CERBERUS_E = (291, 251, 199, 284)
 # E2 (in V72, V180): model M18 scaled 0.1 -> 60 in 20 frames, an 18 m sphere at full white. Its GS blend isn't
 # read, and drawn as an ordinary blend it fills the screen with white slabs, so it's left out.
 SKIP_E = {2}
+# Agni & Rudra's charged blades (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's.
+AGNI_RUDRA_V = (588, 589)
 # Effect models whose second chunk is a 16-byte reference rather than their own textures. The reference's
 # meaning isn't decoded. A model takes a twin's textures when one has the same vertices, else the ice texture
 # of the icicle model M54 (the ice pieces and frozen floor are the same material).
@@ -200,9 +204,10 @@ def main():
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
+    summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in enumerate(summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4), summary):
         print(f"bank {bank}: {v} V, {e} E, {t} textures, {m} models; not ported: {skipped['P']} P, {skipped['G']} G children")
 
 

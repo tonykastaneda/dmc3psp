@@ -878,7 +878,7 @@ a hit), after which he counters at once from the second attack table. A blow tha
 hits are those is inferred: the port's heavy, slam and launch). The pair's opening (64, below) is the game's
 (`ar_opening`; Rudra going 60 frames after Agni reads +0x2ee0 as their place in the pair, an inference). Not yet:
 the pedestal climb (63) and team moves, the hops (16-21) beyond their scripts, the guard stances the scripts set (`FUN_003a1a50` turns hits while one
-is up), the game's own effects (the slam's fire and wind bursts 0x311 / 0x312 and the charged blades' 0x24c / 0x24d are stand-ins: the port's burst, hurting within 300 cm as attack record 12 [estimate], and motes), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
+is up), the game's own effects (the charged blades are the game's V588 / V589 from em026 [18], with their generators, looping while the charge lasts but riding his hand, not the sword's matrix [estimate]; the slam's fire and wind bursts 0x311 / 0x312 are a stand-in: their E part is a 6-frame flash and the rest P particles, so the port's burst, hurting within 300 cm as attack record 12 [estimate]), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
 Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.
 They start as statues (ar71/ar72) and wake within 900 cm, when struck, or after 600 frames (the game plays a
 cutscene). One boss bar for both.

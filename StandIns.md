@@ -33,7 +33,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
-  throws, Geryon's missiles, Vergil's 0x338, Agni & Rudra's 0x311 / 0x312 / 0x24c / 0x24d, Cerberus's unported
+  throws, Geryon's missiles, Vergil's 0x338, Agni & Rudra's 0x311 / 0x312 (the charged blades' 0x24c / 0x24d are the game's, riding the hand), Cerberus's unported
   particle programs, the Vanguard's P312 dissolve). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
   flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.

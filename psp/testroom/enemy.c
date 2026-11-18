@@ -31,6 +31,7 @@
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
+#include "nfx.h"
 #include "beowulf_scripts.h"
 #include "soul_eater_scripts.h"
 #include "arachne_scripts.h"
@@ -4223,11 +4224,16 @@ static void ar_update(float f, float px, float py, float pz) {
                 landed_damage = ar_attacks[12].damage;
             }
         }
-        if (b->charged > 0.0f && ((int)e->timer & 7) == 0) {
-            /* The charged blade (FUN_003ac280: V588 / V589 looping on the sword): their E elements (E142, E508 / E381,
-             * E1275) draw nothing without the G generators that drive them (not ported). A stand-in: motes of its element. */
-            float v[3] = {0.0f, 40.0f, 0.0f};
-            fx_mote(hand, v, 60.0f, 10.0f, 0.4f, b->set == 1 ? 0xffffd080u : 0xff2080ffu);
+        /* The charged blade (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's, looping on it while it lasts (the
+         * survivor's: the one his last charge was for). It rides his hand, not the sword's own matrix [estimate]. */
+        if (b->charged > 0.0f && e->plan != P_DEATH) {
+            if (!nfx_alive(b->charge_fx)) {
+                int sword = b->set == 2 ? b->charge_sword : b->set;
+                b->charge_fx = nfx_spawn(NFX_AGNI_RUDRA, sword ? 589 : 588, hand, e->yaw, 1);
+            } else nfx_move(b->charge_fx, hand, e->yaw);
+        } else if (b->charge_fx) {
+            nfx_kill(b->charge_fx);
+            b->charge_fx = 0;
         }
     }
     /* A script that loops (a fall, a hold) gives way after 150 frames: what it waits on isn't followed. */
@@ -4235,7 +4241,7 @@ static void ar_update(float f, float px, float py, float pz) {
         ++e->step;
         if (e->step < 6 && in->scripts[e->step] >= 0) ar_phase_start(in);
         else {
-            if (e->action == 50 || e->action == 51) ar_brain_charged(b);
+            if (e->action == 50 || e->action == 51) { b->charge_sword = e->action == 51; ar_brain_charged(b); }
             if (e->action >= 22 && e->action <= 26 && e->action != 23 && e->action != 25) ar_brain_counter(b);
             if (e->action == AR_DEATH) return;
             ar_go(in->next >= 0 ? in->next : AR_IDLE);
