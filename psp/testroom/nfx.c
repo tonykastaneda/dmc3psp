@@ -13,9 +13,17 @@
  *      translation at +8, rotation in degrees at +20, scale at +32.
  *   E: kind at +1 (1 billboard, 2 placed quad, 5 model), u16 texture at +4, rect at +12, width +0x3c,
  *      height +0x44, spread +0x5c, u16 life +0x80 (0 = while its owner lasts), scale curves from +0x88,
- *      turn rates +0x144 (degrees a frame), colour keys from +0x174, u16 model at +0x28. */
-#define MAX_SEQ 128          /* the orbs alone can hold 96 */
-#define MAX_EL 320
+ *      turn rates +0x144 (degrees a frame), colour keys from +0x174, u16 model at +0x28.
+ *   G (generator, FUN_001b1970 / FUN_001b1cd0; in a bank's V table with its id | G_FLAG): an emitter. +0 where
+ *      its children go (0 the world, fixed where made; 1 / 2 on the emitter), +1 its path (0 a line: speed +4
+ *      losing +8 a frame, along the direction turned by +0x10 / +0x14 degrees; 1 a model's points, not ported;
+ *      2 still), i32 first delay +0x18, interval +0x1c plus (random & +0x34), life +0x20 (+0x30 set: no end),
+ *      child kind +0x24 (0 P, 1 E, 2 G, 3 V) and u16 id +0x26, the children's frame turned by +0x28 (yaw, with
+ *      a random spread of byte +0x59) and +0x2c degrees, scale +0x38 going to +0x3c over u16 +0x40 frames (0:
+ *      +0x38 times a random factor from +0x50 / +0x54), random offsets within +0x44 / +0x48 / +0x4c. */
+#define MAX_SEQ 255          /* the orbs alone can hold 96; a handle keeps the slot in 8 bits */
+#define MAX_EL 512
+#define G_FLAG 0x8000
 #define PI 3.14159265f
 
 typedef struct { float m[3][3], p[3]; } Frame;
@@ -30,6 +38,13 @@ typedef struct {
     float tr[3], rot[3], sc[3];
     unsigned char tint[3];
     int refs;
+    /* A G (generator): its record, whether it still emits, its clocks, path and scale factor. */
+    const unsigned char *g;
+    unsigned char g_on, fixed;
+    short owner;                 /* made by a G: that G's slot (-1 none), with its generation */
+    unsigned short owner_gen;
+    float g_life, g_next, g_speed, g_time, g_rand, g_path[3];
+    Frame frame;                 /* fixed: its frame about its parent (or the world, without one) */
 } Seq;
 typedef struct {
     unsigned char active, bank;
@@ -94,9 +109,11 @@ static const NfxBank *bank_of(int b) {
     return b == NFX_DEMO ? &demo_bank : b == NFX_LEVIATHAN ? &nfx2 : b == NFX_CERBERUS ? &nfx1 : &nfx0;
 }
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
+static unsigned int irand(void) { seed = seed * 1664525u + 1013904223u; return seed >> 8; }
 static unsigned int rd16(const unsigned char *p) { return p[0] | p[1] << 8; }
 static int rs16(const unsigned char *p) { return (short)rd16(p); }
 static float rdf(const unsigned char *p) { float f; memcpy(&f, p, 4); return f; }
+static int rd32(const unsigned char *p) { int v; memcpy(&v, p, 4); return v; }
 
 static const unsigned char *find(const NfxRecord *r, int n, int id) {
     int i;
@@ -116,6 +133,7 @@ static int new_seq(int bank, const unsigned char *v, int parent) {
         s->gen = generation++;
         if (!generation) generation = 1;
         s->scale = 1.0f; s->sc[0] = s->sc[1] = s->sc[2] = 1.0f;
+        s->owner = -1;
         if (parent >= 0) {
             s->loop = seqs[parent].loop;
             ++seqs[parent].refs;
@@ -155,30 +173,54 @@ static void add_element(int bank, const unsigned char *e, int seq, const unsigne
     ++seqs[seq].refs;
 }
 
-int nfx_spawn(int bank, int v_id, const float pos[3], float yaw, int loop) {
+/* A G's random scale factor (FUN_001b1970): 1 unless +0x54 - +0x50 is a whole unit or more; then +0x50 plus a
+ * random tenth-step share of the difference [inferred: the game's code adds no +0x50, which would make 0.6-1.5
+ * read as 0-0.9]. */
+static float g_random_scale(const unsigned char *g) {
+    float lo = rdf(g + 0x50), d = rdf(g + 0x54) - lo;
+    int n = (int)(d * 10.0f);
+    if ((int)d == 0) return 1.0f;
+    if (n < 0) n = -n;
+    return lo + (float)(irand() % (unsigned int)n) * (d < 0.0f ? -0.1f : 0.1f);
+}
+/* A V timeline, or a G with G_FLAG on its id. */
+static int new_node(int bank, int id, int parent) {
     const NfxBank *b = bank_of(bank);
-    int i = new_seq(bank, find(b->v, b->v_count, v_id), -1);
+    int i = new_seq(bank, find(b->v, b->v_count, id), parent);
+    if (i >= 0 && (id & G_FLAG)) {
+        Seq *s = &seqs[i];
+        s->g = s->v; s->g_on = 1;
+        s->g_life = (float)rd32(s->g + 0x20);
+        s->g_next = (float)rd32(s->g + 0x18);
+        s->g_speed = s->g[1] == 0 ? rdf(s->g + 4) : 0.0f;
+        s->g_rand = g_random_scale(s->g);
+    }
+    return i;
+}
+/* A one-child timeline of our own: the V record format with a single E child at delay 0. */
+static unsigned char single[MAX_SEQ][48];
+static int new_single(int bank, int e_id, int parent) {
+    const NfxBank *b = bank_of(bank);
+    int i;
+    if (!find(b->e, b->e_count, e_id)) return -1;
+    for (i = 0; i < MAX_SEQ && seqs[i].active; ++i) {}
+    if (i >= MAX_SEQ) return -1;
+    memset(single[i], 0, sizeof(single[i]));
+    single[i][0] = 1; single[i][4] = 1; single[i][6] = (unsigned char)e_id; single[i][7] = (unsigned char)(e_id >> 8);
+    { float one = 1.0f; int k; for (k = 0; k < 3; ++k) memcpy(single[i] + 4 + 32 + k * 4, &one, 4); }
+    return new_seq(bank, single[i], parent);
+}
+static int root_at(int i, const float pos[3], float yaw, int loop) {
     if (i < 0) return 0;
     memcpy(seqs[i].pos, pos, sizeof(seqs[i].pos));
     seqs[i].yaw = yaw; seqs[i].loop = (unsigned char)loop;
     return handle_of(i);
 }
+int nfx_spawn(int bank, int v_id, const float pos[3], float yaw, int loop) {
+    return root_at(new_node(bank, v_id, -1), pos, yaw, loop);
+}
 int nfx_spawn_e(int bank, int e_id, const float pos[3], float yaw, int loop) {
-    /* A one-child timeline of our own: the V record format with a single E child at delay 0. */
-    static unsigned char single[MAX_SEQ][48];
-    const NfxBank *b = bank_of(bank);
-    const unsigned char *e = find(b->e, b->e_count, e_id);
-    int i;
-    if (!e) return 0;
-    for (i = 0; i < MAX_SEQ && seqs[i].active; ++i) {}
-    if (i >= MAX_SEQ) return 0;
-    memset(single[i], 0, sizeof(single[i]));
-    single[i][0] = 1; single[i][4] = 1; single[i][6] = (unsigned char)e_id; single[i][7] = (unsigned char)(e_id >> 8);
-    { float one = 1.0f; int k; for (k = 0; k < 3; ++k) memcpy(single[i] + 4 + 32 + k * 4, &one, 4); }
-    i = new_seq(bank, single[i], -1);
-    memcpy(seqs[i].pos, pos, sizeof(seqs[i].pos));
-    seqs[i].yaw = yaw; seqs[i].loop = (unsigned char)loop;
-    return handle_of(i);
+    return root_at(new_single(bank, e_id, -1), pos, yaw, loop);
 }
 void nfx_move(int h, const float pos[3], float yaw) {
     Seq *s = from_handle(h);
@@ -193,6 +235,9 @@ void nfx_kill(int h) { Seq *s = from_handle(h); if (s) s->killed = 1; }
 int nfx_alive(int h) { return from_handle(h) != 0; }
 int nfx_live_elements(void) { int i, n = 0; for (i = 0; i < MAX_EL; ++i) n += els[i].active; return n; }
 
+static void g_tick(int i, float frames);
+static int owner_emitting(int seq);
+
 static void release(int seq) {
     Seq *s = &seqs[seq];
     if (--s->refs < 0) s->refs = 0;
@@ -206,6 +251,7 @@ void nfx_update(float frames) {
         if (!s->active) continue;
         if (root_of(s)->killed) continue;
         s->age += frames;
+        if (s->g) { g_tick(i, frames); continue; }
         count = (int)rd16(s->v);
         for (j = 0; j < count && j < 32; ++j) {
             const unsigned char *child = s->v + 4 + j * 44;
@@ -214,9 +260,8 @@ void nfx_update(float frames) {
             if (child[0] == 1) {
                 const NfxBank *b = bank_of(s->bank);
                 add_element(s->bank, find(b->e, b->e_count, (int)rd16(child + 2)), i, child);
-            } else if (child[0] == 3) {
-                const NfxBank *b = bank_of(s->bank);
-                int n = new_seq(s->bank, find(b->v, b->v_count, (int)rd16(child + 2)), i);
+            } else if (child[0] == 3 || child[0] == 2) {
+                int n = new_node(s->bank, (int)rd16(child + 2) | (child[0] == 2 ? G_FLAG : 0), i);
                 if (n >= 0) place(seqs[n].tr, seqs[n].rot, seqs[n].sc, child);
             }
         }
@@ -229,9 +274,10 @@ void nfx_update(float frames) {
         if (root->killed) { e->active = 0; release(e->seq); continue; }
         e->age += frames;
         if (e->life > 0.0f && e->age >= e->life) {
-            if (root->loop) e->age = fmodf(e->age, e->life);
+            /* Its own timeline's loop: a G's children (loop 0) play once inside a looping owner. */
+            if (seqs[e->seq].loop) e->age = fmodf(e->age, e->life);
             else { e->active = 0; release(e->seq); }
-        }
+        } else if (e->life <= 0.0f && !owner_emitting(e->seq)) { e->active = 0; release(e->seq); }
     }
     /* A timeline ends once all its children have started and nothing it made is still showing. */
     for (i = 0; i < MAX_SEQ; ++i) {
@@ -239,7 +285,7 @@ void nfx_update(float frames) {
         int count, done;
         if (!s->active) continue;
         count = (int)rd16(s->v);
-        done = s->fired == (count >= 32 ? 0xffffffffu : (1u << count) - 1u);
+        done = s->g ? !s->g_on : s->fired == (count >= 32 ? 0xffffffffu : (1u << count) - 1u);
         if (root_of(s)->killed) done = 1;
         if (done && !s->refs && (!s->loop || root_of(s)->killed)) {
             s->active = 0;
@@ -273,7 +319,13 @@ static void frame_local(Frame *f, const float tr[3], const float rot[3], const f
     }
 }
 static void seq_frame(const Seq *s, Frame *out) {
-    if (s->parent >= 0) {
+    if (s->fixed) {
+        if (s->parent >= 0) {
+            Frame parent;
+            seq_frame(&seqs[s->parent], &parent);
+            frame_mul(out, &parent, &s->frame);
+        } else *out = s->frame;
+    } else if (s->parent >= 0) {
         Frame parent, local;
         seq_frame(&seqs[s->parent], &parent);
         frame_local(&local, s->tr, s->rot, s->sc);
@@ -285,6 +337,100 @@ static void seq_frame(const Seq *s, Frame *out) {
         out->m[1][1] = s->scale;
         out->m[2][0] = -sn * s->scale; out->m[2][2] = c * s->scale;
         memcpy(out->p, s->pos, sizeof(out->p));
+    }
+}
+
+/* ---- Generators (FUN_001b1cd0) -------------------------------------------- */
+/* An element that lasts while its owner does (life 0), made by a G: while that G still emits. */
+static int owner_emitting(int seq) {
+    const Seq *s = &seqs[seq];
+    for (;;) {
+        if (s->owner >= 0) {
+            const Seq *g = &seqs[s->owner];
+            return g->active && g->gen == s->owner_gen && g->g_on;
+        }
+        if (s->parent < 0) return 1;
+        s = &seqs[s->parent];
+    }
+}
+static void g_emit(int i, float scale) {
+    Seq *s = &seqs[i];
+    const unsigned char *g = s->g;
+    int kind = g[0x24], id = (int)rd16(g + 0x26), spread = g[0x59], k, n;
+    float yaw = rdf(g + 0x28), rot[3], jit[3];
+    static const float zero[3] = {0.0f, 0.0f, 0.0f}, one[3] = {1.0f, 1.0f, 1.0f};
+    Frame loc;
+    if (kind == 0) return;   /* P: particle programs aren't ported */
+    if (spread) {
+        yaw += (float)(irand() % (unsigned int)spread) - (float)(spread >> 1);
+        if (yaw > 180.0f) yaw -= 360.0f;
+        if (yaw < -180.0f) yaw += 360.0f;
+    }
+    /* The children's frame: turned (0, +0x28, +0x2c), at the path's point, scaled; then a random offset. */
+    rot[0] = 0.0f; rot[1] = yaw * (PI / 180.0f); rot[2] = rdf(g + 0x2c) * (PI / 180.0f);
+    frame_local(&loc, zero, rot, one);
+    for (k = 0; k < 3; ++k) {
+        int r = (int)rdf(g + 0x44 + k * 4);
+        if (r < 0) r = -r;
+        jit[k] = r ? (float)(irand() % (unsigned int)r) - (float)(r >> 1) : 0.0f;
+    }
+    for (k = 0; k < 3; ++k) {
+        loc.p[k] = loc.m[k][0] * s->g_path[0] + loc.m[k][1] * s->g_path[1] + loc.m[k][2] * s->g_path[2];
+        loc.m[k][0] *= scale; loc.m[k][1] *= scale; loc.m[k][2] *= scale;
+        loc.p[k] += loc.m[k][0] * jit[0] + loc.m[k][1] * jit[1] + loc.m[k][2] * jit[2];
+    }
+    n = kind == 1 ? new_single(s->bank, id, g[0] ? i : -1)
+                  : new_node(s->bank, id | (kind == 2 ? G_FLAG : 0), g[0] ? i : -1);
+    if (n < 0) return;
+    s = &seqs[i];
+    seqs[n].fixed = 1;
+    seqs[n].loop = 0;
+    seqs[n].owner = (short)i; seqs[n].owner_gen = s->gen;
+    if (g[0]) seqs[n].frame = loc;   /* 1 / 2: on the emitter, moving with it */
+    else {
+        /* 0: in the world, where the emitter is now; its owner's colour carries over. */
+        const Seq *root = root_of(s);
+        Frame here;
+        seq_frame(s, &here);
+        frame_mul(&seqs[n].frame, &here, &loc);
+        seqs[n].tinted = root->tinted;
+        memcpy(seqs[n].tint, root->tint, sizeof(seqs[n].tint));
+    }
+}
+static void g_tick(int i, float frames) {
+    Seq *s = &seqs[i];
+    const unsigned char *g = s->g;
+    float scale;
+    unsigned int ramp = rd16(g + 0x40);
+    if (!s->g_on) return;
+    /* +0x30: no end while a looping owner lasts; under a one-off owner it keeps its life [inferred]. */
+    if (!g[0x30] || !root_of(s)->loop) {
+        s->g_life -= frames;
+        if (s->g_life < 0.0f) { s->g_on = 0; return; }
+    }
+    scale = rdf(g + 0x38);
+    if (!ramp) s->g_rand = g_random_scale(g);
+    else {
+        float end = rdf(g + 0x3c), v = scale + s->g_time * (end - scale) / (float)ramp;
+        scale = end > scale ? fminf(v, end) : fmaxf(v, end);
+        s->g_time += frames;
+    }
+    s->g_next -= frames;
+    if (s->g_next <= 0.0f) {
+        g_emit(i, scale * s->g_rand);
+        s = &seqs[i];
+        s->g_next += (float)(rd32(g + 0x1c) + (int)(irand() & (unsigned int)rd32(g + 0x34)));
+        if (s->g_next < 1.0f) s->g_next = 1.0f;   /* one a frame at most, as the game's */
+    }
+    if (g[1] == 0) {
+        /* A line: speed +4, slowing +8 a frame (FUN_001b2ab0), along (0, +0x10, +0x14) degrees. */
+        float a = rdf(g + 0x10) * (PI / 180.0f), b = rdf(g + 0x14) * (PI / 180.0f), step = s->g_speed * frames;
+        float slow = rdf(g + 8) * frames;
+        s->g_path[0] += cosf(b) * cosf(a) * step;
+        s->g_path[1] += sinf(b) * cosf(a) * step;
+        s->g_path[2] += -sinf(a) * step;
+        if (rdf(g + 8) < 1.0f && slow >= 1.0f) slow = 0.99999f;
+        s->g_speed -= slow;
     }
 }
 

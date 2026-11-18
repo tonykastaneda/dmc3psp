@@ -60,7 +60,7 @@ Laser movement retains the decoded +/-60-degree sweep, 2 degrees per frame,
 30-frame pauses, 2000 cm length, and 1500 damage record. The visual beam uses
 the existing additive ribbon renderer. Stage effect bank 2 exports all eight
 native st302 V timelines, including V745/V851 charge effects and V837 spheres.
-Native particle/generator children remain unsupported (2 P and 7 G children).
+Its 7 G (generator) children run in nfx (NATIVE_FX.md, Generators); its 2 P (particle program) children don't.
 Projectile count, stagger, 800 damage and homing speed are based on native data;
 steering and lifetime use bounded port approximations. Target points still
 come from native model bones rather than the complete posed hurt capsules.

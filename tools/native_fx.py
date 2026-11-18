@@ -7,8 +7,9 @@ Two banks, read straight from the user's disc:
   1 em025's effect pack (GDATA 130, PNST chunk 23): Cerberus's ice. Its shells play V117 (icicle), V89 and V101
     (sphere), V48 (shard); its moves play the ids listed in CERBERUS_V below (FUN_00208590 call sites).
 
-Each V timeline is exported with every V/E child it reaches. P (VU particle) and G (generator) children are
-counted but not exported: their programs aren't ported. E records are kept raw (their curves are read at run
+Each V timeline is exported with every V/E/G child it reaches. G records (generators: emitters, FUN_001b1cd0) go in
+the V table with their id | 0x8000 (G_FLAG), so a bank's layout doesn't change; nfx.c runs them. P (VU particle
+program) children are counted but not exported: their programs aren't ported. E records are kept raw (their curves are read at run
 time, as for em008 in vanguard_fx.py); the textures and MOD meshes they use are converted for the PSP.
 """
 import argparse
@@ -52,24 +53,51 @@ def records(pack):
     return out
 
 
+G_FLAG = 0x8000
+
+
+def record(recs, kind, number):
+    """A record by its table id: in the V table, an id with G_FLAG is a G record."""
+    if kind == "V" and number & G_FLAG:
+        return recs["G", number & ~G_FLAG]
+    return recs[kind, number]
+
+
+def has(recs, number):
+    return ("G", number & ~G_FLAG) in recs if number & G_FLAG else ("V", number) in recs
+
+
 def closure(recs, v_ids, e_ids):
+    """(V and G ids (G with G_FLAG), E ids, skipped counts) reached from the V (or flagged G) ids and E ids."""
     vs, es, skipped = set(), set(e_ids), {"P": 0, "G": 0}
     todo = list(v_ids)
+
+    def reach(kind, child):
+        if kind == 3:
+            todo.append(child)
+        elif kind == 2:
+            todo.append(child | G_FLAG)
+        elif kind == 1:
+            if child not in SKIP_E:
+                es.add(child)
+        else:
+            skipped["P"] += 1
+
     while todo:
         v = todo.pop()
         if v in vs:
             continue
+        if not has(recs, v):   # not in this pack
+            skipped["G"] += bool(v & G_FLAG)
+            continue
         vs.add(v)
-        data = recs["V", v]
+        data = record(recs, "V", v)
+        if v & G_FLAG:
+            # A G emits one child: its kind at +0x24 (0 P, 1 E, 2 G, 3 V), its id at +0x26.
+            reach(data[0x24], struct.unpack_from("<H", data, 0x26)[0])
+            continue
         for j in range(struct.unpack_from("<H", data, 0)[0]):
-            kind, child = data[4 + j * 44], struct.unpack_from("<H", data, 6 + j * 44)[0]
-            if kind == 3:
-                todo.append(child)
-            elif kind == 1:
-                if child not in SKIP_E:
-                    es.add(child)
-            else:
-                skipped["P" if kind == 0 else "G"] += 1
+            reach(data[4 + j * 44], struct.unpack_from("<H", data, 6 + j * 44)[0])
     return sorted(vs), sorted(es), skipped
 
 
@@ -145,7 +173,7 @@ def write_bank(lines, bank, recs, v_ids, e_ids):
     for kind, ids in (("V", vs), ("E", es)):
         for i in ids:
             lines += [f"static const unsigned char {p}_{kind}{i}[] __attribute__((aligned(4))) = {{",
-                      array_lines(recs[kind, i], str, 32), "};"]
+                      array_lines(record(recs, kind, i), str, 32), "};"]
         lines.append(f"static const NfxRecord {p}_{kind}[] = {{" + ",".join(f"{{{i},{p}_{kind}{i}}}" for i in ids) + "};")
     lines.append(f"static const NfxBank {p} = {{{p}_V,{len(vs)},{p}_E,{len(es)},{p}_textures,{len(tex_ids)},"
                  f"{p}_models,{len(models)}}};")

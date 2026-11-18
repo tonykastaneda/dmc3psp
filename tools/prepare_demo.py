@@ -218,7 +218,7 @@ def effect_records(names: bytes, body: bytes):
 
 def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
     """The Effect tracks' V and E clips and the bank they need (nfx's NFX_DEMO, psp/testroom/nfx.c). Returns
-    (bank offset, clips offset, clip count). G (models) and P (particles) clips: not yet (nfx doesn't run them)."""
+    (bank offset, clips offset, clip count). V, E and G (emitter) clips; P (particle programs): not yet."""
     import native_fx
     from prepare_skinned_model import decode_textures, indexed_texture
     names, body = work / "fx_names.bin", work / "fx_body.bin"
@@ -231,9 +231,11 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
             continue
         for c in track["clips"]:
             kind, number = str(c.get("Id", "")), c.get("No")
-            if kind not in ("V", "E") or not isinstance(number, int) or (kind, number) not in recs:
+            if kind not in ("V", "E", "G") or not isinstance(number, int) or (kind, number) not in recs:
                 continue
-            clips.append((float(c.get("SetFrame", 0.0)), 0 if kind == "V" else 1, number,
+            # A G clip plays as a V one with its id flagged (native_fx.G_FLAG: G records share the V table).
+            clips.append((float(c.get("SetFrame", 0.0)), 1 if kind == "E" else 0,
+                          number | native_fx.G_FLAG if kind == "G" else number,
                           c.get("Pos") or [0.0, 0.0, 0.0], c.get("Rot") or [0.0, 0.0, 0.0],
                           (c.get("Sca") or [1.0, 1.0, 1.0])[0] if isinstance(c.get("Sca"), list) else 1.0,
                           # SpTrackNo counts the Set section's lines (WorkRate 0, Camera 1, then Model / Motion / Hide per
@@ -249,7 +251,7 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
         vs, es, _ = native_fx.closure(recs, v_ids, e_ids)
     except KeyError:
         vs, es = set(i for i in v_ids), set(e_ids)
-    vs = sorted(v for v in vs if ("V", v) in recs)
+    vs = sorted(v for v in vs if native_fx.has(recs, v))
     es = sorted(e for e in es if ("E", e) in recs)
     textures, models = {}, {}
     for e in es:
@@ -282,7 +284,7 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
         blob += bytes(8 * len(ids))
         for k, i in enumerate(ids):
             at = align(blob, 4)
-            blob += recs[kind, i]
+            blob += native_fx.record(recs, kind, i)
             struct.pack_into("<2I", blob, table + 8 * k, i, at)
         rec_tables.append(table)
     tex_ids = sorted(textures)

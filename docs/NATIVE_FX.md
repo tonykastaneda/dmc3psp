@@ -12,7 +12,8 @@ path). Times are 60 Hz frames and distances are centimetres.
 | E kind 1 | yes | Billboard: texture rect, width and height, scale curves, colour keys, screen spin (+0x14c). |
 | E kind 2 | yes | Quad in its frame's XZ plane, turning about its normal (+0x148). E153's frost lies flat at rotation 0. |
 | E kind 5 | yes | MOD mesh (+0x28 names the M entry): scale curves, colour keys and turn rates (+0x144). |
-| P (particle program), G (generator) | no | VU programs. They're counted by the exporter and skipped. |
+| G (generator) | yes | An emitter (`FUN_001b1970` / `FUN_001b1cd0`); see Generators below. |
+| P (particle program) | no | VU programs. They're counted by the exporter and skipped. |
 
 The layouts are those already used for em008: scale curves at `+0x88/+0x8e/+0xa8/+0xb4`, colour keys from
 `+0x174` (20 bytes each, 0x80 = 1.0), life `+0x80` (0 = while the owner lasts) and spread `+0x5c`.
@@ -27,6 +28,28 @@ Inferred, not decoded:
 
 A looping handle (the game's effect `+0x3a` flag) keeps its elements alive until `nfx_kill`, and `nfx_move`
 follows a moving owner (the `+0x90` matrix pointer). Orbs use this, and so do the icicle, sphere and shard shells.
+
+## Generators
+
+A G record (96 bytes) emits one child, again and again. The exporter keeps G records in a bank's V table with
+their id | 0x8000, so the banks and the cutscenes' blobs keep their layout. Its fields, as `FUN_001b1cd0` reads them:
+
+| Offset | Meaning |
+| --- | --- |
+| +0 | Where the children go: 0 the world, fixed where made; 1 / 2 on the emitter, moving with it |
+| +1 | Its path: 0 a line (speed +4 losing +8 a frame, along (0, +0x10, +0x14) degrees, `FUN_001b2ab0`); 1 a model's points (not ported: it stays put); 2 still |
+| +0x18, +0x1c, +0x34 | i32: first delay; interval, plus a random number masked by +0x34 |
+| +0x20, +0x30 | i32 life in frames; +0x30 set: no end (the port: while a looping owner lasts) [inferred] |
+| +0x24, +0x26 | The child's kind (0 P, 1 E, 2 G, 3 V) and u16 id |
+| +0x28, +0x2c, +0x59 | The children's frame turned (0, +0x28, +0x2c) degrees; byte +0x59 a random spread on +0x28 |
+| +0x38, +0x3c, +0x40 | Scale +0x38 going to +0x3c over u16 +0x40 frames |
+| +0x50, +0x54 | With +0x40 = 0: +0x38 times a random factor, 1 unless the two are a unit or more apart; then +0x50 plus a share of the difference [inferred: the code adds no +0x50] |
+| +0x44 / +0x48 / +0x4c | Random offsets within those ranges (whole centimetres), in the children's frame |
+
+The children of a G play once (a looping owner doesn't make them loop), and those with no life of their own (life
+0) last while the G emits. A P child is still skipped. Checked in PPSSPP: Cerberus's fight runs the same frame for
+frame with and without generators, and his punch's V166 now raises its own taller ice spikes (34 elements become
+82 at the peak).
 
 ## Red orbs
 
