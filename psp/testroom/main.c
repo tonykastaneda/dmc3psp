@@ -2018,6 +2018,7 @@ static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": fo
 static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
 static int cmp_mirror_at, cmp_mirror_k;
 static int cmp_demo = -1;   /* tests: a demo to play at frame 2 */
+static int pending_room_demo = -1;   /* a demo a mission's own code asks for (12's bridge, 33), played as play goes on */
 static int cmp_force_clear;   /* tests: "forceclear n", the mission cleared at frame n */
 static int cmp_item[8][2], cmp_item_count, cmp_trim_at, cmp_trim_keep, cmp_force_at, cmp_force_state;      /* "item id state": for a test, a key item starts got (1) or used (2) */
 static void cmp_load(void) {
@@ -3260,6 +3261,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     if (mission_choice.mission == 12) {
         float to[4];
         if (m12_warp(room_number(mission_room), to)) {   /* mission12.c: the bridge falls */
+            pending_room_demo = 33;   /* its demo (Geryon off the bridge, it falls), then on at start 2 */
             player->x = to[0]; player->y = to[1]; player->z = to[2];
             player->yaw = to[3] * 0.0174533f;
             player->vy = 0.0f;
@@ -3637,7 +3639,7 @@ static const RoomDemo room_demos[] = {
     {5, 121, 12, 0, 3}, {5, 121, 13, 1, 2},    /* the Jester's room */
     {9, 210, 22, 0, 2}, {9, 210, 23, 1, 3},    /* Nevan */
     {11, 217, 28, 0, 2}, {11, 217, 29, 1, 3},  /* Beowulf */
-    {12, 228, 32, 0, 0}, {12, 228, 33, 1, 2},  /* Geryon */
+    {12, 228, 32, 0, 0}, {12, 228, 34, 1, 2},  /* Geryon: his entrance; 33 (the bridge falls) is mission12.c's; his defeat */
     {16, 115, 44, 0, 2},                       /* Lady */
     {17, 139, 48, 1, 1},                       /* the Doppelganger beaten */
 };
@@ -4178,6 +4180,7 @@ int main(int argc, char *argv[]) {
                     transit = 1;
                 }
             room_demo_last_room = room;
+            if (pending_room_demo >= 0) { queue_demo(pending_room_demo); pending_room_demo = -1; demo_resume_start = -1; transit = 1; }
             if (transit) demo_queue_then = 2;
             else if ((entered && queue_room_demo(mission_choice.mission, room, 0)) ||
                 (msg_room_fought && enemy_alive_count() == 0 && queue_room_demo(mission_choice.mission, room, 1)))
