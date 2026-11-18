@@ -59,7 +59,12 @@ file is a list of clips, `# Clip` ... `# End`, every clip with `SetFrame` (its s
   Demo 5's cut 1: mask 0x3fc0 (channels 6-13 keyed), 0-268, eye (-46, 30394, 7083), target (2576, 29283, 2424),
   58.5 degrees, channel 13 6.0. The keyed records from +0x58 aren't decoded yet (`FUN_001fa410` / `FUN_001fae10`;
   they look like MOT's curve records). `FUN_00211a10(step)` advances the frame (looping or holding at the end).
-- **Hide tracks** (`.hid`): `HID\0` after a 0x90 lead, then 1.0 / 10.0 pairs and a run of per-frame bytes [not decoded].
+- **Hide tracks** (`.hid`): MOT-like. +4 `HID\0`, then +0x1c the model's object count n and n bytes, 1 for each object with a
+  channel; at the header's end the channel count, then a record per such object as MOT's: kind 7, a base and scale
+  (f32) and 4-byte keys {u16 frame, u16 q}, stepped; value = base + scale x q / 65535: -1 shown, 0 hidden. DispOn.hid
+  keys all 100 objects at -1, DispOff.hid at 0; a cut's own (em108_01_c016.hid) keys one object (shown, then hidden
+  from its frame 1261). The port takes DispOn / DispOff per slot; per-object channels need the mesh's objects kept apart
+  (the bake merges them by texture) [not yet].
 
 ## In the port
 
@@ -98,6 +103,14 @@ sound, and the demos inside missions (boss entrances and defeats).
 the mission clears, then its clear screen. Not yet: 2's 114 and 14's 326, one scene whose city stage (128,000 triangles,
 11 MB) neither fits nor draws at speed. A rig whose bones aren't in parent order (em134_00) is left out of a demo. Test
 line `forceclear n`.
+
+**Bosses**: the event scripts' ROOM blocks play a boss's entrance when counter 0 is still 0 and Dante is in an area of
+the room, and its defeat when the counter is at its step and the room's enemies are cleared; AFTER_DEMO then puts
+Dante at a start of the room. The port (`room_demos`): 3: 6 / 7 (Cerberus), 5: 12 / 13, 9: 22 / 23 (Nevan), 11: 28 / 29
+(Beowulf), 12: 32 / 33 (Geryon), 16: 44 (Lady), on first entering the room [the area isn't checked] and once its fight
+is over; 19's 53 (Vergil joins) when Arkham's second round begins. Afterwards the room's stage is read back and Dante
+put at the start; nothing restarts. Not yet: those that go on to another room (7's 17, 13's 37, 16's 45, 17's 47 / 48,
+19's 52, 20's 56-58) and 12's 34 (Geryon's second).
 
 ## Porting plan
 

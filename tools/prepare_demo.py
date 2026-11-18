@@ -98,7 +98,7 @@ def bake_camera(timeline, files):
             clips.append((clip, parse_cam(files[name])))
     frames = int(math.ceil(max(clip_span(c)[1] for c, _ in clips)))
     out = []
-    current = None
+    current = min(clips, key=lambda c: clip_span(c[0])[0])   # before the first clip starts: the first
     for f in range(frames):
         for clip, cam in clips:
             a, b = clip_span(clip)
@@ -258,10 +258,12 @@ def main():
     out.write_bytes(blob)
 
     # The stage: slot 00's .scm clip, its texture, built as a room; its play area the camera's reach.
-    stage_clip = next((c for t in timeline["tracks"] if t["kind"] == "Model" for c in t["clips"]
-                       if str(c.get("Model", "")).lower().endswith(".scm")), None)
+    # The stage proper (stNNN.scm), not its pieces (ss...scm).
+    scms = [c for t in timeline["tracks"] if t["kind"] == "Model" for c in t["clips"]
+            if str(c.get("Model", "")).lower().endswith(".scm")]
+    stage_clip = next((c for c in scms if str(c["Model"]).lower().startswith("st")), scms[0] if scms else None)
     room_bin = None
-    if stage_clip and not (work / "model" / stage_clip["Model"]).exists():
+    if stage_clip and not ((work / "model" / stage_clip["Model"]).exists() and (work / "model" / str(stage_clip.get("Texture"))).exists()):
         # A room's own stage (st232 is room 232): the room's BIN as built for the missions (tools/gen_rooms.py).
         import re
         import shutil

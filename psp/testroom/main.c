@@ -3600,8 +3600,41 @@ static void menu_clear_shot(int frame) {
 
 /* Real-time cutscenes waiting to play (demo.c); the main loop plays them in turn, then starts the mission afresh. */
 static int demo_queue[8], demo_queue_len, demo_queue_at;
-/* What follows the queue: 0 the mission starts afresh (its opening), 1 its clear screen (demo_clear_due). */
-static int demo_queue_then, demo_clear_due, demo_clear_played;
+/* What follows the queue: 0 the mission starts afresh (its opening), 1 its clear screen (demo_clear_due), 2 play goes on
+ * in the room (its stage read back, Dante at demo_resume_start). */
+static int demo_queue_then, demo_clear_due, demo_clear_played, demo_resume_start = -1;
+
+/* Demos inside the missions, from the event scripts' ROOM blocks: a boss's entrance (counter 0 still 0 and Dante in the
+ * room's area: taken as his first entry into the room [the area: not checked]) and its defeat (the counter at its step
+ * and the room's enemies cleared: sw_enemies_cleared), each then putting Dante at a start of the room (AFTER_DEMO's
+ * goto_room). Only those that stay in the room are here. */
+typedef struct { unsigned char mission; short room, demo; unsigned char cleared; signed char start; } RoomDemo;
+static const RoomDemo room_demos[] = {
+    {3, 6, 6, 0, 2}, {3, 6, 7, 1, 2},          /* Cerberus appears / beaten */
+    {5, 121, 12, 0, 3}, {5, 121, 13, 1, 2},    /* the Jester's room */
+    {9, 210, 22, 0, 2}, {9, 210, 23, 1, 3},    /* Nevan */
+    {11, 217, 28, 0, 2}, {11, 217, 29, 1, 3},  /* Beowulf */
+    {12, 228, 32, 0, 0}, {12, 228, 33, 1, 2},  /* Geryon */
+    {16, 115, 44, 0, 2},                       /* Lady */
+};
+#define ROOM_DEMOS (int)(sizeof(room_demos) / sizeof(room_demos[0]))
+static unsigned char room_demo_played[ROOM_DEMOS];
+static int room_demo_last_room = -1;
+
+static void queue_demo(int id);
+/* A room demo due now (kind 0 on entering, 1 once cleared), queued to resume play; 1 if one was. */
+static int queue_room_demo(int mission, int room, int cleared) {
+    int k;
+    for (k = 0; k < ROOM_DEMOS; ++k) {
+        const RoomDemo *r = &room_demos[k];
+        if (r->mission != mission || r->room != room || r->cleared != cleared || room_demo_played[k]) continue;
+        room_demo_played[k] = 1;
+        queue_demo(r->demo);
+        demo_resume_start = r->start;
+        return 1;
+    }
+    return 0;
+}
 static void queue_demo(int id) { if (demo_queue_len < 8) demo_queue[demo_queue_len++] = id; }
 
 /* Each mission's opening, from its event script's first op and the AFTER_DEMO sections it chains through to the
@@ -3627,6 +3660,8 @@ static void play_intro(int mission) {
     demo_queue_len = demo_queue_at = 0;
     demo_queue_then = 0;
     demo_clear_played = 0;
+    memset(room_demo_played, 0, sizeof room_demo_played);
+    room_demo_last_room = -1;
     if (mission >= 1 && mission <= 20)
         for (k = 0; k < 3 && mission_opening_demos[mission][k] >= 0; ++k) queue_demo(mission_opening_demos[mission][k]);
 }
@@ -4063,6 +4098,19 @@ int main(int argc, char *argv[]) {
             if (demo_queue_at >= demo_queue_len) {
                 demo_queue_len = demo_queue_at = 0;
                 if (demo_queue_then == 1) { demo_queue_then = 0; demo_clear_due = 1; }   /* on to the clear screen */
+                else if (demo_queue_then == 2) {
+                    /* Back to the room: its stage read back, Dante at the script's start. */
+                    char stage_path[320];
+                    demo_queue_then = 0;
+                    path_in_game_dir(stage_path, sizeof stage_path, rooms[mission_room].file);
+                    stage_load(stage_path);
+                    if (demo_resume_start >= 0 && demo_resume_start < 8) {
+                        const float *s = rooms[mission_room].starts[demo_resume_start];
+                        msg_player = &player;
+                        msg_place(s[0], s[1], s[2], s[3]);
+                    }
+                    demo_resume_start = -1;
+                }
                 else if (mission_mode) start_mission(&mission_choice, &player, &camera);   /* the room, as it was before the demos */
                 else {   /* the test street: its stage back */
                     char stage_path[320];
@@ -4073,6 +4121,15 @@ int main(int argc, char *argv[]) {
             }
             render_scene(&player, &camera, hud, 0);
             goto frame_drawn;
+        }
+        if (mission_mode && mission_room != ROOM_NONE && !demo_active() && demo_queue_at >= demo_queue_len) {
+            /* The room's own demos: on entering it, and once its fight is over. */
+            int room = room_number(mission_room);
+            int entered = room != room_demo_last_room;
+            room_demo_last_room = room;
+            if ((entered && queue_room_demo(mission_choice.mission, room, 0)) ||
+                (msg_room_fought && enemy_alive_count() == 0 && queue_room_demo(mission_choice.mission, room, 1)))
+                demo_queue_then = 2;
         }
         if (focus_cmp && cmp_enemy_audit && cmp_audit_room_count) {
             int a;
@@ -4263,6 +4320,7 @@ int main(int argc, char *argv[]) {
                     int k;
                     demo_clear_played = 1;
                     demo_queue_len = demo_queue_at = 0;
+                    if (mission_room != ROOM_NONE) queue_room_demo(m, room_number(mission_room), 1);   /* its defeat first */
                     for (k = 0; k < 3 && mission_clear_demos[m][k] >= 0; ++k) queue_demo(mission_clear_demos[m][k]);
                     demo_queue_then = 1;
                     cleared = 0;
@@ -4550,6 +4608,12 @@ int main(int argc, char *argv[]) {
                 memset(&partner_input, 0, sizeof partner_input);
                 partner_on = 1;
                 enemy_test_note("partner joins", 0, arkham_boss_health());
+                if (!demo_active() && demo_queue_at >= demo_queue_len) {   /* demo 53 (Vergil joins), then 421 start 0 */
+                    demo_queue_len = demo_queue_at = 0;
+                    queue_demo(53);
+                    demo_resume_start = 0;
+                    demo_queue_then = 2;
+                }
             }
             if (partner_on) {
                 FollowCamera beside = camera;   /* his stick read as Dante's was; Dante's camera untouched */
