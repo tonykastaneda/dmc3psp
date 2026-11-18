@@ -145,6 +145,59 @@ def parse_hid(data: bytes):
     return first, channels
 
 
+def scm_rig(data: bytes):
+    """A stage piece (.scm) as a rigid rig (tools/scm_ps2.py has the format): a bone per node record (its parent, its
+    local translation and rotation, R = Rz Ry Rx), each object's vertices in its node's own space, wholly on that
+    node's bone (rest offset 0), one draw per sub-mesh. Returns (skel, mesh, order, rest_rot)."""
+    from mod_skeleton import strip_faces
+    object_count, node_count = data[0x10], data[0x11]
+    block = struct.unpack_from("<I", data, 0x1C)[0]
+    tables = struct.unpack_from("<4I", data, block)
+    hier = data[block + tables[0]:block + tables[0] + node_count]
+    remap = data[block + tables[1]:block + tables[1] + node_count]
+    objmap = data[block + tables[2]:block + tables[2] + node_count]
+    records = [struct.unpack_from("<8f", data, block + tables[3] + r * 32) for r in range(node_count)]
+    parent = [-1] * node_count
+    for node in range(node_count):
+        parent[remap[node]] = -1 if hier[node] == 0xFF else hier[node]
+    order, placed = [], set()
+    while len(order) < node_count:
+        before = len(order)
+        for r in range(node_count):
+            if r not in placed and (parent[r] < 0 or parent[r] in placed):
+                order.append(r)
+                placed.add(r)
+        if len(order) == before:
+            raise ValueError("Cycle in SCM nodes")
+    object_node = {obj: r for r, obj in enumerate(objmap) if obj != 0xFF}
+    mesh = {"positions": [], "normals": [], "uvs": [], "bones": [], "weights": [], "indices": [], "objects": []}
+    for index in range(object_count):
+        if index not in object_node:
+            continue
+        bone = object_node[index]
+        flags, total, mesh_offset = struct.unpack_from("<HHI", data, 0x30 + index * 48)
+        for k in range(flags & 0xFF):
+            header = mesh_offset + 0x30 * k
+            vc, texture = struct.unpack_from("<HH", data, header)
+            ptrs = struct.unpack_from("<8I", data, header + 4)
+            base = len(mesh["positions"])
+            colors = [data[ptrs[7] + i * 4:ptrs[7] + i * 4 + 4] for i in range(vc)]
+            for i in range(vc):
+                mesh["positions"].append(struct.unpack_from("<3f", data, ptrs[2] + i * 12))
+                mesh["normals"].append(struct.unpack_from("<3f", data, ptrs[3] + i * 12))
+                mesh["uvs"].append(tuple(c / 4096.0 for c in struct.unpack_from("<2h", data, ptrs[4] + i * 4)))
+                mesh["bones"].append((bone, 0, 0))
+                mesh["weights"].append((31, 0, 0))
+            start = len(mesh["indices"])
+            for f in strip_faces([bool(c[3] & 2) for c in colors]):
+                mesh["indices"].extend(base + v for v in f)
+            if len(mesh["indices"]) > start:
+                mesh["objects"].append({"texture": texture, "index_start": start, "index_count": len(mesh["indices"]) - start})
+    skel = {"count": node_count, "parents": parent, "local": [r[:3] for r in records],
+            "world": [(0.0, 0.0, 0.0)] * node_count}
+    return skel, mesh, order, [r[4:7] for r in records]
+
+
 def align(blob: bytearray, n: int = 16) -> int:
     while len(blob) % n:
         blob.append(0)
@@ -175,16 +228,29 @@ def bake_cast(timeline, files, blob: bytearray):
             continue
         clip = model["clips"][0]
         name = str(clip.get("Model", ""))
-        if not name.lower().endswith(".mod") or name not in files or not files[name]:
+        lower = name.lower()
+        is_piece = lower.endswith(".scm") and not lower.startswith("st")   # the stage proper is DSTG
+        if not (lower.endswith((".mod", ".efm")) or is_piece) or name not in files or not files[name]:
             continue
+        order = rest_rot = None
         try:
-            skel = psm.parse_skeleton(files[name])
-            # Objects kept apart, in the MOD's order: a cut's hide track keys them one by one.
-            mesh = psm.slim_mesh(psm.build_mesh(files[name], skel["count"]), 0.7)
+            if is_piece:
+                skel, mesh, order, rest_rot = scm_rig(files[name])
+                if skel["count"] > 48 or not mesh["positions"]:
+                    continue
+            else:
+                data = files[name]
+                if data[:4] == b"EFM ":
+                    data = b"MOD " + data[4:]   # an effect model: the MOD layout (as the enemies' are read)
+                skel = psm.parse_skeleton(data)
+                # Objects kept apart, in the MOD's order: a cut's hide track keys them one by one.
+                mesh = psm.slim_mesh(psm.build_mesh(data, skel["count"]), 0.7)
         except ValueError as error:   # a rig the converter doesn't take (a parent after its child): left out
             print(f"  slot {slot:2d} {name}: skipped ({error})")
             continue
         tex = texture_set(clip["Texture"]) if clip.get("Texture") in files else []
+        if is_piece and not tex:
+            continue   # its textures are the room's (not in the package)
         motions = []
         for mclip in (tracks.get(("Motion", slot)) or {"clips": []})["clips"]:
             mot = mclip.get("Motion")
@@ -202,14 +268,17 @@ def bake_cast(timeline, files, blob: bytearray):
             if hid.lower() in ("dispoff.hid", "dispon.hid") or not files.get(hid):
                 switches.append((start, scale, 0 if hid.lower() == "dispoff.hid" else 1, 0.0, []))
             else:
-                first, channels = parse_hid(files[hid])
-                switches.append((start, scale, 2, first, channels))
+                try:
+                    first, channels = parse_hid(files[hid])
+                    switches.append((start, scale, 2, first, channels))
+                except (ValueError, struct.error):   # not a hide track we read: shown
+                    switches.append((start, scale, 1, 0.0, []))
         switches.sort(key=lambda s: s[0])
         cns = clip.get("CnsPos")
         actors.append({"slot": slot, "name": name, "skel": skel, "mesh": mesh, "tex": tex, "motions": motions,
                        "parent": cns[0] if isinstance(cns, list) else -1, "bone": cns[1] if isinstance(cns, list) else 0,
                        "pos": clip.get("Pos") or [0.0, 0.0, 0.0], "rot": clip.get("Rot") or [0.0, 0.0, 0.0],
-                       "span": clip_span(clip), "switches": switches})
+                       "span": clip_span(clip), "switches": switches, "order": order, "rest_rot": rest_rot})
 
     tex_table = align(blob)
     blob += bytes(16 * len(textures))
@@ -277,6 +346,13 @@ def bake_cast(timeline, files, blob: bytearray):
         for (start, scale, mode, first, channels), table_at in zip(a["switches"], tables):
             blob += struct.pack("<3f3I", start, scale, first, mode, table_at, len(channels))
         struct.pack_into("<2I", blob, actor_table + 128 * i + 104, len(a["switches"]), switch_at)
+        if a["order"]:
+            order_at = align(blob)
+            blob += bytes(a["order"])
+            rest_at2 = align(blob)
+            for r in a["rest_rot"]:
+                blob += struct.pack("<3f", *r)
+            struct.pack_into("<2I", blob, actor_table + 128 * i + 112, order_at, rest_at2)
         parent = slot_to_actor.get(a["parent"], -1)
         struct.pack_into("<8i10I6f2f", blob, actor_table + 128 * i,
                          a["slot"], parent, a["bone"], n, v, len(mesh["indices"]), len(mesh["objects"]), len(a["motions"]),

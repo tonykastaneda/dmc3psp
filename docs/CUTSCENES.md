@@ -96,8 +96,12 @@ it chains through (`tools/event_dump.py`): 3: 5, 123; 4: 9; 7: 16; 10: 25; 11: 2
 START skips). Movies are ids 318 on, MDATA2's rows in order (318 m99_s00 ... 326 m14_c00, 327 m14_s00, 328 m19_c00,
 329 m01_v01); by that order (and their pictures: the tower rising; Lady) the port's M3_INTRO_A / B (MDATA2 2, 3) are Mission 2's clear and Mission 6's opening, and play there
 
-Not yet: per-object hide channels, cloth, a second stage piece (demo 5's slot 12 .scm), effects, messages, fades,
-sound, and the demos inside missions (boss entrances and defeats).
+**Stage pieces**: a slot's `.efm` (an effect model: the MOD layout) is cast as a MOD; a `.scm` piece (not the stage, stNNN)
+as a rigid rig: a bone per node record (parent, local translation and rotation), its objects' vertices in their node's
+space on that bone, posed parents first (SCM parents may follow children) with the nodes' rest rotations where its
+motion doesn't key them. A piece whose textures are the room's (not in the package) is left out.
+
+Not yet: cloth, effects, sound.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when

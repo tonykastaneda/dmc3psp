@@ -30,7 +30,9 @@ typedef struct {
     float radius;               /* this far */
     float pos[3], rot[3], shown_from, shown_to;
     unsigned int switches, switch_at;   /* its hide track: {f32 frame, u32 on} (DispOn / DispOff) */
-    unsigned int pad[4];   /* 128 bytes, as written */
+    unsigned int order_at;    /* a stage piece's (SCM) node order to pose in, parents first (u8 per bone; 0: 0, 1, ...) */
+    unsigned int rest_rot_at; /* its nodes' rest rotations (f32 x3 per bone), where a motion doesn't key them (0: none) */
+    unsigned int pad[2];   /* 128 bytes, as written */
 } DemoActorData;
 typedef struct { float set, end, scale, skip; unsigned int mot, size; unsigned int pad[2]; } DemoMotionClip;
 typedef struct { float u, v, nx, ny, nz, x, y, z; } DemoVertex;
@@ -301,7 +303,9 @@ static void pose(Actor *a, int depth) {
     const DemoMotionClip *clips = (const DemoMotionClip *)(blob + d->motion_at);
     M3 base_rot, r;
     float base_pos[3] = {d->pos[0], d->pos[1], d->pos[2]};
-    int i, k, clip = -1, attached = 0;
+    int i, j, k, clip = -1, attached = 0;
+    const unsigned char *order = d->order_at ? blob + d->order_at : 0;
+    const float (*rest_rot)[3] = d->rest_rot_at ? (const float (*)[3])(blob + d->rest_rot_at) : 0;
     if (a->posed) return;
     a->posed = 1;
     m_euler(&base_rot, d->rot[0], d->rot[1], d->rot[2]);
@@ -330,16 +334,18 @@ static void pose(Actor *a, int depth) {
     } else {
         memset(&s, 0, sizeof s);
     }
-    for (i = 0; i < d->bones; ++i) {
+    for (j = 0; j < d->bones; ++j) {
         float rot[3], t[3];
-        int p = parents[i];
+        int p;
+        i = order ? order[j] : j;
+        p = parents[i];
         for (k = 0; k < 3; ++k) {
-            rot[k] = i < MOTION_MAX_BONES && s.has_rot[i][k] ? s.rot[i][k] : 0.0f;
+            rot[k] = i < MOTION_MAX_BONES && s.has_rot[i][k] ? s.rot[i][k] : rest_rot ? rest_rot[i][k] : 0.0f;
             t[k] = i < MOTION_MAX_BONES && s.has_trans[i][k] ? s.trans[i][k] : local[i][k];
             if (attached && p < 0) t[k] = 0.0f;   /* its root is the parent's bone */
         }
         m_euler(&r, rot[0], rot[1], rot[2]);
-        if (p < 0 || p >= i) {
+        if (p < 0 || p >= d->bones || (!order && p >= i)) {
             m_mul(&a->world_rot[i], &base_rot, &r);
             for (k = 0; k < 3; ++k)
                 a->world_pos[i][k] = base_pos[k] + base_rot.m[k][0] * t[0] + base_rot.m[k][1] * t[1] + base_rot.m[k][2] * t[2];
