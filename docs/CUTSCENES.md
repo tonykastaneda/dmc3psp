@@ -93,8 +93,8 @@ room's BIN.
 it chains through (`tools/event_dump.py`): 3: 5, 123; 4: 9; 7: 16; 10: 25; 11: 27; 12: 31; 13: 36; 14: 39 (after movie
 327); 15: 41; 16: 43; 17: 46; 18: 49; 19: 51; 20: 55 (`mission_opening_demos`, played from the menu's mission start;
 START skips). Movies are ids 318 on, MDATA2's rows in order (318 m99_s00 ... 326 m14_c00, 327 m14_s00, 328 m19_c00,
-329 m01_v01); by that order the port's M3_INTRO_A / B (MDATA2 2, 3) are Mission 2's clear and Mission 6's opening
-[to check].
+329 m01_v01); by that order (and their pictures: the tower rising; Lady) the port's M3_INTRO_A / B (MDATA2 2, 3) are Mission 2's clear and Mission 6's opening, and play there
+
 Not yet: per-object hide channels, cloth, a second stage piece (demo 5's slot 12 .scm), effects, messages, fades,
 sound, and the demos inside missions (boss entrances and defeats).
 

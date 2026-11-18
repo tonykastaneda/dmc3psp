@@ -3689,7 +3689,9 @@ static const short mission_clear_demos[21][3] = {
 static void play_intro(int mission) {
     int k;
     if (mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
-    if (mission == 3) { play_movie("MOVIES/M3_INTRO_A.MOV"); play_movie("MOVIES/M3_INTRO_B.MOV"); }
+    /* Mission 6 opens with movie 321 (MDATA2 row 3, m06_s00: Lady); the file keeps its old name. Mission 3's opening is
+     * demos 5 and 123 (below); the tower rising (row 2, m02_c00, movie 320) ends Mission 2. */
+    if (mission == 6) play_movie("MOVIES/M3_INTRO_B.MOV");
     demo_queue_len = demo_queue_at = 0;
     demo_queue_then = 0;
     demo_clear_played = 0;
@@ -4395,6 +4397,7 @@ int main(int argc, char *argv[]) {
                 }
                 if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;
+                if (mission_choice.mission == 2) play_movie("MOVIES/M3_INTRO_A.MOV");   /* movie 320, m02_c00: the tower rises */
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 if(focus_cmp && cmp_stop_on_clear)cmp_frames=frames;
                 else {
