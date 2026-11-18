@@ -81,8 +81,8 @@ loads, a sound's whole sample is decoded and mixed (125 of 126 frames to its end
 Dante's own bank (type 1) is GDATA 173: the file `FUN_001aff20` takes from the table at `0x58e840` by character (for
 the room loader `FUN_00230c30`), resolved into `SFX_DANTE.BIN`. His motion definitions' 0x30 / 0x34 events of types 0
 and 1 (128, keyed by their layer-0 motion's runtime name in `sfx_runtime.h`) fire as his move's frame passes them
-(`sfx_motion`, from main.c after `combat_update`). Checked in PPSSPP: 115 of the 128 resolve to his motions, and
-Rebellion's combo plays his sound 37 on its second hit.
+(`sfx_motion`, from main.c after `combat_update`: his move's motion, and his jump's and landing's base motions). Checked in PPSSPP: 115 of the 128 resolve to his motions, and
+Rebellion's combo plays his sound 37 on its second hit, and a jump plays 0 then 5 at its take-off and landing.
 ## Cutscenes
 
 See CUTSCENES.md (Sound): each real-time demo streams its own SDATA track (`<package>.adx`).

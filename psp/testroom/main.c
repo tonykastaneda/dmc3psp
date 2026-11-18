@@ -4489,6 +4489,12 @@ int main(int argc, char *argv[]) {
                 if (m >= 0) sfx_motion(m, m != sfx_m || combat.phase_time < sfx_t ? combat.frame - 0.5f : sfx_f, combat.frame);
                 sfx_m = m; sfx_f = combat.frame; sfx_t = combat.phase_time;
             }
+            {   /* And his jumps' and landings' (the base motions the air pose plays, skeleton.c). */
+                static int sfx_j = -1; static float sfx_jf;
+                int j = player.jump_motion;
+                if (j >= 0) sfx_motion(j, j != sfx_j || player.jump_frame < sfx_jf ? player.jump_frame - 0.5f : sfx_jf, player.jump_frame);
+                sfx_j = j; sfx_jf = player.jump_frame;
+            }
             {
                 /* A new move of Dante's: bosses that guard see it start (Agni & Rudra, FUN_003aeec0). */
                 static int last_action;
