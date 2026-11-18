@@ -79,6 +79,7 @@ static int actor_count;
 static float demo_clock;
 static int playing, id = -1;
 static char demo_path[256];   /* the DEMO file: its motions are read from it as they come up */
+static SceUID demo_fd = -1;   /* kept open while it plays (opening it for each read cost a frame) */
 static void demo_stream(void);
 
 static int read_error;
@@ -189,6 +190,7 @@ int demo_start(int demo, const char *dir) {
 
 void demo_stop(void) {
     free_actors();
+    if (demo_fd >= 0) { sceIoClose(demo_fd); demo_fd = -1; }
     if (blob_raw) free(blob_raw);
     blob_raw = 0;
     spare = 0; spare_left = 0;
@@ -271,34 +273,49 @@ static void load_motion(Actor *a, int k) {
     if (a->motion_data[k] || !c->size) return;
     data = malloc(c->size);
     if (!data) return;
-    fd = sceIoOpen(demo_path, PSP_O_RDONLY, 0);
+    if (demo_fd < 0) demo_fd = sceIoOpen(demo_path, PSP_O_RDONLY, 0);
+    fd = demo_fd;
     if (fd < 0) { free(data); return; }
     sceIoLseek(fd, (SceOff)c->mot, PSP_SEEK_SET);
     if (sceIoRead(fd, data, c->size) != (int)c->size || !motion_parse_blob("demo", data, c->size, &a->motions[k], 1)) {
         free(data);
         a->motions[k].channel_count = 0;
-        sceIoClose(fd);
         return;
     }
-    sceIoClose(fd);
     a->motion_data[k] = data;
 }
 
-/* Motions coming up within 20 frames are read now; those over are freed. */
 static void demo_stream(void) {
-    int i, k;
+    int i, k, loads = 0, best_i = -1, best_k = -1;
+    float best = 1e9f;
+    /* Frees what's over; then reads the clips coming up within 40 frames, the soonest first, one a frame (a
+     * cut's dozen motions read in one frame missed a vblank or two). pose() still reads one that's due and missing. */
     for (i = 0; i < actor_count; ++i) {
         Actor *a = &actors[i];
         const DemoMotionClip *c;
         if (!a->d) continue;
         c = (const DemoMotionClip *)(blob + a->d->motion_at);
         for (k = 0; k < a->d->motions; ++k) {
-            int wanted = demo_clock >= c[k].set - 20.0f && demo_clock < c[k].end;
-            if (wanted && !a->motion_data[k]) load_motion(a, k);
+            int wanted = demo_clock >= c[k].set - 40.0f && demo_clock < c[k].end;
+            if (wanted && !a->motion_data[k] && c[k].set < best) { best = c[k].set; best_i = i; best_k = k; }
             else if (!wanted && a->motion_data[k]) {
                 free(a->motions[k].channels); a->motions[k].channels = 0; a->motions[k].channel_count = 0;
                 free(a->motion_data[k]); a->motion_data[k] = 0;
             }
+        }
+    }
+    while (best_i >= 0 && loads < 1) {
+        load_motion(&actors[best_i], best_k);
+        ++loads;
+        best_i = -1; best = 1e9f;
+        for (i = 0; i < actor_count; ++i) {
+            const DemoMotionClip *c;
+            if (!actors[i].d) continue;
+            c = (const DemoMotionClip *)(blob + actors[i].d->motion_at);
+            for (k = 0; k < actors[i].d->motions; ++k)
+                if (demo_clock >= c[k].set - 40.0f && demo_clock < c[k].end && !actors[i].motion_data[k] && c[k].set < best) {
+                    best = c[k].set; best_i = i; best_k = k;
+                }
         }
     }
 }
