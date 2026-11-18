@@ -109,8 +109,10 @@ the room, and its defeat when the counter is at its step and the room's enemies 
 Dante at a start of the room. The port (`room_demos`): 3: 6 / 7 (Cerberus), 5: 12 / 13, 9: 22 / 23 (Nevan), 11: 28 / 29
 (Beowulf), 12: 32 / 33 (Geryon), 16: 44 (Lady), on first entering the room [the area isn't checked] and once its fight
 is over; 19's 53 (Vergil joins) when Arkham's second round begins. Afterwards the room's stage is read back and Dante
-put at the start; nothing restarts. Not yet: those that go on to another room (7's 17, 13's 37, 16's 45, 17's 47 / 48,
-19's 52, 20's 56-58) and 12's 34 (Geryon's second).
+put at the start; nothing restarts. Between rooms (`transit_demos`): 7's 17 (142 to 144), 17's 47 (143 to 139), 19's 52 (408 to 421), 20's 57 / 58 (Vergil
+beaten in 411, to 012), played as the port's own flow brings Dante into the next room; 17's 48 on the Doppelganger's
+defeat; 16's 45 before its clear (the port clears at Lady); 20's 56 after its 55. Not yet: 12's 34 (Geryon's second),
+and 13's 37 (its script holds only the AFTER_DEMO).
 
 ## Porting plan
 

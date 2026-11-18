@@ -128,7 +128,10 @@ static int load_actors(void) {
         a->motions = table[i].motions ? calloc((size_t)table[i].motions, sizeof(Motion)) : 0;
         a->motion_data = table[i].motions ? calloc((size_t)table[i].motions, sizeof(unsigned char *)) : 0;
         if (!a->skinned || (table[i].motions && (!a->motions || !a->motion_data))) {
-            if (a->skinned_heap) free(a->skinned); free(a->motions); free(a->motion_data); continue;
+            if (a->skinned_heap) free(a->skinned);
+            free(a->motions);
+            free(a->motion_data);
+            continue;
         }
         memcpy(a->skinned, blob + table[i].vertex_at, sizeof(DemoVertex) * (size_t)table[i].vertices);
         (void)clips; (void)k;

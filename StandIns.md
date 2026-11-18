@@ -17,9 +17,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
   defeats that stay in their room, but: no sound, subtitles, effects, fades or cloth; a cut's per-object hide
   channels count as shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
-  [inferred]; an entrance demo plays on entering the room, not in its area; demos that move to another room
-  (Mission 7's 17, 13's 37, 16's 45, 17's 47 / 48, 19's 52 / 53, 20's 56-58) and 2's 114 / 14's 326 (a city stage
-  too big) aren't played; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
+  [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
+  next; 12's 34, 13's 37 and 2's 114 / 14's 326 (a city stage too big) aren't played; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
 - **Sound**: only in movies; no music or effects in menus or the game. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).

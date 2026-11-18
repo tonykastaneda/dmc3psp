@@ -3616,7 +3616,17 @@ static const RoomDemo room_demos[] = {
     {11, 217, 28, 0, 2}, {11, 217, 29, 1, 3},  /* Beowulf */
     {12, 228, 32, 0, 0}, {12, 228, 33, 1, 2},  /* Geryon */
     {16, 115, 44, 0, 2},                       /* Lady */
+    {17, 139, 48, 1, 1},                       /* the Doppelganger beaten */
 };
+/* Demos between rooms: the script plays them in one room and its AFTER_DEMO goes to the next, which the port's own flow
+ * reaches by a door or a defeat: played as Dante arrives. 7: 142's area 0 (17) to 144; 17: 143's area 0 (47) to 139;
+ * 19: 408 (52) to 421; 20: Vergil beaten in 411 (57, 58) to 012. */
+typedef struct { unsigned char mission; short from, to, demo[2]; } TransitDemo;
+static const TransitDemo transit_demos[] = {
+    {7, 142, 144, {17, -1}}, {17, 143, 139, {47, -1}}, {19, 408, 421, {52, -1}}, {20, 411, 12, {57, 58}},
+};
+#define TRANSIT_DEMOS (int)(sizeof(transit_demos) / sizeof(transit_demos[0]))
+static unsigned char transit_demo_played[TRANSIT_DEMOS];
 #define ROOM_DEMOS (int)(sizeof(room_demos) / sizeof(room_demos[0]))
 static unsigned char room_demo_played[ROOM_DEMOS];
 static int room_demo_last_room = -1;
@@ -3642,7 +3652,7 @@ static void queue_demo(int id) { if (demo_queue_len < 8) demo_queue[demo_queue_l
  * on, MDATA2's rows in order) are played as before. */
 static const short mission_opening_demos[21][3] = {
     {-1}, {-1}, {-1}, {5, 123, -1}, {9, -1}, {-1}, {-1}, {16, -1}, {-1}, {-1}, {25, -1}, {27, -1}, {31, -1},
-    {36, -1}, {39, -1}, {41, -1}, {43, -1}, {46, -1}, {49, -1}, {51, -1}, {55, -1},
+    {36, -1}, {39, -1}, {41, -1}, {43, -1}, {46, -1}, {49, -1}, {51, -1}, {55, 56, -1},
 };
 
 /* The real-time demos before each mission's clear (the AFTER_DEMO sections that end in mission_clear, and the demos
@@ -3650,7 +3660,7 @@ static const short mission_opening_demos[21][3] = {
  * on a movie or no demo. Not yet: 2's 114 and 14's 326 (one scene: its city stage, 128,000 triangles, doesn't fit). */
 static const short mission_clear_demos[21][3] = {
     {-1}, {-1}, {-1}, {8, -1}, {10, -1}, {-1}, {15, -1}, {-1}, {20, -1}, {24, -1}, {26, -1}, {30, -1}, {35, -1},
-    {-1}, {-1}, {42, -1}, {-1}, {-1}, {50, -1}, {-1}, {59, 60, -1},
+    {-1}, {-1}, {42, -1}, {45, -1}, {-1}, {50, -1}, {-1}, {59, 60, -1},
 };
 
 static void play_intro(int mission) {
@@ -3661,6 +3671,7 @@ static void play_intro(int mission) {
     demo_queue_then = 0;
     demo_clear_played = 0;
     memset(room_demo_played, 0, sizeof room_demo_played);
+    memset(transit_demo_played, 0, sizeof transit_demo_played);
     room_demo_last_room = -1;
     if (mission >= 1 && mission <= 20)
         for (k = 0; k < 3 && mission_opening_demos[mission][k] >= 0; ++k) queue_demo(mission_opening_demos[mission][k]);
@@ -4124,10 +4135,22 @@ int main(int argc, char *argv[]) {
         }
         if (mission_mode && mission_room != ROOM_NONE && !demo_active() && demo_queue_at >= demo_queue_len) {
             /* The room's own demos: on entering it, and once its fight is over. */
-            int room = room_number(mission_room);
+            int room = room_number(mission_room), k, transit = 0;
             int entered = room != room_demo_last_room;
+            if (entered)
+                for (k = 0; k < TRANSIT_DEMOS; ++k) {
+                    const TransitDemo *d = &transit_demos[k];
+                    if (d->mission != mission_choice.mission || d->from != room_demo_last_room || d->to != room ||
+                        transit_demo_played[k]) continue;
+                    transit_demo_played[k] = 1;
+                    queue_demo(d->demo[0]);
+                    if (d->demo[1] >= 0) queue_demo(d->demo[1]);
+                    demo_resume_start = -1;   /* where the port put him */
+                    transit = 1;
+                }
             room_demo_last_room = room;
-            if ((entered && queue_room_demo(mission_choice.mission, room, 0)) ||
+            if (transit) demo_queue_then = 2;
+            else if ((entered && queue_room_demo(mission_choice.mission, room, 0)) ||
                 (msg_room_fought && enemy_alive_count() == 0 && queue_room_demo(mission_choice.mission, room, 1)))
                 demo_queue_then = 2;
         }
