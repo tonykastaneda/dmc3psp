@@ -63,7 +63,10 @@ The effects are banks of SPU ADPCM samples that the game's own EE code plays (th
   plays a weapon bank's id (`FUN_0033ed90`: bank byte 2, 0-9, to its slot through `FUN_0033e5e0`, the manager's
   +0x114 bytes giving slots 3-6, which `FUN_0033e820` folds into type 2 with the bank's base from `0x5af3c0`: 40,
   80 ... 400); 0x33 a footstep (`FUN_0033ef00`: type 8, ids 0-9 by the foot's kind and the floor's material).
-- A call's bank also offsets the program (`FUN_00302230`'s pairs: index 0 adds to the record's +6).
+- A call's bank also offsets the program (`FUN_00302230`'s pairs: index 0 adds to the record's +6): `FUN_0033e820`
+  folds a weapon slot into type 2 and passes the bank there, so type 2's head holds every weapon's programs; where that
+  head is installed isn't found yet (`FUN_0033dff0`'s callers install types 1 and 7; `FUN_0028f490` installs the room's
+  type 7 from its files of kind 6, entries 0xc / 0xd).
 - GDATA 172 holds two tables, 180 ids (all program 0) and 470 (programs 0-5: the type-2 layout, banks of 40 from 40,
   440 on for direct type-2 calls); 141-152, 165 and 179-205 hold a Head and samples with no table of their own,
   153-166 and 173-178 a table, Head and samples each. Which of them each type and slot gets (`FUN_001b0020` installs
