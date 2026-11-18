@@ -56,6 +56,18 @@ The effects are banks of SPU ADPCM samples that the game's own EE code plays (th
   callers pass are its filled records]. The menus play 2 as the cursor moves, 3 on a choice and 4 going back
   (`00415290`); an orb plays 0 (sizes below 3) or 1 as it's taken (`FUN_002f3750`).
 
+**The other types** (not ported yet; what's known):
+
+- Dante's own sounds come from his motion definitions' timed events (`FUN_00255d30`; `tools/motion_scripts.py`
+  decodes them): 0x30 plays type byte 2 with id byte 3 at his position (his are type 1: ids 0, 2, 5, 36, 44 ...); 0x31
+  plays a weapon bank's id (`FUN_0033ed90`: bank byte 2, 0-9, to its slot through `FUN_0033e5e0`, the manager's
+  +0x114 bytes giving slots 3-6, which `FUN_0033e820` folds into type 2 with the bank's base from `0x5af3c0`: 40,
+  80 ... 400); 0x33 a footstep (`FUN_0033ef00`: type 8, ids 0-9 by the foot's kind and the floor's material).
+- A call's bank also offsets the program (`FUN_00302230`'s pairs: index 0 adds to the record's +6).
+- GDATA 172 holds two tables, 180 ids (all program 0) and 470 (programs 0-5: the type-2 layout, banks of 40 from 40,
+  440 on for direct type-2 calls); 141-152, 165 and 179-205 hold a Head and samples with no table of their own,
+  153-166 and 173-178 a table, Head and samples each. Which of them each type and slot gets (`FUN_001b0020` installs
+  type 1 from a task's file; rooms and the title type 7, the title from GDATA 219) isn't followed yet.
 In the port, `tools/gen_sfx.py` resolves the system bank into `SFX_SYS.BIN` (per id: the sample, volume, pan, its
 playback step at 44.1 kHz and the id it chains to; then the samples as they are), and `psp/testroom/sfx.c` mixes up to
 eight voices on a hardware channel of its own, decoding the ADPCM as it plays (16-byte frames: a shift, one of five
