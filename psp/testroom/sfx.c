@@ -1,8 +1,11 @@
-/* The game's sound effects (docs/MUSIC.md, Sound effects): a bank resolved by tools/gen_sfx.py (SFX_SYS.BIN: per id a
- * sample, volume, pan, playback step and the id it chains to), played by a mixer of its own on one hardware channel.
+/* The game's sound effects (docs/MUSIC.md, Sound effects): banks resolved by tools/gen_sfx.py (SFX_SYS.BIN, the
+ * system bank; SFX_DANTE.BIN, his own: per id a sample, volume, pan, playback step and the id it chains to), played by
+ * a mixer of its own on one hardware channel, and his motions' sound events (sfx_runtime.h) as their frames pass.
  * Samples are the SPU's ADPCM (16-byte frames of 28 nibbles: a shift and one of five filters), decoded as they play;
  * they're read from the memory stick when first wanted and kept in a small cache (rooms leave little memory). */
 #include "sfx.h"
+#include "motion.h"
+#include "sfx_runtime.h"
 
 #include <malloc.h>
 #include <pspaudio.h>
@@ -26,11 +29,19 @@ typedef struct {
     int left, right;              /* 0-0x8000 */
 } Voice;
 
-static SfxId *ids;
-static SfxSample *samples;
-static int id_count, sample_count, ready;
-static unsigned int body_at;
-static SceUID fd = -1, thread, lock;
+typedef struct {
+    SfxId *ids;
+    SfxSample *samples;
+    int id_count, sample_count, *cached_at;   /* cached_at: per sample, its place in the pool (-1 not there) */
+    unsigned int body_at;
+    SceUID fd;
+} Bank;
+static const char *const bank_files[SFX_BANKS] = {"SFX_SYS.BIN", "SFX_DANTE.BIN"};
+static Bank banks[SFX_BANKS];
+static int ready;
+static SceUID thread, lock;
+/* The motion events, by motion index (sfx_runtime.h's names resolved at start). */
+static short *event_motion;
 static int channel = -1;
 static Voice voices[VOICES];
 static volatile int running;
@@ -40,27 +51,26 @@ static short __attribute__((aligned(64))) pcm[2][CHUNK * 2];
 /* The cache: samples by index, packed into one pool; full, it starts over (the voices using it stop). */
 static unsigned char *pool;
 static unsigned int pool_used;
-static int *cached_at;            /* per sample: its place in the pool, -1 not there */
 
 static const int coef[5][2] = {{0, 0}, {60, 0}, {115, -52}, {98, -55}, {122, -60}};
 
-static const unsigned char *sample_data(int s) {
+static const unsigned char *sample_data(Bank *b, int s) {
     unsigned int size;
-    int k;
-    if (s < 0 || s >= sample_count) return 0;
-    if (cached_at[s] >= 0) return pool + cached_at[s];
-    size = (samples[s].size + 15u) & ~15u;
+    int k, j;
+    if (s < 0 || s >= b->sample_count) return 0;
+    if (b->cached_at[s] >= 0) return pool + b->cached_at[s];
+    size = (b->samples[s].size + 15u) & ~15u;
     if (size > CACHE_BYTES) return 0;
     if (pool_used + size > CACHE_BYTES) {
         for (k = 0; k < VOICES; ++k) voices[k].active = 0;
-        for (k = 0; k < sample_count; ++k) cached_at[k] = -1;
+        for (j = 0; j < SFX_BANKS; ++j) for (k = 0; k < banks[j].sample_count; ++k) banks[j].cached_at[k] = -1;
         pool_used = 0;
     }
-    sceIoLseek(fd, body_at + samples[s].offset, PSP_SEEK_SET);
-    if (sceIoRead(fd, pool + pool_used, samples[s].size) != (int)samples[s].size) return 0;
-    cached_at[s] = (int)pool_used;
+    sceIoLseek(b->fd, b->body_at + b->samples[s].offset, PSP_SEEK_SET);
+    if (sceIoRead(b->fd, pool + pool_used, b->samples[s].size) != (int)b->samples[s].size) return 0;
+    b->cached_at[s] = (int)pool_used;
     pool_used += size;
-    return pool + cached_at[s];
+    return pool + b->cached_at[s];
 }
 
 static int decode_frame(Voice *v) {
@@ -121,24 +131,33 @@ static int mixer_main(SceSize args, void *argp) {
     return 0;
 }
 
-int sfx_init(const char *game_dir) {
+static int bank_open(Bank *b, const char *game_dir, const char *file) {
     char path[300];
     struct { char magic[4]; unsigned int ids, samples, body; } h;
     int k;
+    snprintf(path, sizeof path, "%s%s", game_dir, file);
+    b->fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+    if (b->fd < 0) return 0;
+    if (sceIoRead(b->fd, &h, sizeof h) != (int)sizeof h || memcmp(h.magic, "SFX1", 4) != 0) return 0;
+    b->id_count = (int)h.ids; b->sample_count = (int)h.samples; b->body_at = h.body;
+    b->ids = malloc(sizeof(SfxId) * b->id_count);
+    b->samples = malloc(sizeof(SfxSample) * b->sample_count);
+    b->cached_at = malloc(sizeof(int) * b->sample_count);
+    if (!b->ids || !b->samples || !b->cached_at) return 0;
+    if (sceIoRead(b->fd, b->ids, sizeof(SfxId) * b->id_count) != (int)(sizeof(SfxId) * b->id_count)) return 0;
+    if (sceIoRead(b->fd, b->samples, sizeof(SfxSample) * b->sample_count) != (int)(sizeof(SfxSample) * b->sample_count))
+        return 0;
+    for (k = 0; k < b->sample_count; ++k) b->cached_at[k] = -1;
+    return 1;
+}
+
+int sfx_init(const char *game_dir) {
+    int k;
     if (ready) return 1;
-    snprintf(path, sizeof path, "%sSFX_SYS.BIN", game_dir);
-    fd = sceIoOpen(path, PSP_O_RDONLY, 0);
-    if (fd < 0) return 0;
-    if (sceIoRead(fd, &h, sizeof h) != (int)sizeof h || memcmp(h.magic, "SFX1", 4) != 0) goto fail;
-    id_count = (int)h.ids; sample_count = (int)h.samples; body_at = h.body;
-    ids = malloc(sizeof(SfxId) * id_count);
-    samples = malloc(sizeof(SfxSample) * sample_count);
-    cached_at = malloc(sizeof(int) * sample_count);
     pool = memalign(64, CACHE_BYTES);
-    if (!ids || !samples || !cached_at || !pool) goto fail;
-    if (sceIoRead(fd, ids, sizeof(SfxId) * id_count) != (int)(sizeof(SfxId) * id_count)) goto fail;
-    if (sceIoRead(fd, samples, sizeof(SfxSample) * sample_count) != (int)(sizeof(SfxSample) * sample_count)) goto fail;
-    for (k = 0; k < sample_count; ++k) cached_at[k] = -1;
+    if (!pool) return 0;
+    for (k = 0; k < SFX_BANKS; ++k)
+        if (!bank_open(&banks[k], game_dir, bank_files[k])) { banks[k].id_count = banks[k].sample_count = 0; if (!k) goto fail; }
     channel = sceAudioChReserve(PSP_AUDIO_NEXT_CHANNEL, CHUNK, PSP_AUDIO_FORMAT_STEREO);
     if (channel < 0) goto fail;
     lock = sceKernelCreateSema("sfx", 0, 1, 1, NULL);
@@ -149,20 +168,20 @@ int sfx_init(const char *game_dir) {
     ready = 1;
     return 1;
 fail:
-    if (fd >= 0) sceIoClose(fd);
-    fd = -1;
     return 0;
 }
 
-/* One id and those it chains to. pan: -1 left to 1 right, added to its own. */
-void sfx_play(int id, float pan, float volume) {
+/* One id of a bank and those it chains to. pan: -1 left to 1 right, added to its own. */
+void sfx_play_bank(int bank, int id, float pan, float volume) {
     int guard;
-    if (!ready) return;
+    Bank *b;
+    if (!ready || bank < 0 || bank >= SFX_BANKS) return;
+    b = &banks[bank];
     sceKernelWaitSema(lock, 1, 0);
-    for (guard = 0; guard < 4 && id >= 0 && id < id_count; ++guard) {
-        const SfxId *e = &ids[id];
+    for (guard = 0; guard < 4 && id >= 0 && id < b->id_count; ++guard) {
+        const SfxId *e = &b->ids[id];
         if (e->sample != 0xffff && e->step > 0.0f) {
-            const unsigned char *data = sample_data(e->sample);
+            const unsigned char *data = sample_data(b, e->sample);
             int k, best = 0;
             for (k = 0; k < VOICES; ++k) if (!voices[k].active) { best = k; break; }
             if (data) {
@@ -171,7 +190,7 @@ void sfx_play(int id, float pan, float volume) {
                 if (p < -1.0f) p = -1.0f;
                 if (p > 1.0f) p = 1.0f;
                 memset(v, 0, sizeof *v);
-                v->data = data; v->size = (samples[e->sample].size) & ~15u; v->step = e->step;
+                v->data = data; v->size = (b->samples[e->sample].size) & ~15u; v->step = e->step;
                 v->left = (int)(gain * (p > 0.0f ? 1.0f - p : 1.0f) * 32768.0f);
                 v->right = (int)(gain * (p < 0.0f ? 1.0f + p : 1.0f) * 32768.0f);
                 v->active = 1;
@@ -183,4 +202,23 @@ void sfx_play(int id, float pan, float volume) {
     sceKernelSignalSema(lock, 1);
 }
 
+void sfx_play(int id, float pan, float volume) { sfx_play_bank(SFX_BANK_SYS, id, pan, volume); }
+
 void sfx_volume(float v) { master = v; }
+
+/* A motion's sound events whose frames it passed this frame (after from, up to to; from < 0: it just began, so
+ * those at to and before it too). */
+void sfx_motion(int motion, float from, float to) {
+    int k;
+    if (!ready || motion < 0) return;
+    if (!event_motion) {
+        event_motion = malloc(sizeof(short) * SFX_EVENT_COUNT);
+        if (!event_motion) return;
+        for (k = 0; k < SFX_EVENT_COUNT; ++k) event_motion[k] = (short)motion_find(sfx_events[k].motion);
+    }
+    if (to < from) return;   /* it went back (a loop): nothing this time */
+    for (k = 0; k < SFX_EVENT_COUNT; ++k) {
+        float f = (float)sfx_events[k].frame;
+        if (event_motion[k] == motion && f <= to && (from < 0.0f ? 1 : f > from)) sfx_play_bank(sfx_events[k].bank, sfx_events[k].id, 0.0f, 1.0f);
+    }
+}

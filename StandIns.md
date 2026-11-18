@@ -20,8 +20,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
   track held until a fight and the stage channel dipping under it [inferred]; tracks loop at their ADX loop points) and
-  the system bank's effects (menus, orbs; that it's the game's type 0 is inferred). No effects from the player's, the
-  enemies' or the rooms' banks yet. MUSIC.md. GAME_FLOW.md.
+  the system bank's effects (menus, orbs; that it's the game's type 0 is inferred). Dante's own bank plays from his moves'
+  events, but his weapons' banks (the swings), footsteps and the enemies' and rooms' banks aren't in yet. MUSIC.md. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
   `main.c` ~4296, EVENT_SCRIPTS.md.

@@ -4483,6 +4483,12 @@ int main(int argc, char *argv[]) {
             MoveId before = combat.move;
             /* Devil Trigger runs him 1.1x as fast (HD Collection traces). */
             combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);
+            {   /* His moves' sound events (gen_sfx.py: the motion definitions' 0x30 / 0x34) as their frames pass. */
+                static int sfx_m = -1; static float sfx_f, sfx_t;
+                int m = combat.action ? combat.motion : -1;
+                if (m >= 0) sfx_motion(m, m != sfx_m || combat.phase_time < sfx_t ? combat.frame - 0.5f : sfx_f, combat.frame);
+                sfx_m = m; sfx_f = combat.frame; sfx_t = combat.phase_time;
+            }
             {
                 /* A new move of Dante's: bosses that guard see it start (Agni & Rudra, FUN_003aeec0). */
                 static int last_action;

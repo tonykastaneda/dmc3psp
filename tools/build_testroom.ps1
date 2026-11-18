@@ -92,9 +92,9 @@ foreach ($M10Room in @(201,206)) {
 }
 
 # The system bank's sound effects (tools/gen_sfx.py).
-if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "SFX_SYS.BIN"))) {
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "SFX_DANTE.BIN")) -or -not (Test-Path -LiteralPath (Join-Path $Generated "sfx_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
-    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\gen_sfx.py"), $Iso.FullName, "--output", $Build)
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\gen_sfx.py"), $Iso.FullName, "--output", $Build, "--header", (Join-Path $Generated "sfx_runtime.h"))
 }
 
 # The Jester's bomb and hand (tools/prepare_jester_props.py).

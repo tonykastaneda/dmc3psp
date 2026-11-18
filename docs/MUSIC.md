@@ -58,7 +58,7 @@ The effects are banks of SPU ADPCM samples that the game's own EE code plays (th
 
 **The other types** (not ported yet; what's known):
 
-- Dante's own sounds come from his motion definitions' timed events (`FUN_00255d30`; `tools/motion_scripts.py`
+- Dante's weapon and footstep sounds come from his motion definitions' timed events (`FUN_00255d30`; `tools/motion_scripts.py`
   decodes them): 0x30 plays type byte 2 with id byte 3 at his position (his are type 1: ids 0, 2, 5, 36, 44 ...); 0x31
   plays a weapon bank's id (`FUN_0033ed90`: bank byte 2, 0-9, to its slot through `FUN_0033e5e0`, the manager's
   +0x114 bytes giving slots 3-6, which `FUN_0033e820` folds into type 2 with the bank's base from `0x5af3c0`: 40,
