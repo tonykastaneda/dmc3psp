@@ -121,6 +121,10 @@ and 13's 37 (its script holds only the AFTER_DEMO).
 sum of its waits, centred at its height (DMO3 header: subtitles, count). A clip needn't end with `# End`; the next
 `# Clip` closes it.
 
+**Fades**: the Fade track's clips (`FadeType` I / O, `DistRGBA` with 128 opaque, `Life`): the last begun covers the screen,
+fading from its colour to clear (I) or to its colour and staying (O); baked into DMO3 +0x28 (fades, count) and drawn over the
+scene (`demo_fade`, `fx_screen_tint`).
+
 ## Porting plan
 
 1. Bake each demo to a streamed `DEMO_nnn.BIN` on the memory stick (the EBOOT is 27 MB already; demo 5 is 8 MB raw):

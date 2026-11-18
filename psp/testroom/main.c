@@ -1452,6 +1452,8 @@ scene_done:
         /* The cutscene's subtitle: its height from the PS2's 448 lines, centred (the PS2's x was set for its own font). */
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
+        unsigned int fade = demo_fade();
+        if (fade) fx_screen_tint(fade);   /* the Fade track */
         if (line) {
             float h = (float)size * (float)SCR_HEIGHT / 448.0f * 1.5f, y = (float)sy * (float)SCR_HEIGHT / 448.0f - h * 0.3f;
             char row[112];

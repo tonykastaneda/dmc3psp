@@ -8,6 +8,8 @@ builds a room). Everything stays local (the repo is public).
 DEMO_nnn.BIN (little endian; offsets from its start):
   +0x00 "DMO3", u32 frames, camera, textures, texture count, actors, actor count, resident (the bytes before the
   MOTs: the runtime reads those and streams each motion as its clip comes up), subtitles, subtitle count; 64 bytes
+  then fades, fade count (DMO3 +0x28: 0 in files without them)
+  fade (16 bytes): {f32 from, length, u32 out (1) / in (0), u8 RGBA (A 128 = opaque)}
   subtitle (128 bytes): {f32 from, to (demo frames), i16 x, y (PS2 640 x 448), size, pad, char text[112] (\n breaks)}
   camera: frames x {f32 eye[3], f32 target[3], f32 fov (degrees), f32 channel 13}
   texture: {u32 width, height, pixels (8-bit, swizzled), palette (256 ABGR)}
@@ -289,9 +291,17 @@ def main():
     for start, end, x, y, size, line in subs:
         raw = line.encode("latin1", "replace")[:111]
         blob += struct.pack("<2f3h2x112s", start, end, x, y, size, raw)
+    # The Fade track: {from, length, 0 in / 1 out, RGBA (128 = opaque)}, by start.
+    fades = sorted((float(c.get("SetFrame", 0.0)), float(c.get("Life", 1.0)) * float(c.get("ClipScale", 1.0) or 1.0),
+                    1 if str(c.get("FadeType", "O")).upper().startswith("O") else 0,
+                    [int(v) for v in (c.get("DistRGBA") if isinstance(c.get("DistRGBA"), list) else [0, 0, 0, 128])])
+                   for t in timeline["tracks"] if t["kind"] == "Fade" for c in t["clips"])
+    fade_at = len(blob)
+    for start, life, out, rgba in fades:
+        blob += struct.pack("<2fI4B", start, max(life, 1.0), out, *[min(255, v) for v in rgba[:4]])
     tex_at, tex_count, actor_at, actor_count, resident = bake_cast(timeline, files, blob)
-    struct.pack_into("<4s9I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
-                     resident, sub_at, len(subs))
+    struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
+                     resident, sub_at, len(subs), fade_at, len(fades))
     print(f"  {len(subs)} subtitles" + (f": {subs[0][5][:40]!r} ..." if subs else ""))
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / f"DEMO_{args.demo:03d}.BIN"

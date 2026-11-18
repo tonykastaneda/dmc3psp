@@ -18,7 +18,8 @@
 #include <string.h>
 
 typedef struct { char magic[4]; unsigned int frames, camera, textures, texture_count, actors, actor_count, reserved;
-                 unsigned int subtitles, subtitle_count, pad[6]; } DemoHeader;
+                 unsigned int subtitles, subtitle_count, fades, fade_count, pad[4]; } DemoHeader;
+typedef struct { float from, length; unsigned int out; unsigned char rgba[4]; } DemoFade;
 typedef struct { float from, to; short x, y, size, pad; char text[112]; } DemoSubtitle;
 typedef struct { float eye[3], target[3], fov, roll; } DemoCamera;
 typedef struct { unsigned int width, height, pixels, palette; } DemoTexture;
@@ -192,6 +193,25 @@ int demo_active(void) { return playing; }
 int demo_id(void) { return id; }
 float demo_frame(void) { return demo_clock; }
 int demo_actor_count(void) { return actor_count; }
+
+/* The Fade track: how much of its colour covers the screen now (the last fade begun: in, from it to clear; out, to
+ * it and staying), as ABGR with alpha 0-255; 0 none. */
+unsigned int demo_fade(void) {
+    const DemoFade *f;
+    unsigned int i, at = 0xffffffffu;
+    float k;
+    if (!playing || !head || !head->fade_count) return 0;
+    f = (const DemoFade *)(blob + head->fades);
+    for (i = 0; i < head->fade_count; ++i) if (f[i].from <= demo_clock) at = i;
+    if (at == 0xffffffffu) return 0;
+    k = (demo_clock - f[at].from) / f[at].length;
+    if (k > 1.0f) k = 1.0f;
+    if (!f[at].out) k = 1.0f - k;
+    k *= (float)f[at].rgba[3] / 128.0f;
+    if (k <= 0.0f) return 0;
+    if (k > 1.0f) k = 1.0f;
+    return (unsigned int)(k * 255.0f) << 24 | (unsigned int)f[at].rgba[2] << 16 | (unsigned int)f[at].rgba[1] << 8 | f[at].rgba[0];
+}
 
 /* The Message track's line now (in English: tools/prepare_demo.py), its place on the PS2's 640 x 448 screen. */
 const char *demo_subtitle(int *x, int *y, int *size) {
