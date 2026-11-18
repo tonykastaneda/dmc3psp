@@ -51,6 +51,7 @@ int testroom_frame;
 #include "wagon.h"
 #include "demo.h"
 #include "music.h"
+#include "sfx.h"
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
@@ -3894,6 +3895,7 @@ int main(int argc, char *argv[]) {
     init_gu();
     rest_error = rest_pose_error_um();
     music_init(game_dir);
+    sfx_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);

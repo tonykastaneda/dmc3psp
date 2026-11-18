@@ -91,6 +91,12 @@ foreach ($M10Room in @(201,206)) {
     }
 }
 
+# The system bank's sound effects (tools/gen_sfx.py).
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "SFX_SYS.BIN"))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\gen_sfx.py"), $Iso.FullName, "--output", $Build)
+}
+
 # The Jester's bomb and hand (tools/prepare_jester_props.py).
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "jester_props_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
@@ -292,7 +298,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music")) {
+foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music", "sfx")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

@@ -18,9 +18,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: their P / G effects and cloth aren't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
   [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
-- **Sound**: movies, cutscenes and the missions' music (two stream channels per room from the event scripts; the battle
-  track held until a fight and the stage channel dipping under it [inferred]; whole tracks loop); no sound effects or menu
-  music. MUSIC.md. GAME_FLOW.md.
+- **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
+  track held until a fight and the stage channel dipping under it [inferred]; tracks loop at their ADX loop points) and
+  the system bank's effects (menus, orbs; that it's the game's type 0 is inferred). No effects from the player's, the
+  enemies' or the rooms' banks yet. MUSIC.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
   `main.c` ~4296, EVENT_SCRIPTS.md.

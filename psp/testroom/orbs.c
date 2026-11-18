@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "fx.h"
+#include "sfx.h"
 #include "nfx.h"
 #include "player.h"
 
@@ -124,8 +125,10 @@ void orbs_update(float dt, float px, float py, float pz) {
             }
             nfx_kill(o->fx);
             o->active = 0;
-            /* FUN_002f3750: E185 where he takes it, in the same colour. */
+            /* FUN_002f3750: E185 where he takes it, in the same colour, and the system bank's sound 0 for the
+             * small sizes (below 3: 1, 5, 20), 1 for the others. */
             flash = nfx_spawn_e(NFX_STATIC, 185, chest, 0.0f, 0);
+            sfx_play(o->value <= 20 ? 0 : 1, 0.0f, 1.0f);
             nfx_tint(flash, 80, 0, 0);
             continue;
         }

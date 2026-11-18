@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "menu_runtime.h"
+#include "sfx.h"
 
 #define SCR_W 480
 #define SCR_H 272
@@ -253,6 +254,14 @@ static void fade_overlay(float amount) {
 
 typedef enum { SCREEN_TITLE, SCREEN_MISSIONS, SCREEN_BRIEFING, SCREEN_DONE } Screen;
 ShopState *menu_shop;   /* the briefing's Customize: set by main */
+/* The menus' sounds, as the game's menu code plays them from the system bank (00415290): 2 as the cursor moves, 3
+ * on a choice, 4 going back. */
+static void menu_sounds(unsigned int pressed) {
+    if (pressed & (PSP_CTRL_UP | PSP_CTRL_DOWN | PSP_CTRL_LEFT | PSP_CTRL_RIGHT)) sfx_play(2, 0.0f, 1.0f);
+    if (pressed & PSP_CTRL_CROSS) sfx_play(3, 0.0f, 1.0f);
+    if (pressed & PSP_CTRL_CIRCLE) sfx_play(4, 0.0f, 1.0f);
+}
+
 static int debug_combo(unsigned int now, unsigned int pressed);
 int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int frame);
 
@@ -357,6 +366,7 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
         pressed = now & ~held;
         held = now;
         if (debug_combo(now, pressed)) { held = 0xffffffffu; pressed = 0; }
+        menu_sounds(pressed);
         if (frame % 300 == 0) scePowerTick(PSP_POWER_TICK_ALL);
         if (!leaving && fade == 0) {
             switch (screen) {
@@ -434,7 +444,7 @@ void menu_mission_clear(MenuPad pad, MenuAfterFrame after_frame) {
         else { sceCtrlReadBufferPositive(&data, 1); now = data.Buttons; }
         pressed = now & ~held;
         held = now;
-        if (!leaving && fade == 0 && (pressed & PSP_CTRL_CROSS)) leaving = 1;
+        if (!leaving && fade == 0 && (pressed & PSP_CTRL_CROSS)) { leaving = 1; sfx_play(3, 0.0f, 1.0f); }
         if (leaving) { if (++fade >= FADE_FRAMES) break; }
         else if (fade > 0) --fade;
         sceGuStart(GU_DIRECT, list);
@@ -479,6 +489,7 @@ void pause_open(void) {
 static int pause_selectable(int row) { return pause_order[row] != PAUSE_STATUS && pause_order[row] != PAUSE_SAVE; }
 
 PauseAction pause_update(unsigned int pressed) {
+    menu_sounds(pressed);
     if (pause_confirm) {
         if (pressed & (PSP_CTRL_LEFT | PSP_CTRL_RIGHT)) pause_yes = !pause_yes;
         if (pressed & PSP_CTRL_CIRCLE) pause_confirm = 0;
@@ -754,6 +765,7 @@ int shop_run(ShopState *state, MenuPad pad, MenuAfterFrame after_frame, int fram
         pressed = now & ~held;
         held = now;
         if (debug_combo(now, pressed)) { held = 0xffffffffu; pressed = 0; }
+        menu_sounds(pressed);
         if (shop_update(pressed)) break;
         sceGuStart(GU_DIRECT, list);
         sceGuClearColor(0xff000000);
