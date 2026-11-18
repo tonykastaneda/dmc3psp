@@ -104,17 +104,17 @@ out. Only the textures a model's objects use are baked (a piece carries the stag
 carry smoke and glow textures).
 
 **Effects**: a demo's own effects are an effect pack ([11] names, [12] body: tools/native_fx.py's layout); the bake keeps
-the V / E closure of its Effect tracks' V and E clips (records, textures, models) as a bank nfx loads at run time
+the V / E / G closure of its Effect tracks' V, E and G clips (records, textures, models) as a bank nfx loads at run time
 (NFX_DEMO), and the clips {start, V / E, id, place, scale, the slot and bone it rides (SpTrackNo counts the Set section's
 lines: slot (n - 2) / 3; SpFlag -1: none)}. demo.c starts them on their frame and moves those on a bone. Of 1510 clips, 590
-are V and 275 E; many V timelines only reach P (particles) and G (generators), which nfx doesn't run, so they show
-nothing; 533 G and 112 P clips aren't played.
+are V, 275 E and 533 G (generators: emitters, NATIVE_FX.md, played since the rebake that added them; demo 11's
+summoning glow is one). 112 P clips (particle programs) aren't played, and timelines that only reach P show nothing.
 
 **Speed**: the demo clock is the PSP's real time, 60 frames a second, whatever the game's speed (Turbo) or a test's step.
 
 **Sound**: a demo's Sound clip names an ADX stream that is the demo's own id, and its file is SDATA.AFS's `<package>.adx` (m03_s00.adx for demo 5): voices and music mixed. prepare_demo decodes it (ffmpeg) to the movies' IMA ADPCM, DAUD_nnn.BIN (`DAU1`, rate, sample pairs, start frame, a byte per stereo pair), and demo.c streams it from the memory stick on its own thread from the clip's frame; both it and the demo clock run on real time. Checked offline: decoded against ffmpeg's own, -42 dB error. 51 tracks, 232 MB.
 
-Not yet: cloth, P / G effects.
+Not yet: cloth, P effects.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when
