@@ -479,14 +479,20 @@ def main():
         skinned = sum(struct.unpack_from("<i", blob, actor_at + 128 * i + 16)[0] * 32 + 64 for i in range(actor_count))
         budget = 5400 * 1024 - resident - skinned - 128 * 1024
         # Coarser first, then cropped to what the cameras see (triangles wholly that far outside their reach dropped).
-        for edge, crop in ((500, 0), (1000, 0), (2000, 0), (4000, 0), (100000, 0), (100000, 30000), (100000, 15000),
-                           (100000, 8000), (100000, 4000)):
+        view_file = work / "view.bin"   # camera samples for prepare_stage --view
+        with open(view_file, "wb") as vf:
+            for k in range(0, len(camera), 8):
+                e, t, fov, _ = camera[k]
+                vf.write(struct.pack("<7f", *e, *t, fov))
+        for edge, crop in ((500, 0), (1000, 0), (2000, 0), (4000, 0), (100000, 0), (2000, -1), (100000, -1),
+                           (100000, 30000), (100000, 15000), (100000, 8000), (100000, 4000)):
             subprocess.run([sys.executable, str(ROOT / "tools" / "prepare_stage.py"), str(args.iso),
                             "--output", str(stage_out),
                             "--scm", str(work / "model" / stage_clip["Model"]),
                             "--ptx", str(work / "model" / stage_clip["Texture"]),
                             "--play", *[f"{v:.1f}" for v in lo + hi], "--max-edge", str(edge)]
-                           + (["--crop", str(crop)] if crop else []), check=True)
+                           + (["--crop", str(crop)] if crop > 0 else []) + (["--view", str(view_file)] if crop else []),
+                           check=True)
             if stage_out.stat().st_size <= budget:
                 break
             print(f"stage {stage_out.stat().st_size:,} bytes over its {budget:,}: coarser")

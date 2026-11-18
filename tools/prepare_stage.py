@@ -170,6 +170,8 @@ def subdivide(tri, play=None):
     """tri = 3 vertices (x, y, z, u, v, r, g, b); split the longest edge until short. Near the play area
     short means MAX_EDGE; scenery far outside it (the sky and backdrops some rooms are wrapped in, tens of
     km across) only needs edges short against its distance from the camera, which can't leave the area."""
+    if MAX_EDGE >= 99999.0:   # --max-edge 100000: none (a cutscene's stage that must fit)
+        return [tri]
     out, stack = [], [tri]
     while stack:
         t = stack.pop()
@@ -434,6 +436,8 @@ def main() -> None:
     parser.add_argument("--play", type=float, nargs=6, help="the demo's play area")
     parser.add_argument("--max-edge", type=float, help="subdivide only to this (cm): a cutscene's stage that must fit")
     parser.add_argument("--crop", type=float, help="drop triangles wholly this far (cm) outside the play area (a cutscene's)")
+    parser.add_argument("--view", type=Path, help="a cutscene's camera samples (f32 eye[3], target[3], fov deg): "
+                        "triangles none of them sees are dropped")
     args = parser.parse_args()
     global MAX_EDGE
     if args.max_edge:
@@ -482,10 +486,48 @@ def main() -> None:
         if any(a < 250 for a in alphas):
             graded = sum(1 for a in alphas if 8 < a < 247)
             (blend_textures if graded > len(alphas) // 50 else alpha_textures).add(i)
-    for obj in scm["objects"]:
-        for sub in obj["submeshes"]:
+    seen = None
+    if args.view:
+        # Which triangles any of the cutscene's cameras sees: each one's bounding sphere against every sample's
+        # frustum (16:9, a margin), out to 60000 cm.
+        import numpy as np
+        views = np.frombuffer(args.view.read_bytes(), dtype="<f4").reshape(-1, 7)
+        seen = {}
+        for oi, obj in enumerate(scm["objects"]):
+            for si, sub in enumerate(obj["submeshes"]):
+                if not sub["faces"]:
+                    continue
+                p = np.array(sub["positions"], dtype=np.float32)
+                f = np.array(sub["faces"], dtype=np.int64)
+                tri = p[f]                                   # (n, 3, 3)
+                c = tri.mean(axis=1)
+                r = np.sqrt(((tri - c[:, None, :]) ** 2).sum(axis=2)).max(axis=1)
+                keep = np.zeros(len(f), dtype=bool)
+                for eye, target, fov in ((v[:3], v[3:6], v[6]) for v in views):
+                    fwd = target - eye
+                    n = np.linalg.norm(fwd)
+                    if n < 1e-3:
+                        continue
+                    fwd = fwd / n
+                    right = np.cross(fwd, np.array([0.0, 1.0, 0.0], dtype=np.float32))
+                    rn = np.linalg.norm(right)
+                    right = right / rn if rn > 1e-3 else np.array([1.0, 0.0, 0.0], dtype=np.float32)
+                    up = np.cross(right, fwd)
+                    d = c - eye
+                    z = d @ fwd
+                    ty = np.tan(np.radians(max(fov, 5.0)) * 0.5) * 1.15
+                    tx = ty * 16.0 / 9.0
+                    keep |= (z > -r) & (z < 60000.0 + r) & (np.abs(d @ right) < z * tx + r * 1.5) & \
+                            (np.abs(d @ up) < z * ty + r * 1.5)
+                seen[(oi, si)] = keep
+        total = sum(len(k) for k in seen.values())
+        print(f"view crop: {sum(int(k.sum()) for k in seen.values())} of {total} triangles seen")
+    for oi, obj in enumerate(scm["objects"]):
+        for si, sub in enumerate(obj["submeshes"]):
             tris = []
-            for f in sub["faces"]:
+            for fi, f in enumerate(sub["faces"]):
+                if seen is not None and not seen[(oi, si)][fi]:
+                    continue
                 tri = tuple(sub["positions"][i] + sub["uvs"][i] + sub["colors"][i] for i in f)
                 if args.crop and min(play_distance(v, play) for v in tri) > args.crop:
                     continue

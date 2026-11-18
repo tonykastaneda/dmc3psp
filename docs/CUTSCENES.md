@@ -107,8 +107,9 @@ Not yet: cloth, effects, sound.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when
-the mission clears, then its clear screen. Not yet: 2's 114 and 14's 326, one scene whose city stage (128,000 triangles,
-11 MB) neither fits nor draws at speed. A rig whose bones aren't in parent order (em134_00) is left out of a demo. Test
+the mission clears, then its clear screen. 2's 114 and 14's 326 are one scene whose city stage only fits unsubdivided (its 10,735 triangles; subdivided they
+were 128,000): `prepare_stage --max-edge 100000` now means no subdivision, and `--view` drops triangles none of the
+demo's cameras sees (prepare_demo writes every 8th frame's camera). A rig whose bones aren't in parent order (em134_00) is left out of a demo. Test
 line `forceclear n`.
 
 **Bosses**: the event scripts' ROOM blocks play a boss's entrance when counter 0 is still 0 and Dante is in an area of

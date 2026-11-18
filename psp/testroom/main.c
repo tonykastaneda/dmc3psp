@@ -3682,10 +3682,10 @@ static const short mission_opening_demos[21][3] = {
 
 /* The real-time demos before each mission's clear (the AFTER_DEMO sections that end in mission_clear, and the demos
  * chained into them): 1: 2; 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60. The others end
- * on a movie or no demo. Not yet: 2's 114 and 14's 326 (one scene: its city stage, 128,000 triangles, doesn't fit). */
+ * on a movie or no demo. 2: 114 (after movie 320) and 14: 326 are one scene, its city stage baked unsubdivided. */
 static const short mission_clear_demos[21][3] = {
-    {-1}, {2, -1}, {-1}, {8, -1}, {10, -1}, {-1}, {15, -1}, {-1}, {20, -1}, {24, -1}, {26, -1}, {30, -1}, {35, -1},
-    {-1}, {-1}, {42, -1}, {45, -1}, {-1}, {50, -1}, {-1}, {59, 60, -1},
+    {-1}, {2, -1}, {114, -1}, {8, -1}, {10, -1}, {-1}, {15, -1}, {-1}, {20, -1}, {24, -1}, {26, -1}, {30, -1}, {35, -1},
+    {-1}, {326, -1}, {42, -1}, {45, -1}, {-1}, {50, -1}, {-1}, {59, 60, -1},
 };
 
 static void play_intro(int mission) {
