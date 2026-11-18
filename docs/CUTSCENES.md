@@ -99,7 +99,9 @@ START skips). Movies are ids 318 on, MDATA2's rows in order (318 m99_s00 ... 326
 **Stage pieces**: a slot's `.efm` (an effect model: the MOD layout) is cast as a MOD; a `.scm` piece (not the stage, stNNN)
 as a rigid rig: a bone per node record (parent, local translation and rotation), its objects' vertices in their node's
 space on that bone, posed parents first (SCM parents may follow children) with the nodes' rest rotations where its
-motion doesn't key them. A piece whose textures are the room's (not in the package) is left out.
+motion doesn't key them. A piece whose textures are the room's (not in the package), or over 4000 vertices (a whole sub-stage), is left
+out. Only the textures a model's objects use are baked (a piece carries the stage's whole set). The cast draws blended (pieces
+carry smoke and glow textures).
 
 Not yet: cloth, effects, sound.
 

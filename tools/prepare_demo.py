@@ -21,6 +21,7 @@ DEMO_nnn.BIN (little endian; offsets from its start):
 """
 import argparse
 import json
+import os
 import math
 import struct
 import subprocess
@@ -210,16 +211,23 @@ def bake_cast(timeline, files, blob: bytearray):
     import prepare_skinned_model as psm
     from prepare_stage import swizzle8
     tracks = {(t["kind"], t["slot"]): t for t in timeline["tracks"]}
-    textures, texture_index = [], {}
+    textures, decoded, texture_ids = [], {}, {}
 
     def texture_set(name):
-        if name not in texture_index:
-            texture_index[name] = []
-            for tx in psm.decode_textures(files[name]):
-                pixels, palette = psm.indexed_texture(tx)
-                texture_index[name].append(len(textures))
-                textures.append((tx["width"], tx["height"], bytes(pixels), palette))
-        return texture_index[name]
+        """The set's textures, decoded once; each goes in the table only when an object uses it (texture_id)."""
+        if name not in decoded:
+            decoded[name] = psm.decode_textures(files[name])
+        return decoded[name]
+
+    def texture_id(name, k):
+        sets = texture_set(name)
+        k = k if k < len(sets) else 0
+        if (name, k) not in texture_ids:
+            tx = sets[k]
+            pixels, palette = psm.indexed_texture(tx)
+            texture_ids[(name, k)] = len(textures)
+            textures.append((tx["width"], tx["height"], bytes(pixels), palette))
+        return texture_ids[(name, k)]
 
     actors = []
     for slot in range(64):
@@ -236,8 +244,8 @@ def bake_cast(timeline, files, blob: bytearray):
         try:
             if is_piece:
                 skel, mesh, order, rest_rot = scm_rig(files[name])
-                if skel["count"] > 48 or not mesh["positions"]:
-                    continue
+                if skel["count"] > 48 or not mesh["positions"] or len(mesh["positions"]) > 4000:
+                    continue   # a piece that big (a whole sub-stage) costs too much memory and skinning: left out
             else:
                 data = files[name]
                 if data[:4] == b"EFM ":
@@ -249,6 +257,7 @@ def bake_cast(timeline, files, blob: bytearray):
             print(f"  slot {slot:2d} {name}: skipped ({error})")
             continue
         tex = texture_set(clip["Texture"]) if clip.get("Texture") in files else []
+        tex_name = clip.get("Texture") if tex else None
         if is_piece and not tex:
             continue   # its textures are the room's (not in the package)
         motions = []
@@ -278,8 +287,11 @@ def bake_cast(timeline, files, blob: bytearray):
         actors.append({"slot": slot, "name": name, "skel": skel, "mesh": mesh, "tex": tex, "motions": motions,
                        "parent": cns[0] if isinstance(cns, list) else -1, "bone": cns[1] if isinstance(cns, list) else 0,
                        "pos": clip.get("Pos") or [0.0, 0.0, 0.0], "rot": clip.get("Rot") or [0.0, 0.0, 0.0],
-                       "span": clip_span(clip), "switches": switches, "order": order, "rest_rot": rest_rot})
+                       "span": clip_span(clip), "switches": switches, "order": order, "rest_rot": rest_rot,
+                       "tex_name": tex_name})
 
+    for a in actors:   # the textures its objects use, in the table before it's written
+        a["tex_ids"] = {o["texture"]: texture_id(a["tex_name"], o["texture"]) for o in a["mesh"]["objects"]} if a["tex_name"] else {}
     tex_table = align(blob)
     blob += bytes(16 * len(textures))
     for i, (w, h, pixels, palette) in enumerate(textures):
@@ -318,7 +330,7 @@ def bake_cast(timeline, files, blob: bytearray):
         blob += struct.pack(f"<{len(mesh['indices'])}H", *mesh["indices"])
         object_at = align(blob)
         for o in mesh["objects"]:
-            t = a["tex"][o["texture"]] if o["texture"] < len(a["tex"]) else (a["tex"][0] if a["tex"] else 0)
+            t = a["tex_ids"].get(o["texture"], 0)
             blob += struct.pack("<3I", t, o["index_start"], o["index_count"])
         motion_at = align(blob)
         blob += bytes(32 * len(a["motions"]))

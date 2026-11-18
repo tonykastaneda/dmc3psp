@@ -41,7 +41,6 @@ typedef struct { unsigned int texture, first, count; } DemoObject;
 typedef struct { float start, scale, first; unsigned int mode, table, objects; } DemoHideClip;   /* 0 off, 1 on, 2 per object */
 typedef struct { float m[3][3]; } M3;
 
-#define DEMO_MAX_ACTORS 40
 #define DEMO_MAX_BONES 48
 #define DEMO_VTYPE (GU_TEXTURE_32BITF | GU_NORMAL_32BITF | GU_VERTEX_32BITF | GU_INDEX_16BIT | GU_TRANSFORM_3D)
 
@@ -74,7 +73,8 @@ static void *demo_alloc(unsigned int size, int *heap) {
 }
 
 static const DemoHeader *head;
-static Actor actors[DEMO_MAX_ACTORS];
+static Actor *actors;   /* one per row of the file's actor table (a row that didn't load: d 0), in the spare */
+static int actors_heap;
 static int actor_count;
 static float demo_clock;
 static int playing, id = -1;
@@ -107,6 +107,7 @@ static void *read_file(const char *path, int *size_out, int limit) {
 static void free_actors(void) {
     int i, k;
     for (i = 0; i < actor_count; ++i) {
+        if (!actors[i].d) continue;
         if (actors[i].motions) {
             for (k = 0; k < actors[i].d->motions; ++k) {
                 free(actors[i].motions[k].channels);
@@ -117,7 +118,8 @@ static void free_actors(void) {
         }
         if (actors[i].skinned_heap) free(actors[i].skinned);
     }
-    memset(actors, 0, sizeof actors);
+    if (actors && actors_heap) free(actors);
+    actors = 0;
     actor_count = 0;
 }
 
@@ -125,8 +127,12 @@ static int load_actors(void) {
     unsigned int i;
     int k;
     const DemoActorData *table = (const DemoActorData *)(blob + head->actors);
-    for (i = 0; i < head->actor_count && i < DEMO_MAX_ACTORS; ++i) {
-        Actor *a = &actors[actor_count];
+    actors = demo_alloc(sizeof(Actor) * head->actor_count, &actors_heap);
+    if (!actors) return 0;
+    memset(actors, 0, sizeof(Actor) * head->actor_count);
+    actor_count = (int)head->actor_count;
+    for (i = 0; i < head->actor_count; ++i) {
+        Actor *a = &actors[i];
         const DemoMotionClip *clips = (const DemoMotionClip *)(blob + table[i].motion_at);
         if (table[i].bones > DEMO_MAX_BONES) { continue; }
         a->d = &table[i];
@@ -137,11 +143,11 @@ static int load_actors(void) {
             if (a->skinned_heap) free(a->skinned);
             free(a->motions);
             free(a->motion_data);
+            memset(a, 0, sizeof *a);   /* this row isn't cast */
             continue;
         }
         memcpy(a->skinned, blob + table[i].vertex_at, sizeof(DemoVertex) * (size_t)table[i].vertices);
         (void)clips; (void)k;
-        ++actor_count;
     }
     return actor_count;
 }
@@ -283,7 +289,9 @@ static void demo_stream(void) {
     int i, k;
     for (i = 0; i < actor_count; ++i) {
         Actor *a = &actors[i];
-        const DemoMotionClip *c = (const DemoMotionClip *)(blob + a->d->motion_at);
+        const DemoMotionClip *c;
+        if (!a->d) continue;
+        c = (const DemoMotionClip *)(blob + a->d->motion_at);
         for (k = 0; k < a->d->motions; ++k) {
             int wanted = demo_clock >= c[k].set - 20.0f && demo_clock < c[k].end;
             if (wanted && !a->motion_data[k]) load_motion(a, k);
@@ -309,7 +317,7 @@ static void pose(Actor *a, int depth) {
     if (a->posed) return;
     a->posed = 1;
     m_euler(&base_rot, d->rot[0], d->rot[1], d->rot[2]);
-    if (d->parent >= 0 && d->parent < actor_count && depth < 4) {
+    if (d->parent >= 0 && d->parent < actor_count && actors[d->parent].d && depth < 4) {
         /* CnsPos: on another slot's bone. The piece's root takes that bone's place (its own rest offset dropped: a
          * head is modelled where the neck bone rests, a hand at the origin of its forearm bone), the clip's Pos / Rot
          * in that bone's space [inferred from the pieces' rests]. */
@@ -420,13 +428,16 @@ void demo_draw(void) {
     gumMultMatrix(&clip, &proj, &view);
     tex = (const DemoTexture *)(blob + head->textures);
     for (i = 0; i < actor_count; ++i) actors[i].posed = 0;
-    for (i = 0; i < actor_count; ++i) pose(&actors[i], 0);
+    for (i = 0; i < actor_count; ++i) if (actors[i].d) pose(&actors[i], 0);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
-    sceGuAlphaFunc(GU_GREATER, 0x40, 0xff);
+    sceGuAlphaFunc(GU_GREATER, 0x08, 0xff);
+    /* Blended: pieces carry smoke and glow textures (graded alpha) as the stages do; opaque texels are unchanged. */
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
     sceGuColor(0xffffffffu);
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuTexScale(1.0f, 1.0f);
@@ -437,9 +448,12 @@ void demo_draw(void) {
     sceGuTexWrap(GU_REPEAT, GU_REPEAT);
     for (i = 0; i < actor_count; ++i) {
         Actor *a = &actors[i];
-        const DemoObject *obj = (const DemoObject *)(blob + a->d->object_at);
-        const unsigned short *idx = (const unsigned short *)(blob + a->d->index_at);
+        const DemoObject *obj;
+        const unsigned short *idx;
         const DemoHideClip *hide;
+        if (!a->d) continue;
+        obj = (const DemoObject *)(blob + a->d->object_at);
+        idx = (const unsigned short *)(blob + a->d->index_at);
         if (demo_clock < a->d->shown_from || demo_clock >= a->d->shown_to) continue;
         hide = 0;
         {   /* its hide track: the last clip begun (DispOff hides it all, a cut's own .hid object by object) */
@@ -466,5 +480,6 @@ void demo_draw(void) {
             sceGumDrawArray(GU_TRIANGLES, DEMO_VTYPE, (int)obj[k].count, idx + obj[k].first, a->skinned);
         }
     }
+    sceGuDisable(GU_BLEND);
     sceGuDisable(GU_ALPHA_TEST);
 }
