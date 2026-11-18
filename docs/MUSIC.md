@@ -40,7 +40,10 @@ See CUTSCENES.md (Sound): each real-time demo streams its own SDATA track (`<pac
 
 ## Not yet
 
-Sound effects: `FUN_0033ee10` offsets an effect id by the owner's bank base (`0x5af430`) and sends it to the IOP sound
-driver over RPC (`FUN_003027a0`); the banks aren't Sony HD/BD and the id-to-sample mapping lives in the IOP module, so
-porting them means that driver's own reverse engineering, the deferred states' exact handling (12-16), ADX loop points (the port loops the
-whole track), the title's and Game Over's music.
+- **Sound effects.** `FUN_0033ee10` offsets an effect id by the owner's bank base (`0x5af430`) and sends it to the IOP
+  sound driver over RPC (`FUN_003027a0`). The banks aren't Sony HD/BD and the id-to-sample mapping lives in the IOP
+  module, so porting them means reverse engineering that driver.
+- The deferred states' exact handling (commands 12-16).
+- ADX loop points: the port loops the whole track.
+- The title's and Game Over's music (Continue.adx, SDATA 27, by its name; the port's Game Over is a 2.5 s pause before
+  the restart).
