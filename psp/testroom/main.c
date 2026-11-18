@@ -3679,10 +3679,10 @@ static const short mission_opening_demos[21][3] = {
 };
 
 /* The real-time demos before each mission's clear (the AFTER_DEMO sections that end in mission_clear, and the demos
- * chained into them): 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60. The others end
+ * chained into them): 1: 2; 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60. The others end
  * on a movie or no demo. Not yet: 2's 114 and 14's 326 (one scene: its city stage, 128,000 triangles, doesn't fit). */
 static const short mission_clear_demos[21][3] = {
-    {-1}, {-1}, {-1}, {8, -1}, {10, -1}, {-1}, {15, -1}, {-1}, {20, -1}, {24, -1}, {26, -1}, {30, -1}, {35, -1},
+    {-1}, {2, -1}, {-1}, {8, -1}, {10, -1}, {-1}, {15, -1}, {-1}, {20, -1}, {24, -1}, {26, -1}, {30, -1}, {35, -1},
     {-1}, {-1}, {42, -1}, {45, -1}, {-1}, {50, -1}, {-1}, {59, 60, -1},
 };
 
@@ -3692,6 +3692,10 @@ static void play_intro(int mission) {
     /* Mission 6 opens with movie 321 (MDATA2 row 3, m06_s00: Lady); the file keeps its old name. Mission 3's opening is
      * demos 5 and 123 (below); the tower rising (row 2, m02_c00, movie 320) ends Mission 2. */
     if (mission == 6) play_movie("MOVIES/M3_INTRO_B.MOV");
+    /* The other openings that are movies (demo ids 318 on: tools/prepare_movies.py). */
+    if (mission == 8) play_movie("MOVIES/D323.MOV");
+    if (mission == 9) play_movie("MOVIES/D324.MOV");
+    if (mission == 14) play_movie("MOVIES/D327.MOV");   /* then demo 39 */
     demo_queue_len = demo_queue_at = 0;
     demo_queue_then = 0;
     demo_clear_played = 0;
@@ -4398,6 +4402,9 @@ int main(int argc, char *argv[]) {
                 if(focus_cmp)vanguard_note("mission_clear",player.health);
                 menu_draw_buffer = draw_buffer;
                 if (mission_choice.mission == 2) play_movie("MOVIES/M3_INTRO_A.MOV");   /* movie 320, m02_c00: the tower rises */
+                if (mission_choice.mission == 7) play_movie("MOVIES/D322.MOV");    /* the clears that are movies */
+                if (mission_choice.mission == 13) play_movie("MOVIES/D325.MOV");
+                if (mission_choice.mission == 19) play_movie("MOVIES/D328.MOV");
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 if(focus_cmp && cmp_stop_on_clear)cmp_frames=frames;
                 else {

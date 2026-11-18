@@ -28,6 +28,13 @@ MOVIES = {
     "M1_INTRO": ("MDATA2.AFS", 1),
     "M3_INTRO_A": ("MDATA2.AFS", 2),   # m02_c00, movie 320: the tower rises (Mission 2's end; the old name kept)
     "M3_INTRO_B": ("MDATA2.AFS", 3),   # m06_s00, movie 321: Lady (Mission 6's opening)
+    # The other story movies by their demo ids (demo 318 + row; psp/testroom/main.c plays them where the event scripts do).
+    "D322": ("MDATA2.AFS", 4),   # m07_c00: Mission 7's clear
+    "D323": ("MDATA2.AFS", 5),   # m08_s00: Mission 8's opening
+    "D324": ("MDATA2.AFS", 6),   # m09_s00: Mission 9's opening
+    "D325": ("MDATA2.AFS", 7),   # m13_c00: Mission 13's clear
+    "D327": ("MDATA2.AFS", 9),   # m14_s00: Mission 14's opening
+    "D328": ("MDATA2.AFS", 10),  # m19_c00: Mission 19's clear
 }
 WIDTH, HEIGHT = 480, 272       # the whole screen; sceJpeg rejects widths that aren't multiples of 16
 FPS = 30

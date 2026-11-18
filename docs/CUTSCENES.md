@@ -125,6 +125,10 @@ sum of its waits, centred at its height (DMO3 header: subtitles, count). A clip 
 fading from its colour to clear (I) or to its colour and staying (O); baked into DMO3 +0x28 (fades, count) and drawn over the
 scene (`demo_fade`, `fx_screen_tint`).
 
+**Movies**: the story movies play where the event scripts put them: openings 1 (319, M1_INTRO), 6 (321), 8 (323),
+9 (324), 14 (327, then demo 39); clears 2 (320), 7 (322), 13 (325), 19 (328) (`tools/prepare_movies.py` D3nn,
+`psp/testroom/main.c` play_intro and the clear).
+
 ## Porting plan
 
 1. Bake each demo to a streamed `DEMO_nnn.BIN` on the memory stick (the EBOOT is 27 MB already; demo 5 is 8 MB raw):
