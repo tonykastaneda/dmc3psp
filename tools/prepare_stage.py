@@ -433,6 +433,7 @@ def main() -> None:
     parser.add_argument("--ptx", type=Path, help="its texture set (.ptx)")
     parser.add_argument("--play", type=float, nargs=6, help="the demo's play area")
     parser.add_argument("--max-edge", type=float, help="subdivide only to this (cm): a cutscene's stage that must fit")
+    parser.add_argument("--crop", type=float, help="drop triangles wholly this far (cm) outside the play area (a cutscene's)")
     args = parser.parse_args()
     global MAX_EDGE
     if args.max_edge:
@@ -486,6 +487,8 @@ def main() -> None:
             tris = []
             for f in sub["faces"]:
                 tri = tuple(sub["positions"][i] + sub["uvs"][i] + sub["colors"][i] for i in f)
+                if args.crop and min(play_distance(v, play) for v in tri) > args.crop:
+                    continue
                 tris.extend(subdivide(tri, play))
             if tris:
                 kind = 2 if sub["texture"] in blend_textures else (1 if sub["texture"] in alpha_textures else 0)

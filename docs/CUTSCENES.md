@@ -91,7 +91,13 @@ START skips). Movies are ids 318 on, MDATA2's rows in order (318 m99_s00 ... 326
 329 m01_v01); by that order the port's M3_INTRO_A / B (MDATA2 2, 3) are Mission 2's clear and Mission 6's opening
 [to check].
 Not yet: per-object hide channels, cloth, a second stage piece (demo 5's slot 12 .scm), effects, messages, fades,
-sound, and the demos inside missions (boss entrances, clears).
+sound, and the demos inside missions (boss entrances and defeats).
+
+**Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
+3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when
+the mission clears, then its clear screen. Not yet: 2's 114 and 14's 326, one scene whose city stage (128,000 triangles,
+11 MB) neither fits nor draws at speed. A rig whose bones aren't in parent order (em134_00) is left out of a demo. Test
+line `forceclear n`.
 
 ## Porting plan
 

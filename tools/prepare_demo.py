@@ -145,7 +145,11 @@ def bake_cast(timeline, files, blob: bytearray):
         name = str(clip.get("Model", ""))
         if not name.lower().endswith(".mod") or name not in files or not files[name]:
             continue
-        skel, mesh = psm.enemy_mesh(files[name], None)
+        try:
+            skel, mesh = psm.enemy_mesh(files[name], None)
+        except ValueError as error:   # a rig the converter doesn't take (a parent after its child): left out
+            print(f"  slot {slot:2d} {name}: skipped ({error})")
+            continue
         tex = texture_set(clip["Texture"]) if clip.get("Texture") in files else []
         motions = []
         for mclip in (tracks.get(("Motion", slot)) or {"clips": []})["clips"]:
@@ -279,12 +283,15 @@ def main():
         stage_out = args.output / f"DSTG_{args.demo:03d}.BIN"
         skinned = sum(struct.unpack_from("<i", blob, actor_at + 128 * i + 16)[0] * 32 + 64 for i in range(actor_count))
         budget = 5400 * 1024 - resident - skinned - 128 * 1024
-        for edge in (500, 1000, 2000, 4000, 100000):
+        # Coarser first, then cropped to what the cameras see (triangles wholly that far outside their reach dropped).
+        for edge, crop in ((500, 0), (1000, 0), (2000, 0), (4000, 0), (100000, 0), (100000, 30000), (100000, 15000),
+                           (100000, 8000), (100000, 4000)):
             subprocess.run([sys.executable, str(ROOT / "tools" / "prepare_stage.py"), str(args.iso),
                             "--output", str(stage_out),
                             "--scm", str(work / "model" / stage_clip["Model"]),
                             "--ptx", str(work / "model" / stage_clip["Texture"]),
-                            "--play", *[f"{v:.1f}" for v in lo + hi], "--max-edge", str(edge)], check=True)
+                            "--play", *[f"{v:.1f}" for v in lo + hi], "--max-edge", str(edge)]
+                           + (["--crop", str(crop)] if crop else []), check=True)
             if stage_out.stat().st_size <= budget:
                 break
             print(f"stage {stage_out.stat().st_size:,} bytes over its {budget:,}: coarser")

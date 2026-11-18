@@ -1995,6 +1995,7 @@ static int cmp_start_room = -1, cmp_start_pos;   /* "startroom number start": fo
 static int cmp_cleared[8], cmp_cleared_count;   /* "cleared number": for a test, that room's fight is already over */
 static int cmp_mirror_at, cmp_mirror_k;
 static int cmp_demo = -1;   /* tests: a demo to play at frame 2 */
+static int cmp_force_clear;   /* tests: "forceclear n", the mission cleared at frame n */
 static int cmp_item[8][2], cmp_item_count, cmp_trim_at, cmp_trim_keep, cmp_force_at, cmp_force_state;      /* "item id state": for a test, a key item starts got (1) or used (2) */
 static void cmp_load(void) {
     char path[320], line[64];
@@ -2050,7 +2051,8 @@ static void cmp_load(void) {
             if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
         }
         else if (strncmp(line, "mirrorlit ", 10) == 0) sscanf(line + 10, "%d %d", &cmp_mirror_at, &cmp_mirror_k);   /* "mirrorlit frame k": 405's mirror k lit */
-        else if (strncmp(line, "demo ", 5) == 0) cmp_demo = atoi(line + 5);   /* "demo n": play demo n from the start (demo.c) */
+        else if (strncmp(line, "demo ", 5) == 0) cmp_demo = atoi(line + 5);
+        else if (strncmp(line, "forceclear ", 11) == 0) cmp_force_clear = atoi(line + 11);   /* "demo n": play demo n from the start (demo.c) */
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
@@ -3598,6 +3600,8 @@ static void menu_clear_shot(int frame) {
 
 /* Real-time cutscenes waiting to play (demo.c); the main loop plays them in turn, then starts the mission afresh. */
 static int demo_queue[8], demo_queue_len, demo_queue_at;
+/* What follows the queue: 0 the mission starts afresh (its opening), 1 its clear screen (demo_clear_due). */
+static int demo_queue_then, demo_clear_due, demo_clear_played;
 static void queue_demo(int id) { if (demo_queue_len < 8) demo_queue[demo_queue_len++] = id; }
 
 /* Each mission's opening, from its event script's first op and the AFTER_DEMO sections it chains through to the
@@ -3608,11 +3612,21 @@ static const short mission_opening_demos[21][3] = {
     {36, -1}, {39, -1}, {41, -1}, {43, -1}, {46, -1}, {49, -1}, {51, -1}, {55, -1},
 };
 
+/* The real-time demos before each mission's clear (the AFTER_DEMO sections that end in mission_clear, and the demos
+ * chained into them): 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60. The others end
+ * on a movie or no demo. Not yet: 2's 114 and 14's 326 (one scene: its city stage, 128,000 triangles, doesn't fit). */
+static const short mission_clear_demos[21][3] = {
+    {-1}, {-1}, {-1}, {8, -1}, {10, -1}, {-1}, {15, -1}, {-1}, {20, -1}, {24, -1}, {26, -1}, {30, -1}, {35, -1},
+    {-1}, {-1}, {42, -1}, {-1}, {-1}, {50, -1}, {-1}, {59, 60, -1},
+};
+
 static void play_intro(int mission) {
     int k;
     if (mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
     if (mission == 3) { play_movie("MOVIES/M3_INTRO_A.MOV"); play_movie("MOVIES/M3_INTRO_B.MOV"); }
     demo_queue_len = demo_queue_at = 0;
+    demo_queue_then = 0;
+    demo_clear_played = 0;
     if (mission >= 1 && mission <= 20)
         for (k = 0; k < 3 && mission_opening_demos[mission][k] >= 0; ++k) queue_demo(mission_opening_demos[mission][k]);
 }
@@ -4048,7 +4062,8 @@ int main(int argc, char *argv[]) {
             demo_stop();
             if (demo_queue_at >= demo_queue_len) {
                 demo_queue_len = demo_queue_at = 0;
-                if (mission_mode) start_mission(&mission_choice, &player, &camera);   /* the room, as it was before the demos */
+                if (demo_queue_then == 1) { demo_queue_then = 0; demo_clear_due = 1; }   /* on to the clear screen */
+                else if (mission_mode) start_mission(&mission_choice, &player, &camera);   /* the room, as it was before the demos */
                 else {   /* the test street: its stage back */
                     char stage_path[320];
                     path_in_game_dir(stage_path, sizeof stage_path, "STAGE.BIN");
@@ -4239,7 +4254,21 @@ int main(int argc, char *argv[]) {
                 }
             }
             if (shop_closed) { shop_closed = 0; last_time = sceKernelGetSystemTimeLow(); }
-            if (mission_update(dt, debug_pressed, &player, &camera)) {
+            {
+                int cleared = demo_clear_due || mission_update(dt, debug_pressed, &player, &camera) || (cmp_force_clear && frames == cmp_force_clear);
+                int m = mission_choice.mission;
+                demo_clear_due = 0;
+                if (cleared && !demo_clear_played && m >= 1 && m <= 20 && mission_clear_demos[m][0] >= 0) {
+                    /* Its clear cutscenes first, then this again (demo_clear_due). */
+                    int k;
+                    demo_clear_played = 1;
+                    demo_queue_len = demo_queue_at = 0;
+                    for (k = 0; k < 3 && mission_clear_demos[m][k] >= 0; ++k) queue_demo(mission_clear_demos[m][k]);
+                    demo_queue_then = 1;
+                    cleared = 0;
+                }
+                if (cleared) demo_clear_played = 0;
+            if (cleared) {
                 if(mission_choice.mission==8) {
                     ++m8_clears_seen;
                     if(focus_cmp) {
@@ -4271,6 +4300,7 @@ int main(int argc, char *argv[]) {
                 }
                 draw_buffer = menu_draw_buffer;
                 last_time = sceKernelGetSystemTimeLow();
+            }
             }
         }
         if (dummy_ready && debug_open && !pause_active) {
