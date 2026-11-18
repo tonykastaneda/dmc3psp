@@ -3689,7 +3689,7 @@ static void queue_demo(int id) { if (!cmp_no_demo && demo_queue_len < 8) demo_qu
  * mission-start screen (tools/event_dump.py; docs/CUTSCENES.md): the real-time demos among them. Movies (ids 318
  * on, MDATA2's rows in order) are played as before. */
 static const short mission_opening_demos[21][3] = {
-    {-1}, {-1}, {-1}, {5, 123, -1}, {9, -1}, {11, -1}, {-1}, {16, -1}, {-1}, {-1}, {25, -1}, {27, -1}, {31, -1},
+    {-1}, {-1}, {3, -1}, {5, 123, -1}, {9, -1}, {11, -1}, {-1}, {16, -1}, {-1}, {-1}, {25, -1}, {27, -1}, {31, -1},
     {36, -1}, {39, -1}, {41, -1}, {43, -1}, {46, -1}, {49, -1}, {51, -1}, {55, 56, -1},
 };
 
