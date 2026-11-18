@@ -3655,10 +3655,12 @@ static const RoomDemo room_demos[] = {
 };
 /* Demos between rooms: the script plays them in one room and its AFTER_DEMO goes to the next, which the port's own flow
  * reaches by a door or a defeat: played as Dante arrives. 7: 142's area 0 (17) to 144; 17: 143's area 0 (47) to 139;
- * 19: 408 (52) to 421; 20: Vergil beaten in 411 (57, 58) to 012. */
+ * 19: 408 (52) to 421; 20: Vergil beaten in 411 (57, 58) to 012; 13: 232's door 1 to Vergil's arena, which its script
+ * retargets to 37 (door_retarget 1, 1, 37, 0; 37's AFTER_DEMO, filed after 233, goes to 234 start 0), to 234. */
 typedef struct { unsigned char mission; short from, to, demo[2]; } TransitDemo;
 static const TransitDemo transit_demos[] = {
     {7, 142, 144, {17, -1}}, {17, 143, 139, {47, -1}}, {19, 408, 421, {52, -1}}, {20, 411, 12, {57, 58}},
+    {13, 232, 234, {37, -1}},
 };
 #define TRANSIT_DEMOS (int)(sizeof(transit_demos) / sizeof(transit_demos[0]))
 static unsigned char transit_demo_played[TRANSIT_DEMOS];

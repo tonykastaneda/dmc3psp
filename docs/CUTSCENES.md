@@ -130,7 +130,7 @@ Dante at a start of the room. The port (`room_demos`): 3: 6 / 7 (Cerberus), 5: 1
 is over; 19's 53 (Vergil joins) when Arkham's second round begins. Afterwards the room's stage is read back and Dante
 put at the start; nothing restarts. Between rooms (`transit_demos`): 7's 17 (142 to 144), 17's 47 (143 to 139), 19's 52 (408 to 421), 20's 57 / 58 (Vergil
 beaten in 411, to 012), played as the port's own flow brings Dante into the next room; 17's 48 on the Doppelganger's
-defeat; 16's 45 before its clear (the port clears at Lady); 20's 56 after its 55. Not yet: 13's 37 (its script holds only the AFTER_DEMO).
+defeat; 16's 45 before its clear (the port clears at Lady); 20's 56 after its 55. 13's 37 plays at 232's door 1 into Vergil's arena (the script's door_retarget 1, 1, 37, 0; its AFTER_DEMO, filed after 233, goes to 234 start 0).
 
 **Subtitles**: the Message track's clips each name a message (`No`); the text is in the record's language files (words
 2-5: Japanese, English, then two more), a tagged script: `# Msg n` blocks of quoted text with `<PS x y>` (place on the PS2's
