@@ -103,7 +103,16 @@ motion doesn't key them. A piece whose textures are the room's (not in the packa
 out. Only the textures a model's objects use are baked (a piece carries the stage's whole set). The cast draws blended (pieces
 carry smoke and glow textures).
 
-Not yet: cloth, effects, sound.
+**Effects**: a demo's own effects are an effect pack ([11] names, [12] body: tools/native_fx.py's layout); the bake keeps
+the V / E closure of its Effect tracks' V and E clips (records, textures, models) as a bank nfx loads at run time
+(NFX_DEMO), and the clips {start, V / E, id, place, scale, the slot and bone it rides (SpTrackNo counts the Set section's
+lines: slot (n - 2) / 3; SpFlag -1: none)}. demo.c starts them on their frame and moves those on a bone. Of 1510 clips, 590
+are V and 275 E; many V timelines only reach P (particles) and G (generators), which nfx doesn't run, so they show
+nothing; 533 G and 112 P clips aren't played.
+
+**Speed**: the demo clock is the PSP's real time, 60 frames a second, whatever the game's speed (Turbo) or a test's step.
+
+Not yet: cloth, P / G effects, sound.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when
