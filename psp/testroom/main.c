@@ -3751,6 +3751,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 }
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    music_stop();   /* the rooms' music from here (music_room) */
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
     vergil_boss_set_difficulty(choice->difficulty);
@@ -4064,6 +4065,7 @@ int main(int argc, char *argv[]) {
                     mission_choice.difficulty = boot_difficulty & 1;
                 } else {
                     play_movie("MOVIES/OPENING.MOV");
+                    music_menu(129);   /* Option.adx: the game's menus (0x81) */
                     menu_run(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
                     play_intro(mission_choice.mission);
                 }
@@ -4226,7 +4228,7 @@ int main(int argc, char *argv[]) {
                 else if (action == PAUSE_QUIT) {
                     pause_active = 0;
                     menu_draw_buffer = draw_buffer;
-                    music_stop();
+                    music_menu(129);
                     menu_run_from_mission_select(&mission_choice, NULL, NULL);
                     play_intro(mission_choice.mission);
                     start_mission(&mission_choice, &player, &camera);
@@ -4278,6 +4280,7 @@ int main(int argc, char *argv[]) {
             /* The debug menu's Quit to menu: back to Mission Select. */
             debug_quit = 0;
             menu_draw_buffer = draw_buffer;
+            music_menu(129);
             menu_run_from_mission_select(&mission_choice, NULL, NULL);
             play_intro(mission_choice.mission);
             start_mission(&mission_choice, &player, &camera);
@@ -4420,10 +4423,11 @@ int main(int argc, char *argv[]) {
                 if (mission_choice.mission == 7) play_movie("MOVIES/D322.MOV");    /* the clears that are movies */
                 if (mission_choice.mission == 13) play_movie("MOVIES/D325.MOV");
                 if (mission_choice.mission == 19) play_movie("MOVIES/D328.MOV");
-                music_stop();
+                music_menu(130);   /* Result.adx: the results (0x82) */
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 if(focus_cmp && cmp_stop_on_clear)cmp_frames=frames;
                 else {
+                    music_menu(129);
                     menu_run_from_mission_select(&mission_choice, cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_test_shot : NULL);
                     play_intro(mission_choice.mission);
                     start_mission(&mission_choice, &player, &camera);

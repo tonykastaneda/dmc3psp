@@ -162,6 +162,15 @@ void music_mute(int on) {
     if (on) for (k = 0; k < 2; ++k) channels[k].volume = 0.0f;   /* at once: a movie's sound takes over */
 }
 
+/* A menu's track on channel 0 at full volume (the menus are their own loops: no fades), channel 1 silent. */
+void music_menu(int track) {
+    if (!ready) return;
+    channels[1].target = 0.0f; channels[1].hold = 0; channels[1].want = -1; channels[1].volume = 0.0f;
+    channels[0].hold = 0; channels[0].target = 1.0f;
+    if (channels[0].want != track) channels[0].want = track;
+    channels[0].volume = muted ? 0.0f : 1.0f;
+}
+
 void music_stop(void) {
     int k;
     for (k = 0; k < 2; ++k) { channels[k].target = 0.0f; channels[k].hold = 0; channels[k].want = -1; channels[k].volume = 0.0f; }

@@ -29,11 +29,18 @@ pair. `psp/testroom/music.c` plays two hardware channels, a streaming thread eac
 Checked in PPSSPP: Mission 3's room 2, Kaze_01 on channel 1 and Battle_01 coming in on channel 0 when the fight starts,
 streaming at 44.1 kHz.
 
+## Menus
+
+The menus play Option.adx (SDATA 129; the game's menu code loads track 0x81) and the mission-clear screen Result.adx
+(130; 0x82 in the results screen's code), at full volume on channel 0 (`music_menu`); a mission's start stops them.
+
 ## Cutscenes
 
 See CUTSCENES.md (Sound): each real-time demo streams its own SDATA track (`<package>.adx`).
 
 ## Not yet
 
-Sound effects (the game's SE banks), the deferred states' exact handling (12-16), ADX loop points (the port loops the
-whole track), menu music.
+Sound effects: `FUN_0033ee10` offsets an effect id by the owner's bank base (`0x5af430`) and sends it to the IOP sound
+driver over RPC (`FUN_003027a0`); the banks aren't Sony HD/BD and the id-to-sample mapping lives in the IOP module, so
+porting them means that driver's own reverse engineering, the deferred states' exact handling (12-16), ADX loop points (the port loops the
+whole track), the title's and Game Over's music.
