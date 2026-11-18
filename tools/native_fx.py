@@ -6,6 +6,7 @@ Two banks, read straight from the user's disc:
     sizes and E185 when one is collected (FUN_002f3750).
   4 em026's effect pack (GDATA 131, PNST chunk 18): Agni & Rudra's charged blades, V588 / V589 (FUN_003ac280).
     (Bank 3 is a cutscene's own, loaded by demo.c.)
+  5 em037's effect pack (GDATA 140, PAC entry 10): the Jester's cross and bomb (JESTER_V).
   1 em025's effect pack (GDATA 130, PNST chunk 23): Cerberus's ice. Its shells play V117 (icicle), V89 and V101
     (sphere), V48 (shard); its moves play the ids listed in CERBERUS_V below (FUN_00208590 call sites).
 
@@ -20,7 +21,7 @@ from pathlib import Path
 
 from dmc3_image import AfsArchive, Iso9660
 from mod_ps2 import parse_mod
-from prepare_skinned_model import array_lines, c_float, decode_textures, indexed_texture, pnst_entries
+from prepare_skinned_model import array_lines, c_float, decode_textures, indexed_texture, pac_list, pnst_entries
 from tim2 import decode_picture
 
 ORB_V = (45, 186, 187, 188, 189)
@@ -35,6 +36,9 @@ CERBERUS_E = (291, 251, 199, 284)
 SKIP_E = {2}
 # Agni & Rudra's charged blades (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's.
 AGNI_RUDRA_V = (588, 589)
+# The Jester's (em037 [10]): the cross (0054d610: V0x3f9 once, V0x3f8 looping; 0054dc70: V0x3fa at its end) and the
+# bomb (0054e710: V0x417 in flight; 0054edc0: V0x41c as it goes off).
+JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c)
 # Effect models whose second chunk is a 16-byte reference rather than their own textures. The reference's
 # meaning isn't decoded. A model takes a twin's textures when one has the same vertices, else the ice texture
 # of the icicle model M54 (the ice pieces and frozen floor are the same material).
@@ -205,9 +209,10 @@ def main():
     summary.append(write_bank(lines, 2, leviathan,
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
     summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, ()))
+    summary.append(write_bank(lines, 5, records(pac_list(read(140))[10]), JESTER_V, ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5), summary):
         print(f"bank {bank}: {v} V, {e} E, {t} textures, {m} models; not ported: {skipped['P']} P, {skipped['G']} G children")
 
 

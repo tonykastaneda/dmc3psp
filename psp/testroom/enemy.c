@@ -6302,8 +6302,10 @@ static void lady_hit_glue(HitKind kind) {
 /* ---- The Jester's projectiles, drawn (their logic is jester.c's). The bomb (em037 [25]) and the trap's hand ([27])
  * are the game's models (tools/prepare_jester_props.py), rigid in their rest pose: the bomb tumbles as it flies
  * [estimate]; the hand rises out of the floor by its arming frame (55) and sinks at its end [estimate: its motions,
- * [28], aren't played]. Stand-ins (their effects aren't ported): the bomb's burst and the trap's warning ring are
- * motes, and the cross's four arms are columns of light swept round where he stood. */
+ * [28], aren't played]. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
+ * and V0x3f8 looping on its frame (0054d610: at him, facing Dante turned 45 degrees, turning with it), V0x3fa as it
+ * ends (0054dc70); the bomb V0x417 in flight (0054e710) and V0x41c as it goes off (0054edc0). Stand-ins for the parts
+ * that are P particles (not ported): the bomb's burst is a mote, and so is the trap's warning ring. */
 #include "jester_props_runtime.h"
 int jester_projectiles_init(void) { return 1; }
 static void jester_prop_draw(int which, const float pos[3], float yaw, float pitch, float roll) {
@@ -6342,7 +6344,32 @@ static void jester_prop_draw(int which, const float pos[3], float yaw, float pit
 }
 void jester_projectiles_draw(const JesterProjectiles *w) {
     static const float still[3] = {0.0f, 0.0f, 0.0f};
+    static int cross_fx, bomb_fx[JESTER_SHOTS], bomb_phase[JESTER_SHOTS];
+    static float cross_at[3], cross_yaw;
     int i, k;
+    /* The cross: its effects while it's out, V0x3fa where it was as it ends. */
+    if (w->emitting && w->kind == 2) {
+        memcpy(cross_at, w->cross, sizeof cross_at);
+        cross_yaw = w->angle;
+        if (!nfx_alive(cross_fx)) {
+            nfx_spawn(NFX_JESTER, 0x3f9, cross_at, cross_yaw, 0);
+            cross_fx = nfx_spawn(NFX_JESTER, 0x3f8, cross_at, cross_yaw, 1);
+        } else nfx_move(cross_fx, cross_at, cross_yaw);
+    } else if (cross_fx) {
+        nfx_kill(cross_fx);
+        cross_fx = 0;
+        nfx_spawn(NFX_JESTER, 0x3fa, cross_at, cross_yaw, 0);
+    }
+    /* The bomb: V0x417 riding it in flight, V0x41c as it goes off. */
+    for (i = 0; i < JESTER_SHOTS; ++i) {
+        const JesterShot *p = &w->shots[i];
+        int phase = p->active && p->kind == 0 ? p->phase : -1;
+        if (phase == 1 && !nfx_alive(bomb_fx[i])) bomb_fx[i] = nfx_spawn(NFX_JESTER, 0x417, p->pos, p->yaw, 1);
+        else if (phase == 1) nfx_move(bomb_fx[i], p->pos, p->yaw);
+        if (phase != 1 && bomb_fx[i]) { nfx_kill(bomb_fx[i]); bomb_fx[i] = 0; }
+        if (phase == 2 && bomb_phase[i] != 2) nfx_spawn(NFX_JESTER, 0x41c, p->pos, p->yaw, 0);
+        bomb_phase[i] = phase;
+    }
     for (i = 0; i < JESTER_SHOTS; ++i) {
         const JesterShot *p = &w->shots[i];
         if (!p->active) continue;
@@ -6362,15 +6389,6 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
                     float a = (float)k * 0.7853982f, at[3] = {p->pos[0] + sinf(a) * 75.0f, p->pos[1] + 5.0f, p->pos[2] + cosf(a) * 75.0f};
                     fx_mote(at, still, 70.0f, 70.0f, 0.06f, 0xffa0f0ffu);
                 }
-        }
-    }
-    if (w->emitting && w->kind == 2) {
-        for (i = 0; i < 4; ++i) {
-            float a = w->angle + (float)i * 1.5707963f;
-            for (k = 1; k <= 6; ++k) {
-                float r = (float)k * 200.0f, at[3] = {w->cross[0] + sinf(a) * r, w->cross[1] + 90.0f, w->cross[2] + cosf(a) * r};
-                fx_mote(at, still, 220.0f, 220.0f, 0.06f, 0xfff060e0u);
-            }
         }
     }
 }

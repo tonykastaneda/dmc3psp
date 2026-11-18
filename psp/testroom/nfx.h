@@ -6,7 +6,7 @@
  * runtime (FUN_00208590): E sprites (kind 1 billboard, kind 2 placed) and E models (kind 5). P particle
  * programs and G generators are skipped. Times are 60 Hz frames, distances centimetres. */
 
-enum { NFX_STATIC = 0, NFX_CERBERUS = 1, NFX_LEVIATHAN = 2, NFX_DEMO = 3, NFX_AGNI_RUDRA = 4 };
+enum { NFX_STATIC = 0, NFX_CERBERUS = 1, NFX_LEVIATHAN = 2, NFX_DEMO = 3, NFX_AGNI_RUDRA = 4, NFX_JESTER = 5 };
 /* A cutscene's own effects (demo.c): its bank's description at blob + at (0, 0: none). */
 void nfx_set_demo_bank(const unsigned char *blob, unsigned int at);
 

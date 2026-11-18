@@ -106,7 +106,7 @@ void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
 }
 
 static const NfxBank *bank_of(int b) {
-    return b == NFX_DEMO ? &demo_bank : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
+    return b == NFX_DEMO ? &demo_bank : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
          : b == NFX_CERBERUS ? &nfx1 : &nfx0;
 }
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
