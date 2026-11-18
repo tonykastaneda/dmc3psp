@@ -50,6 +50,7 @@ int testroom_frame;
 #include "mission19.h"
 #include "wagon.h"
 #include "demo.h"
+#include "music.h"
 #include "mission7.h"
 #include "leviathan_boss.h"
 #include "mission8.h"
@@ -2403,7 +2404,9 @@ static void play_movie(const char *name) {
     FILE *report;
     if (cmp_menu && !cmp_movie) return;
     path_in_game_dir(path, sizeof(path), name);
-    if (!movie_play(path, &menu_draw_buffer, cmp_movie, cmp_menu ? movie_test_shot : NULL)) return;
+    music_mute(1);
+    if (!movie_play(path, &menu_draw_buffer, cmp_movie, cmp_menu ? movie_test_shot : NULL)) { music_mute(0); return; }
+    music_mute(0);
     movie_stats(&shown, &late, &decode_max);
     movie_timing(&elapsed_ms, &audio_ms);
     path_in_game_dir(path, sizeof(path), "MOVIE_STATS.TXT");
@@ -3091,6 +3094,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     breakables_enter(room);
     seal_enter(room);
     msg_prev_room = mission_room != ROOM_NONE ? room_number(mission_room) : -1;   /* op 1e */
+    music_room(mission_choice.mission, atoi(rooms[room].file + 5));   /* its on-enter BGM (event op 0x70) */
     msg_room_fought = 0;
     mission_room = room;
     if(mission_choice.mission==8) {
@@ -3883,6 +3887,7 @@ int main(int argc, char *argv[]) {
     sceKernelDcacheWritebackAll();
     init_gu();
     rest_error = rest_pose_error_um();
+    music_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
@@ -4115,6 +4120,8 @@ int main(int argc, char *argv[]) {
             if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
             read_pad(&input, &previous_buttons, &previous_l);
         }
+        music_mute(demo_active() || demo_queue_at < demo_queue_len);
+        music_update(mission_mode && enemy_alive_count() > 0);
         if (demo_active() || demo_queue_at < demo_queue_len) {
             /* A cutscene has the frame: nothing else runs. START skips it. */
             static unsigned int demo_prev_buttons;
@@ -4219,6 +4226,7 @@ int main(int argc, char *argv[]) {
                 else if (action == PAUSE_QUIT) {
                     pause_active = 0;
                     menu_draw_buffer = draw_buffer;
+                    music_stop();
                     menu_run_from_mission_select(&mission_choice, NULL, NULL);
                     play_intro(mission_choice.mission);
                     start_mission(&mission_choice, &player, &camera);
@@ -4412,6 +4420,7 @@ int main(int argc, char *argv[]) {
                 if (mission_choice.mission == 7) play_movie("MOVIES/D322.MOV");    /* the clears that are movies */
                 if (mission_choice.mission == 13) play_movie("MOVIES/D325.MOV");
                 if (mission_choice.mission == 19) play_movie("MOVIES/D328.MOV");
+                music_stop();
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 if(focus_cmp && cmp_stop_on_clear)cmp_frames=frames;
                 else {
