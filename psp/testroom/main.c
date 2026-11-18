@@ -1295,6 +1295,10 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         sceGuDisable(GU_ALPHA_TEST);
         if (stage_loaded()) stage_draw();
         demo_draw();
+        {
+            float eye[3] = {camera->x, camera->y, camera->z};
+            nfx_draw(eye);   /* the cutscene's effects (demo.c) */
+        }
         goto scene_done;
     }
 

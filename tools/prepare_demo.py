@@ -199,13 +199,134 @@ def scm_rig(data: bytes):
     return skel, mesh, order, [r[4:7] for r in records]
 
 
+def effect_records(names: bytes, body: bytes):
+    """A demo's own effects ([11] names, [12] PNST body): the layout of the game's effect packs (tools/native_fx.py)."""
+    from prepare_skinned_model import pnst_entries
+    chunks = pnst_entries(body) if body[:4] == b"PNST" else []
+    out, index = {}, 0
+    for line in names.decode("ascii", errors="replace").splitlines():
+        fields = line.split()
+        if len(fields) != 2 or fields[0] not in "GVEPTAMC" or not fields[1].isdigit():
+            continue
+        kind, number = fields[0], int(fields[1])
+        if index + (2 if kind == "M" else 1) > len(chunks):
+            break
+        out[kind, number] = (chunks[index], chunks[index + 1]) if kind == "M" else chunks[index]
+        index += 2 if kind == "M" else 1
+    return out
+
+
+def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
+    """The Effect tracks' V and E clips and the bank they need (nfx's NFX_DEMO, psp/testroom/nfx.c). Returns
+    (bank offset, clips offset, clip count). G (models) and P (particles) clips: not yet (nfx doesn't run them)."""
+    import native_fx
+    from prepare_skinned_model import decode_textures, indexed_texture
+    names, body = work / "fx_names.bin", work / "fx_body.bin"
+    if not names.exists() or not body.exists():
+        return 0, 0, 0
+    recs = effect_records(names.read_bytes(), body.read_bytes())
+    clips = []
+    for track in timeline["tracks"]:
+        if track["kind"] not in ("Effect", "EffectI"):
+            continue
+        for c in track["clips"]:
+            kind, number = str(c.get("Id", "")), c.get("No")
+            if kind not in ("V", "E") or not isinstance(number, int) or (kind, number) not in recs:
+                continue
+            clips.append((float(c.get("SetFrame", 0.0)), 0 if kind == "V" else 1, number,
+                          c.get("Pos") or [0.0, 0.0, 0.0], c.get("Rot") or [0.0, 0.0, 0.0],
+                          (c.get("Sca") or [1.0, 1.0, 1.0])[0] if isinstance(c.get("Sca"), list) else 1.0,
+                          # SpTrackNo counts the Set section's lines (WorkRate 0, Camera 1, then Model / Motion / Hide per
+                          # slot): its slot is (n - 2) / 3. SpFlag -1: not on one.
+                          slot_to_actor.get((int(c.get("SpTrackNo") or 0) - 2) // 3, -1)
+                          if isinstance(c.get("SpFlag"), int) and c.get("SpFlag") >= 0 else -1,
+                          int(c.get("SpBoneNo") or 0)))
+    if not clips:
+        return 0, 0, 0
+    v_ids = sorted({n for _, k, n, *_ in clips if k == 0})
+    e_ids = sorted({n for _, k, n, *_ in clips if k == 1})
+    try:
+        vs, es, _ = native_fx.closure(recs, v_ids, e_ids)
+    except KeyError:
+        vs, es = set(i for i in v_ids), set(e_ids)
+    vs = sorted(v for v in vs if ("V", v) in recs)
+    es = sorted(e for e in es if ("E", e) in recs)
+    textures, models = {}, {}
+    for e in es:
+        rec = recs["E", e]
+        kind, tex = rec[1], struct.unpack_from("<H", rec, 4)[0]
+        if kind == 5:
+            m = struct.unpack_from("<H", rec, 0x28)[0]
+            if ("M", m) in recs:
+                models.setdefault(m, None)
+        elif tex != 0xFFFF and ("T", tex) in recs:
+            try:
+                textures.setdefault(tex, native_fx.picture(recs["T", tex]))
+            except Exception:
+                pass
+    model_tex = {}
+    for m in sorted(models):
+        mod, tex = recs["M", m]
+        if len(tex) > 16:
+            try:
+                textures[10000 + m] = decode_textures(tex)[0]
+                model_tex[m] = 10000 + m
+            except Exception:
+                pass
+    # The bank: u32 v count, e count, texture count, model count, then their tables' offsets.
+    bank_at = align(blob)
+    blob += bytes(32)
+    rec_tables = []
+    for ids, kind in ((vs, "V"), (es, "E")):
+        table = align(blob)
+        blob += bytes(8 * len(ids))
+        for k, i in enumerate(ids):
+            at = align(blob, 4)
+            blob += recs[kind, i]
+            struct.pack_into("<2I", blob, table + 8 * k, i, at)
+        rec_tables.append(table)
+    tex_ids = sorted(textures)
+    tex_table = align(blob)
+    blob += bytes(20 * len(tex_ids))
+    for k, tid in enumerate(tex_ids):
+        tx = textures[tid]
+        pixels, palette = indexed_texture(tx)
+        pix = align(blob)
+        blob += bytes(pixels)
+        pal = align(blob)
+        blob += struct.pack("<256I", *palette)
+        struct.pack_into("<5I", blob, tex_table + 20 * k, tid, tx["width"], tx["height"], pix, pal)
+    model_ids = sorted(models)
+    model_table = align(blob)
+    blob += bytes(24 * len(model_ids))
+    for k, m in enumerate(model_ids):
+        verts, idx = native_fx.mesh(recs["M", m][0])
+        vat = align(blob)
+        for v in verts:
+            blob += struct.pack("<8f", *v)
+        iat = align(blob)
+        blob += struct.pack(f"<{len(idx)}H", *idx)
+        tex_index = tex_ids.index(model_tex[m]) if m in model_tex else -1
+        struct.pack_into("<3I2Ii", blob, model_table + 24 * k, m, len(verts), len(idx), vat, iat, tex_index)
+    struct.pack_into("<8I", blob, bank_at, len(vs), len(es), len(tex_ids), len(model_ids),
+                     rec_tables[0], rec_tables[1], tex_table, model_table)
+    # Clips: {f32 start, u32 kind (0 V, 1 E), id, f32 pos[3], rot[3], scale, i32 actor, bone; 48 bytes}, by start.
+    clips.sort(key=lambda c: c[0])
+    clip_at = align(blob)
+    for start, kind, number, pos, rot, scale, actor, bone in clips:
+        blob += struct.pack("<f2I7f2i", start, kind, number, *[float(x) for x in pos[:3]],
+                            *[float(x) for x in rot[:3]], float(scale), actor, bone)
+    print(f"  effects: {len(clips)} clips, {len(vs)} V, {len(es)} E, {len(tex_ids)} textures, {len(model_ids)} models")
+    return bank_at, clip_at, len(clips)
+
+
 def align(blob: bytearray, n: int = 16) -> int:
     while len(blob) % n:
         blob.append(0)
     return len(blob)
 
 
-def bake_cast(timeline, files, blob: bytearray):
+def bake_cast(timeline, files, blob: bytearray, work: Path = None):
     """Each model slot with a .mod: its skeleton, slimmed mesh, objects on the shared textures, its CnsPos and its
     motion clips (raw MOT). Returns (texture table offset, count, actor table offset, count)."""
     import prepare_skinned_model as psm
@@ -373,12 +494,13 @@ def bake_cast(timeline, files, blob: bytearray):
                          *a["pos"][:3], *a["rot"][:3], *a["span"])
         on = "" if parent < 0 else f" on slot {a['parent']} bone {a['bone']}"
         print(f"  slot {a['slot']:2d} {a['name']:14s} {n:2d} bones {v:5d} vertices {len(a['motions']):3d} motions{on}")
+    fx = bake_effects(timeline, work, blob, slot_to_actor) if work else (0, 0, 0)
     resident = align(blob)
     for entry, s, e, scale, skip, data in pending:
         at = align(blob)
         blob += data
         struct.pack_into("<4f2I", blob, entry, s, e, scale, skip, at, len(data))
-    return tex_table, len(textures), actor_table, len(actors), resident
+    return tex_table, len(textures), actor_table, len(actors), resident, fx
 
 
 def subtitles(iso_path: Path, demo: int, timeline):
@@ -442,9 +564,10 @@ def main():
     fade_at = len(blob)
     for start, life, out, rgba in fades:
         blob += struct.pack("<2fI4B", start, max(life, 1.0), out, *[min(255, v) for v in rgba[:4]])
-    tex_at, tex_count, actor_at, actor_count, resident = bake_cast(timeline, files, blob)
+    tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))
+    struct.pack_into("<3I", blob, 0x30, *fx)   # +0x30 effect bank, effect clips, clip count (0: none)
     print(f"  {len(subs)} subtitles" + (f": {subs[0][5][:40]!r} ..." if subs else ""))
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / f"DEMO_{args.demo:03d}.BIN"

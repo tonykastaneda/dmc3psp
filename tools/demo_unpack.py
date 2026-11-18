@@ -129,6 +129,8 @@ def unpack(iso_path: Path, demo: int, out: Path):
         raise SystemExit(f"Demo {demo} (GDATA {rec[0] >> 16}) isn't a real-time demo")
     out.mkdir(parents=True, exist_ok=True)
     (out / "script.txt").write_text(text(parts[0]), encoding="utf-8")
+    (out / "fx_names.bin").write_bytes(parts[11])   # the effects it uses: an effect pack's name list and body
+    (out / "fx_body.bin").write_bytes(parts[12])
     files = {}
     for names_at, data_at, kind in PAIRS:
         names = name_list(parts[names_at])

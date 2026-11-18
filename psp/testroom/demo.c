@@ -6,6 +6,7 @@
 #include "demo.h"
 
 #include "motion.h"
+#include "nfx.h"
 #include "stage.h"
 
 #include <malloc.h>
@@ -18,7 +19,8 @@
 #include <string.h>
 
 typedef struct { char magic[4]; unsigned int frames, camera, textures, texture_count, actors, actor_count, reserved;
-                 unsigned int subtitles, subtitle_count, fades, fade_count, pad[4]; } DemoHeader;
+                 unsigned int subtitles, subtitle_count, fades, fade_count, fx_bank, fx_clips, fx_count, pad; } DemoHeader;
+typedef struct { float start; unsigned int kind, id; float pos[3], rot[3], scale; int actor, bone; } DemoEffect;
 typedef struct { float from, length; unsigned int out; unsigned char rgba[4]; } DemoFade;
 typedef struct { float from, to; short x, y, size, pad; char text[112]; } DemoSubtitle;
 typedef struct { float eye[3], target[3], fov, roll; } DemoCamera;
@@ -78,6 +80,11 @@ static int actors_heap;
 static int actor_count;
 static float demo_clock;
 static int playing, id = -1;
+/* The Effect tracks' effects running (nfx handles), those on a bone moved with it each frame. */
+#define DEMO_FX_LIVE 32
+static struct { int handle; const DemoEffect *e; } fx_live[DEMO_FX_LIVE];
+static float fx_clock;   /* the demo clock the effects have been started up to */
+static unsigned int demo_last_us;   /* the real time at the last update (0: none yet) */
 static char demo_path[256];   /* the DEMO file: its motions are read from it as they come up */
 static SceUID demo_fd = -1;   /* kept open while it plays (opening it for each read cost a frame) */
 static void demo_stream(void);
@@ -182,6 +189,11 @@ int demo_start(int demo, const char *dir) {
         return 0;
     }
     load_actors();   /* a demo without its own stage plays over the room's */
+    nfx_reset();
+    nfx_set_demo_bank(blob, head->fx_bank);
+    memset(fx_live, 0, sizeof fx_live);
+    fx_clock = -1.0f;
+    demo_last_us = 0;
     demo_clock = 0.0f;
     playing = 1;
     id = demo;
@@ -189,6 +201,7 @@ int demo_start(int demo, const char *dir) {
 }
 
 void demo_stop(void) {
+    if (blob) { nfx_reset(); nfx_set_demo_bank(0, 0); }
     free_actors();
     if (demo_fd >= 0) { sceIoClose(demo_fd); demo_fd = -1; }
     if (blob_raw) free(blob_raw);
@@ -235,13 +248,64 @@ const char *demo_subtitle(int *x, int *y, int *size) {
     return 0;
 }
 
+/* Where an effect goes: its actor's bone (as posed last frame) plus its offset in that bone's space, or the world. */
+static void effect_place(const DemoEffect *e, float out[3]) {
+    int k;
+    if (e->actor >= 0 && e->actor < actor_count && actors[e->actor].d && actors[e->actor].posed) {
+        const Actor *a = &actors[e->actor];
+        int b = e->bone >= 0 && e->bone < a->d->bones ? e->bone : 0;
+        for (k = 0; k < 3; ++k)
+            out[k] = a->world_pos[b][k] + a->world_rot[b].m[k][0] * e->pos[0] + a->world_rot[b].m[k][1] * e->pos[1] +
+                     a->world_rot[b].m[k][2] * e->pos[2];
+    } else {
+        for (k = 0; k < 3; ++k) out[k] = e->pos[k];
+    }
+}
+
+/* The Effect tracks' V and E effects (nfx's NFX_DEMO bank), started as the clock passes their frame. */
+static void demo_effects(float dt) {
+    const DemoEffect *fx;
+    unsigned int i;
+    int k;
+    if (!head->fx_count) return;
+    fx = (const DemoEffect *)(blob + head->fx_clips);
+    for (i = 0; i < head->fx_count; ++i) {
+        float at[3];
+        int h;
+        if (!(fx[i].start > fx_clock && fx[i].start <= demo_clock)) continue;
+        effect_place(&fx[i], at);
+        h = fx[i].kind ? nfx_spawn_e(NFX_DEMO, (int)fx[i].id, at, fx[i].rot[1], 0)
+                       : nfx_spawn(NFX_DEMO, (int)fx[i].id, at, fx[i].rot[1], 0);
+        if (!h) continue;
+        if (fx[i].scale > 0.0f && fx[i].scale != 1.0f) nfx_scale(h, fx[i].scale);
+        if (fx[i].actor >= 0)
+            for (k = 0; k < DEMO_FX_LIVE; ++k)
+                if (!fx_live[k].handle || !nfx_alive(fx_live[k].handle)) { fx_live[k].handle = h; fx_live[k].e = &fx[i]; break; }
+    }
+    fx_clock = demo_clock;
+    for (k = 0; k < DEMO_FX_LIVE; ++k) {
+        float at[3];
+        if (!fx_live[k].handle) continue;
+        if (!nfx_alive(fx_live[k].handle)) { fx_live[k].handle = 0; continue; }
+        effect_place(fx_live[k].e, at);
+        nfx_move(fx_live[k].handle, at, fx_live[k].e->rot[1]);
+    }
+    nfx_update(dt * 60.0f);
+}
+
 int demo_update(float dt, FollowCamera *camera) {
     const DemoCamera *cams, *c;
-    unsigned int f;
+    unsigned int f, now = sceKernelGetSystemTimeLow();
     if (!playing) return 0;
+    /* Cutscenes always run at normal speed: their clock is the PSP's real time (60 demo frames a second), not the
+     * game's dt (Turbo scales that; tests fix it), at most a 15th of a second a frame. */
+    dt = demo_last_us ? (float)(now - demo_last_us) / 1000000.0f : 1.0f / 60.0f;
+    if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
+    demo_last_us = now;
     demo_clock += dt * 60.0f;
     if (demo_clock >= (float)head->frames) { playing = 0; return 0; }
     demo_stream();
+    demo_effects(dt);
     cams = (const DemoCamera *)(blob + head->camera);
     f = (unsigned int)demo_clock;
     c = &cams[f];

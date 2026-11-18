@@ -2,6 +2,7 @@
 
 #include <pspgu.h>
 #include <pspgum.h>
+#include <malloc.h>
 #include <math.h>
 #include <string.h>
 
@@ -44,7 +45,54 @@ static El els[MAX_EL];
 static unsigned short generation = 1;
 static unsigned int seed = 0x2545f491u;
 
-static const NfxBank *bank_of(int b) { return b == NFX_LEVIATHAN ? &nfx2 : b == NFX_CERBERUS ? &nfx1 : &nfx0; }
+/* A cutscene's own effects (tools/prepare_demo.py bake_effects): its records, textures and models point into the
+ * demo's data, which outlives them (nfx_set_demo_bank(0, 0) before it goes). */
+static NfxBank demo_bank;
+static NfxRecord *demo_v, *demo_e;
+static NfxTexture *demo_textures;
+static NfxModel *demo_models;
+void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
+    const unsigned int *h;
+    unsigned int i;
+    free(demo_v); free(demo_e); free(demo_textures); free(demo_models);
+    demo_v = demo_e = 0; demo_textures = 0; demo_models = 0;
+    memset(&demo_bank, 0, sizeof demo_bank);
+    if (!blob || !at) return;
+    h = (const unsigned int *)(blob + at);   /* v, e, texture, model counts; their tables */
+    demo_v = calloc(h[0] + 1, sizeof *demo_v);
+    demo_e = calloc(h[1] + 1, sizeof *demo_e);
+    demo_textures = calloc(h[2] + 1, sizeof *demo_textures);
+    demo_models = calloc(h[3] + 1, sizeof *demo_models);
+    if (!demo_v || !demo_e || !demo_textures || !demo_models) { nfx_set_demo_bank(0, 0); return; }
+    for (i = 0; i < h[0]; ++i) {
+        const unsigned int *r = (const unsigned int *)(blob + h[4]) + 2 * i;
+        demo_v[i].id = (unsigned short)r[0]; demo_v[i].data = blob + r[1];
+    }
+    for (i = 0; i < h[1]; ++i) {
+        const unsigned int *r = (const unsigned int *)(blob + h[5]) + 2 * i;
+        demo_e[i].id = (unsigned short)r[0]; demo_e[i].data = blob + r[1];
+    }
+    for (i = 0; i < h[2]; ++i) {
+        const unsigned int *r = (const unsigned int *)(blob + h[6]) + 5 * i;
+        demo_textures[i].id = (int)r[0]; demo_textures[i].width = (int)r[1]; demo_textures[i].height = (int)r[2];
+        demo_textures[i].pixels = blob + r[3]; demo_textures[i].palette = (const unsigned int *)(blob + r[4]);
+    }
+    for (i = 0; i < h[3]; ++i) {
+        const unsigned int *r = (const unsigned int *)(blob + h[7]) + 6 * i;
+        demo_models[i].id = (int)r[0]; demo_models[i].vertex_count = (int)r[1]; demo_models[i].index_count = (int)r[2];
+        demo_models[i].vertices = (const NfxVertex *)(blob + r[3]);
+        demo_models[i].indices = (const unsigned short *)(blob + r[4]);
+        demo_models[i].texture = (int)r[5];
+    }
+    demo_bank.v = demo_v; demo_bank.v_count = (int)h[0];
+    demo_bank.e = demo_e; demo_bank.e_count = (int)h[1];
+    demo_bank.textures = demo_textures; demo_bank.texture_count = (int)h[2];
+    demo_bank.models = demo_models; demo_bank.model_count = (int)h[3];
+}
+
+static const NfxBank *bank_of(int b) {
+    return b == NFX_DEMO ? &demo_bank : b == NFX_LEVIATHAN ? &nfx2 : b == NFX_CERBERUS ? &nfx1 : &nfx0;
+}
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
 static unsigned int rd16(const unsigned char *p) { return p[0] | p[1] << 8; }
 static int rs16(const unsigned char *p) { return (short)rd16(p); }
