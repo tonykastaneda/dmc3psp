@@ -91,6 +91,16 @@ foreach ($M10Room in @(201,206)) {
     }
 }
 
+# The real-time cutscenes the missions play (psp/testroom/main.c mission_opening_demos; docs/CUTSCENES.md):
+# DEMO_nnn.BIN and DSTG_nnn.BIN beside the EBOOT, baked once (a few minutes each).
+foreach ($DemoId in @(5,123,9,16,25,27,31,36,39,41,43,46,49,51,55)) {
+    $DemoBin = Join-Path $Build ("DEMO_{0:D3}.BIN" -f $DemoId)
+    if ($Regenerate -or -not (Test-Path $DemoBin)) {
+        $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+        Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_demo.py"), $Iso.FullName, [string]$DemoId, "--output", $Build)
+    }
+}
+
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "gigapede_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     $Python = (Get-Command python -ErrorAction Stop).Source
