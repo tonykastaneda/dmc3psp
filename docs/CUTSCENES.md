@@ -74,9 +74,24 @@ it starts, freeing it after). Two things the demos showed: **a cutscene MOT stor
 then rotation, then scale (bits 6-8, 3-5, 0-2; the hips' first records are world positions, a face bone's 0x1ff run
 offsets, angles, 1.0s), the port's other motions are read as before; and **a CnsPos piece's root takes its parent
 bone's place** (a head is modelled where the neck bone rests, a hand at its forearm bone's origin) [inferred from the
-pieces' rests]. Room for it: the room's stage is freed while a demo plays (3.8 MB is free with the street loaded).
-Not yet: hide tracks, cloth, the second stage piece (slot 12's .scm), effects, messages, fades, sound, and starting
-demos from the event scripts.
+pieces' rests]. **Memory**: a room leaves under 2 MB of heap, so the stage buffer is taken once, at the first load, sized for the largest
+room (5400 KB; ROOM_100.BIN is 5.27 MB), and every later stage is read into it (freed and taken again, a room's few MB
+didn't always come back in one piece). A demo's stage goes in the room's place and its resident data and skinned
+vertices in the buffer's unused tail (`stage_spare`), the heap only past it; `prepare_demo` coarsens a demo's own
+stage (`--max-edge`) until the three fit. After the demo the mission starts afresh and the room is read back.
+
+**Hide tracks**: a slot's DispOn / DispOff clips switch it on and off at their SetFrame (a cut's own .hid, keyed per
+object, counts as on). **Stages from rooms**: a demo whose stage isn't in its package (st232: room 232) uses the
+room's BIN.
+
+**In the missions**: each mission's opening demos, from its event script's first op and the AFTER_DEMO sections
+it chains through (`tools/event_dump.py`): 3: 5, 123; 4: 9; 7: 16; 10: 25; 11: 27; 12: 31; 13: 36; 14: 39 (after movie
+327); 15: 41; 16: 43; 17: 46; 18: 49; 19: 51; 20: 55 (`mission_opening_demos`, played from the menu's mission start;
+START skips). Movies are ids 318 on, MDATA2's rows in order (318 m99_s00 ... 326 m14_c00, 327 m14_s00, 328 m19_c00,
+329 m01_v01); by that order the port's M3_INTRO_A / B (MDATA2 2, 3) are Mission 2's clear and Mission 6's opening
+[to check].
+Not yet: per-object hide channels, cloth, a second stage piece (demo 5's slot 12 .scm), effects, messages, fades,
+sound, and the demos inside missions (boss entrances, clears).
 
 ## Porting plan
 

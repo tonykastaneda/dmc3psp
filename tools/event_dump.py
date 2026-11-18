@@ -49,6 +49,8 @@ def disassemble(data):
         while at + 4 <= len(data):
             word = struct.unpack_from("<I", data, at)[0]
             op, argc = word & 0xFF, (word >> 8) & 0xFF
+            if at + 4 + 4 * argc > len(data):   # past the file's end: the last script ends without an END
+                break
             args = list(struct.unpack_from(f"<{argc}i", data, at + 4)) if argc else []
             name = NAMES.get(op, f"op_{op:02x}")
             if op in CLOSE:

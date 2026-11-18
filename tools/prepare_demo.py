@@ -13,7 +13,8 @@ DEMO_nnn.BIN (little endian; offsets from its start):
   actor (128 bytes): i32 slot, parent actor (CnsPos, -1), parent bone, bones, vertices, indices, objects, motions;
     u32 parents (i8), local (f32x3), rest (f32x3), vertices ({u, v, normal, position} f32), skin ({bones, weights}
     u8x3 each, 8 bytes), indices (u16), objects ({texture, first index, count}), motions ({f32 set, end, scale, skip;
-    u32 MOT offset, size; 32 bytes}), the bone its bounding sphere is about, its radius (f32); f32 pos[3], rot[3] (the clip's adjustments), shown from / to
+    u32 MOT offset, size; 32 bytes}), the bone its bounding sphere is about, its radius (f32); f32 pos[3], rot[3] (the clip's adjustments), shown from / to; u32 hide switches, their offset ({f32 frame,
+    u32 on})
 """
 import argparse
 import json
@@ -152,11 +153,19 @@ def bake_cast(timeline, files, blob: bytearray):
             if mot and files.get(mot):
                 a, b = clip_span(mclip)
                 motions.append((a, b, float(mclip.get("ClipScale", 1.0) or 1.0), float(mclip.get("SkipFrame", 0.0)), files[mot]))
+        # Its hide track: DispOn / DispOff switch the whole slot at a clip's start (a cut's own .hid, which keys
+        # each of the model's objects, counts as on [its per-object channels: not yet]).
+        switches = []
+        for hclip in (tracks.get(("Hide", slot)) or {"clips": []})["clips"]:
+            hid = str(hclip.get("Hide", ""))
+            if hid:
+                switches.append((float(hclip.get("SetFrame", 0.0)), 0 if hid.lower() == "dispoff.hid" else 1))
+        switches.sort()
         cns = clip.get("CnsPos")
         actors.append({"slot": slot, "name": name, "skel": skel, "mesh": mesh, "tex": tex, "motions": motions,
                        "parent": cns[0] if isinstance(cns, list) else -1, "bone": cns[1] if isinstance(cns, list) else 0,
                        "pos": clip.get("Pos") or [0.0, 0.0, 0.0], "rot": clip.get("Rot") or [0.0, 0.0, 0.0],
-                       "span": clip_span(clip)})
+                       "span": clip_span(clip), "switches": switches})
 
     tex_table = align(blob)
     blob += bytes(16 * len(textures))
@@ -202,6 +211,10 @@ def bake_cast(timeline, files, blob: bytearray):
         blob += bytes(32 * len(a["motions"]))
         for k, (s, e, scale, skip, data) in enumerate(a["motions"]):
             pending.append((motion_at + 32 * k, s, e, scale, skip, data))
+        switch_at = align(blob)
+        for frame, on in a["switches"]:
+            blob += struct.pack("<fI", frame, on)
+        struct.pack_into("<2I", blob, actor_table + 128 * i + 104, len(a["switches"]), switch_at)
         parent = slot_to_actor.get(a["parent"], -1)
         struct.pack_into("<8i10I6f2f", blob, actor_table + 128 * i,
                          a["slot"], parent, a["bone"], n, v, len(mesh["indices"]), len(mesh["objects"]), len(a["motions"]),
@@ -243,15 +256,40 @@ def main():
     # The stage: slot 00's .scm clip, its texture, built as a room; its play area the camera's reach.
     stage_clip = next((c for t in timeline["tracks"] if t["kind"] == "Model" for c in t["clips"]
                        if str(c.get("Model", "")).lower().endswith(".scm")), None)
+    room_bin = None
+    if stage_clip and not (work / "model" / stage_clip["Model"]).exists():
+        # A room's own stage (st232 is room 232): the room's BIN as built for the missions (tools/gen_rooms.py).
+        import re
+        import shutil
+        m = re.match(r"st(\d+)", stage_clip["Model"].lower())
+        room_bin = args.output / f"ROOM_{m.group(1)}.BIN" if m else None
+        if room_bin and room_bin.exists():
+            shutil.copyfile(room_bin, args.output / f"DSTG_{args.demo:03d}.BIN")
+            skinned = sum(struct.unpack_from("<i", blob, actor_at + 128 * i + 16)[0] * 32 + 64 for i in range(actor_count))
+            if room_bin.stat().st_size + resident + skinned > 5400 * 1024:
+                print(f"WARNING: {room_bin.name} and the demo's data don't fit together")
+            print(f"stage {stage_clip['Model']}: {room_bin.name}")
+        stage_clip = None
     if stage_clip:
         pts = [p for e, t, _, _ in camera for p in (e, t)]
         lo = [min(p[k] for p in pts) for k in range(3)]
         hi = [max(p[k] for p in pts) for k in range(3)]
-        subprocess.run([sys.executable, str(ROOT / "tools" / "prepare_stage.py"), str(args.iso),
-                        "--output", str(args.output / f"DSTG_{args.demo:03d}.BIN"),
-                        "--scm", str(work / "model" / stage_clip["Model"]),
-                        "--ptx", str(work / "model" / stage_clip["Texture"]),
-                        "--play", *[f"{v:.1f}" for v in lo + hi]], check=True)
+        # It shares the stage buffer (5400 KB, psp/testroom/stage.c) with the demo's resident part and its skinned
+        # vertices: coarser subdivision until it fits.
+        stage_out = args.output / f"DSTG_{args.demo:03d}.BIN"
+        skinned = sum(struct.unpack_from("<i", blob, actor_at + 128 * i + 16)[0] * 32 + 64 for i in range(actor_count))
+        budget = 5400 * 1024 - resident - skinned - 128 * 1024
+        for edge in (500, 1000, 2000, 4000, 100000):
+            subprocess.run([sys.executable, str(ROOT / "tools" / "prepare_stage.py"), str(args.iso),
+                            "--output", str(stage_out),
+                            "--scm", str(work / "model" / stage_clip["Model"]),
+                            "--ptx", str(work / "model" / stage_clip["Texture"]),
+                            "--play", *[f"{v:.1f}" for v in lo + hi], "--max-edge", str(edge)], check=True)
+            if stage_out.stat().st_size <= budget:
+                break
+            print(f"stage {stage_out.stat().st_size:,} bytes over its {budget:,}: coarser")
+        if stage_out.stat().st_size > budget:
+            print(f"WARNING: {stage_out.name} doesn't fit ({stage_out.stat().st_size:,} > {budget:,})")
     e0, t0, fov0, roll0 = camera[0]
     print(f"{out}: {len(camera)} frames; first eye {[round(v) for v in e0]} target {[round(v) for v in t0]} "
           f"fov {fov0:.1f} ch13 {roll0:.2f}")

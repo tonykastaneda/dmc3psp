@@ -26,7 +26,8 @@ typedef struct {
     unsigned int centre_bone;   /* its bounding sphere: about this bone, */
     float radius;               /* this far */
     float pos[3], rot[3], shown_from, shown_to;
-    unsigned int pad[6];   /* 128 bytes, as written */
+    unsigned int switches, switch_at;   /* its hide track: {f32 frame, u32 on} (DispOn / DispOff) */
+    unsigned int pad[4];   /* 128 bytes, as written */
 } DemoActorData;
 typedef struct { float set, end, scale, skip; unsigned int mot, size; unsigned int pad[2]; } DemoMotionClip;
 typedef struct { float u, v, nx, ny, nz, x, y, z; } DemoVertex;
@@ -45,10 +46,27 @@ typedef struct {
     DemoVertex *skinned;       /* drawn this frame */
     M3 world_rot[DEMO_MAX_BONES];
     float world_pos[DEMO_MAX_BONES][3];
-    int posed, visible;
+    int posed, visible, skinned_heap;
 } Actor;
 
-static unsigned char *blob, *blob_raw;   /* blob: blob_raw aligned to 64 */
+static unsigned char *blob, *blob_raw;   /* blob: blob_raw aligned to 64 (blob_raw 0: blob is in the spare) */
+
+/* The demo's own data goes in the stage buffer's unused tail (stage_spare: the buffer is sized for the largest room,
+ * a cutscene's stage leaves room), the heap only past it: a room leaves under 2 MB of heap. */
+static unsigned char *spare;
+static unsigned int spare_left;
+static void *demo_alloc(unsigned int size, int *heap) {
+    unsigned int pad = (unsigned int)(((unsigned int)spare + 63u) & ~63u) - (unsigned int)spare;
+    if (spare && pad + size <= spare_left) {
+        void *p = spare + pad;
+        spare += pad + size; spare_left -= pad + size;
+        *heap = 0;
+        return p;
+    }
+    *heap = 1;
+    return memalign(64, size);
+}
+
 static const DemoHeader *head;
 static Actor actors[DEMO_MAX_ACTORS];
 static int actor_count;
@@ -67,12 +85,15 @@ static void *read_file(const char *path, int *size_out, int limit) {
     size = (int)sceIoLseek(fd, 0, PSP_SEEK_END);
     sceIoLseek(fd, 0, PSP_SEEK_SET);
     if (limit > 0 && limit < size) size = limit;
-    blob_raw = malloc((size_t)size + 64);
-    if (!blob_raw) { sceIoClose(fd); read_error = -4; return 0; }
-    data = (void *)(((unsigned int)blob_raw + 63u) & ~63u);
+    {
+        int heap;
+        data = demo_alloc((unsigned int)size, &heap);
+        blob_raw = heap ? data : 0;
+    }
+    if (!data) { sceIoClose(fd); read_error = -4; return 0; }
     got = sceIoRead(fd, data, (unsigned int)size);
     sceIoClose(fd);
-    if (got != size) { free(blob_raw); blob_raw = 0; read_error = -5 - (got < 0 ? 0 : 1); return 0; }
+    if (got != size) { if (blob_raw) free(blob_raw); blob_raw = 0; read_error = -5 - (got < 0 ? 0 : 1); return 0; }
     if (size_out) *size_out = size;
     return data;
 }
@@ -88,7 +109,7 @@ static void free_actors(void) {
             free(actors[i].motions);
             free(actors[i].motion_data);
         }
-        free(actors[i].skinned);
+        if (actors[i].skinned_heap) free(actors[i].skinned);
     }
     memset(actors, 0, sizeof actors);
     actor_count = 0;
@@ -103,11 +124,11 @@ static int load_actors(void) {
         const DemoMotionClip *clips = (const DemoMotionClip *)(blob + table[i].motion_at);
         if (table[i].bones > DEMO_MAX_BONES) { continue; }
         a->d = &table[i];
-        a->skinned = memalign(16, sizeof(DemoVertex) * (size_t)table[i].vertices);
+        a->skinned = demo_alloc(sizeof(DemoVertex) * (unsigned int)table[i].vertices, &a->skinned_heap);
         a->motions = table[i].motions ? calloc((size_t)table[i].motions, sizeof(Motion)) : 0;
         a->motion_data = table[i].motions ? calloc((size_t)table[i].motions, sizeof(unsigned char *)) : 0;
         if (!a->skinned || (table[i].motions && (!a->motions || !a->motion_data))) {
-            free(a->skinned); free(a->motions); free(a->motion_data); continue;
+            if (a->skinned_heap) free(a->skinned); free(a->motions); free(a->motion_data); continue;
         }
         memcpy(a->skinned, blob + table[i].vertex_at, sizeof(DemoVertex) * (size_t)table[i].vertices);
         (void)clips; (void)k;
@@ -123,8 +144,9 @@ int demo_start(int demo, const char *dir) {
     snprintf(path, sizeof path, "%s/DSTG_%03d.BIN", dir, demo);
     {
         SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
-        if (fd >= 0) { sceIoClose(fd); stage_unload(); }   /* its own stage goes in the room's place */
+        if (fd >= 0) { sceIoClose(fd); stage_load(path); }   /* its own stage, read into the room's buffer (stage.c) */
     }
+    spare = stage_spare(&spare_left);
     snprintf(demo_path, sizeof demo_path, "%s/DEMO_%03d.BIN", dir, demo);
     {
         /* Its header says how much stays resident (all but the motions). */
@@ -143,8 +165,7 @@ int demo_start(int demo, const char *dir) {
         demo_stop();
         return 0;
     }
-    load_actors();
-    stage_load(path);   /* a demo without its own stage plays over the room's */
+    load_actors();   /* a demo without its own stage plays over the room's */
     demo_clock = 0.0f;
     playing = 1;
     id = demo;
@@ -155,6 +176,7 @@ void demo_stop(void) {
     free_actors();
     if (blob_raw) free(blob_raw);
     blob_raw = 0;
+    spare = 0; spare_left = 0;
     blob = 0;
     head = 0;
     playing = 0;
@@ -362,6 +384,13 @@ void demo_draw(void) {
         const DemoObject *obj = (const DemoObject *)(blob + a->d->object_at);
         const unsigned short *idx = (const unsigned short *)(blob + a->d->index_at);
         if (demo_clock < a->d->shown_from || demo_clock >= a->d->shown_to) continue;
+        {   /* its hide track: the last switch at or before now */
+            const struct { float frame; unsigned int on; } *sw = (const void *)(blob + a->d->switch_at);
+            unsigned int n, on = 1;
+            for (n = 0; n < a->d->switches && sw[n].frame <= demo_clock; ++n) on = sw[n].on;
+            if (a->d->switches && sw[0].frame > demo_clock) on = 1;
+            if (!on) continue;
+        }
         {
             int cb = (int)a->d->centre_bone < a->d->bones ? (int)a->d->centre_bone : 0;
             if (!sphere_visible(&clip, a->world_pos[cb], a->d->radius)) continue;

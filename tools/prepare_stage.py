@@ -432,7 +432,11 @@ def main() -> None:
     parser.add_argument("--scm", type=Path, help="a demo's stage .scm instead of a GDATA slot")
     parser.add_argument("--ptx", type=Path, help="its texture set (.ptx)")
     parser.add_argument("--play", type=float, nargs=6, help="the demo's play area")
+    parser.add_argument("--max-edge", type=float, help="subdivide only to this (cm): a cutscene's stage that must fit")
     args = parser.parse_args()
+    global MAX_EDGE
+    if args.max_edge:
+        MAX_EDGE = args.max_edge
 
     if args.scm:
         name = args.scm.stem

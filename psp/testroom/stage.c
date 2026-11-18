@@ -69,6 +69,13 @@ static StageInfo collision_info;
 static unsigned char *chunk_visible;   /* per chunk, this frame */
 static unsigned int chunk_total;
 
+/* The stage's buffer is kept and a new stage read into it when it fits (a cutscene's stage in the room's place, then
+ * the room's again): freed and taken again, a room's few MB don't always come back in one piece. */
+static unsigned int blob_capacity, chunk_capacity, stage_loaded_size;
+/* Taken once at the first load (the heap still whole then), big enough for every room (ROOM_100.BIN, 5.27 MB, is
+ * the largest) and every cutscene's stage (tools/prepare_demo.py keeps them under it): later loads never need more. */
+#define STAGE_RESERVE (5400u << 10)
+
 int stage_load(const char *path) {
     memset(group_hidden, 0, sizeof(group_hidden));
     memset(group_pose,0,sizeof(group_pose));
@@ -78,20 +85,26 @@ int stage_load(const char *path) {
     int size, got;
     if (fd < 0) return 0;
     /* Replacing a stage: nothing draws during this. */
-    if (blob) { free(blob); blob = 0; header = 0; }
-    if (chunk_visible) { free(chunk_visible); chunk_visible = 0; }
+    header = 0;
     chunk_total = 0;
     size = (int)sceIoLseek(fd, 0, PSP_SEEK_END);
     sceIoLseek(fd, 0, PSP_SEEK_SET);
-    blob = memalign(64, (size_t)size);
+    if (!blob || (unsigned int)size > blob_capacity) {
+        /* Both freed first, so the freed space joins up for the bigger one. */
+        if (chunk_visible) { free(chunk_visible); chunk_visible = 0; chunk_capacity = 0; }
+        unsigned int want = (unsigned int)size > STAGE_RESERVE ? (unsigned int)size : STAGE_RESERVE;
+        if (blob) free(blob);
+        blob = memalign(64, want);
+        if (!blob && want > (unsigned int)size) { want = (unsigned int)size; blob = memalign(64, want); }
+        blob_capacity = blob ? want : 0;
+    }
     if (!blob) { sceIoClose(fd); return 0; }
     got = sceIoRead(fd, blob, (unsigned int)size);
+    stage_loaded_size = (unsigned int)size;
     sceIoClose(fd);
     header = (const Header *)blob;
     if (got != size || memcmp(header->magic, "STG1", 4) != 0 || header->version != 3) {
-        free(blob);
-        blob = 0;
-        header = 0;
+        header = 0;   /* the buffer stays for the next */
         return 0;
     }
     {
@@ -99,7 +112,11 @@ int stage_load(const char *path) {
         unsigned int i;
         for (i = 0; i < header->batches; ++i)
             if (bt[i].chunk_first + bt[i].chunk_count > chunk_total) chunk_total = bt[i].chunk_first + bt[i].chunk_count;
-        chunk_visible = malloc(chunk_total ? chunk_total : 1);
+        if (!chunk_visible || chunk_total > chunk_capacity) {
+            if (chunk_visible) free(chunk_visible);
+            chunk_visible = malloc(chunk_total ? chunk_total : 1);
+            chunk_capacity = chunk_visible ? chunk_total : 0;
+        }
     }
     sceKernelDcacheWritebackAll();
     hits = (const HitsHeader *)(blob + 0x80);
@@ -124,10 +141,20 @@ int stage_load(const char *path) {
     return 1;
 }
 
+/* The stage buffer's unused tail (a cutscene keeps its own data there: demo.c). */
+void *stage_spare(unsigned int *size) {
+    unsigned int used;
+    if (!blob || !header) { *size = 0; return 0; }
+    used = (stage_loaded_size + 63u) & ~63u;
+    *size = blob_capacity > used ? blob_capacity - used : 0;
+    return *size ? blob + used : 0;
+}
+
 /* Frees the stage (a cutscene loads its own in its place). */
 void stage_unload(void) {
     if (blob) { free(blob); blob = 0; header = 0; }
     if (chunk_visible) { free(chunk_visible); chunk_visible = 0; }
+    blob_capacity = chunk_capacity = 0;
     chunk_total = 0;
 }
 

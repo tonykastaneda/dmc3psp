@@ -3596,9 +3596,25 @@ static void menu_clear_shot(int frame) {
     if (frame == 30) capture_frame(menu_draw_buffer, "MENU_CLEAR.BMP");
 }
 
+/* Real-time cutscenes waiting to play (demo.c); the main loop plays them in turn, then starts the mission afresh. */
+static int demo_queue[8], demo_queue_len, demo_queue_at;
+static void queue_demo(int id) { if (demo_queue_len < 8) demo_queue[demo_queue_len++] = id; }
+
+/* Each mission's opening, from its event script's first op and the AFTER_DEMO sections it chains through to the
+ * mission-start screen (tools/event_dump.py; docs/CUTSCENES.md): the real-time demos among them. Movies (ids 318
+ * on, MDATA2's rows in order) are played as before. */
+static const short mission_opening_demos[21][3] = {
+    {-1}, {-1}, {-1}, {5, 123, -1}, {9, -1}, {-1}, {-1}, {16, -1}, {-1}, {-1}, {25, -1}, {27, -1}, {31, -1},
+    {36, -1}, {39, -1}, {41, -1}, {43, -1}, {46, -1}, {49, -1}, {51, -1}, {55, -1},
+};
+
 static void play_intro(int mission) {
+    int k;
     if (mission == 1) play_movie("MOVIES/M1_INTRO.MOV");
     if (mission == 3) { play_movie("MOVIES/M3_INTRO_A.MOV"); play_movie("MOVIES/M3_INTRO_B.MOV"); }
+    demo_queue_len = demo_queue_at = 0;
+    if (mission >= 1 && mission <= 20)
+        for (k = 0; k < 3 && mission_opening_demos[mission][k] >= 0; ++k) queue_demo(mission_opening_demos[mission][k]);
 }
 
 /* Mission Select's Debug Room: the Mission 2 street (STAGE.BIN), empty, with the debug menu's dummies. */
@@ -4003,6 +4019,45 @@ int main(int argc, char *argv[]) {
             dt = (float)(frame_start - last_time) / 1000000.0f;
             if (dt > 1.0f / 15.0f) dt = 1.0f / 15.0f;
             read_pad(&input, &previous_buttons, &previous_l);
+        }
+        if (demo_active() || demo_queue_at < demo_queue_len) {
+            /* A cutscene has the frame: nothing else runs. START skips it. */
+            static unsigned int demo_prev_buttons;
+            SceCtrlData pad;
+            int skip;
+            sceCtrlPeekBufferPositive(&pad, 1);
+            skip = (pad.Buttons & PSP_CTRL_START) && !(demo_prev_buttons & PSP_CTRL_START);
+            demo_prev_buttons = pad.Buttons;
+            last_time = frame_start;
+            if (!demo_active()) {
+                char dir[256];
+                path_in_game_dir(dir, sizeof dir, "");
+                if (dir[0] && dir[strlen(dir) - 1] == '/') dir[strlen(dir) - 1] = 0;
+                enemy_test_note("demo start", demo_start(demo_queue[demo_queue_at], dir), (float)demo_queue[demo_queue_at]);
+                ++demo_queue_at;
+            }
+            if (skip) demo_stop();
+            {
+                FollowCamera shown = camera;
+                if (demo_active() && demo_update(dt, &shown)) {
+                    const char *none[HUD_LINES] = {0};
+                    render_scene(&player, &shown, none, 0);
+                    goto frame_drawn;
+                }
+            }
+            demo_stop();
+            if (demo_queue_at >= demo_queue_len) {
+                demo_queue_len = demo_queue_at = 0;
+                if (mission_mode) start_mission(&mission_choice, &player, &camera);   /* the room, as it was before the demos */
+                else {   /* the test street: its stage back */
+                    char stage_path[320];
+                    path_in_game_dir(stage_path, sizeof stage_path, "STAGE.BIN");
+                    stage_load(stage_path);
+                }
+                last_time = sceKernelGetSystemTimeLow();
+            }
+            render_scene(&player, &camera, hud, 0);
+            goto frame_drawn;
         }
         if (focus_cmp && cmp_enemy_audit && cmp_audit_room_count) {
             int a;
@@ -4535,17 +4590,7 @@ int main(int argc, char *argv[]) {
             focus_coat_camera(&player, &camera, frames);
             hud[0] = hud[1] = hud[2] = hud[3] = NULL;
         }
-        if (cmp_demo >= 0 && frames == 2) {
-            char dir[256];
-            path_in_game_dir(dir, sizeof dir, "");
-            if (dir[0] && dir[strlen(dir) - 1] == '/') dir[strlen(dir) - 1] = 0;
-            enemy_test_note("demo start", demo_start(cmp_demo, dir), (float)demo_actor_count());
-        }
-        if (demo_active()) {
-            FollowCamera shown = camera;
-            if (demo_update(dt, &shown)) { render_scene(&player, &shown, hud, bones_now); goto frame_drawn; }
-            enemy_test_note("demo end", demo_id(), demo_frame());
-        }
+        if (cmp_demo >= 0 && frames == 2) { demo_queue_len = demo_queue_at = 0; queue_demo(cmp_demo); }   /* tests: "demo n" */
         render_scene(&player, &camera, hud, bones_now);
         frame_drawn:
 
