@@ -535,15 +535,49 @@ def subtitles(iso_path: Path, demo: int, timeline):
     return out
 
 
+def bake_audio(iso_path: Path, timeline, out: Path, demo: int):
+    """The demo's sound: SDATA.AFS's "<package>.adx" (its Sound clip names stream = the demo; the file is named after
+    the demo's package, m03_s00 for demo 5), decoded by ffmpeg and stored as the movies' IMA ADPCM
+    (tools/prepare_movies.py): DAUD_nnn.BIN = "DAU1", u32 rate, u32 sample pairs, f32 start frame, then a byte per
+    stereo sample pair (left in the low nibble). Returns its path or None."""
+    import subprocess as sp
+    import prepare_movies
+    track = next((t for t in timeline["tracks"] if t["kind"] == "Sound"), None)
+    if not track or not track["clips"]:
+        return None
+    package = track["file"].replace("_SoundSet.txt", "")
+    start = float(track["clips"][0].get("SetFrame", 0.0))
+    with demo_unpack.psm.Iso9660(iso_path) as iso:
+        sdata = demo_unpack.psm.AfsArchive(iso, "SDATA.AFS")
+        entry = next((e for e in sdata.entries if e["name"].lower() == f"{package.lower()}.adx"), None)
+        if not entry:
+            return None
+        adx = iso.read_file("SDATA.AFS", entry["offset"], entry["size"])
+    rate = 44100
+    pcm = sp.run([prepare_movies.FFMPEG, "-v", "error", "-f", "adx", "-i", "pipe:0", "-f", "s16le", "-ac", "2",
+                  "-ar", str(rate), "pipe:1"], input=adx, capture_output=True, check=True).stdout
+    samples = struct.unpack(f"<{len(pcm) // 2}h", pcm[:len(pcm) // 4 * 4])
+    nibbles = prepare_movies.ima_encode(samples)[:len(samples) // 2]
+    path = out / f"DAUD_{demo:03d}.BIN"
+    path.write_bytes(struct.pack("<4s2If", b"DAU1", rate, len(samples) // 2, start) + bytes(nibbles))
+    print(f"  sound: {package}.adx, {len(samples) / 2 / rate:.1f} s from frame {start:.0f} -> {path.name}")
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
     parser.add_argument("demo", type=int)
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "testroom")
+    parser.add_argument("--audio-only", action="store_true", help="only its sound (DAUD_nnn.BIN)")
     args = parser.parse_args()
     work = ROOT / "build" / "demo" / str(args.demo)
     demo_unpack.unpack(args.iso, args.demo, work)
     timeline = json.loads((work / "timeline.json").read_text(encoding="utf-8"))
+    if args.audio_only:
+        args.output.mkdir(parents=True, exist_ok=True)
+        bake_audio(args.iso, timeline, args.output, args.demo)
+        return
     files = {p.name: p.read_bytes() for d in work.iterdir() if d.is_dir() for p in d.iterdir()}
 
     camera = bake_camera(timeline, files)
@@ -621,6 +655,7 @@ def main():
             print(f"stage {stage_out.stat().st_size:,} bytes over its {budget:,}: coarser")
         if stage_out.stat().st_size > budget:
             print(f"WARNING: {stage_out.name} doesn't fit ({stage_out.stat().st_size:,} > {budget:,})")
+    bake_audio(args.iso, timeline, args.output, args.demo)
     e0, t0, fov0, roll0 = camera[0]
     print(f"{out}: {len(camera)} frames; first eye {[round(v) for v in e0]} target {[round(v) for v in t0]} "
           f"fov {fov0:.1f} ch13 {roll0:.2f}")

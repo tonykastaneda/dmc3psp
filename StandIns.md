@@ -15,10 +15,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
   `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), and fades, but: no sound, effects or cloth; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
+  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: their P / G effects and cloth aren't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
   [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; 13's 37 isn't played; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
-- **Sound**: only in movies; no music or effects in menus or the game. GAME_FLOW.md.
+- **Sound**: only in movies and cutscenes; no music or effects in menus or play. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
   `main.c` ~4296, EVENT_SCRIPTS.md.

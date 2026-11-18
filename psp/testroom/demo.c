@@ -14,6 +14,7 @@
 #include <pspgu.h>
 #include <pspgum.h>
 #include <pspiofilemgr.h>
+#include <pspaudio.h>
 #include <pspkernel.h>
 #include <stdio.h>
 #include <string.h>
@@ -85,6 +86,86 @@ static int playing, id = -1;
 static struct { int handle; const DemoEffect *e; } fx_live[DEMO_FX_LIVE];
 static float fx_clock;   /* the demo clock the effects have been started up to */
 static unsigned int demo_last_us;   /* the real time at the last update (0: none yet) */
+
+/* ---- Its sound: DAUD_nnn.BIN (tools/prepare_demo.py bake_audio), the movies' IMA ADPCM, a byte per stereo sample
+ * pair, streamed from the memory stick by its own thread from the Sound clip's frame. Both it and the demo clock run on
+ * real time, so they keep together. */
+#define SOUND_CHUNK 1024
+static SceUID sound_fd = -1, sound_thread = -1;
+static volatile int sound_on;
+static int sound_reserved;
+static unsigned int sound_left;
+static float sound_start;
+static int sound_predicted[2], sound_index[2];
+static const short sound_steps[89] = {
+    7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107,
+    118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963,
+    1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428, 4871, 5358, 5894,
+    6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767};
+static const signed char sound_index_step[8] = {-1, -1, -1, -1, 2, 4, 6, 8};
+static short sound_decode(int ch, int nibble) {
+    int step = sound_steps[sound_index[ch]], change = step >> 3;
+    if (nibble & 4) change += step;
+    if (nibble & 2) change += step >> 1;
+    if (nibble & 1) change += step >> 2;
+    sound_predicted[ch] += nibble & 8 ? -change : change;
+    if (sound_predicted[ch] > 32767) sound_predicted[ch] = 32767;
+    if (sound_predicted[ch] < -32768) sound_predicted[ch] = -32768;
+    sound_index[ch] += sound_index_step[nibble & 7];
+    if (sound_index[ch] < 0) sound_index[ch] = 0;
+    if (sound_index[ch] > 88) sound_index[ch] = 88;
+    return (short)sound_predicted[ch];
+}
+static int sound_main(SceSize args, void *argp) {
+    static short __attribute__((aligned(64))) pcm[2][SOUND_CHUNK * 2];
+    static unsigned char bytes[SOUND_CHUNK];
+    int which = 0;
+    (void)args; (void)argp;
+    while (sound_on && demo_clock < sound_start) sceKernelDelayThread(2000);
+    while (sound_on && sound_left) {
+        unsigned int n = sound_left < SOUND_CHUNK ? sound_left : SOUND_CHUNK, i;
+        short *out = pcm[which];
+        int got = sceIoRead(sound_fd, bytes, n);
+        which = !which;
+        if (got <= 0) break;
+        for (i = 0; i < SOUND_CHUNK; ++i) {
+            if (i < (unsigned int)got) {
+                out[i * 2] = sound_decode(0, bytes[i] & 15);
+                out[i * 2 + 1] = sound_decode(1, bytes[i] >> 4);
+            } else out[i * 2] = out[i * 2 + 1] = 0;
+        }
+        sound_left -= (unsigned int)got;
+        if (sceAudioSRCOutputBlocking(PSP_AUDIO_VOLUME_MAX, out) < 0) sceKernelDelayThread(20000);
+    }
+    return 0;
+}
+static void sound_stop(void) {
+    if (sound_thread >= 0) {
+        sound_on = 0;
+        sceKernelWaitThreadEnd(sound_thread, NULL);
+        sceKernelDeleteThread(sound_thread);
+        sound_thread = -1;
+    }
+    if (sound_reserved) { while (sceAudioSRCChRelease() < 0) sceKernelDelayThread(1000); sound_reserved = 0; }
+    if (sound_fd >= 0) { sceIoClose(sound_fd); sound_fd = -1; }
+}
+static void sound_begin(const char *dir, int demo) {
+    char path[256];
+    struct { char magic[4]; unsigned int rate, pairs; float start; } h;
+    snprintf(path, sizeof path, "%s/DAUD_%03d.BIN", dir, demo);
+    sound_fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+    if (sound_fd < 0) return;
+    if (sceIoRead(sound_fd, &h, sizeof h) != (int)sizeof h || memcmp(h.magic, "DAU1", 4) != 0 ||
+        sceAudioSRCChReserve(SOUND_CHUNK, (int)h.rate, 2) < 0) { sceIoClose(sound_fd); sound_fd = -1; return; }
+    sound_reserved = 1;
+    sound_left = h.pairs;
+    sound_start = h.start;
+    sound_predicted[0] = sound_predicted[1] = sound_index[0] = sound_index[1] = 0;
+    sound_on = 1;
+    sound_thread = sceKernelCreateThread("demo sound", sound_main, 0x12, 0x4000, PSP_THREAD_ATTR_USER, NULL);
+    if (sound_thread >= 0) sceKernelStartThread(sound_thread, 0, NULL);
+    else sound_stop();
+}
 static char demo_path[256];   /* the DEMO file: its motions are read from it as they come up */
 static SceUID demo_fd = -1;   /* kept open while it plays (opening it for each read cost a frame) */
 static void demo_stream(void);
@@ -194,6 +275,7 @@ int demo_start(int demo, const char *dir) {
     memset(fx_live, 0, sizeof fx_live);
     fx_clock = -1.0f;
     demo_last_us = 0;
+    sound_begin(dir, demo);
     demo_clock = 0.0f;
     playing = 1;
     id = demo;
@@ -201,6 +283,7 @@ int demo_start(int demo, const char *dir) {
 }
 
 void demo_stop(void) {
+    sound_stop();
     if (blob) { nfx_reset(); nfx_set_demo_bank(0, 0); }
     free_actors();
     if (demo_fd >= 0) { sceIoClose(demo_fd); demo_fd = -1; }

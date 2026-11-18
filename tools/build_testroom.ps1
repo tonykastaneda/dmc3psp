@@ -100,6 +100,10 @@ foreach ($DemoId in @(5,123,9,16,25,27,31,36,39,41,43,46,49,51,55, 8,10,15,20,24
         $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
         Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_demo.py"), $Iso.FullName, [string]$DemoId, "--output", $Build)
     }
+    elseif (-not (Test-Path (Join-Path $Build ("DAUD_{0:D3}.BIN" -f $DemoId)))) {   # its sound
+        $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+        Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_demo.py"), $Iso.FullName, [string]$DemoId, "--output", $Build, "--audio-only")
+    }
 }
 
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "gigapede_runtime.h"))) {
