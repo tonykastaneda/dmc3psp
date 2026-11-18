@@ -405,6 +405,10 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
         } else if (b->step == 2) {
             if (b->done) { play(b, LADY_M_ZIP); b->speed = 20.0f; b->clock = 120.0f; b->air = 1; b->step = 3; }
         } else if (b->step == 3) {
+            /* Her wire, a stand-in: a thin line from her up to an anchor above where she lets go (the game's wire
+             * actor, 0049e4f0, and its direction, 0044b780, aren't read; the anchor at y 1400 is an estimate). */
+            float from[3] = {b->pos[0], b->pos[1] + 160.0f, b->pos[2]}, to[3] = {b->pos[0], 1400.0f, b->pos[2]};
+            fx_tracer(from, to, 0xffb0b0b0u, 3.0f);
             b->speed += 1.0f * f;
             b->pos[1] += b->speed * f;
             if (b->pos[1] >= 1200.0f) {

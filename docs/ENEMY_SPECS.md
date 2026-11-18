@@ -1233,7 +1233,7 @@ dispatch `00444c90` (+0x47c0: modes 0-0x17 her walk `00445210`, 0x18 `004455d0`,
 **In the port** (`psp/testroom/lady_boss.c`): the modes above at rank 0, each action's own motion, her turn rate,
 magazine and burst count, and her records' damage; her waypoints, walk, 0x28, 0x1a, the special picker, 0x1b and
 0x1c, her line of sight (a stage ray), her grapple (0x1d) and her ledge mode (0x1e), as decoded above. Stand-ins:
-the grapple's wire isn't drawn and she rises straight up (its direction, `0044b780`, isn't read); the ledges aren't in
+the grapple's wire is a thin line from her up to y 1400 [estimate] while she climbs (the game's wire actor, `0049e4f0`, isn't read) and she rises straight up (its direction, `0044b780`, isn't read); the ledges aren't in
 the port's collision (it has only the floor there), so she perches at their y 501 until her hop; `00449120` taken as
 the ledge nearest Dante; 0x0e's slot ([2] 14) is empty, 0x61's landing plays; what 0x8f fires (one pistol shot
 [inferred]); the special gate (every 600 frames [estimate]), what 0x1b and 0x1c fire (a
