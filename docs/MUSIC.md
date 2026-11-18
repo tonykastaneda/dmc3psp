@@ -18,8 +18,11 @@ own tracks, menus). The port plays the missions' music and the cutscenes' sound;
 ## In the port
 
 `tools/gen_music.py` writes `music_runtime.h` (mission, room, SDATA track and command per channel) and converts each
-track used (38, 192 MB) to `BGM_nnn.BIN`: `BGM1`, rate, sample pairs, then the movies' IMA ADPCM, a byte per stereo
-pair. `psp/testroom/music.c` plays two hardware channels, a streaming thread each, looping:
+track used (40, 200 MB) to `BGM_nnn.BIN`: `BGM2`, rate, sample pairs, the loop's start and end, the IMA coder's
+state at the loop's start, then the movies' IMA ADPCM, a byte per stereo pair. The loop is the ADX header's (version 4:
+flag +0x24, start +0x28, end +0x30, in 48 kHz samples; Option.adx plays a 35 s opening once, then loops from there); a
+track without one (Result.adx) loops whole. `psp/testroom/music.c` plays two hardware channels, a streaming thread
+each, to the loop's end and back to its start:
 
 - command 0 nothing, 1 / 2 stop, 3-6 fade out, 12 hold the track and fade it in while enemies are alive in the room
   (out again once it's clear) [inferred: state 5's handling isn't read], the rest play (7 / 8 at once, others fading in
@@ -44,6 +47,5 @@ See CUTSCENES.md (Sound): each real-time demo streams its own SDATA track (`<pac
   sound driver over RPC (`FUN_003027a0`). The banks aren't Sony HD/BD and the id-to-sample mapping lives in the IOP
   module, so porting them means reverse engineering that driver.
 - The deferred states' exact handling (commands 12-16).
-- ADX loop points: the port loops the whole track.
 - The title's and Game Over's music (Continue.adx, SDATA 27, by its name; the port's Game Over is a 2.5 s pause before
   the restart).

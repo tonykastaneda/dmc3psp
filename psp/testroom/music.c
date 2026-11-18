@@ -1,6 +1,6 @@
 /* The missions' music (docs/MUSIC.md): two stream channels, as the game's event op 0x70 drives them (FUN_0032cef0), set
  * per room from tools/gen_music.py's table and played from BGM_nnn.BIN (nnn: the track's SDATA.AFS index; the movies'
- * IMA ADPCM, looping) by a thread each on a hardware channel.
+ * IMA ADPCM) by a thread each on a hardware channel: to the ADX loop's end, then back to its start.
  *
  * Commands, per channel: 0 nothing; 1 / 2 stop; 3-6 fade out; 12 hold the track until a fight (state 5), then fade it
  * in, and out again once the room is clear [the deferred states' handling: inferred from the scripts, where channel 0
@@ -29,7 +29,9 @@ typedef struct {
     int hold;                   /* command 12: waits for a fight */
     int predicted[2], index[2];
     SceUID fd;
-    unsigned int pairs, left;
+    unsigned int pairs, left, loop_start, loop_end;
+    short loop_predicted[2];
+    unsigned char loop_index[2];
     unsigned char bytes[CHUNK];
     short __attribute__((aligned(64))) pcm[2][CHUNK * 2];
 } Channel;
@@ -61,26 +63,37 @@ static short decode(Channel *c, int s, int nibble) {
     return (short)c->predicted[s];
 }
 
-static void rewind_track(Channel *c) {
-    sceIoLseek(c->fd, 12, PSP_SEEK_SET);
-    c->left = c->pairs;
-    c->predicted[0] = c->predicted[1] = c->index[0] = c->index[1] = 0;
+#define BGM_HEADER 28
+/* To the loop's start (the coder as it was there), or the track's. */
+static void rewind_track(Channel *c, int loop) {
+    int k;
+    unsigned int at = loop ? c->loop_start : 0;
+    sceIoLseek(c->fd, BGM_HEADER + at, PSP_SEEK_SET);
+    c->left = c->loop_end - at;
+    for (k = 0; k < 2; ++k) {
+        c->predicted[k] = loop ? c->loop_predicted[k] : 0;
+        c->index[k] = loop ? c->loop_index[k] : 0;
+    }
 }
 
 static void open_track(Channel *c, int track) {
     char path[300];
-    struct { char magic[4]; unsigned int rate, pairs; } h;
+    struct { char magic[4]; unsigned int rate, pairs, loop_start, loop_end; short predicted[2]; unsigned char index[2], pad[2]; } h;
     if (c->fd >= 0) { sceIoClose(c->fd); c->fd = -1; }
     c->track = -1;
     if (track < 0) return;
     snprintf(path, sizeof path, "%s/BGM_%03d.BIN", dir, track);
     c->fd = sceIoOpen(path, PSP_O_RDONLY, 0);
     if (c->fd < 0) return;
-    if (sceIoRead(c->fd, &h, sizeof h) != (int)sizeof h || memcmp(h.magic, "BGM1", 4) != 0 || !h.pairs) {
+    if (sceIoRead(c->fd, &h, sizeof h) != (int)sizeof h || memcmp(h.magic, "BGM2", 4) != 0 || !h.pairs
+        || h.loop_end > h.pairs || h.loop_start >= h.loop_end) {
         sceIoClose(c->fd); c->fd = -1; return;
     }
     c->pairs = h.pairs;
-    rewind_track(c);
+    c->loop_start = h.loop_start; c->loop_end = h.loop_end;
+    c->loop_predicted[0] = h.predicted[0]; c->loop_predicted[1] = h.predicted[1];
+    c->loop_index[0] = h.index[0] > 88 ? 88 : h.index[0]; c->loop_index[1] = h.index[1] > 88 ? 88 : h.index[1];
+    rewind_track(c, 0);
     c->track = track;
 }
 
@@ -99,7 +112,7 @@ static int channel_main(SceSize args, void *argp) {
             got = sceIoRead(c->fd, c->bytes, n);
             if (got < 0) got = 0;
             c->left -= (unsigned int)got;
-            if (!c->left) rewind_track(c);   /* it loops */
+            if (!c->left) rewind_track(c, 1);   /* the loop's end: back to its start */
         }
         for (i = 0; i < CHUNK; ++i) {
             if (i < got) {

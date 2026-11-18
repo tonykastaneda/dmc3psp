@@ -50,12 +50,16 @@ STEP_TABLE = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 3
 INDEX_TABLE = [-1, -1, -1, -1, 2, 4, 6, 8]
 
 
-def ima_encode(samples):
-    """samples: stereo interleaved s16. Returns one nibble per sample, left in the low nibble."""
+def ima_encode(samples, snapshot=None):
+    """samples: stereo interleaved s16. Returns one nibble per sample, left in the low nibble. snapshot: a dict with
+    "at" (a sample pair): the coder's (predicted, index) per channel there are put in it, for a player that jumps."""
     out = bytearray(len(samples) // 2 + 1)
     predicted = [0, 0]
     index = [0, 0]
+    snap_at = snapshot["at"] * 2 if snapshot is not None else -1
     for i, sample in enumerate(samples):
+        if i == snap_at:
+            snapshot["predicted"], snapshot["index"] = list(predicted), list(index)
         channel = i & 1
         step = STEP_TABLE[index[channel]]
         delta = sample - predicted[channel]

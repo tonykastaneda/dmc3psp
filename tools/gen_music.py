@@ -9,9 +9,12 @@ until a fight) and its stage or ambience on channel 1 (15 / 16); boss rooms fade
     python tools/gen_music.py <iso> --output build/testroom --header build/testroom/generated/music_runtime.h
 
 writes music_runtime.h (room table: mission, room, SDATA track and command per channel; the first bgm op of the room's
-section) and BGM_nnn.BIN for each track used (nnn = its SDATA index): "BGM1", u32 rate, u32 sample pairs, then the
-movies' IMA ADPCM, a byte per stereo pair (tools/prepare_movies.py), played looping by psp/testroom/music.c. Tracks
-already written are kept. Everything it reads and writes stays local.
+section) and BGM_nnn.BIN for each track used (nnn = its SDATA index): "BGM2", u32 rate, u32 sample pairs, u32 loop
+start and end (sample pairs), the IMA coder's state at the loop start (i16 predicted x2, u8 index x2, 2 pad), then the
+movies' IMA ADPCM, a byte per stereo pair (tools/prepare_movies.py). psp/testroom/music.c plays to the loop end and
+goes back to its start. The loop is the ADX header's (version 4: flag +0x24, start +0x28, end +0x30, in the track's
+samples, scaled to 44.1 kHz); a track without one loops whole. Tracks already written are kept. Everything it reads
+and writes stays local.
 """
 import argparse
 import struct
@@ -52,17 +55,39 @@ def room_settings(iso, elf):
 
 def write_track(iso, sdata, index, out: Path):
     path = out / f"BGM_{index:03d}.BIN"
-    if path.exists():
+    if path.exists() and path.read_bytes()[:4] == b"BGM2":
         return path
     entry = sdata.entries[index]
     adx = iso.read_file("SDATA.AFS", entry["offset"], entry["size"])
     pcm = subprocess.run([prepare_movies.FFMPEG, "-v", "error", "-f", "adx", "-i", "pipe:0", "-f", "s16le", "-ac", "2",
                           "-ar", str(RATE), "pipe:1"], input=adx, capture_output=True, check=True).stdout
     samples = struct.unpack(f"<{len(pcm) // 4 * 2}h", pcm[:len(pcm) // 4 * 4])
-    nibbles = prepare_movies.ima_encode(samples)[:len(samples) // 2]
-    path.write_bytes(struct.pack("<4s2I", b"BGM1", RATE, len(samples) // 2) + bytes(nibbles))
-    print(f"  {entry['name']}: {len(samples) / 2 / RATE:.1f} s -> {path.name}")
+    pairs = len(samples) // 2
+    start, end = adx_loop(adx)
+    if start is None or not 0 <= start < end:
+        start, end = 0, pairs
+    else:
+        start, end = start * RATE // adx_rate(adx), min(pairs, end * RATE // adx_rate(adx))
+    snapshot = {"at": start}
+    nibbles = prepare_movies.ima_encode(samples, snapshot)[:pairs]
+    p, i = snapshot.get("predicted", [0, 0]), snapshot.get("index", [0, 0])
+    path.write_bytes(struct.pack("<4s4I2h2B2x", b"BGM2", RATE, pairs, start, end, p[0], p[1], i[0], i[1]) + bytes(nibbles))
+    print(f"  {entry['name']}: {pairs / RATE:.1f} s, loop {start / RATE:.1f}-{end / RATE:.1f} s -> {path.name}")
     return path
+
+
+def adx_rate(adx):
+    return struct.unpack_from(">I", adx, 8)[0]
+
+
+def adx_loop(adx):
+    """(start, end) in the track's samples, or (None, None): the version 4 header's loop (flag +0x24, start +0x28, end
+    +0x30), when the header reaches it (its data begins at the u16 +2 plus 4)."""
+    if adx[0x12] != 4 or struct.unpack_from(">H", adx, 2)[0] + 4 < 0x34:
+        return None, None
+    flag, start = struct.unpack_from(">2I", adx, 0x24)
+    end = struct.unpack_from(">I", adx, 0x30)[0]
+    return (start, end) if flag == 1 else (None, None)
 
 
 def main():
