@@ -116,6 +116,35 @@ def bake_camera(timeline, files):
     return out
 
 
+def parse_hid(data: bytes):
+    """A hide track (.hid; docs/CUTSCENES.md): its first frame (+0x0c), and per object its stepped keys
+    [(frame, shown)] or None (no channel). Values: -1 shown, 0 hidden."""
+    header = struct.unpack_from("<I", data, 0)[0]
+    if data[4:8] != b"HID\0":
+        raise ValueError("Not a HID")
+    first = struct.unpack_from("<f", data, 0x0C)[0]
+    n = data[0x1C]
+    flags = data[0x1D:0x1D + n]
+    at = header + 4
+    channels = []
+    for k in range(n):
+        if not flags[k]:
+            channels.append(None)
+            continue
+        size, count, kind = struct.unpack_from("<HHH", data, at)
+        if kind in (2, 7):
+            base, scale = struct.unpack_from("<2f", data, at + 8)
+            keys = []
+            for i in range(count):
+                frame, q = struct.unpack_from("<2H", data, at + 16 + 4 * i)
+                keys.append(((frame & 0x7FFF), base + scale * q / 65535.0 < -0.5))
+            channels.append(keys)
+        else:
+            channels.append(None)
+        at += size
+    return first, channels
+
+
 def align(blob: bytearray, n: int = 16) -> int:
     while len(blob) % n:
         blob.append(0)
@@ -149,7 +178,9 @@ def bake_cast(timeline, files, blob: bytearray):
         if not name.lower().endswith(".mod") or name not in files or not files[name]:
             continue
         try:
-            skel, mesh = psm.enemy_mesh(files[name], None)
+            skel = psm.parse_skeleton(files[name])
+            # Objects kept apart, in the MOD's order: a cut's hide track keys them one by one.
+            mesh = psm.slim_mesh(psm.build_mesh(files[name], skel["count"]), 0.7)
         except ValueError as error:   # a rig the converter doesn't take (a parent after its child): left out
             print(f"  slot {slot:2d} {name}: skipped ({error})")
             continue
@@ -162,12 +193,18 @@ def bake_cast(timeline, files, blob: bytearray):
                 motions.append((a, b, float(mclip.get("ClipScale", 1.0) or 1.0), float(mclip.get("SkipFrame", 0.0)), files[mot]))
         # Its hide track: DispOn / DispOff switch the whole slot at a clip's start (a cut's own .hid, which keys
         # each of the model's objects, counts as on [its per-object channels: not yet]).
-        switches = []
+        switches = []   # (start, scale, mode 0 off / 1 on / 2 per object, first frame, channels)
         for hclip in (tracks.get(("Hide", slot)) or {"clips": []})["clips"]:
             hid = str(hclip.get("Hide", ""))
-            if hid:
-                switches.append((float(hclip.get("SetFrame", 0.0)), 0 if hid.lower() == "dispoff.hid" else 1))
-        switches.sort()
+            if not hid:
+                continue
+            start, scale = float(hclip.get("SetFrame", 0.0)), float(hclip.get("ClipScale", 1.0) or 1.0)
+            if hid.lower() in ("dispoff.hid", "dispon.hid") or not files.get(hid):
+                switches.append((start, scale, 0 if hid.lower() == "dispoff.hid" else 1, 0.0, []))
+            else:
+                first, channels = parse_hid(files[hid])
+                switches.append((start, scale, 2, first, channels))
+        switches.sort(key=lambda s: s[0])
         cns = clip.get("CnsPos")
         actors.append({"slot": slot, "name": name, "skel": skel, "mesh": mesh, "tex": tex, "motions": motions,
                        "parent": cns[0] if isinstance(cns, list) else -1, "bone": cns[1] if isinstance(cns, list) else 0,
@@ -218,9 +255,27 @@ def bake_cast(timeline, files, blob: bytearray):
         blob += bytes(32 * len(a["motions"]))
         for k, (s, e, scale, skip, data) in enumerate(a["motions"]):
             pending.append((motion_at + 32 * k, s, e, scale, skip, data))
+        # Hide clips: {f32 start, scale, first frame, u32 mode, channel table, object count; 24 bytes}; a channel
+        # table: per object {u32 key count, keys offset}; keys {f32 frame, u32 shown}.
+        tables = []
+        for start, scale, mode, first, channels in a["switches"]:
+            table_at = 0
+            if mode == 2:
+                key_at = []
+                for keys in channels:
+                    if keys:
+                        key_at.append((len(keys), align(blob)))
+                        for frame, shown in keys:
+                            blob += struct.pack("<fI", float(frame), 1 if shown else 0)
+                    else:
+                        key_at.append((0, 0))
+                table_at = align(blob)
+                for count, off in key_at:
+                    blob += struct.pack("<2I", count, off)
+            tables.append(table_at)
         switch_at = align(blob)
-        for frame, on in a["switches"]:
-            blob += struct.pack("<fI", frame, on)
+        for (start, scale, mode, first, channels), table_at in zip(a["switches"], tables):
+            blob += struct.pack("<3f3I", start, scale, first, mode, table_at, len(channels))
         struct.pack_into("<2I", blob, actor_table + 128 * i + 104, len(a["switches"]), switch_at)
         parent = slot_to_actor.get(a["parent"], -1)
         struct.pack_into("<8i10I6f2f", blob, actor_table + 128 * i,

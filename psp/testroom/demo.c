@@ -36,6 +36,7 @@ typedef struct { float set, end, scale, skip; unsigned int mot, size; unsigned i
 typedef struct { float u, v, nx, ny, nz, x, y, z; } DemoVertex;
 typedef struct { unsigned char bone[3], weight[3], pad[2]; } DemoSkin;
 typedef struct { unsigned int texture, first, count; } DemoObject;
+typedef struct { float start, scale, first; unsigned int mode, table, objects; } DemoHideClip;   /* 0 off, 1 on, 2 per object */
 typedef struct { float m[3][3]; } M3;
 
 #define DEMO_MAX_ACTORS 40
@@ -390,6 +391,19 @@ static int sphere_visible(const ScePspFMatrix4 *m, const float c[3], float r) {
     return w > -s && x > -w - s && x < w + s && y > -w - s && y < w + s && z < w + s;
 }
 
+/* A cut's hide channel for object k: its last key at or before the clip's own frame (stepped); shown without one. */
+static int object_shown(const DemoHideClip *h, unsigned int k) {
+    const unsigned int (*table)[2] = (const unsigned int (*)[2])(blob + h->table);
+    const struct { float frame; unsigned int shown; } *keys;
+    float local = h->first + (demo_clock - h->start) / (h->scale > 0.0f ? h->scale : 1.0f);
+    unsigned int i, shown = 1;
+    if (k >= h->objects || !table[k][0]) return 1;
+    keys = (const void *)(blob + table[k][1]);
+    for (i = 0; i < table[k][0] && keys[i].frame <= local; ++i) shown = keys[i].shown;
+    if (keys[0].frame > local) shown = keys[0].shown;
+    return (int)shown;
+}
+
 void demo_draw(void) {
     const DemoTexture *tex;
     int i, k, bound = -1;
@@ -419,13 +433,15 @@ void demo_draw(void) {
         Actor *a = &actors[i];
         const DemoObject *obj = (const DemoObject *)(blob + a->d->object_at);
         const unsigned short *idx = (const unsigned short *)(blob + a->d->index_at);
+        const DemoHideClip *hide;
         if (demo_clock < a->d->shown_from || demo_clock >= a->d->shown_to) continue;
-        {   /* its hide track: the last switch at or before now */
-            const struct { float frame; unsigned int on; } *sw = (const void *)(blob + a->d->switch_at);
-            unsigned int n, on = 1;
-            for (n = 0; n < a->d->switches && sw[n].frame <= demo_clock; ++n) on = sw[n].on;
-            if (a->d->switches && sw[0].frame > demo_clock) on = 1;
-            if (!on) continue;
+        hide = 0;
+        {   /* its hide track: the last clip begun (DispOff hides it all, a cut's own .hid object by object) */
+            const DemoHideClip *sw = (const DemoHideClip *)(blob + a->d->switch_at);
+            unsigned int n;
+            for (n = 0; n < a->d->switches && sw[n].start <= demo_clock; ++n) hide = &sw[n];
+            if (hide && hide->mode == 0) continue;
+            if (hide && hide->mode != 2) hide = 0;
         }
         {
             int cb = (int)a->d->centre_bone < a->d->bones ? (int)a->d->centre_bone : 0;
@@ -440,6 +456,7 @@ void demo_draw(void) {
                 sceGuTexImage(0, (int)t->width, (int)t->height, (int)t->width, blob + t->pixels);
                 sceGuTexFlush();
             }
+            if (hide && !object_shown(hide, (unsigned int)k)) continue;
             sceGumDrawArray(GU_TRIANGLES, DEMO_VTYPE, (int)obj[k].count, idx + obj[k].first, a->skinned);
         }
     }

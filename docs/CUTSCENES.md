@@ -63,8 +63,9 @@ file is a list of clips, `# Clip` ... `# End`, every clip with `SetFrame` (its s
   channel; at the header's end the channel count, then a record per such object as MOT's: kind 7, a base and scale
   (f32) and 4-byte keys {u16 frame, u16 q}, stepped; value = base + scale x q / 65535: -1 shown, 0 hidden. DispOn.hid
   keys all 100 objects at -1, DispOff.hid at 0; a cut's own (em108_01_c016.hid) keys one object (shown, then hidden
-  from its frame 1261). The port takes DispOn / DispOff per slot; per-object channels need the mesh's objects kept apart
-  (the bake merges them by texture) [not yet].
+  from its frame 1261). The port bakes each slot's hide clips: DispOn / DispOff switch the slot, a cut's own .hid hides
+  its objects one by one (keys stepped, on the .hid's own clock from its first frame, +0x0c); the demo meshes keep the
+  MOD's objects apart (not merged by texture) for it.
 
 ## In the port
 
