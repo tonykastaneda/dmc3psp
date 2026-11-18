@@ -97,6 +97,8 @@ def parse_clips(src: str):
         if not line:
             continue
         if line == "# Clip":
+            if clip is not None:   # a clip need not end with "# End": the next one closes it
+                clips.append(clip)
             clip = {}
             continue
         if line == "# End":
@@ -108,6 +110,8 @@ def parse_clips(src: str):
             continue
         parts = line.split()
         clip[parts[0]] = value(parts[1:]) if len(parts) > 1 else None
+    if clip is not None:
+        clips.append(clip)
     return clips
 
 

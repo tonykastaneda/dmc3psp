@@ -17,7 +17,9 @@
 #include <stdio.h>
 #include <string.h>
 
-typedef struct { char magic[4]; unsigned int frames, camera, textures, texture_count, actors, actor_count, reserved; } DemoHeader;
+typedef struct { char magic[4]; unsigned int frames, camera, textures, texture_count, actors, actor_count, reserved;
+                 unsigned int subtitles, subtitle_count, pad[6]; } DemoHeader;
+typedef struct { float from, to; short x, y, size, pad; char text[112]; } DemoSubtitle;
 typedef struct { float eye[3], target[3], fov, roll; } DemoCamera;
 typedef struct { unsigned int width, height, pixels, palette; } DemoTexture;
 typedef struct {
@@ -159,7 +161,7 @@ int demo_start(int demo, const char *dir) {
         if (fd < 0) return -3;
         got = sceIoRead(fd, &h, sizeof h);
         sceIoClose(fd);
-        if (got != (int)sizeof h || memcmp(h.magic, "DMO2", 4) != 0) return -2;
+        if (got != (int)sizeof h || memcmp(h.magic, "DMO3", 4) != 0) return -2;
         blob = read_file(demo_path, &size, (int)h.reserved);
     }
     if (!blob) return read_error;
@@ -190,6 +192,17 @@ int demo_active(void) { return playing; }
 int demo_id(void) { return id; }
 float demo_frame(void) { return demo_clock; }
 int demo_actor_count(void) { return actor_count; }
+
+/* The Message track's line now (in English: tools/prepare_demo.py), its place on the PS2's 640 x 448 screen. */
+const char *demo_subtitle(int *x, int *y, int *size) {
+    const DemoSubtitle *s;
+    unsigned int i;
+    if (!playing || !head || !head->subtitle_count) return 0;
+    s = (const DemoSubtitle *)(blob + head->subtitles);
+    for (i = 0; i < head->subtitle_count; ++i)
+        if (demo_clock >= s[i].from && demo_clock < s[i].to) { *x = s[i].x; *y = s[i].y; *size = s[i].size; return s[i].text; }
+    return 0;
+}
 
 int demo_update(float dt, FollowCamera *camera) {
     const DemoCamera *cams, *c;

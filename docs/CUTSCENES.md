@@ -114,6 +114,13 @@ beaten in 411, to 012), played as the port's own flow brings Dante into the next
 defeat; 16's 45 before its clear (the port clears at Lady); 20's 56 after its 55. Not yet: 12's 34 (Geryon's second),
 and 13's 37 (its script holds only the AFTER_DEMO).
 
+**Subtitles**: the Message track's clips each name a message (`No`); the text is in the record's language files (words
+2-5: Japanese, English, then two more), a tagged script: `# Msg n` blocks of quoted text with `<PS x y>` (place on the PS2's
+640 x 448), `<SZ size>`, `<IT frames>` (per character), `<WT frames>` (wait), `<BR>`, `<FO frames>` (fade out), `<JP n>`,
+`<NE>` (the file's own header explains them). The port bakes the English lines, each shown from its clip's frame for the
+sum of its waits, centred at its height (DMO3 header: subtitles, count). A clip needn't end with `# End`; the next
+`# Clip` closes it.
+
 ## Porting plan
 
 1. Bake each demo to a streamed `DEMO_nnn.BIN` on the memory stick (the EBOOT is 27 MB already; demo 5 is 8 MB raw):

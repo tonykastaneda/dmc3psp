@@ -15,7 +15,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
   `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, but: no sound, subtitles, effects, fades or cloth; a cut's per-object hide
+  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), but: no sound, effects, fades or cloth; a cut's per-object hide
   channels count as shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
   [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; 12's 34, 13's 37 and 2's 114 / 14's 326 (a city stage too big) aren't played; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.

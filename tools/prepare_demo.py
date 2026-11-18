@@ -6,8 +6,9 @@ writes DEMO_nnn.BIN (the camera, baked per demo frame) and DSTG_nnn.BIN (the dem
 builds a room). Everything stays local (the repo is public).
 
 DEMO_nnn.BIN (little endian; offsets from its start):
-  +0x00 "DMO2", u32 frames, camera, textures, texture count, actors, actor count, resident (the bytes before the
-  MOTs: the runtime reads those and streams each motion as its clip comes up)
+  +0x00 "DMO3", u32 frames, camera, textures, texture count, actors, actor count, resident (the bytes before the
+  MOTs: the runtime reads those and streams each motion as its clip comes up), subtitles, subtitle count; 64 bytes
+  subtitle (128 bytes): {f32 from, to (demo frames), i16 x, y (PS2 640 x 448), size, pad, char text[112] (\n breaks)}
   camera: frames x {f32 eye[3], f32 target[3], f32 fov (degrees), f32 channel 13}
   texture: {u32 width, height, pixels (8-bit, swizzled), palette (256 ABGR)}
   actor (128 bytes): i32 slot, parent actor (CnsPos, -1), parent bone, bones, vertices, indices, objects, motions;
@@ -235,6 +236,38 @@ def bake_cast(timeline, files, blob: bytearray):
     return tex_table, len(textures), actor_table, len(actors), resident
 
 
+def subtitles(iso_path: Path, demo: int, timeline):
+    """The Message track's lines, in English (the record's second language file: Japanese, English, then two more):
+    each "# Msg n" block's text, its <PS x y> place (PS2 640 x 448 screen) and <SZ size>, shown from its clip's frame
+    for the sum of its <WT frames> waits (<IT 0>: all at once; <FO 0> then clears it)."""
+    import re
+    elf = demo_unpack.gen_enemy_ai.Elf(demo_unpack.EXE.read_bytes())
+    rec = demo_unpack.demo_record(elf, demo)
+    clips = [c for t in timeline["tracks"] if t["kind"] == "Message" for c in t["clips"] if c.get("No") is not None]
+    if not rec or not clips or rec[3] in (0, 0xFFFFFFFF):
+        return []
+    with demo_unpack.psm.Iso9660(iso_path) as iso:
+        gdata = demo_unpack.psm.AfsArchive(iso, "GDATA.AFS")
+        e = gdata.entries[rec[3] >> 16]
+        text = iso.read_file("GDATA.AFS", e["offset"], e["size"]).decode("latin1").replace("\r", "")
+    msgs = {int(n): body for n, body in re.findall(r"# Msg (\d+)\n(.*?)# End", text, re.S)}
+    out = []
+    for c in clips:
+        body = msgs.get(int(c["No"]))
+        if body is None:
+            continue
+        s = "".join(re.findall(r'"([^"]*)"', body))
+        pos = re.search(r"<PS (\d+) (\d+)>", s)
+        size = re.search(r"<SZ (\d+)>", s)
+        wait = sum(int(w) for w in re.findall(r"<WT (\d+)>", s)) or 120
+        line = re.sub(r"<BR>", "\n", s)
+        line = re.sub(r"<[^>]*>", "", line).strip()
+        start = float(c.get("SetFrame", 0.0))
+        out.append((start, start + wait, int(pos.group(1)) if pos else 0, int(pos.group(2)) if pos else 420,
+                    int(size.group(1)) if size else 22, line))
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
@@ -247,12 +280,19 @@ def main():
     files = {p.name: p.read_bytes() for d in work.iterdir() if d.is_dir() for p in d.iterdir()}
 
     camera = bake_camera(timeline, files)
-    blob = bytearray(32)
+    blob = bytearray(64)
     cam_at_offset = len(blob)
     for eye, target, fov, roll in camera:
         blob += struct.pack("<8f", *eye, *target, fov, roll)
+    subs = subtitles(args.iso, args.demo, timeline)
+    sub_at = len(blob)
+    for start, end, x, y, size, line in subs:
+        raw = line.encode("latin1", "replace")[:111]
+        blob += struct.pack("<2f3h2x112s", start, end, x, y, size, raw)
     tex_at, tex_count, actor_at, actor_count, resident = bake_cast(timeline, files, blob)
-    struct.pack_into("<4s7I", blob, 0, b"DMO2", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count, resident)
+    struct.pack_into("<4s9I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
+                     resident, sub_at, len(subs))
+    print(f"  {len(subs)} subtitles" + (f": {subs[0][5][:40]!r} ..." if subs else ""))
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / f"DEMO_{args.demo:03d}.BIN"
     out.write_bytes(blob)

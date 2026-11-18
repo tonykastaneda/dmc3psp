@@ -11,4 +11,5 @@ float demo_frame(void);                       /* the demo's clock, 60 a second *
 int demo_update(float dt, FollowCamera *camera);   /* 1 while it plays: the camera is the demo's */
 void demo_draw(void);                         /* the cast, after the stage */
 int demo_actor_count(void);
+const char *demo_subtitle(int *x, int *y, int *size);   /* the line shown now, or 0 (PS2 640 x 448 place) */
 #endif

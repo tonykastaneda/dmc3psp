@@ -1448,6 +1448,27 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     }
 scene_done:
     if (!demo_active()) draw_hud(hud);
+    else {
+        /* The cutscene's subtitle: its height from the PS2's 448 lines, centred (the PS2's x was set for its own font). */
+        int sx, sy, size;
+        const char *line = demo_subtitle(&sx, &sy, &size);
+        if (line) {
+            float h = (float)size * (float)SCR_HEIGHT / 448.0f * 1.5f, y = (float)sy * (float)SCR_HEIGHT / 448.0f - h * 0.3f;
+            char row[112];
+            const char *p = line;
+            while (*p) {
+                int n = 0;
+                while (p[n] && p[n] != '\n' && n < 111) { row[n] = p[n]; ++n; }
+                row[n] = 0;
+                menu_font_draw(SCR_WIDTH / 2 - menu_font_width(h, row) * 0.5f + 1.0f, y + 1.0f, h, row, 0xc0000000u);
+                menu_font_draw(SCR_WIDTH / 2 - menu_font_width(h, row) * 0.5f, y, h, row, 0xffffffffu);
+                y += h * 1.15f;
+                p += n;
+                if (*p == '\n') ++p;
+            }
+            sceGuDisable(GU_BLEND);
+        }
+    }
     if (player->weapon_wheel) draw_weapon_wheel(player);
     if (debug_open) draw_debug_menu(anim.viewer);
     if (pause_active) pause_draw();
