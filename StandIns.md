@@ -64,7 +64,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
-  shown, his idle's turn rate [inferred], the throws are motes, a bullet's stun value 8
+  shown, his idle's turn rate [inferred], the bomb and the hand trap are his own models but rigid (the hand's motions aren't played: it rises and sinks by an estimate), their effects and the cross are motes, a bullet's stun value 8
   [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit

@@ -826,8 +826,11 @@ flinch js05, stun js14, launched js04, death js16.
 - **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
   each throw starts the emitter its no-repeat pick names (`jester_projectiles_begin`, AI rank 0), the attack holds
   its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;
-  what lands (the ball 1200 heavy, a trap 650, the cross 800) hurts Dante with that damage. They're drawn as motes
-  (`jester_projectiles_draw`): the effects themselves aren't ported. Between attacks he idles as the game: 0x64
+  what lands (the ball 1200 heavy, a trap 650, the cross 800) hurts Dante with that damage. The bomb (em037 [25], textures [24]: the
+  ball attack's projectile, `0054de00` entry 0x19 + 2 x variant) and the trap's hand ([27], textures [26], motions [28]:
+  `0054caa0`'s +0x70 / +0x74 / +0x78) are drawn as his own models, rigid at rest (`tools/prepare_jester_props.py`,
+  `jester_projectiles_draw`): the bomb tumbles in flight and the hand rises out of the floor by its arming frame [estimates:
+  the hand's motions aren't played]. Their effects (the bomb's burst, the trap's ring) and the cross are motes. Between attacks he idles as the game: 0x64
   (`00534d10`) goes at once to 0x66 (`00535140`), one of `0x5e2e10`'s five motions (js21, js24, js23, js27, js28 by
   `0x5e2db0`) at random but never the last again (the next instead); for its first 60 frames he turns to Dante
   (`0053ed60(10)`, the port's rate [inferred]), js27 and js28 walk him by their root (`00535310`), and at its end 0x64

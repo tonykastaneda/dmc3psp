@@ -6299,10 +6299,47 @@ static void lady_hit_glue(HitKind kind) {
     b->restart = 0;
 }
 
-/* ---- The Jester's projectiles, drawn (their logic is jester.c's): motes, as the game's effects aren't ported.
- * The ball glows in his hand and in flight; a trap shows a ring where it lies, and bursts as it springs (55-65);
- * the cross's four arms are columns of light swept round where he stood. */
+/* ---- The Jester's projectiles, drawn (their logic is jester.c's). The bomb (em037 [25]) and the trap's hand ([27])
+ * are the game's models (tools/prepare_jester_props.py), rigid in their rest pose: the bomb tumbles as it flies
+ * [estimate]; the hand rises out of the floor by its arming frame (55) and sinks at its end [estimate: its motions,
+ * [28], aren't played]. Stand-ins (their effects aren't ported): the bomb's burst and the trap's warning ring are
+ * motes, and the cross's four arms are columns of light swept round where he stood. */
+#include "jester_props_runtime.h"
 int jester_projectiles_init(void) { return 1; }
+static void jester_prop_draw(int which, const float pos[3], float yaw, float pitch, float roll) {
+    const JesterProp *prop = &jester_props[which];
+    ScePspFVector3 at;
+    int j;
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_BLEND);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuAlphaFunc(GU_GREATER, 0x20, 0xff);
+    sceGuDepthMask(GU_FALSE);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexMode(GU_PSM_T8, 0, 0, 0);
+    sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuTexScale(1.0f, 1.0f);
+    sceGuTexOffset(0.0f, 0.0f);
+    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadIdentity();
+    at.x = pos[0]; at.y = pos[1]; at.z = pos[2];
+    sceGumTranslate(&at);
+    sceGumRotateY(yaw);
+    if (pitch != 0.0f) sceGumRotateX(pitch);
+    if (roll != 0.0f) sceGumRotateZ(roll);
+    for (j = 0; j < prop->count; ++j) {
+        const JesterPropBatch *b = &prop->batches[j];
+        sceGuClutLoad(32, b->palette);
+        sceGuTexImage(0, b->width, b->height, b->width, b->pixels);
+        sceGuTexFlush();
+        sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                        b->count, 0, b->vertices);
+    }
+    sceGuEnable(GU_BLEND);
+}
 void jester_projectiles_draw(const JesterProjectiles *w) {
     static const float still[3] = {0.0f, 0.0f, 0.0f};
     int i, k;
@@ -6310,14 +6347,21 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         const JesterShot *p = &w->shots[i];
         if (!p->active) continue;
         if (p->kind == 0) {
-            fx_mote(p->pos, still, p->phase == 2 ? 420.0f : 170.0f, p->phase == 2 ? 520.0f : 150.0f, 0.06f,
-                    p->phase == 2 ? 0xff2080ffu : 0xff40e0ffu);
+            if (p->phase == 2) fx_mote(p->pos, still, 420.0f, 520.0f, 0.06f, 0xff2080ffu);
+            else jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f);
         } else {
-            float armed = p->age > 55.0f && p->age <= 65.0f;
-            for (k = 0; k < 8; ++k) {
-                float a = (float)k * 0.7853982f, at[3] = {p->pos[0] + sinf(a) * 75.0f, p->pos[1] + (armed ? 150.0f : 5.0f), p->pos[2] + cosf(a) * 75.0f};
-                fx_mote(at, still, armed ? 160.0f : 70.0f, armed ? 90.0f : 70.0f, 0.06f, armed ? 0xff2040ffu : 0xffa0f0ffu);
+            /* Out of the floor over 35-55, down again over its last 20 (of 180). */
+            float up = p->age < 35.0f ? 0.0f : p->age < 55.0f ? (p->age - 35.0f) / 20.0f
+                     : p->age > 160.0f ? fmaxf(0.0f, (180.0f - p->age) / 20.0f) : 1.0f;
+            if (up > 0.0f) {
+                float at[3] = {p->pos[0], p->pos[1] - 370.0f * (1.0f - up), p->pos[2]};
+                jester_prop_draw(JESTER_PROP_HAND, at, p->yaw, -1.5707963f, 0.0f);   /* its fingers (+z) up */
             }
+            if (p->age <= 55.0f)
+                for (k = 0; k < 8; ++k) {
+                    float a = (float)k * 0.7853982f, at[3] = {p->pos[0] + sinf(a) * 75.0f, p->pos[1] + 5.0f, p->pos[2] + cosf(a) * 75.0f};
+                    fx_mote(at, still, 70.0f, 70.0f, 0.06f, 0xffa0f0ffu);
+                }
         }
     }
     if (w->emitting && w->kind == 2) {

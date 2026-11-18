@@ -91,6 +91,12 @@ foreach ($M10Room in @(201,206)) {
     }
 }
 
+# The Jester's bomb and hand (tools/prepare_jester_props.py).
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "jester_props_runtime.h"))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_jester_props.py"), $Iso.FullName, "--output", $Generated)
+}
+
 # The missions' music (tools/gen_music.py): the rooms' BGM table and BGM_nnn.BIN tracks.
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "music_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
