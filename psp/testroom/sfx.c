@@ -36,7 +36,8 @@ typedef struct {
     unsigned int body_at;
     SceUID fd;
 } Bank;
-static const char *const bank_files[SFX_BANKS] = {"SFX_SYS.BIN", "SFX_DANTE.BIN"};
+static const char *const bank_files[SFX_BANKS] = {"SFX_SYS.BIN", "SFX_DANTE.BIN", "SFX_W0.BIN", "SFX_W1.BIN",
+    "SFX_W2.BIN", "SFX_W3.BIN", "SFX_W4.BIN", "SFX_W5.BIN", "SFX_W6.BIN", "SFX_W7.BIN", "SFX_W8.BIN", "SFX_W9.BIN"};
 static Bank banks[SFX_BANKS];
 static int ready;
 static SceUID thread, lock;

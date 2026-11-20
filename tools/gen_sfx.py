@@ -14,9 +14,15 @@ The system bank, type 0 (menus, orbs and the like [inferred from the ids its cal
 169 (Head) and 171 (samples). Dante's own, type 1, is a PAC (its entries 0, 1, 2): the file FUN_001aff20 names from the
 table at 0x58e840 by character, GDATA 173 for him.
 
+His weapons' (type 2, FUN_001b01f0): the table is the file at 0x58e8d0 by character (GDATA 209 for him), weapon w's
+ids at 40 (w + 1) (0x5af3c0); each equipped weapon's head and samples are the file at 0x58e850[w] (GDATA 179 + w),
+merged into one head (FUN_001b06b0) in which the play's bank offsets the program (FUN_00302230's pair 0): weapon w's
+file has w + 1 programs, its own at w. Each weapon is resolved into a bank of its own here (SFX_W0 .. SFX_W9).
+
 Dante's motion definitions (GDATA 0, PAC entry 5; tools/motion_scripts.py) carry timed sound events
-(FUN_00255d30): 0x30 {op, layer, type, id, u16 frame} and 0x34 (the same on a bone). Those of types 0 and 1 are
-exported by the motion they go with (its layer-0 motion, named as the runtime names them).
+(FUN_00255d30): 0x30 {op, layer, type, id, u16 frame} and 0x34 (the same on a bone) play a type; 0x31 / 0x35 a weapon
+bank's id (byte 2 the weapon). Those of types 0 and 1 and the weapons' are exported by the motion they go with (its
+layer-0 motion, named as the runtime names them).
 
     python tools/gen_sfx.py <iso> --output build/testroom --header build/testroom/generated/sfx_runtime.h
 
@@ -34,8 +40,9 @@ import motion_scripts
 
 OUT_RATE = 44100
 # name: (dbsT, Head, samples) GDATA entries, or a PAC's entry (its 0, 1, 2). Their order is sfx.c's bank numbers.
-BANKS = (("SYS", (170, 169, 171)), ("DANTE", 173))
+BANKS = (("SYS", (170, 169, 171)), ("DANTE", 173)) + tuple((f"W{w}", ("weapon", w)) for w in range(10))
 EVENT_TYPES = {0: 0, 1: 1}   # the game's sound type -> the port's bank
+WEAPON_TABLE, WEAPON_FILE, WEAPON_BANK = 209, 179, 2   # the port's bank of weapon w: WEAPON_BANK + w
 
 
 def runtime_name(f, i):
@@ -67,6 +74,8 @@ def motion_events(script):
                 raw = bytes.fromhex(ev["raw"])
                 if ev["op"] in (0x30, 0x34) and raw[2] in EVENT_TYPES:
                     out.add((name, ev["frame"], EVENT_TYPES[raw[2]], raw[3]))
+                elif ev["op"] in (0x31, 0x35) and raw[2] < 10 and raw[3] < 40:
+                    out.add((name, ev["frame"], WEAPON_BANK + raw[2], raw[3]))
     return sorted(out)
 
 
@@ -81,22 +90,29 @@ def parse_head(head):
     programs = []
     for off in offsets:
         at = prog_at + off
+        if at >= len(head):   # a placeholder (a weapon's file keeps empty slots before its own program)
+            programs.append([])
+            continue
         tones = [head[at + 8 + 14 * t: at + 22 + 14 * t] for t in range(head[at])]
         programs.append(tones)
     return programs, smpl, vagi
 
 
-def resolve(table, programs, smpl, vagi):
-    """Per id: (vagi index or None, volume, pan, step, next)."""
-    count = struct.unpack_from("<I", table, 12)[0]
+def resolve(table, programs, smpl, vagi, first=0, count=None, program_offset=0):
+    """Per id: (vagi index or None, volume, pan, step, next). first / count: a run of the table's ids (renumbered from
+    0, their chains too); program_offset: added to each record's program."""
+    total = struct.unpack_from("<I", table, 12)[0]
+    count = total - first if count is None else min(count, total - first)
     out = []
-    for k in range(count):
+    for k in range(first, first + count):
         r = table[16 + 32 * k: 48 + 32 * k]
         nxt = struct.unpack_from("<h", r, 22)[0]
+        nxt = nxt - first if first <= nxt < first + count else -1
         entry = (None, 0, 0x40, 0.0, nxt)
-        if r[0] == 1 and r[6] < len(programs):
+        program = r[6] + program_offset
+        if r[0] == 1 and program < len(programs):
             note, cents = r[7], struct.unpack_from("<h", r, 14)[0]
-            for tone in programs[r[6]]:
+            for tone in programs[program]:
                 if tone[2] <= note <= tone[3]:
                     s = struct.unpack_from("<H", tone, 12)[0]
                     if s >= len(smpl):
@@ -124,12 +140,18 @@ def main():
         read = lambda k: iso.read_file("GDATA.AFS", afs.entries[k]["offset"], afs.entries[k]["size"])
         events = motion_events(pac_list(read(0))[5])
         for name, source in BANKS:
-            if isinstance(source, tuple):
+            first, count, offset = 0, None, 0
+            if isinstance(source, tuple) and source[0] == "weapon":
+                w = source[1]
+                table = pac_list(read(WEAPON_TABLE))[0]
+                head, body = pac_list(read(WEAPON_FILE + w))[1:3]
+                first, count, offset = 40 * (w + 1), 40, w
+            elif isinstance(source, tuple):
                 table, head, body = (read(k) for k in source)
             else:
                 table, head, body = pac_list(read(source))[:3]
             programs, smpl, vagi = parse_head(head)
-            ids = resolve(table, programs, smpl, vagi)
+            ids = resolve(table, programs, smpl, vagi, first, count, offset)
             header = struct.pack("<4s3I", b"SFX1", len(ids), len(vagi), 0)
             id_rows = b"".join(struct.pack("<HBBfh2x", 0xFFFF if v is None else v, vol, pan, step, nxt)
                                for v, vol, pan, step, nxt in ids)
