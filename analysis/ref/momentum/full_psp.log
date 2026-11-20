@@ -1,0 +1,33 @@
+cmp done, frames=170 enemy_poses=57
+port mo_reb1_st 170
+[1/418] psp mo_reb1_st
+cmp done, frames=210 enemy_poses=71
+port mo_reb1_run 210
+[2/418] psp mo_reb1_run
+cmp done, frames=200 enemy_poses=67
+port mo_reb1_let 200
+[3/418] psp mo_reb1_let
+cmp done, frames=172 enemy_poses=58
+port mo_reb1_go 172
+[4/418] psp mo_reb1_go
+cmp done, frames=214 enemy_poses=72
+port mo_reb1_sj 214
+[5/418] psp mo_reb1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_reb1_rj 244
+[6/418] psp mo_reb1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_reb1_rjl 244
+[7/418] psp mo_reb1_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_reb1_steer 170
+[8/418] psp mo_reb1_steer
+cmp done, frames=226 enemy_poses=76
+port mo_reb1_land 226
+[9/418] psp mo_reb1_land
+cmp done, frames=210 enemy_poses=71
+port mo_reb3_st 210
+[10/418] psp mo_reb3_st
+cmp done, frames=250 enemy_poses=84
+port mo_reb3_run 250
+[11/418] psp mo_reb3_run

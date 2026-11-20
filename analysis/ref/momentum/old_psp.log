@@ -1,0 +1,12 @@
+cmp done, frames=170 enemy_poses=57
+port a_trick 170
+cmp done, frames=170 enemy_poses=57
+port a_trick_far 170
+cmp done, frames=110 enemy_poses=37
+port a_jump 110
+cmp done, frames=130 enemy_poses=44
+port a_jumpheld 130
+cmp done, frames=140 enemy_poses=47
+port a_hike 140
+cmp done, frames=150 enemy_poses=51
+port a_hikeheld 150

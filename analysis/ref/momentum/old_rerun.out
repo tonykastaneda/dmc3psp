@@ -1,0 +1,499 @@
+166 old scripts
+cmp done, frames=170 enemy_poses=57
+port a_trick 170
+[1/166] a_trick
+cmp done, frames=170 enemy_poses=57
+port a_trick_far 170
+[2/166] a_trick_far
+cmp done, frames=110 enemy_poses=37
+port a_jump 110
+[3/166] a_jump
+cmp done, frames=130 enemy_poses=44
+port a_jumpheld 130
+[4/166] a_jumpheld
+cmp done, frames=140 enemy_poses=47
+port a_hike 140
+[5/166] a_hike
+cmp done, frames=150 enemy_poses=51
+port a_hikeheld 150
+[6/166] a_hikeheld
+cmp done, frames=170 enemy_poses=57
+port a_hikestar 170
+[7/166] a_hikestar
+cmp done, frames=170 enemy_poses=57
+port a_starhike 170
+[8/166] a_starhike
+cmp done, frames=110 enemy_poses=37
+port a_star 110
+[9/166] a_star
+cmp done, frames=200 enemy_poses=67
+port taunt 200
+[10/166] taunt
+cmp done, frames=160 enemy_poses=54
+port dt 160
+[11/166] dt
+cmp done, frames=120 enemy_poses=44
+port fxdash 120
+[12/166] fxdash
+cmp done, frames=170 enemy_poses=60
+port fxsky 170
+[13/166] fxsky
+cmp done, frames=120 enemy_poses=43
+port fxguard 120
+[14/166] fxguard
+cmp done, frames=120 enemy_poses=44
+port fxland 120
+[15/166] fxland
+cmp done, frames=150 enemy_poses=54
+port fxgun 150
+[16/166] fxgun
+cmp done, frames=150 enemy_poses=52
+port fxmelee 150
+[17/166] fxmelee
+cmp done, frames=240 enemy_poses=81
+port run 240
+[18/166] run
+cmp done, frames=380 enemy_poses=127
+port dtrun 380
+[19/166] dtrun
+cmp done, frames=260 enemy_poses=87
+port turn 260
+[20/166] turn
+cmp done, frames=160 enemy_poses=54
+port jump 160
+[21/166] jump
+cmp done, frames=240 enemy_poses=81
+port runjump 240
+[22/166] runjump
+cmp done, frames=220 enemy_poses=74
+port jump2 220
+[23/166] jump2
+cmp done, frames=240 enemy_poses=81
+port hike 240
+[24/166] hike
+cmp done, frames=200 enemy_poses=67
+port dash 200
+[25/166] dash
+cmp done, frames=160 enemy_poses=54
+port dash0 160
+[26/166] dash0
+cmp done, frames=200 enemy_poses=67
+port flipl 200
+[27/166] flipl
+cmp done, frames=200 enemy_poses=67
+port flipr 200
+[28/166] flipr
+cmp done, frames=200 enemy_poses=67
+port flipb 200
+[29/166] flipb
+cmp done, frames=200 enemy_poses=67
+port flipf 200
+[30/166] flipf
+cmp done, frames=220 enemy_poses=74
+port airturn 220
+[31/166] airturn
+cmp done, frames=180 enemy_poses=61
+port airdrift 180
+[32/166] airdrift
+cmp done, frames=240 enemy_poses=81
+port strafe 240
+[33/166] strafe
+cmp done, frames=200 enemy_poses=67
+port roll 200
+[34/166] roll
+cmp done, frames=200 enemy_poses=67
+port melee 200
+[35/166] melee
+cmp done, frames=200 enemy_poses=68
+port melee_hit 200
+[36/166] melee_hit
+cmp done, frames=150 enemy_poses=51
+port stinger 150
+[37/166] stinger
+cmp done, frames=170 enemy_poses=57
+port stinger_far 170
+[38/166] stinger_far
+cmp done, frames=150 enemy_poses=51
+port hightime 150
+[39/166] hightime
+cmp done, frames=170 enemy_poses=57
+port hightime_h 170
+[40/166] hightime_h
+cmp done, frames=200 enemy_poses=68
+port stinger_c 200
+[41/166] stinger_c
+cmp done, frames=280 enemy_poses=94
+port gs_rsrun 280
+[42/166] gs_rsrun
+cmp done, frames=280 enemy_poses=94
+port gs_rsrunh 280
+[43/166] gs_rsrunh
+cmp done, frames=280 enemy_poses=94
+port gs_rsrunlet 280
+[44/166] gs_rsrunlet
+cmp done, frames=240 enemy_poses=81
+port gs_rshold 240
+[45/166] gs_rshold
+cmp done, frames=128 enemy_poses=43
+port r_1 128
+[46/166] r_1
+cmp done, frames=140 enemy_poses=47
+port r_2 140
+[47/166] r_2
+cmp done, frames=176 enemy_poses=59
+port r_3 176
+[48/166] r_3
+cmp done, frames=200 enemy_poses=67
+port r_4 200
+[49/166] r_4
+cmp done, frames=212 enemy_poses=71
+port r_gap 212
+[50/166] r_gap
+cmp done, frames=284 enemy_poses=95
+port r_gapl 284
+[51/166] r_gapl
+cmp done, frames=152 enemy_poses=51
+port r_st 152
+[52/166] r_st
+cmp done, frames=152 enemy_poses=51
+port r_ht 152
+[53/166] r_ht
+cmp done, frames=176 enemy_poses=59
+port r_hth 176
+[54/166] r_hth
+cmp done, frames=140 enemy_poses=47
+port r_helm 140
+[55/166] r_helm
+cmp done, frames=212 enemy_poses=71
+port r_ms 212
+[56/166] r_ms
+cmp done, frames=188 enemy_poses=63
+port r_rise 188
+[57/166] r_rise
+cmp done, frames=176 enemy_poses=59
+port w_u 176
+[58/166] w_u
+cmp done, frames=176 enemy_poses=59
+port w_d 176
+[59/166] w_d
+cmp done, frames=176 enemy_poses=59
+port w_l 176
+[60/166] w_l
+cmp done, frames=176 enemy_poses=59
+port w_r 176
+[61/166] w_r
+cmp done, frames=152 enemy_poses=51
+port w_au 152
+[62/166] w_au
+cmp done, frames=152 enemy_poses=51
+port w_aa 152
+[63/166] w_aa
+cmp done, frames=104 enemy_poses=35
+port d_n 104
+[64/166] d_n
+cmp done, frames=104 enemy_poses=35
+port d_u 104
+[65/166] d_u
+cmp done, frames=104 enemy_poses=35
+port d_d 104
+[66/166] d_d
+cmp done, frames=104 enemy_poses=35
+port d_l 104
+[67/166] d_l
+cmp done, frames=104 enemy_poses=35
+port d_r 104
+[68/166] d_r
+cmp done, frames=164 enemy_poses=55
+port t_air 164
+[69/166] t_air
+cmp done, frames=164 enemy_poses=55
+port t_airb 164
+[70/166] t_airb
+cmp done, frames=140 enemy_poses=47
+port dash3 140
+[71/166] dash3
+cmp done, frames=104 enemy_poses=35
+port ei_g1 104
+[72/166] ei_g1
+cmp done, frames=128 enemy_poses=44
+port ei_gm 128
+[73/166] ei_gm
+cmp done, frames=152 enemy_poses=52
+port ei_gh 152
+[74/166] ei_gh
+cmp done, frames=128 enemy_poses=43
+port ei_ga 128
+[75/166] ei_ga
+cmp done, frames=104 enemy_poses=35
+port sg_g1 104
+[76/166] sg_g1
+cmp done, frames=128 enemy_poses=43
+port sg_gm 128
+[77/166] sg_gm
+cmp done, frames=152 enemy_poses=51
+port sg_gh 152
+[78/166] sg_gh
+cmp done, frames=128 enemy_poses=43
+port sg_ga 128
+[79/166] sg_ga
+cmp done, frames=104 enemy_poses=36
+port ar_g1 104
+[80/166] ar_g1
+cmp done, frames=128 enemy_poses=45
+port ar_gm 128
+[81/166] ar_gm
+cmp done, frames=152 enemy_poses=52
+port ar_gh 152
+[82/166] ar_gh
+cmp done, frames=128 enemy_poses=43
+port ar_ga 128
+[83/166] ar_ga
+cmp done, frames=104 enemy_poses=36
+port sp_g1 104
+[84/166] sp_g1
+cmp done, frames=128 enemy_poses=44
+port sp_gm 128
+[85/166] sp_gm
+cmp done, frames=152 enemy_poses=52
+port sp_gh 152
+[86/166] sp_gh
+cmp done, frames=128 enemy_poses=44
+port sp_ga 128
+[87/166] sp_ga
+cmp done, frames=104 enemy_poses=36
+port ka_g1 104
+[88/166] ka_g1
+cmp done, frames=128 enemy_poses=44
+port ka_gm 128
+[89/166] ka_gm
+cmp done, frames=152 enemy_poses=52
+port ka_gh 152
+[90/166] ka_gh
+cmp done, frames=128 enemy_poses=44
+port ka_ga 128
+[91/166] ka_ga
+cmp done, frames=128 enemy_poses=43
+port cer_c1 128
+[92/166] cer_c1
+cmp done, frames=164 enemy_poses=55
+port cer_chold 164
+[93/166] cer_chold
+cmp done, frames=152 enemy_poses=51
+port cer_cair 152
+[94/166] cer_cair
+cmp done, frames=188 enemy_poses=63
+port cer_cairm 188
+[95/166] cer_cairm
+cmp done, frames=164 enemy_poses=55
+port cer_cb 164
+[96/166] cer_cb
+cmp done, frames=164 enemy_poses=55
+port cer_cf 164
+[97/166] cer_cf
+cmp done, frames=212 enemy_poses=71
+port cer_cmash 212
+[98/166] cer_cmash
+cmp done, frames=212 enemy_poses=71
+port cer_rgap 212
+[99/166] cer_rgap
+cmp done, frames=200 enemy_poses=67
+port cer_r4 200
+[100/166] cer_r4
+cmp done, frames=128 enemy_poses=43
+port agn_c1 128
+[101/166] agn_c1
+cmp done, frames=164 enemy_poses=55
+port agn_chold 164
+[102/166] agn_chold
+cmp done, frames=152 enemy_poses=51
+port agn_cair 152
+[103/166] agn_cair
+cmp done, frames=188 enemy_poses=63
+port agn_cairm 188
+[104/166] agn_cairm
+cmp done, frames=164 enemy_poses=55
+port agn_cb 164
+[105/166] agn_cb
+cmp done, frames=164 enemy_poses=55
+port agn_cf 164
+[106/166] agn_cf
+cmp done, frames=212 enemy_poses=71
+port agn_cmash 212
+[107/166] agn_cmash
+cmp done, frames=212 enemy_poses=71
+port agn_rgap 212
+[108/166] agn_rgap
+cmp done, frames=200 enemy_poses=67
+port agn_r4 200
+[109/166] agn_r4
+cmp done, frames=128 enemy_poses=43
+port nev_c1 128
+[110/166] nev_c1
+cmp done, frames=164 enemy_poses=55
+port nev_chold 164
+[111/166] nev_chold
+cmp done, frames=152 enemy_poses=51
+port nev_cair 152
+[112/166] nev_cair
+cmp done, frames=188 enemy_poses=63
+port nev_cairm 188
+[113/166] nev_cairm
+cmp done, frames=164 enemy_poses=55
+port nev_cb 164
+[114/166] nev_cb
+cmp done, frames=164 enemy_poses=55
+port nev_cf 164
+[115/166] nev_cf
+cmp done, frames=212 enemy_poses=71
+port nev_cmash 212
+[116/166] nev_cmash
+cmp done, frames=212 enemy_poses=71
+port nev_rgap 212
+[117/166] nev_rgap
+cmp done, frames=200 enemy_poses=67
+port nev_r4 200
+[118/166] nev_r4
+cmp done, frames=128 enemy_poses=43
+port beo_c1 128
+[119/166] beo_c1
+cmp done, frames=164 enemy_poses=55
+port beo_chold 164
+[120/166] beo_chold
+cmp done, frames=152 enemy_poses=51
+port beo_cair 152
+[121/166] beo_cair
+cmp done, frames=188 enemy_poses=63
+port beo_cairm 188
+[122/166] beo_cairm
+cmp done, frames=164 enemy_poses=55
+port beo_cb 164
+[123/166] beo_cb
+cmp done, frames=164 enemy_poses=55
+port beo_cf 164
+[124/166] beo_cf
+cmp done, frames=212 enemy_poses=71
+port beo_cmash 212
+[125/166] beo_cmash
+cmp done, frames=212 enemy_poses=71
+port beo_rgap 212
+[126/166] beo_rgap
+cmp done, frames=200 enemy_poses=67
+port beo_r4 200
+[127/166] beo_r4
+cmp done, frames=152 enemy_poses=51
+port sm_1 152
+[128/166] sm_1
+cmp done, frames=176 enemy_poses=59
+port sm_2 176
+[129/166] sm_2
+cmp done, frames=200 enemy_poses=67
+port sm_3 200
+[130/166] sm_3
+cmp done, frames=212 enemy_poses=71
+port sm_mash 212
+[131/166] sm_mash
+cmp done, frames=212 enemy_poses=71
+port sm_hold 212
+[132/166] sm_hold
+cmp done, frames=164 enemy_poses=55
+port sm_air 164
+[133/166] sm_air
+cmp done, frames=200 enemy_poses=67
+port sm_airm 200
+[134/166] sm_airm
+cmp done, frames=176 enemy_poses=59
+port sm_lf 176
+[135/166] sm_lf
+cmp done, frames=176 enemy_poses=59
+port sm_lb 176
+[136/166] sm_lb
+cmp done, frames=224 enemy_poses=75
+port sm_lfm 224
+[137/166] sm_lfm
+cmp done, frames=224 enemy_poses=75
+port sm_lbm 224
+[138/166] sm_lbm
+cmp done, frames=224 enemy_poses=75
+port sm_lh 224
+[139/166] sm_lh
+cmp done, frames=200 enemy_poses=67
+port sm_airs 200
+[140/166] sm_airs
+cmp done, frames=152 enemy_poses=52
+port gs_1 152
+[141/166] gs_1
+cmp done, frames=176 enemy_poses=59
+port gs_2 176
+[142/166] gs_2
+cmp done, frames=200 enemy_poses=67
+port gs_3 200
+[143/166] gs_3
+cmp done, frames=212 enemy_poses=73
+port gs_mash 212
+[144/166] gs_mash
+cmp done, frames=212 enemy_poses=72
+port gs_hold 212
+[145/166] gs_hold
+cmp done, frames=164 enemy_poses=56
+port gs_air 164
+[146/166] gs_air
+cmp done, frames=200 enemy_poses=68
+port gs_airm 200
+[147/166] gs_airm
+cmp done, frames=176 enemy_poses=60
+port gs_lf 176
+[148/166] gs_lf
+cmp done, frames=176 enemy_poses=60
+port gs_lb 176
+[149/166] gs_lb
+cmp done, frames=224 enemy_poses=76
+port gs_lfm 224
+[150/166] gs_lfm
+cmp done, frames=224 enemy_poses=76
+port gs_lbm 224
+[151/166] gs_lbm
+cmp done, frames=224 enemy_poses=76
+port gs_lh 224
+[152/166] gs_lh
+cmp done, frames=200 enemy_poses=67
+port gs_airs 200
+[153/166] gs_airs
+cmp done, frames=152 enemy_poses=51
+port rg_1 152
+[154/166] rg_1
+cmp done, frames=176 enemy_poses=59
+port rg_2 176
+[155/166] rg_2
+cmp done, frames=200 enemy_poses=67
+port rg_3 200
+[156/166] rg_3
+cmp done, frames=212 enemy_poses=71
+port rg_mash 212
+[157/166] rg_mash
+cmp done, frames=212 enemy_poses=71
+port rg_hold 212
+[158/166] rg_hold
+cmp done, frames=164 enemy_poses=55
+port rg_air 164
+[159/166] rg_air
+cmp done, frames=200 enemy_poses=67
+port rg_airm 200
+[160/166] rg_airm
+cmp done, frames=176 enemy_poses=59
+port rg_lf 176
+[161/166] rg_lf
+cmp done, frames=176 enemy_poses=59
+port rg_lb 176
+[162/166] rg_lb
+cmp done, frames=224 enemy_poses=75
+port rg_lfm 224
+[163/166] rg_lfm
+cmp done, frames=224 enemy_poses=75
+port rg_lbm 224
+[164/166] rg_lbm
+cmp done, frames=224 enemy_poses=75
+port rg_lh 224
+[165/166] rg_lh
+cmp done, frames=200 enemy_poses=67
+port rg_airs 200
+[166/166] rg_airs

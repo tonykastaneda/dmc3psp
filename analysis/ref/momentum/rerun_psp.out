@@ -1,0 +1,1254 @@
+cmp done, frames=170 enemy_poses=57
+port mo_reb1_st 170
+[1/418] psp mo_reb1_st
+cmp done, frames=210 enemy_poses=71
+port mo_reb1_run 210
+[2/418] psp mo_reb1_run
+cmp done, frames=200 enemy_poses=67
+port mo_reb1_let 200
+[3/418] psp mo_reb1_let
+cmp done, frames=172 enemy_poses=58
+port mo_reb1_go 172
+[4/418] psp mo_reb1_go
+cmp done, frames=214 enemy_poses=72
+port mo_reb1_sj 214
+[5/418] psp mo_reb1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_reb1_rj 244
+[6/418] psp mo_reb1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_reb1_rjl 244
+[7/418] psp mo_reb1_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_reb1_steer 170
+[8/418] psp mo_reb1_steer
+cmp done, frames=226 enemy_poses=76
+port mo_reb1_land 226
+[9/418] psp mo_reb1_land
+cmp done, frames=210 enemy_poses=71
+port mo_reb3_st 210
+[10/418] psp mo_reb3_st
+cmp done, frames=250 enemy_poses=84
+port mo_reb3_run 250
+[11/418] psp mo_reb3_run
+cmp done, frames=240 enemy_poses=81
+port mo_reb3_let 240
+[12/418] psp mo_reb3_let
+cmp done, frames=212 enemy_poses=71
+port mo_reb3_go 212
+[13/418] psp mo_reb3_go
+cmp done, frames=254 enemy_poses=85
+port mo_reb3_sj 254
+[14/418] psp mo_reb3_sj
+cmp done, frames=284 enemy_poses=95
+port mo_reb3_rj 284
+[15/418] psp mo_reb3_rj
+cmp done, frames=284 enemy_poses=95
+port mo_reb3_rjl 284
+[16/418] psp mo_reb3_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_reb3_steer 210
+[17/418] psp mo_reb3_steer
+cmp done, frames=266 enemy_poses=89
+port mo_reb3_land 266
+[18/418] psp mo_reb3_land
+cmp done, frames=170 enemy_poses=57
+port mo_cer1_st 170
+[19/418] psp mo_cer1_st
+cmp done, frames=210 enemy_poses=71
+port mo_cer1_run 210
+[20/418] psp mo_cer1_run
+cmp done, frames=200 enemy_poses=67
+port mo_cer1_let 200
+[21/418] psp mo_cer1_let
+cmp done, frames=172 enemy_poses=58
+port mo_cer1_go 172
+[22/418] psp mo_cer1_go
+cmp done, frames=214 enemy_poses=72
+port mo_cer1_sj 214
+[23/418] psp mo_cer1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_cer1_rj 244
+[24/418] psp mo_cer1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_cer1_rjl 244
+[25/418] psp mo_cer1_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_cer1_steer 170
+[26/418] psp mo_cer1_steer
+cmp done, frames=226 enemy_poses=76
+port mo_cer1_land 226
+[27/418] psp mo_cer1_land
+cmp done, frames=210 enemy_poses=71
+port mo_cer3_st 210
+[28/418] psp mo_cer3_st
+cmp done, frames=250 enemy_poses=84
+port mo_cer3_run 250
+[29/418] psp mo_cer3_run
+cmp done, frames=240 enemy_poses=81
+port mo_cer3_let 240
+[30/418] psp mo_cer3_let
+cmp done, frames=212 enemy_poses=71
+port mo_cer3_go 212
+[31/418] psp mo_cer3_go
+cmp done, frames=254 enemy_poses=85
+port mo_cer3_sj 254
+[32/418] psp mo_cer3_sj
+cmp done, frames=284 enemy_poses=95
+port mo_cer3_rj 284
+[33/418] psp mo_cer3_rj
+cmp done, frames=284 enemy_poses=95
+port mo_cer3_rjl 284
+[34/418] psp mo_cer3_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_cer3_steer 210
+[35/418] psp mo_cer3_steer
+cmp done, frames=266 enemy_poses=89
+port mo_cer3_land 266
+[36/418] psp mo_cer3_land
+cmp done, frames=170 enemy_poses=57
+port mo_agn1_st 170
+[37/418] psp mo_agn1_st
+cmp done, frames=210 enemy_poses=71
+port mo_agn1_run 210
+[38/418] psp mo_agn1_run
+cmp done, frames=200 enemy_poses=67
+port mo_agn1_let 200
+[39/418] psp mo_agn1_let
+cmp done, frames=172 enemy_poses=58
+port mo_agn1_go 172
+[40/418] psp mo_agn1_go
+cmp done, frames=214 enemy_poses=72
+port mo_agn1_sj 214
+[41/418] psp mo_agn1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_agn1_rj 244
+[42/418] psp mo_agn1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_agn1_rjl 244
+[43/418] psp mo_agn1_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_agn1_steer 170
+[44/418] psp mo_agn1_steer
+cmp done, frames=226 enemy_poses=76
+port mo_agn1_land 226
+[45/418] psp mo_agn1_land
+cmp done, frames=210 enemy_poses=71
+port mo_agn3_st 210
+[46/418] psp mo_agn3_st
+cmp done, frames=250 enemy_poses=84
+port mo_agn3_run 250
+[47/418] psp mo_agn3_run
+cmp done, frames=240 enemy_poses=81
+port mo_agn3_let 240
+[48/418] psp mo_agn3_let
+cmp done, frames=212 enemy_poses=71
+port mo_agn3_go 212
+[49/418] psp mo_agn3_go
+cmp done, frames=254 enemy_poses=85
+port mo_agn3_sj 254
+[50/418] psp mo_agn3_sj
+cmp done, frames=284 enemy_poses=95
+port mo_agn3_rj 284
+[51/418] psp mo_agn3_rj
+cmp done, frames=284 enemy_poses=95
+port mo_agn3_rjl 284
+[52/418] psp mo_agn3_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_agn3_steer 210
+[53/418] psp mo_agn3_steer
+cmp done, frames=266 enemy_poses=89
+port mo_agn3_land 266
+[54/418] psp mo_agn3_land
+cmp done, frames=170 enemy_poses=57
+port mo_nev1_st 170
+[55/418] psp mo_nev1_st
+cmp done, frames=210 enemy_poses=71
+port mo_nev1_run 210
+[56/418] psp mo_nev1_run
+cmp done, frames=200 enemy_poses=67
+port mo_nev1_let 200
+[57/418] psp mo_nev1_let
+cmp done, frames=172 enemy_poses=58
+port mo_nev1_go 172
+[58/418] psp mo_nev1_go
+cmp done, frames=214 enemy_poses=72
+port mo_nev1_sj 214
+[59/418] psp mo_nev1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_nev1_rj 244
+[60/418] psp mo_nev1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_nev1_rjl 244
+[61/418] psp mo_nev1_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_nev1_steer 170
+[62/418] psp mo_nev1_steer
+cmp done, frames=226 enemy_poses=76
+port mo_nev1_land 226
+[63/418] psp mo_nev1_land
+cmp done, frames=210 enemy_poses=71
+port mo_nev3_st 210
+[64/418] psp mo_nev3_st
+cmp done, frames=250 enemy_poses=84
+port mo_nev3_run 250
+[65/418] psp mo_nev3_run
+cmp done, frames=240 enemy_poses=81
+port mo_nev3_let 240
+[66/418] psp mo_nev3_let
+cmp done, frames=212 enemy_poses=71
+port mo_nev3_go 212
+[67/418] psp mo_nev3_go
+cmp done, frames=254 enemy_poses=85
+port mo_nev3_sj 254
+[68/418] psp mo_nev3_sj
+cmp done, frames=284 enemy_poses=95
+port mo_nev3_rj 284
+[69/418] psp mo_nev3_rj
+cmp done, frames=284 enemy_poses=95
+port mo_nev3_rjl 284
+[70/418] psp mo_nev3_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_nev3_steer 210
+[71/418] psp mo_nev3_steer
+cmp done, frames=266 enemy_poses=89
+port mo_nev3_land 266
+[72/418] psp mo_nev3_land
+cmp done, frames=170 enemy_poses=57
+port mo_beo1_st 170
+[73/418] psp mo_beo1_st
+cmp done, frames=210 enemy_poses=71
+port mo_beo1_run 210
+[74/418] psp mo_beo1_run
+cmp done, frames=200 enemy_poses=67
+port mo_beo1_let 200
+[75/418] psp mo_beo1_let
+cmp done, frames=172 enemy_poses=58
+port mo_beo1_go 172
+[76/418] psp mo_beo1_go
+cmp done, frames=214 enemy_poses=72
+port mo_beo1_sj 214
+[77/418] psp mo_beo1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_beo1_rj 244
+[78/418] psp mo_beo1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_beo1_rjl 244
+[79/418] psp mo_beo1_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_beo1_steer 170
+[80/418] psp mo_beo1_steer
+cmp done, frames=226 enemy_poses=76
+port mo_beo1_land 226
+[81/418] psp mo_beo1_land
+cmp done, frames=210 enemy_poses=71
+port mo_beo3_st 210
+[82/418] psp mo_beo3_st
+cmp done, frames=250 enemy_poses=84
+port mo_beo3_run 250
+[83/418] psp mo_beo3_run
+cmp done, frames=240 enemy_poses=81
+port mo_beo3_let 240
+[84/418] psp mo_beo3_let
+cmp done, frames=212 enemy_poses=71
+port mo_beo3_go 212
+[85/418] psp mo_beo3_go
+cmp done, frames=254 enemy_poses=85
+port mo_beo3_sj 254
+[86/418] psp mo_beo3_sj
+cmp done, frames=284 enemy_poses=95
+port mo_beo3_rj 284
+[87/418] psp mo_beo3_rj
+cmp done, frames=284 enemy_poses=95
+port mo_beo3_rjl 284
+[88/418] psp mo_beo3_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_beo3_steer 210
+[89/418] psp mo_beo3_steer
+cmp done, frames=266 enemy_poses=89
+port mo_beo3_land 266
+[90/418] psp mo_beo3_land
+cmp done, frames=170 enemy_poses=58
+port mo_ei1_st 170
+[91/418] psp mo_ei1_st
+cmp done, frames=210 enemy_poses=72
+port mo_ei1_run 210
+[92/418] psp mo_ei1_run
+cmp done, frames=200 enemy_poses=68
+port mo_ei1_let 200
+[93/418] psp mo_ei1_let
+cmp done, frames=172 enemy_poses=59
+port mo_ei1_go 172
+[94/418] psp mo_ei1_go
+cmp done, frames=214 enemy_poses=72
+port mo_ei1_sj 214
+[95/418] psp mo_ei1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_ei1_rj 244
+[96/418] psp mo_ei1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_ei1_rjl 244
+[97/418] psp mo_ei1_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_ei1_steer 170
+[98/418] psp mo_ei1_steer
+cmp done, frames=226 enemy_poses=77
+port mo_ei1_land 226
+[99/418] psp mo_ei1_land
+cmp done, frames=170 enemy_poses=58
+port mo_eih_st 170
+[100/418] psp mo_eih_st
+cmp done, frames=210 enemy_poses=72
+port mo_eih_run 210
+[101/418] psp mo_eih_run
+cmp done, frames=200 enemy_poses=68
+port mo_eih_let 200
+[102/418] psp mo_eih_let
+cmp done, frames=172 enemy_poses=59
+port mo_eih_go 172
+[103/418] psp mo_eih_go
+cmp done, frames=214 enemy_poses=72
+port mo_eih_sj 214
+[104/418] psp mo_eih_sj
+cmp done, frames=244 enemy_poses=82
+port mo_eih_rj 244
+[105/418] psp mo_eih_rj
+cmp done, frames=244 enemy_poses=82
+port mo_eih_rjl 244
+[106/418] psp mo_eih_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_eih_steer 170
+[107/418] psp mo_eih_steer
+cmp done, frames=226 enemy_poses=77
+port mo_eih_land 226
+[108/418] psp mo_eih_land
+cmp done, frames=170 enemy_poses=57
+port mo_sg1_st 170
+[109/418] psp mo_sg1_st
+cmp done, frames=210 enemy_poses=71
+port mo_sg1_run 210
+[110/418] psp mo_sg1_run
+cmp done, frames=200 enemy_poses=67
+port mo_sg1_let 200
+[111/418] psp mo_sg1_let
+cmp done, frames=172 enemy_poses=58
+port mo_sg1_go 172
+[112/418] psp mo_sg1_go
+cmp done, frames=214 enemy_poses=72
+port mo_sg1_sj 214
+[113/418] psp mo_sg1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_sg1_rj 244
+[114/418] psp mo_sg1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_sg1_rjl 244
+[115/418] psp mo_sg1_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_sg1_steer 170
+[116/418] psp mo_sg1_steer
+cmp done, frames=226 enemy_poses=76
+port mo_sg1_land 226
+[117/418] psp mo_sg1_land
+cmp done, frames=170 enemy_poses=57
+port mo_sgh_st 170
+[118/418] psp mo_sgh_st
+cmp done, frames=210 enemy_poses=71
+port mo_sgh_run 210
+[119/418] psp mo_sgh_run
+cmp done, frames=200 enemy_poses=67
+port mo_sgh_let 200
+[120/418] psp mo_sgh_let
+cmp done, frames=172 enemy_poses=58
+port mo_sgh_go 172
+[121/418] psp mo_sgh_go
+cmp done, frames=214 enemy_poses=72
+port mo_sgh_sj 214
+[122/418] psp mo_sgh_sj
+cmp done, frames=244 enemy_poses=82
+port mo_sgh_rj 244
+[123/418] psp mo_sgh_rj
+cmp done, frames=244 enemy_poses=82
+port mo_sgh_rjl 244
+[124/418] psp mo_sgh_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_sgh_steer 170
+[125/418] psp mo_sgh_steer
+cmp done, frames=226 enemy_poses=76
+port mo_sgh_land 226
+[126/418] psp mo_sgh_land
+cmp done, frames=170 enemy_poses=58
+port mo_ar1_st 170
+[127/418] psp mo_ar1_st
+cmp done, frames=210 enemy_poses=72
+port mo_ar1_run 210
+[128/418] psp mo_ar1_run
+cmp done, frames=200 enemy_poses=69
+port mo_ar1_let 200
+[129/418] psp mo_ar1_let
+cmp done, frames=172 enemy_poses=59
+port mo_ar1_go 172
+[130/418] psp mo_ar1_go
+cmp done, frames=214 enemy_poses=72
+port mo_ar1_sj 214
+[131/418] psp mo_ar1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_ar1_rj 244
+[132/418] psp mo_ar1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_ar1_rjl 244
+[133/418] psp mo_ar1_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_ar1_steer 170
+[134/418] psp mo_ar1_steer
+cmp done, frames=226 enemy_poses=77
+port mo_ar1_land 226
+[135/418] psp mo_ar1_land
+cmp done, frames=170 enemy_poses=57
+port mo_arh_st 170
+[136/418] psp mo_arh_st
+cmp done, frames=210 enemy_poses=71
+port mo_arh_run 210
+[137/418] psp mo_arh_run
+cmp done, frames=200 enemy_poses=68
+port mo_arh_let 200
+[138/418] psp mo_arh_let
+cmp done, frames=172 enemy_poses=58
+port mo_arh_go 172
+[139/418] psp mo_arh_go
+cmp done, frames=214 enemy_poses=73
+port mo_arh_sj 214
+[140/418] psp mo_arh_sj
+cmp done, frames=244 enemy_poses=83
+port mo_arh_rj 244
+[141/418] psp mo_arh_rj
+cmp done, frames=244 enemy_poses=83
+port mo_arh_rjl 244
+[142/418] psp mo_arh_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_arh_steer 170
+[143/418] psp mo_arh_steer
+cmp done, frames=226 enemy_poses=76
+port mo_arh_land 226
+[144/418] psp mo_arh_land
+cmp done, frames=170 enemy_poses=59
+port mo_sp1_st 170
+[145/418] psp mo_sp1_st
+cmp done, frames=210 enemy_poses=72
+port mo_sp1_run 210
+[146/418] psp mo_sp1_run
+cmp done, frames=200 enemy_poses=69
+port mo_sp1_let 200
+[147/418] psp mo_sp1_let
+cmp done, frames=172 enemy_poses=59
+port mo_sp1_go 172
+[148/418] psp mo_sp1_go
+cmp done, frames=214 enemy_poses=72
+port mo_sp1_sj 214
+[149/418] psp mo_sp1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_sp1_rj 244
+[150/418] psp mo_sp1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_sp1_rjl 244
+[151/418] psp mo_sp1_rjl
+cmp done, frames=170 enemy_poses=59
+port mo_sp1_steer 170
+[152/418] psp mo_sp1_steer
+cmp done, frames=226 enemy_poses=77
+port mo_sp1_land 226
+[153/418] psp mo_sp1_land
+cmp done, frames=170 enemy_poses=59
+port mo_sph_st 170
+[154/418] psp mo_sph_st
+cmp done, frames=210 enemy_poses=72
+port mo_sph_run 210
+[155/418] psp mo_sph_run
+cmp done, frames=200 enemy_poses=69
+port mo_sph_let 200
+[156/418] psp mo_sph_let
+cmp done, frames=172 enemy_poses=59
+port mo_sph_go 172
+[157/418] psp mo_sph_go
+cmp done, frames=214 enemy_poses=72
+port mo_sph_sj 214
+[158/418] psp mo_sph_sj
+cmp done, frames=244 enemy_poses=82
+port mo_sph_rj 244
+[159/418] psp mo_sph_rj
+cmp done, frames=244 enemy_poses=82
+port mo_sph_rjl 244
+[160/418] psp mo_sph_rjl
+cmp done, frames=170 enemy_poses=59
+port mo_sph_steer 170
+[161/418] psp mo_sph_steer
+cmp done, frames=226 enemy_poses=77
+port mo_sph_land 226
+[162/418] psp mo_sph_land
+cmp done, frames=170 enemy_poses=58
+port mo_ka1_st 170
+[163/418] psp mo_ka1_st
+cmp done, frames=210 enemy_poses=71
+port mo_ka1_run 210
+[164/418] psp mo_ka1_run
+cmp done, frames=200 enemy_poses=68
+port mo_ka1_let 200
+[165/418] psp mo_ka1_let
+cmp done, frames=172 enemy_poses=59
+port mo_ka1_go 172
+[166/418] psp mo_ka1_go
+cmp done, frames=214 enemy_poses=72
+port mo_ka1_sj 214
+[167/418] psp mo_ka1_sj
+cmp done, frames=244 enemy_poses=82
+port mo_ka1_rj 244
+[168/418] psp mo_ka1_rj
+cmp done, frames=244 enemy_poses=82
+port mo_ka1_rjl 244
+[169/418] psp mo_ka1_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_ka1_steer 170
+[170/418] psp mo_ka1_steer
+cmp done, frames=226 enemy_poses=77
+port mo_ka1_land 226
+[171/418] psp mo_ka1_land
+cmp done, frames=170 enemy_poses=58
+port mo_kah_st 170
+[172/418] psp mo_kah_st
+cmp done, frames=210 enemy_poses=71
+port mo_kah_run 210
+[173/418] psp mo_kah_run
+cmp done, frames=200 enemy_poses=68
+port mo_kah_let 200
+[174/418] psp mo_kah_let
+cmp done, frames=172 enemy_poses=59
+port mo_kah_go 172
+[175/418] psp mo_kah_go
+cmp done, frames=214 enemy_poses=72
+port mo_kah_sj 214
+[176/418] psp mo_kah_sj
+cmp done, frames=244 enemy_poses=82
+port mo_kah_rj 244
+[177/418] psp mo_kah_rj
+cmp done, frames=244 enemy_poses=82
+port mo_kah_rjl 244
+[178/418] psp mo_kah_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_kah_steer 170
+[179/418] psp mo_kah_steer
+cmp done, frames=226 enemy_poses=77
+port mo_kah_land 226
+[180/418] psp mo_kah_land
+cmp done, frames=170 enemy_poses=57
+port mo_tr_st 170
+[181/418] psp mo_tr_st
+cmp done, frames=210 enemy_poses=71
+port mo_tr_run 210
+[182/418] psp mo_tr_run
+cmp done, frames=200 enemy_poses=67
+port mo_tr_let 200
+[183/418] psp mo_tr_let
+cmp done, frames=172 enemy_poses=58
+port mo_tr_go 172
+[184/418] psp mo_tr_go
+cmp done, frames=214 enemy_poses=72
+port mo_tr_sj 214
+[185/418] psp mo_tr_sj
+cmp done, frames=244 enemy_poses=82
+port mo_tr_rj 244
+[186/418] psp mo_tr_rj
+cmp done, frames=244 enemy_poses=82
+port mo_tr_rjl 244
+[187/418] psp mo_tr_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_tr_steer 170
+[188/418] psp mo_tr_steer
+cmp done, frames=226 enemy_poses=76
+port mo_tr_land 226
+[189/418] psp mo_tr_land
+cmp done, frames=210 enemy_poses=71
+port mo_trm_st 210
+[190/418] psp mo_trm_st
+cmp done, frames=250 enemy_poses=84
+port mo_trm_run 250
+[191/418] psp mo_trm_run
+cmp done, frames=240 enemy_poses=81
+port mo_trm_let 240
+[192/418] psp mo_trm_let
+cmp done, frames=212 enemy_poses=71
+port mo_trm_go 212
+[193/418] psp mo_trm_go
+cmp done, frames=254 enemy_poses=85
+port mo_trm_sj 254
+[194/418] psp mo_trm_sj
+cmp done, frames=284 enemy_poses=95
+port mo_trm_rj 284
+[195/418] psp mo_trm_rj
+cmp done, frames=284 enemy_poses=95
+port mo_trm_rjl 284
+[196/418] psp mo_trm_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_trm_steer 210
+[197/418] psp mo_trm_steer
+cmp done, frames=266 enemy_poses=89
+port mo_trm_land 266
+[198/418] psp mo_trm_land
+cmp done, frames=170 enemy_poses=57
+port mo_rg_st 170
+[199/418] psp mo_rg_st
+cmp done, frames=210 enemy_poses=71
+port mo_rg_run 210
+[200/418] psp mo_rg_run
+cmp done, frames=200 enemy_poses=67
+port mo_rg_let 200
+[201/418] psp mo_rg_let
+cmp done, frames=172 enemy_poses=58
+port mo_rg_go 172
+[202/418] psp mo_rg_go
+cmp done, frames=214 enemy_poses=72
+port mo_rg_sj 214
+[203/418] psp mo_rg_sj
+cmp done, frames=244 enemy_poses=82
+port mo_rg_rj 244
+[204/418] psp mo_rg_rj
+cmp done, frames=244 enemy_poses=82
+port mo_rg_rjl 244
+[205/418] psp mo_rg_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_rg_steer 170
+[206/418] psp mo_rg_steer
+cmp done, frames=226 enemy_poses=76
+port mo_rg_land 226
+[207/418] psp mo_rg_land
+cmp done, frames=170 enemy_poses=57
+port mo_rgh_st 170
+[208/418] psp mo_rgh_st
+cmp done, frames=210 enemy_poses=71
+port mo_rgh_run 210
+[209/418] psp mo_rgh_run
+cmp done, frames=200 enemy_poses=67
+port mo_rgh_let 200
+[210/418] psp mo_rgh_let
+cmp done, frames=172 enemy_poses=58
+port mo_rgh_go 172
+[211/418] psp mo_rgh_go
+cmp done, frames=214 enemy_poses=72
+port mo_rgh_sj 214
+[212/418] psp mo_rgh_sj
+cmp done, frames=244 enemy_poses=82
+port mo_rgh_rj 244
+[213/418] psp mo_rgh_rj
+cmp done, frames=244 enemy_poses=82
+port mo_rgh_rjl 244
+[214/418] psp mo_rgh_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_rgh_steer 170
+[215/418] psp mo_rgh_steer
+cmp done, frames=226 enemy_poses=76
+port mo_rgh_land 226
+[216/418] psp mo_rgh_land
+cmp done, frames=170 enemy_poses=57
+port mo_smreb_st 170
+[217/418] psp mo_smreb_st
+cmp done, frames=210 enemy_poses=71
+port mo_smreb_run 210
+[218/418] psp mo_smreb_run
+cmp done, frames=200 enemy_poses=67
+port mo_smreb_let 200
+[219/418] psp mo_smreb_let
+cmp done, frames=172 enemy_poses=58
+port mo_smreb_go 172
+[220/418] psp mo_smreb_go
+cmp done, frames=214 enemy_poses=72
+port mo_smreb_sj 214
+[221/418] psp mo_smreb_sj
+cmp done, frames=244 enemy_poses=82
+port mo_smreb_rj 244
+[222/418] psp mo_smreb_rj
+cmp done, frames=244 enemy_poses=82
+port mo_smreb_rjl 244
+[223/418] psp mo_smreb_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_smreb_steer 170
+[224/418] psp mo_smreb_steer
+cmp done, frames=226 enemy_poses=76
+port mo_smreb_land 226
+[225/418] psp mo_smreb_land
+cmp done, frames=210 enemy_poses=71
+port mo_smrebm_st 210
+[226/418] psp mo_smrebm_st
+cmp done, frames=250 enemy_poses=84
+port mo_smrebm_run 250
+[227/418] psp mo_smrebm_run
+cmp done, frames=240 enemy_poses=81
+port mo_smrebm_let 240
+[228/418] psp mo_smrebm_let
+cmp done, frames=212 enemy_poses=71
+port mo_smrebm_go 212
+[229/418] psp mo_smrebm_go
+cmp done, frames=254 enemy_poses=85
+port mo_smrebm_sj 254
+[230/418] psp mo_smrebm_sj
+cmp done, frames=284 enemy_poses=95
+port mo_smrebm_rj 284
+[231/418] psp mo_smrebm_rj
+cmp done, frames=284 enemy_poses=95
+port mo_smrebm_rjl 284
+[232/418] psp mo_smrebm_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_smrebm_steer 210
+[233/418] psp mo_smrebm_steer
+cmp done, frames=266 enemy_poses=89
+port mo_smrebm_land 266
+[234/418] psp mo_smrebm_land
+cmp done, frames=170 enemy_poses=57
+port mo_smcer_st 170
+[235/418] psp mo_smcer_st
+cmp done, frames=210 enemy_poses=71
+port mo_smcer_run 210
+[236/418] psp mo_smcer_run
+cmp done, frames=200 enemy_poses=67
+port mo_smcer_let 200
+[237/418] psp mo_smcer_let
+cmp done, frames=172 enemy_poses=58
+port mo_smcer_go 172
+[238/418] psp mo_smcer_go
+cmp done, frames=214 enemy_poses=72
+port mo_smcer_sj 214
+[239/418] psp mo_smcer_sj
+cmp done, frames=244 enemy_poses=82
+port mo_smcer_rj 244
+[240/418] psp mo_smcer_rj
+cmp done, frames=244 enemy_poses=82
+port mo_smcer_rjl 244
+[241/418] psp mo_smcer_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_smcer_steer 170
+[242/418] psp mo_smcer_steer
+cmp done, frames=226 enemy_poses=76
+port mo_smcer_land 226
+[243/418] psp mo_smcer_land
+cmp done, frames=210 enemy_poses=71
+port mo_smcerm_st 210
+[244/418] psp mo_smcerm_st
+cmp done, frames=250 enemy_poses=84
+port mo_smcerm_run 250
+[245/418] psp mo_smcerm_run
+cmp done, frames=240 enemy_poses=81
+port mo_smcerm_let 240
+[246/418] psp mo_smcerm_let
+cmp done, frames=212 enemy_poses=71
+port mo_smcerm_go 212
+[247/418] psp mo_smcerm_go
+cmp done, frames=254 enemy_poses=85
+port mo_smcerm_sj 254
+[248/418] psp mo_smcerm_sj
+cmp done, frames=284 enemy_poses=95
+port mo_smcerm_rj 284
+[249/418] psp mo_smcerm_rj
+cmp done, frames=284 enemy_poses=95
+port mo_smcerm_rjl 284
+[250/418] psp mo_smcerm_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_smcerm_steer 210
+[251/418] psp mo_smcerm_steer
+cmp done, frames=266 enemy_poses=89
+port mo_smcerm_land 266
+[252/418] psp mo_smcerm_land
+cmp done, frames=170 enemy_poses=57
+port mo_smagn_st 170
+[253/418] psp mo_smagn_st
+cmp done, frames=210 enemy_poses=71
+port mo_smagn_run 210
+[254/418] psp mo_smagn_run
+cmp done, frames=200 enemy_poses=67
+port mo_smagn_let 200
+[255/418] psp mo_smagn_let
+cmp done, frames=172 enemy_poses=58
+port mo_smagn_go 172
+[256/418] psp mo_smagn_go
+cmp done, frames=214 enemy_poses=72
+port mo_smagn_sj 214
+[257/418] psp mo_smagn_sj
+cmp done, frames=244 enemy_poses=82
+port mo_smagn_rj 244
+[258/418] psp mo_smagn_rj
+cmp done, frames=244 enemy_poses=82
+port mo_smagn_rjl 244
+[259/418] psp mo_smagn_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_smagn_steer 170
+[260/418] psp mo_smagn_steer
+cmp done, frames=226 enemy_poses=76
+port mo_smagn_land 226
+[261/418] psp mo_smagn_land
+cmp done, frames=210 enemy_poses=71
+port mo_smagnm_st 210
+[262/418] psp mo_smagnm_st
+cmp done, frames=250 enemy_poses=84
+port mo_smagnm_run 250
+[263/418] psp mo_smagnm_run
+cmp done, frames=240 enemy_poses=81
+port mo_smagnm_let 240
+[264/418] psp mo_smagnm_let
+cmp done, frames=212 enemy_poses=71
+port mo_smagnm_go 212
+[265/418] psp mo_smagnm_go
+cmp done, frames=254 enemy_poses=85
+port mo_smagnm_sj 254
+[266/418] psp mo_smagnm_sj
+cmp done, frames=284 enemy_poses=95
+port mo_smagnm_rj 284
+[267/418] psp mo_smagnm_rj
+cmp done, frames=284 enemy_poses=95
+port mo_smagnm_rjl 284
+[268/418] psp mo_smagnm_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_smagnm_steer 210
+[269/418] psp mo_smagnm_steer
+cmp done, frames=266 enemy_poses=89
+port mo_smagnm_land 266
+[270/418] psp mo_smagnm_land
+cmp done, frames=170 enemy_poses=57
+port mo_smnev_st 170
+[271/418] psp mo_smnev_st
+cmp done, frames=210 enemy_poses=71
+port mo_smnev_run 210
+[272/418] psp mo_smnev_run
+cmp done, frames=200 enemy_poses=67
+port mo_smnev_let 200
+[273/418] psp mo_smnev_let
+cmp done, frames=172 enemy_poses=58
+port mo_smnev_go 172
+[274/418] psp mo_smnev_go
+cmp done, frames=214 enemy_poses=72
+port mo_smnev_sj 214
+[275/418] psp mo_smnev_sj
+cmp done, frames=244 enemy_poses=82
+port mo_smnev_rj 244
+[276/418] psp mo_smnev_rj
+cmp done, frames=244 enemy_poses=82
+port mo_smnev_rjl 244
+[277/418] psp mo_smnev_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_smnev_steer 170
+[278/418] psp mo_smnev_steer
+cmp done, frames=226 enemy_poses=76
+port mo_smnev_land 226
+[279/418] psp mo_smnev_land
+cmp done, frames=210 enemy_poses=71
+port mo_smnevm_st 210
+[280/418] psp mo_smnevm_st
+cmp done, frames=250 enemy_poses=84
+port mo_smnevm_run 250
+[281/418] psp mo_smnevm_run
+cmp done, frames=240 enemy_poses=81
+port mo_smnevm_let 240
+[282/418] psp mo_smnevm_let
+cmp done, frames=212 enemy_poses=71
+port mo_smnevm_go 212
+[283/418] psp mo_smnevm_go
+cmp done, frames=254 enemy_poses=85
+port mo_smnevm_sj 254
+[284/418] psp mo_smnevm_sj
+cmp done, frames=284 enemy_poses=95
+port mo_smnevm_rj 284
+[285/418] psp mo_smnevm_rj
+cmp done, frames=284 enemy_poses=95
+port mo_smnevm_rjl 284
+[286/418] psp mo_smnevm_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_smnevm_steer 210
+[287/418] psp mo_smnevm_steer
+cmp done, frames=266 enemy_poses=89
+port mo_smnevm_land 266
+[288/418] psp mo_smnevm_land
+cmp done, frames=170 enemy_poses=57
+port mo_smbeo_st 170
+[289/418] psp mo_smbeo_st
+cmp done, frames=210 enemy_poses=71
+port mo_smbeo_run 210
+[290/418] psp mo_smbeo_run
+cmp done, frames=200 enemy_poses=67
+port mo_smbeo_let 200
+[291/418] psp mo_smbeo_let
+cmp done, frames=172 enemy_poses=58
+port mo_smbeo_go 172
+[292/418] psp mo_smbeo_go
+cmp done, frames=214 enemy_poses=72
+port mo_smbeo_sj 214
+[293/418] psp mo_smbeo_sj
+cmp done, frames=244 enemy_poses=82
+port mo_smbeo_rj 244
+[294/418] psp mo_smbeo_rj
+cmp done, frames=244 enemy_poses=82
+port mo_smbeo_rjl 244
+[295/418] psp mo_smbeo_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_smbeo_steer 170
+[296/418] psp mo_smbeo_steer
+cmp done, frames=226 enemy_poses=76
+port mo_smbeo_land 226
+[297/418] psp mo_smbeo_land
+cmp done, frames=210 enemy_poses=71
+port mo_smbeom_st 210
+[298/418] psp mo_smbeom_st
+cmp done, frames=250 enemy_poses=84
+port mo_smbeom_run 250
+[299/418] psp mo_smbeom_run
+cmp done, frames=240 enemy_poses=81
+port mo_smbeom_let 240
+[300/418] psp mo_smbeom_let
+cmp done, frames=212 enemy_poses=71
+port mo_smbeom_go 212
+[301/418] psp mo_smbeom_go
+cmp done, frames=254 enemy_poses=85
+port mo_smbeom_sj 254
+[302/418] psp mo_smbeom_sj
+cmp done, frames=284 enemy_poses=95
+port mo_smbeom_rj 284
+[303/418] psp mo_smbeom_rj
+cmp done, frames=284 enemy_poses=95
+port mo_smbeom_rjl 284
+[304/418] psp mo_smbeom_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_smbeom_steer 210
+[305/418] psp mo_smbeom_steer
+cmp done, frames=266 enemy_poses=89
+port mo_smbeom_land 266
+[306/418] psp mo_smbeom_land
+cmp done, frames=170 enemy_poses=58
+port mo_gsei_st 170
+[307/418] psp mo_gsei_st
+cmp done, frames=210 enemy_poses=72
+port mo_gsei_run 210
+[308/418] psp mo_gsei_run
+cmp done, frames=200 enemy_poses=68
+port mo_gsei_let 200
+[309/418] psp mo_gsei_let
+cmp done, frames=172 enemy_poses=59
+port mo_gsei_go 172
+[310/418] psp mo_gsei_go
+cmp done, frames=214 enemy_poses=72
+port mo_gsei_sj 214
+[311/418] psp mo_gsei_sj
+cmp done, frames=244 enemy_poses=82
+port mo_gsei_rj 244
+[312/418] psp mo_gsei_rj
+cmp done, frames=244 enemy_poses=82
+port mo_gsei_rjl 244
+[313/418] psp mo_gsei_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_gsei_steer 170
+[314/418] psp mo_gsei_steer
+cmp done, frames=226 enemy_poses=77
+port mo_gsei_land 226
+[315/418] psp mo_gsei_land
+cmp done, frames=210 enemy_poses=72
+port mo_gseim_st 210
+[316/418] psp mo_gseim_st
+cmp done, frames=250 enemy_poses=86
+port mo_gseim_run 250
+[317/418] psp mo_gseim_run
+cmp done, frames=240 enemy_poses=82
+port mo_gseim_let 240
+[318/418] psp mo_gseim_let
+cmp done, frames=212 enemy_poses=73
+port mo_gseim_go 212
+[319/418] psp mo_gseim_go
+cmp done, frames=254 enemy_poses=86
+port mo_gseim_sj 254
+[320/418] psp mo_gseim_sj
+cmp done, frames=284 enemy_poses=96
+port mo_gseim_rj 284
+[321/418] psp mo_gseim_rj
+cmp done, frames=284 enemy_poses=96
+port mo_gseim_rjl 284
+[322/418] psp mo_gseim_rjl
+cmp done, frames=210 enemy_poses=72
+port mo_gseim_steer 210
+[323/418] psp mo_gseim_steer
+cmp done, frames=266 enemy_poses=91
+port mo_gseim_land 266
+[324/418] psp mo_gseim_land
+cmp done, frames=170 enemy_poses=57
+port mo_gssg_st 170
+[325/418] psp mo_gssg_st
+cmp done, frames=210 enemy_poses=71
+port mo_gssg_run 210
+[326/418] psp mo_gssg_run
+cmp done, frames=200 enemy_poses=67
+port mo_gssg_let 200
+[327/418] psp mo_gssg_let
+cmp done, frames=172 enemy_poses=58
+port mo_gssg_go 172
+[328/418] psp mo_gssg_go
+cmp done, frames=214 enemy_poses=72
+port mo_gssg_sj 214
+[329/418] psp mo_gssg_sj
+cmp done, frames=244 enemy_poses=82
+port mo_gssg_rj 244
+[330/418] psp mo_gssg_rj
+cmp done, frames=244 enemy_poses=82
+port mo_gssg_rjl 244
+[331/418] psp mo_gssg_rjl
+cmp done, frames=170 enemy_poses=57
+port mo_gssg_steer 170
+[332/418] psp mo_gssg_steer
+cmp done, frames=226 enemy_poses=76
+port mo_gssg_land 226
+[333/418] psp mo_gssg_land
+cmp done, frames=210 enemy_poses=71
+port mo_gssgm_st 210
+[334/418] psp mo_gssgm_st
+cmp done, frames=250 enemy_poses=84
+port mo_gssgm_run 250
+[335/418] psp mo_gssgm_run
+cmp done, frames=240 enemy_poses=81
+port mo_gssgm_let 240
+[336/418] psp mo_gssgm_let
+cmp done, frames=212 enemy_poses=71
+port mo_gssgm_go 212
+[337/418] psp mo_gssgm_go
+cmp done, frames=254 enemy_poses=85
+port mo_gssgm_sj 254
+[338/418] psp mo_gssgm_sj
+cmp done, frames=284 enemy_poses=95
+port mo_gssgm_rj 284
+[339/418] psp mo_gssgm_rj
+cmp done, frames=284 enemy_poses=95
+port mo_gssgm_rjl 284
+[340/418] psp mo_gssgm_rjl
+cmp done, frames=210 enemy_poses=71
+port mo_gssgm_steer 210
+[341/418] psp mo_gssgm_steer
+cmp done, frames=266 enemy_poses=89
+port mo_gssgm_land 266
+[342/418] psp mo_gssgm_land
+cmp done, frames=170 enemy_poses=58
+port mo_gsar_st 170
+[343/418] psp mo_gsar_st
+cmp done, frames=210 enemy_poses=72
+port mo_gsar_run 210
+[344/418] psp mo_gsar_run
+cmp done, frames=200 enemy_poses=69
+port mo_gsar_let 200
+[345/418] psp mo_gsar_let
+cmp done, frames=172 enemy_poses=59
+port mo_gsar_go 172
+[346/418] psp mo_gsar_go
+cmp done, frames=214 enemy_poses=72
+port mo_gsar_sj 214
+[347/418] psp mo_gsar_sj
+cmp done, frames=244 enemy_poses=82
+port mo_gsar_rj 244
+[348/418] psp mo_gsar_rj
+cmp done, frames=244 enemy_poses=82
+port mo_gsar_rjl 244
+[349/418] psp mo_gsar_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_gsar_steer 170
+[350/418] psp mo_gsar_steer
+cmp done, frames=226 enemy_poses=77
+port mo_gsar_land 226
+[351/418] psp mo_gsar_land
+cmp done, frames=210 enemy_poses=72
+port mo_gsarm_st 210
+[352/418] psp mo_gsarm_st
+cmp done, frames=250 enemy_poses=85
+port mo_gsarm_run 250
+[353/418] psp mo_gsarm_run
+cmp done, frames=240 enemy_poses=82
+port mo_gsarm_let 240
+[354/418] psp mo_gsarm_let
+cmp done, frames=212 enemy_poses=72
+port mo_gsarm_go 212
+[355/418] psp mo_gsarm_go
+cmp done, frames=254 enemy_poses=86
+port mo_gsarm_sj 254
+[356/418] psp mo_gsarm_sj
+cmp done, frames=284 enemy_poses=97
+port mo_gsarm_rj 284
+[357/418] psp mo_gsarm_rj
+cmp done, frames=284 enemy_poses=96
+port mo_gsarm_rjl 284
+[358/418] psp mo_gsarm_rjl
+cmp done, frames=210 enemy_poses=72
+port mo_gsarm_steer 210
+[359/418] psp mo_gsarm_steer
+cmp done, frames=266 enemy_poses=91
+port mo_gsarm_land 266
+[360/418] psp mo_gsarm_land
+cmp done, frames=170 enemy_poses=59
+port mo_gssp_st 170
+[361/418] psp mo_gssp_st
+cmp done, frames=210 enemy_poses=72
+port mo_gssp_run 210
+[362/418] psp mo_gssp_run
+cmp done, frames=200 enemy_poses=69
+port mo_gssp_let 200
+[363/418] psp mo_gssp_let
+cmp done, frames=172 enemy_poses=59
+port mo_gssp_go 172
+[364/418] psp mo_gssp_go
+cmp done, frames=214 enemy_poses=72
+port mo_gssp_sj 214
+[365/418] psp mo_gssp_sj
+cmp done, frames=244 enemy_poses=82
+port mo_gssp_rj 244
+[366/418] psp mo_gssp_rj
+cmp done, frames=244 enemy_poses=82
+port mo_gssp_rjl 244
+[367/418] psp mo_gssp_rjl
+cmp done, frames=170 enemy_poses=59
+port mo_gssp_steer 170
+[368/418] psp mo_gssp_steer
+cmp done, frames=226 enemy_poses=77
+port mo_gssp_land 226
+[369/418] psp mo_gssp_land
+cmp done, frames=210 enemy_poses=73
+port mo_gsspm_st 210
+[370/418] psp mo_gsspm_st
+cmp done, frames=250 enemy_poses=86
+port mo_gsspm_run 250
+[371/418] psp mo_gsspm_run
+cmp done, frames=240 enemy_poses=83
+port mo_gsspm_let 240
+[372/418] psp mo_gsspm_let
+cmp done, frames=212 enemy_poses=73
+port mo_gsspm_go 212
+[373/418] psp mo_gsspm_go
+cmp done, frames=254 enemy_poses=87
+port mo_gsspm_sj 254
+[374/418] psp mo_gsspm_sj
+cmp done, frames=284 enemy_poses=97
+port mo_gsspm_rj 284
+[375/418] psp mo_gsspm_rj
+cmp done, frames=284 enemy_poses=97
+port mo_gsspm_rjl 284
+[376/418] psp mo_gsspm_rjl
+cmp done, frames=210 enemy_poses=73
+port mo_gsspm_steer 210
+[377/418] psp mo_gsspm_steer
+cmp done, frames=266 enemy_poses=91
+port mo_gsspm_land 266
+[378/418] psp mo_gsspm_land
+cmp done, frames=170 enemy_poses=58
+port mo_gska_st 170
+[379/418] psp mo_gska_st
+cmp done, frames=210 enemy_poses=72
+port mo_gska_run 210
+[380/418] psp mo_gska_run
+cmp done, frames=200 enemy_poses=69
+port mo_gska_let 200
+[381/418] psp mo_gska_let
+cmp done, frames=172 enemy_poses=59
+port mo_gska_go 172
+[382/418] psp mo_gska_go
+cmp done, frames=214 enemy_poses=72
+port mo_gska_sj 214
+[383/418] psp mo_gska_sj
+cmp done, frames=244 enemy_poses=82
+port mo_gska_rj 244
+[384/418] psp mo_gska_rj
+cmp done, frames=244 enemy_poses=82
+port mo_gska_rjl 244
+[385/418] psp mo_gska_rjl
+cmp done, frames=170 enemy_poses=58
+port mo_gska_steer 170
+[386/418] psp mo_gska_steer
+cmp done, frames=226 enemy_poses=77
+port mo_gska_land 226
+[387/418] psp mo_gska_land
+cmp done, frames=210 enemy_poses=72
+port mo_gskam_st 210
+[388/418] psp mo_gskam_st
+cmp done, frames=250 enemy_poses=86
+port mo_gskam_run 250
+[389/418] psp mo_gskam_run
+cmp done, frames=240 enemy_poses=82
+port mo_gskam_let 240
+[390/418] psp mo_gskam_let
+cmp done, frames=212 enemy_poses=72
+port mo_gskam_go 212
+[391/418] psp mo_gskam_go
+cmp done, frames=254 enemy_poses=86
+port mo_gskam_sj 254
+[392/418] psp mo_gskam_sj
+cmp done, frames=284 enemy_poses=97
+port mo_gskam_rj 284
+[393/418] psp mo_gskam_rj
+cmp done, frames=284 enemy_poses=97
+port mo_gskam_rjl 284
+[394/418] psp mo_gskam_rjl
+cmp done, frames=210 enemy_poses=72
+port mo_gskam_steer 210
+[395/418] psp mo_gskam_steer
+cmp done, frames=266 enemy_poses=91
+port mo_gskam_land 266
+[396/418] psp mo_gskam_land
+cmp done, frames=102 enemy_poses=35
+port mo_tap2 102
+[397/418] psp mo_tap2
+cmp done, frames=104 enemy_poses=35
+port mo_tap4 104
+[398/418] psp mo_tap4
+cmp done, frames=106 enemy_poses=36
+port mo_tap6 106
+[399/418] psp mo_tap6
+cmp done, frames=108 enemy_poses=37
+port mo_tap8 108
+[400/418] psp mo_tap8
+cmp done, frames=110 enemy_poses=37
+port mo_tap10 110
+[401/418] psp mo_tap10
+cmp done, frames=114 enemy_poses=39
+port mo_tap14 114
+[402/418] psp mo_tap14
+cmp done, frames=120 enemy_poses=41
+port mo_tap20 120
+[403/418] psp mo_tap20
+cmp done, frames=130 enemy_poses=44
+port mo_tap30 130
+[404/418] psp mo_tap30
+cmp done, frames=200 enemy_poses=67
+port mo_rev8 200
+[405/418] psp mo_rev8
+cmp done, frames=200 enemy_poses=67
+port mo_side8 200
+[406/418] psp mo_side8
+cmp done, frames=200 enemy_poses=67
+port mo_rev14 200
+[407/418] psp mo_rev14
+cmp done, frames=200 enemy_poses=67
+port mo_side14 200
+[408/418] psp mo_side14
+cmp done, frames=200 enemy_poses=67
+port mo_rev20 200
+[409/418] psp mo_rev20
+cmp done, frames=200 enemy_poses=67
+port mo_side20 200
+[410/418] psp mo_side20
+cmp done, frames=200 enemy_poses=67
+port mo_rev40 200
+[411/418] psp mo_rev40
+cmp done, frames=200 enemy_poses=67
+port mo_side40 200
+[412/418] psp mo_side40
+cmp done, frames=160 enemy_poses=54
+port mo_jumpdrift 160
+[413/418] psp mo_jumpdrift
+cmp done, frames=160 enemy_poses=54
+port mo_jumpdrift2 160
+[414/418] psp mo_jumpdrift2
+cmp done, frames=200 enemy_poses=67
+port mo_rjrev 200
+[415/418] psp mo_rjrev
+cmp done, frames=200 enemy_poses=67
+port mo_rjside 200
+[416/418] psp mo_rjside
+cmp done, frames=220 enemy_poses=74
+port mo_rjland 220
+[417/418] psp mo_rjland
+cmp done, frames=160 enemy_poses=54
+port mo_jumpheld 160
+[418/418] psp mo_jumpheld
