@@ -36,6 +36,8 @@
 #include "soul_eater_scripts.h"
 #include "arachne_scripts.h"
 #include "jester.h"
+#include "lady_boss.h"
+static LadyBrain lady_brain;
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
  * Three layers, as on the disc:
@@ -2774,6 +2776,7 @@ void enemy_draw(void) {
         if (e->kind == ENEMY_VANGUARD) {vanguard_select((int)(e-enemies));vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
+        if (e->kind == ENEMY_LADY) lady_draw_wire(&lady_brain);
     }
     arrows_draw();
     jester_projectiles_draw(&jester_world);
@@ -3556,7 +3559,7 @@ static int jester_init(void) {
         jester_idle_motion[i] = motion_find(name);
         if (jester_idle_motion[i] < 0) return 0;
     }
-    return 1;
+    return jester_projectiles_init();
 }
 
 static void jester_state(int s) {
@@ -3896,8 +3899,9 @@ static void jester_update(float f, float px, float py, float pz) {
 /* FUN_0053d0d0 (his hits), FUN_0053eb20 (which of the parameter rows 0x5e3a60 the hit meets) and the reactions
  * (FUN_00535470 a shot, FUN_00536110 a blade, FUN_00535e60 the stun). The rows' +0x20 scales the damage: 1 (in
  * hundredths) as he is, 100 while stunned (+0x1e2 = 3). The stun meter (+0x4cc8) takes 50 a blade hit (0x5e2f14,
- * rank 0) and 1.75 times the shot's own value a bullet (0x5e2f10; that value, +0x4d54, isn't read: the port's
- * bullet's 8 [estimate]); past 249 (0x5e2f30) his next reaction is the stun, 500 frames (0x5e2ed0), the meter
+ * rank 0) and 1.75 times the shot's raw attack value a bullet (0x5e2f10): ordinary E&I
+ * packet +4 is 10 (0x5a5a30, copied by 002efaa0 to incoming +4 / Jester +0x4d54).
+ * Past 249 (0x5e2f30) his next reaction is the stun, 500 frames (0x5e2ed0), the meter
  * emptied. During his attacks (actions 0x15-0x2c, 0x3e-0x43) hits don't stop him. */
 static int jester_attacking(void) { return e->action == J_ATK_TP || (e->action >= J_ATK0 && e->action <= J_ATK2) || e->action >= J_RISE; }
 static void jester_hit(HitKind kind) {
@@ -3925,7 +3929,8 @@ static void jester_hit(HitKind kind) {
     if (e->encounter && !e->j_second && e->ar_health < (e->encounter == 1 ? 2500.0f : 4500.0f)) e->j_pending = 1;
     if (stunned || jester_attacking()) return;
     if (e->j_pending) { jester_puff(); jester_state(J_RISE); return; }
-    e->goyle_stone += gun ? 1.75f * 8.0f : 50.0f;
+    e->goyle_stone += gun ? 1.75f * 10.0f : 50.0f;
+    giga_note("jester stun meter", gun, e->goyle_stone);
     if (e->goyle_stone > JESTER_STUN_AT) { e->goyle_stone = 0.0f; jester_state(J_STUN); return; }
     if (gun) { e->vel[0] = 3.0f; jester_state(J_FLINCH); return; }   /* 0x67-0x6a: js06, on the spot (row 0) */
     /* 0x6d: a blade's hit sends him off (row 1, 50-550 cm about Dante) unless his attack is due. */
@@ -6210,8 +6215,6 @@ static void fallen_hit_glue(HitKind kind, float from_x, float from_z) {
 }
 
 /* ---- Lady (lady_boss.c decides; here her body). Her health is the Enemy's own, for the boss bar. */
-#include "lady_boss.h"
-static LadyBrain lady_brain;
 static int lady_motion_id[LADY_M_COUNT] = {-2};
 static void lady_play(int m, int restart) {
     int id;
@@ -6259,6 +6262,8 @@ static void lady_update_glue(float f, float px, float py, float pz) {
     if (floor_under(e->pos[0], e->pos[1] + 50.0f, e->pos[2], &g)) b->floor_y = g;
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done;
+    evaluate_pose();
+    lady_wire_pose(b, world_rot[9].m, world_pos[9]);
     {
         int before = b->action, before_step = b->step;
         {
@@ -6300,21 +6305,72 @@ static void lady_hit_glue(HitKind kind) {
 }
 
 /* ---- The Jester's projectiles, drawn (their logic is jester.c's). The bomb (em037 [25]) and the trap's hand ([27])
- * are the game's models (tools/prepare_jester_props.py), rigid in their rest pose: the bomb tumbles as it flies
- * [estimate]; the hand rises out of the floor by its arming frame (55) and sinks at its end [estimate: its motions,
- * [28], aren't played]. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
+ * are the game's models (tools/prepare_jester_props.py): the bomb tumbles as it flies [estimate];
+ * the hand plays [28]:0 on its own 18-bone rig at the native floor transform. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
  * and V0x3f8 looping on its frame (0054d610: at him, facing Dante turned 45 degrees, turning with it), V0x3fa as it
  * ends (0054dc70); the bomb V0x417 in flight (0054e710) and V0x41c as it goes off (0054edc0). Stand-ins for the parts
  * that are P particles (not ported): the bomb's burst is a mote, and so is the trap's warning ring. */
 #include "jester_props_runtime.h"
-int jester_projectiles_init(void) { return 1; }
-static void jester_prop_draw(int which, const float pos[3], float yaw, float pitch, float roll) {
+static Motion jester_hand_motion;
+int jester_projectiles_init(void) {
+    return motion_parse_blob("jester-hand", jp_hand_motion, sizeof jp_hand_motion, &jester_hand_motion, 0);
+}
+/* Native 0054caa0 requests [28]:0 at frame zero; 0054ce50 advances it every tick.
+ * The actor stays at floor y=500 with its model pitched -90 degrees. Its finger
+ * motion (not a vertical translation) runs once and holds its last pose. */
+static JesterPropVertex *jester_hand_skin(const JesterPropBatch *batch, float frame) {
+    MotionSample sample;
+    M3 rotation[18], local;
+    float position[18][3];
+    JesterPropVertex *out = sceGuGetMemory(batch->count * sizeof(*out));
+    int i, k, j;
+    float ticks = floorf(frame);
+    float alpha = ticks <= 11.0f ? fminf(128.0f, ticks * 12.0f)
+                : ticks <= 62.0f ? 128.0f : fmaxf(0.0f, 128.0f - (ticks - 62.0f) * 12.0f);
+    motion_sample(&jester_hand_motion, fminf(frame, jester_hand_motion.end_frame), &sample);
+    for (i = 0; i < 18; ++i) {
+        float r[3], t[3];
+        int parent = jp_hand_parent[i];
+        for (k = 0; k < 3; ++k) {
+            r[k] = sample.has_rot[i][k] ? sample.rot[i][k] : 0.0f;
+            t[k] = sample.has_trans[i][k] ? sample.trans[i][k] : jp_hand_local[i][k];
+        }
+        m_euler(&local, r[0], r[1], r[2]);
+        if (parent < 0) { rotation[i] = local; memcpy(position[i], t, sizeof t); }
+        else {
+            m_mul(&rotation[i], &rotation[parent], &local);
+            for (k = 0; k < 3; ++k)
+                position[i][k] = position[parent][k] + rotation[parent].m[k][0] * t[0]
+                              + rotation[parent].m[k][1] * t[1] + rotation[parent].m[k][2] * t[2];
+        }
+    }
+    for (i = 0; i < batch->count; ++i) {
+        const JesterPropVertex *v = &batch->vertices[i];
+        float result[3] = {0, 0, 0};
+        out[i] = *v;
+        out[i].color = ((unsigned int)(alpha * (255.0f / 128.0f)) << 24) | (v->color & 0x00ffffffu);
+        for (j = 0; j < 3; ++j) {
+            int b = batch->skin[i][j], weight = batch->skin[i][j + 3];
+            float d[3] = {v->x - jp_hand_world[b][0], v->y - jp_hand_world[b][1], v->z - jp_hand_world[b][2]};
+            if (!weight) continue;
+            for (k = 0; k < 3; ++k)
+                result[k] += weight * (1.0f / 31.0f) * (position[b][k] + rotation[b].m[k][0] * d[0]
+                            + rotation[b].m[k][1] * d[1] + rotation[b].m[k][2] * d[2]);
+        }
+        out[i].x = result[0]; out[i].y = result[1]; out[i].z = result[2];
+    }
+    return out;
+}
+static void jester_prop_draw(int which, const float pos[3], float yaw, float pitch, float roll, float frame) {
     const JesterProp *prop = &jester_props[which];
     ScePspFVector3 at;
     int j;
     sceGuEnable(GU_TEXTURE_2D);
     sceGuDisable(GU_LIGHTING);
-    sceGuDisable(GU_BLEND);
+    if (which == JESTER_PROP_HAND) {
+        sceGuEnable(GU_BLEND);
+        sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    } else sceGuDisable(GU_BLEND);
     sceGuEnable(GU_ALPHA_TEST);
     sceGuAlphaFunc(GU_GREATER, 0x20, 0xff);
     sceGuDepthMask(GU_FALSE);
@@ -6338,7 +6394,7 @@ static void jester_prop_draw(int which, const float pos[3], float yaw, float pit
         sceGuTexImage(0, b->width, b->height, b->width, b->pixels);
         sceGuTexFlush();
         sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
-                        b->count, 0, b->vertices);
+                        b->count, 0, b->skin ? jester_hand_skin(b, frame) : b->vertices);
     }
     sceGuEnable(GU_BLEND);
 }
@@ -6375,15 +6431,11 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         if (!p->active) continue;
         if (p->kind == 0) {
             if (p->phase == 2) fx_mote(p->pos, still, 420.0f, 520.0f, 0.06f, 0xff2080ffu);
-            else jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f);
+            else jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f, 0.0f);
         } else {
-            /* Out of the floor over 35-55, down again over its last 20 (of 180). */
-            float up = p->age < 35.0f ? 0.0f : p->age < 55.0f ? (p->age - 35.0f) / 20.0f
-                     : p->age > 160.0f ? fmaxf(0.0f, (180.0f - p->age) / 20.0f) : 1.0f;
-            if (up > 0.0f) {
-                float at[3] = {p->pos[0], p->pos[1] - 370.0f * (1.0f - up), p->pos[2]};
-                jester_prop_draw(JESTER_PROP_HAND, at, p->yaw, -1.5707963f, 0.0f);   /* its fingers (+z) up */
-            }
+            /* 0054d080/0054d0e0/0054d120: fade to 128 by 12/tick, hold
+             * 51 ticks, fade out. Geometry remains animated at its native floor. */
+            jester_prop_draw(JESTER_PROP_HAND, p->pos, p->yaw, -1.5707963f, 0.0f, p->animation);
             if (p->age <= 55.0f)
                 for (k = 0; k < 8; ++k) {
                     float a = (float)k * 0.7853982f, at[3] = {p->pos[0] + sinf(a) * 75.0f, p->pos[1] + 5.0f, p->pos[2] + cosf(a) * 75.0f};

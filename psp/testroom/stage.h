@@ -42,6 +42,7 @@ void stage_set_group_motion_scaled(int tag, const float pivot[3], const float mo
                                    const float pivot2[3], const float scale[3]);
 void stage_clear_boxes(void);
 void stage_add_box(float x, float y, float z, float hx, float hy, float hz, float yaw, int tag);
+/* A negative box tag enables its walkable top (permanent authored platforms). */
 /* Push a vertical capsule (feet at y, height ~180) out of the stage's
  * collision walls; returns 1 if it moved. */
 int stage_collide(float *x, float *z, float y, float radius);

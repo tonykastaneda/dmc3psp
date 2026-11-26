@@ -599,8 +599,23 @@ int stage_floor(float x, float y, float z, float step, float *out) {
                 if (h <= y + step && h > best) { best = h; found = 1; }
             }
         }
-        if (found) { *out = best; return 1; }
     }
+    /* Negative tags mark permanent structural boxes with walkable tops
+     * (gen_rooms.py: Lady's five bookcase crosspieces). Use their authored
+     * centre, half sizes and yaw, shared with collide_boxes. */
+    {
+        int i;
+        for (i = 0; i < box_count; ++i) {
+            float top = boxes[i].y + boxes[i].hy, dx, dz, lx, lz;
+            if (boxes[i].tag >= 0) continue;
+            if (top > y + step || top <= best) continue;
+            dx = x-boxes[i].x; dz = z-boxes[i].z;
+            lx = boxes[i].c*dx-boxes[i].s*dz;
+            lz = boxes[i].s*dx+boxes[i].c*dz;
+            if (fabsf(lx) <= boxes[i].hx && fabsf(lz) <= boxes[i].hz) { best = top; found = 1; }
+        }
+    }
+    if (found) { *out = best; return 1; }
     return shown_floor(x, y, z, step, out);
 }
 
