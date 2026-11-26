@@ -491,9 +491,13 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
             else if ((b->clock -= f) < 0.0f) { play(b, LADY_M_ZIP_FALL); b->step = 4; }
             else if (b->done) play(b, LADY_M_ZIP);
         } else if (b->step == 4) {
-            float floor = b->ledge ? 501.0f : b->floor_y;   /* the ledges aren't in the port's collision: y 501 (0x5cc360) */
+            float floor = b->floor_y;   /* stage_floor includes the authored STAY crosspiece under her */
             b->pos[1] -= 20.0f * f;
-            if (b->pos[1] <= floor) { b->pos[1] = floor; b->air = b->ledge ? 3 : 0; b->wire = 0; play(b, LADY_M_ZIP_LAND); b->step = 5; }
+            if (b->pos[1] <= floor) {
+                b->pos[1] = floor; b->ledge = floor > 491.0f;
+                b->air = b->ledge ? 3 : 0; b->wire = 0;
+                play(b, LADY_M_ZIP_LAND); b->step = 5;
+            }
         } else if (b->done) {
             if (b->pos[1] > 501.0f - 10.0f) { b->last_mode = 0x1e; act(b, L_LEDGE); }
             else act(b, L_IDLE);

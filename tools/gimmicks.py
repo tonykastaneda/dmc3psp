@@ -201,11 +201,13 @@ def story_tags(game_text):
     return {s["index"]: story_tag(s) for s in parse_game(game_text) if story_tag(s)}
 
 
-def collision_boxes(game_text, tags, include_stay=False):
+def collision_boxes(game_text, tags, include_stay=False, stay_numbers=()):
     """The sets that stop Dante and the enemies: [(tag, centre (x, y, z), half sizes (x, y, z), yaw radians)].
     COLLISION sets are invisible walls in world space; BREAK props are solid until broken; STAY pieces only when
     they hit characters ("hitattr charhit"). A prop's box is relative to its pos and turned with it; hit_rot
-    turns the box itself. tags: {set index: the stage batch tag that hides it}, 0 = always there."""
+    turns the box itself. tags: {set index: the stage batch tag that hides it}, 0 = always there.
+    stay_numbers explicitly enables authored STAY colliders whose native default is solid (Lady's perches),
+    without admitting other rooms' STAY camera volumes."""
     out = []
     for s in parse_game(game_text):
         if s["box"] is None:
@@ -220,7 +222,7 @@ def collision_boxes(game_text, tags, include_stay=False):
         elif s["kind"] == "STAY":
             # Off by default: st006's ice "boxes" are 40 m across around the room's start, not the ice's shape,
             # so these aren't the pieces' outlines (camera / attack volumes?).
-            solid = include_stay and "charhit" in attrs
+            solid = (include_stay and "charhit" in attrs) or s["number"] in stay_numbers
         else:
             solid = False
         if not solid:
