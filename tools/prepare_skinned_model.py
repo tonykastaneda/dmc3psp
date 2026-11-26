@@ -313,6 +313,23 @@ def psp_texture(texture):
 
 def indexed_texture(texture):
     """(pixels, 256 ABGR words), colour and alpha quantized together."""
+    # TIM2's indexed pictures already fit a PSP CLUT. FASTOCTREE merges even
+    # distinct source palettes with <=256 colours, changing skin tones and alpha.
+    # Preserve those pictures exactly, assigning entries in first-pixel order.
+    rgba = bytes(texture["rgba"])
+    if len(rgba) != texture["width"] * texture["height"] * 4:
+        raise ValueError("RGBA byte count does not match texture dimensions")
+    entries, pixels = {}, []
+    for offset in range(0, len(rgba), 4):
+        color = rgba[offset:offset + 4]
+        if color not in entries:
+            if len(entries) == 256:
+                break
+            entries[color] = len(entries)
+        pixels.append(entries[color])
+    else:
+        words = [int.from_bytes(color, "little") for color in entries]
+        return pixels, words + [0] * (256 - len(words))
     from PIL import Image
     image = Image.frombytes("RGBA", (texture["width"], texture["height"]), bytes(texture["rgba"]))
     quant = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
