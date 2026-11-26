@@ -65,8 +65,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
-  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes, a bullet's stun value 8
-  [estimate], the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
+  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes; ordinary E&I stun uses the native raw10 x1.75, the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit
   records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300

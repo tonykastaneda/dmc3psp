@@ -98,7 +98,9 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "SFX_W9.BIN")
 }
 
 # The Jester's bomb and hand (tools/prepare_jester_props.py).
-if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "jester_props_runtime.h"))) {
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "jester_props_runtime.h")) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_jester_props.py")).LastWriteTime -gt
+    (Get-Item -LiteralPath (Join-Path $Generated "jester_props_runtime.h")).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_jester_props.py"), $Iso.FullName, "--output", $Generated)
 }

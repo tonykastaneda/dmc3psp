@@ -3899,8 +3899,9 @@ static void jester_update(float f, float px, float py, float pz) {
 /* FUN_0053d0d0 (his hits), FUN_0053eb20 (which of the parameter rows 0x5e3a60 the hit meets) and the reactions
  * (FUN_00535470 a shot, FUN_00536110 a blade, FUN_00535e60 the stun). The rows' +0x20 scales the damage: 1 (in
  * hundredths) as he is, 100 while stunned (+0x1e2 = 3). The stun meter (+0x4cc8) takes 50 a blade hit (0x5e2f14,
- * rank 0) and 1.75 times the shot's own value a bullet (0x5e2f10; that value, +0x4d54, isn't read: the port's
- * bullet's 8 [estimate]); past 249 (0x5e2f30) his next reaction is the stun, 500 frames (0x5e2ed0), the meter
+ * rank 0) and 1.75 times the shot's raw attack value a bullet (0x5e2f10): ordinary E&I
+ * packet +4 is 10 (0x5a5a30, copied by 002efaa0 to incoming +4 / Jester +0x4d54).
+ * Past 249 (0x5e2f30) his next reaction is the stun, 500 frames (0x5e2ed0), the meter
  * emptied. During his attacks (actions 0x15-0x2c, 0x3e-0x43) hits don't stop him. */
 static int jester_attacking(void) { return e->action == J_ATK_TP || (e->action >= J_ATK0 && e->action <= J_ATK2) || e->action >= J_RISE; }
 static void jester_hit(HitKind kind) {
@@ -3928,7 +3929,8 @@ static void jester_hit(HitKind kind) {
     if (e->encounter && !e->j_second && e->ar_health < (e->encounter == 1 ? 2500.0f : 4500.0f)) e->j_pending = 1;
     if (stunned || jester_attacking()) return;
     if (e->j_pending) { jester_puff(); jester_state(J_RISE); return; }
-    e->goyle_stone += gun ? 1.75f * 8.0f : 50.0f;
+    e->goyle_stone += gun ? 1.75f * 10.0f : 50.0f;
+    giga_note("jester stun meter", gun, e->goyle_stone);
     if (e->goyle_stone > JESTER_STUN_AT) { e->goyle_stone = 0.0f; jester_state(J_STUN); return; }
     if (gun) { e->vel[0] = 3.0f; jester_state(J_FLINCH); return; }   /* 0x67-0x6a: js06, on the spot (row 0) */
     /* 0x6d: a blade's hit sends him off (row 1, 50-550 cm about Dante) unless his attack is due. */

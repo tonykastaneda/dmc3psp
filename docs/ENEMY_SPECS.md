@@ -803,7 +803,11 @@ flinch js05, stun js14, launched js04, death js16.
   meter): the rows at `0x5e3a60` (0x54 bytes) are picked by the hit (blade or shot) and his state (+0x1e2: 3 stunned,
   4 another); their +0x20 scales the damage, **1 as he is, 100 stunned, 35 in state 4** (hundredths). The stun meter
   +0x4cc8 takes **50** a blade hit (`0x5e2f14`, rank 0) and **1.75 ×** the shot's own value a bullet (`0x5e2f10`;
-  that value, +0x4d54, isn't read). Past **249** (`0x5e2f30`) his next reaction is the stun (0x6b, `FUN_00535e60`:
+  raw packet +4 is copied to +0x4d54 by `0053d0d0`). Ordinary E&I records 0/1 at `0x5a5a30` both
+  contain **10** at +4 (`gp=0x620170`, table pointer `0x618bf0`, constructor `002efaa0`), giving
+  **17.5 stun per ordinary shot** at rank 0: hit 15 crosses the threshold. Difficulty damage scaling in
+  `002f17a0` does not rewrite this packet value. Upgraded/charged E&I variants carry different packet values;
+  the port's `HIT_PISTOL` represents the ordinary unupgraded shot. Past **249** (`0x5e2f30`) his next reaction is the stun (0x6b, `FUN_00535e60`:
   motion js10, the meter emptied, **500** frames from `0x5e2ed0`). Otherwise a shot makes him flinch where he is
   (0x67-0x6a, `FUN_00535470`, js06, row 0) and a blade sends him off (0x6d, `FUN_00536110`, js12, row 1) unless his
   attack is due (idle time ≥ 500). Hits during his attacks (actions 0x15-0x2c, 0x3e-0x43) don't stop him. With
@@ -847,9 +851,12 @@ flinch js05, stun js14, launched js04, death js16.
   (`00534d10`) goes at once to 0x66 (`00535140`), one of `0x5e2e10`'s five motions (js21, js24, js23, js27, js28 by
   `0x5e2db0`) at random but never the last again (the next instead); for its first 60 frames he turns to Dante
   (`0053ed60(10)`, the port's rate [inferred]), js27 and js28 walk him by their root (`00535310`), and at its end 0x64
-  again (0x7b in his second set off the floor). His defence, stun meter, flinch and vanish are the game's (above; a bullet's value is
-  the port's 8, an estimate); the arena clamp stays the stand-in's. The old cane swings and taunt are no longer
+  again (0x7b in his second set off the floor). His defence, stun meter, flinch and vanish are the game's (above; an ordinary E&I shot
+  contributes 10 x 1.75 stun); the arena clamp stays the stand-in's. The old cane swings and taunt are no longer
   chosen: the game's first encounter has no such attacks in its picker.
+  Verified in PPSSPP Mission 5 room 422: `run3_jester_hand_live` frames 1815/1830/1840 show the
+  native hand motion and its 650-damage hit; `run3_jester_stun_native` frame 240 shows js10 stunned,
+  with the meter log advancing 17.5 each ordinary hit, 245 at hit 14 and 262.5 at hit 15.
 
 **Projectile follow-up (pM).** The emitters' tables use **AI rank `+481c`**, not encounter `+481e`:
 ball wait/speed `5e2fd0` = (140,70), (80,70), (40,70), (20,70); trap interval `5e3000` =
