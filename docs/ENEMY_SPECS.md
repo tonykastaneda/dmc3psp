@@ -838,7 +838,12 @@ flinch js05, stun js14, launched js04, death js16.
   its native >180-frame spawn wait instead of being cancelled early. The cross and the bomb play the game's effects from em037 [10] (NFX_JESTER): the cross V0x3f9 once and V0x3f8
   looping on its frame (`0054d610`: at him, facing Dante turned 45 degrees), V0x3fa as it ends (`0054dc70`); the bomb
   V0x417 in flight (`0054e710`) and V0x41c as it goes off (`0054edc0`). Their P particles aren't ported: the bomb's burst
-  and the trap's warning ring are motes; the trap's G0x1c8 (`0054c1e0`) isn't in his pack. Between attacks he idles as the game: 0x64
+  and the trap's warning ring are motes. **G0x1c8 is not this trap's effect**: `0054c1e0` initializes a
+  separate 0x470-byte actor (`0054bf90`, vtable `0x616bb0`), whose sole caller in the exported call graph is
+  player weapon routine `0052c4c0`. The Jester's hand is the 0xd40-byte actor `0054c660`
+  (vtable `0x616cf0`), initialized by `0054caa0` and updated by `0054ce50`, spawned by emitter `0055c200`.
+  Neither hand initializer nor update spawns G0x1c8; em037 [10] contains G IDs 0x253, 0x25a, 0x277, 0x276,
+  0x25d, 0x267, 0x25b and 0x25c, with no 0x1c8. No unrelated generator is attached to the hand. Between attacks he idles as the game: 0x64
   (`00534d10`) goes at once to 0x66 (`00535140`), one of `0x5e2e10`'s five motions (js21, js24, js23, js27, js28 by
   `0x5e2db0`) at random but never the last again (the next instead); for its first 60 frames he turns to Dante
   (`0053ed60(10)`, the port's rate [inferred]), js27 and js28 walk him by their root (`00535310`), and at its end 0x64
