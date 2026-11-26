@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "native_fx_runtime.h"
+#include "pfx.h"
 
 /* Record layouts, as em008's subset in vanguard_fx.inc reads them (00206f90, 001f12e0, 001f8ce0):
  *   V: u16 child count; children at 4 + 44 j: type (0 P, 1 E, 2 G, 3 V), u16 id at +2, i16 delay at +4,
@@ -122,7 +123,7 @@ static const unsigned char *find(const NfxRecord *r, int n, int id) {
     return 0;
 }
 
-void nfx_reset(void) { memset(seqs, 0, sizeof(seqs)); memset(els, 0, sizeof(els)); }
+void nfx_reset(void) { memset(seqs, 0, sizeof(seqs)); memset(els, 0, sizeof(els)); pfx_reset(); }
 
 static int new_seq(int bank, const unsigned char *v, int parent) {
     int i;
@@ -232,12 +233,71 @@ void nfx_tint(int h, unsigned int r, unsigned int g, unsigned int b) {
     Seq *s = from_handle(h);
     if (s) { s->tinted = 1; s->tint[0] = (unsigned char)r; s->tint[1] = (unsigned char)g; s->tint[2] = (unsigned char)b; }
 }
-void nfx_kill(int h) { Seq *s = from_handle(h); if (s) s->killed = 1; }
+void nfx_kill(int h) { Seq *s = from_handle(h); if (s) { s->killed = 1; pfx_kill_root(h); } }
 int nfx_alive(int h) { return from_handle(h) != 0; }
 int nfx_live_elements(void) { int i, n = 0; for (i = 0; i < MAX_EL; ++i) n += els[i].active; return n; }
 
 static void g_tick(int i, float frames);
 static int owner_emitting(int seq);
+static void frame_local(Frame *f, const float tr[3], const float rot[3], const float sc[3]);
+static void frame_mul(Frame *out, const Frame *a, const Frame *b);
+static void seq_frame(const Seq *s, Frame *out);
+
+/* ---- P children (pfx.c) ---------------------------------------------------- */
+const unsigned char *nfx_record(int bank, int kind, int id) {
+    const NfxBank *b = bank_of(bank);
+    if (kind == 'P') return b->p ? find(b->p, b->p_count, id) : 0;
+    if (kind == 'A') return b->a ? find(b->a, b->a_count, id) : 0;
+    return 0;
+}
+static const NfxTexture *texture(const NfxBank *b, int id);
+static void bind(const NfxTexture *t);
+int nfx_texture_size(int bank, int id, int *width, int *height) {
+    const NfxTexture *t = texture(bank_of(bank), id);
+    if (!t) return 0;
+    *width = t->width; *height = t->height;
+    return 1;
+}
+int nfx_bind_texture(int bank, int id) {
+    const NfxTexture *t = texture(bank_of(bank), id);
+    if (t) bind(t);
+    return t != 0;
+}
+int nfx_frame(int handle, float m[3][3], float p[3]) {
+    Seq *s = from_handle(handle);
+    Frame f;
+    if (!s || root_of(s)->killed) return 0;
+    seq_frame(s, &f);
+    memcpy(m, f.m, sizeof(f.m)); memcpy(p, f.p, sizeof(f.p));
+    return 1;
+}
+/* A P child of seq i: placed by its V child line (or, from a G, by `at`, about the G when on it, else the world). */
+static void start_p(int bank, int id, int i, const unsigned char *child, const Frame *at) {
+    PfxFrame where;
+    const Seq *root;
+    int owner = 0;
+    if (child) {
+        float tr[3], rot[3], sc[3];
+        Frame f;
+        place(tr, rot, sc, child);
+        frame_local(&f, tr, rot, sc);
+        memcpy(&where, &f, sizeof(where));
+        owner = handle_of(i);
+    } else {
+        memcpy(&where, at, sizeof(where));
+        if (seqs[i].g[0]) owner = handle_of(i);
+    }
+    root = root_of(&seqs[i]);
+    pfx_spawn(bank, nfx_record(bank, 'P', id), &where, owner, handle_of((int)(root - seqs)), root->loop);
+}
+int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop) {
+    PfxFrame f;
+    float c = cosf(yaw), sn = sinf(yaw);
+    memset(&f, 0, sizeof(f));
+    f.m[0][0] = c; f.m[0][2] = sn; f.m[1][1] = 1.0f; f.m[2][0] = -sn; f.m[2][2] = c;
+    memcpy(f.p, pos, sizeof(f.p));
+    return pfx_spawn(bank, nfx_record(bank, 'P', p_id), &f, 0, 0, loop);
+}
 
 static void release(int seq) {
     Seq *s = &seqs[seq];
@@ -246,6 +306,7 @@ static void release(int seq) {
 
 void nfx_update(float frames) {
     int i, j;
+    pfx_update(frames);
     for (i = 0; i < MAX_SEQ; ++i) {
         Seq *s = &seqs[i];
         int count;
@@ -264,6 +325,8 @@ void nfx_update(float frames) {
             } else if (child[0] == 3 || child[0] == 2) {
                 int n = new_node(s->bank, (int)rd16(child + 2) | (child[0] == 2 ? G_FLAG : 0), i);
                 if (n >= 0) place(seqs[n].tr, seqs[n].rot, seqs[n].sc, child);
+            } else if (child[0] == 0) {
+                start_p(s->bank, (int)rd16(child + 2), i, child, 0);
             }
         }
     }
@@ -361,7 +424,6 @@ static void g_emit(int i, float scale) {
     float yaw = rdf(g + 0x28), rot[3], jit[3];
     static const float zero[3] = {0.0f, 0.0f, 0.0f}, one[3] = {1.0f, 1.0f, 1.0f};
     Frame loc;
-    if (kind == 0) return;   /* P: particle programs aren't ported */
     if (spread) {
         yaw += (float)(irand() % (unsigned int)spread) - (float)(spread >> 1);
         if (yaw > 180.0f) yaw -= 360.0f;
@@ -379,6 +441,17 @@ static void g_emit(int i, float scale) {
         loc.p[k] = loc.m[k][0] * s->g_path[0] + loc.m[k][1] * s->g_path[1] + loc.m[k][2] * s->g_path[2];
         loc.m[k][0] *= scale; loc.m[k][1] *= scale; loc.m[k][2] *= scale;
         loc.p[k] += loc.m[k][0] * jit[0] + loc.m[k][1] * jit[1] + loc.m[k][2] * jit[2];
+    }
+    if (kind == 0) {
+        /* P (pfx.c): on the emitter (1 / 2), or in the world where the emitter is now (0) */
+        if (g[0]) start_p(s->bank, id, i, 0, &loc);
+        else {
+            Frame here, w;
+            seq_frame(s, &here);
+            frame_mul(&w, &here, &loc);
+            start_p(s->bank, id, i, 0, &w);
+        }
+        return;
     }
     n = kind == 1 ? new_single(s->bank, id, g[0] ? i : -1)
                   : new_node(s->bank, id | (kind == 2 ? G_FLAG : 0), g[0] ? i : -1);
@@ -624,6 +697,7 @@ void nfx_draw(const float eye[3]) {
             }
         }
     }
+    pfx_draw(eye);   /* the P particles, after the elements */
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGuColor(0xffffffffu);

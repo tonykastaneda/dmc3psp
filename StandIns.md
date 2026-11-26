@@ -36,6 +36,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
   throws, Geryon's missiles, Vergil's 0x338, Agni & Rudra's 0x311 / 0x312 (the charged blades' 0x24c / 0x24d are the game's, riding the hand), Cerberus's unported
   particle programs, the Vanguard's P312 dissolve). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
+- **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
+  camera-facing emitter's axes from the eye and world up (not the camera matrix and `FUN_001b2dc0`'s half turn); fake
+  sprite layers face the camera; the sheet's top taken as a sprite's top; Line00 and Line02 aren't ported.
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
   flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.

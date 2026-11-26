@@ -3,8 +3,8 @@
 
 /* Native PS2 effects: the game's own V timelines and E elements (tools/native_fx.py), played with their
  * authored delays, placements, scale and colour curves, sheets and MOD meshes. A subset of the PS2 effect
- * runtime (FUN_00208590): E sprites (kind 1 billboard, kind 2 placed) and E models (kind 5). P particle
- * programs and G generators are skipped. Times are 60 Hz frames, distances centimetres. */
+ * runtime (FUN_00208590): E sprites (kind 1 billboard, kind 2 placed) and E models (kind 5), G generators, and P
+ * particle programs (pfx.c, started here for V / G children). Times are 60 Hz frames, distances centimetres. */
 
 enum { NFX_STATIC = 0, NFX_CERBERUS = 1, NFX_LEVIATHAN = 2, NFX_DEMO = 3, NFX_AGNI_RUDRA = 4, NFX_JESTER = 5 };
 /* A cutscene's own effects (demo.c): its bank's description at blob + at (0, 0: none). */
@@ -27,5 +27,14 @@ void nfx_update(float frames);
 /* After the world and characters, before the 2D. eye: the camera position. */
 void nfx_draw(const float eye[3]);
 int nfx_live_elements(void);
+
+/* For pfx.c: bank b's record of kind 'P' or 'A' by id (0 if none); a texture's size and binding (0 if none); a live
+ * handle's frame (columns the axes, as pfx's PfxFrame; 0 once it's gone or killed). */
+const unsigned char *nfx_record(int bank, int kind, int id);
+int nfx_texture_size(int bank, int id, int *width, int *height);
+int nfx_bind_texture(int bank, int id);
+int nfx_frame(int handle, float m[3][3], float p[3]);
+/* A P record started on its own at pos, turned by yaw (as nfx_spawn), in the world; loop: bursts until nfx_reset. */
+int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop);
 
 #endif

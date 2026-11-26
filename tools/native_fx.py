@@ -11,8 +11,9 @@ Two banks, read straight from the user's disc:
     (sphere), V48 (shard); its moves play the ids listed in CERBERUS_V below (FUN_00208590 call sites).
 
 Each V timeline is exported with every V/E/G child it reaches. G records (generators: emitters, FUN_001b1cd0) go in
-the V table with their id | 0x8000 (G_FLAG), so a bank's layout doesn't change; nfx.c runs them. P (VU particle
-program) children are counted but not exported: their programs aren't ported. E records are kept raw (their curves are read at run
+the V table with their id | 0x8000 (G_FLAG), so a bank's layout doesn't change; nfx.c runs them. P records (particle
+programs, CPtcl*: FUN_001b3bf0 / FUN_001b45e0; pfx.c runs them) go in the P table raw, with the T sheets their sprites use
+and the A records (atlas frames, FUN_001ec360) that cut those sheets. E records are kept raw (their curves are read at run
 time, as for em008 in vanguard_fx.py); the textures and MOD meshes they use are converted for the PSP.
 """
 import argparse
@@ -34,8 +35,9 @@ CERBERUS_E = (291, 251, 199, 284)
 # E2 (in V72, V180): model M18 scaled 0.1 -> 60 in 20 frames, an 18 m sphere at full white. Its GS blend isn't
 # read, and drawn as an ordinary blend it fills the screen with white slabs, so it's left out.
 SKIP_E = {2}
-# Agni & Rudra's charged blades (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's.
-AGNI_RUDRA_V = (588, 589)
+# Agni & Rudra's charged blades (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's. The slam (FUN_003a8200 phase
+# 0x1f): V785 at Agni's blade, V786 at Rudra's (E0 and the P24 / P44 particles).
+AGNI_RUDRA_V = (588, 589, 785, 786)
 # The Jester's (em037 [10]): the cross (0054d610: V0x3f9 once, V0x3f8 looping; 0054dc70: V0x3fa at its end) and the
 # bomb (0054e710: V0x417 in flight; 0054edc0: V0x41c as it goes off).
 JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c)
@@ -109,6 +111,38 @@ def closure(recs, v_ids, e_ids):
     return sorted(vs), sorted(es), skipped
 
 
+def p_param(rec):
+    """A P record's parameter block and sub-records (FUN_001b3bf0): offsets from +0x10 at +0x10; the block at the
+    first, its u16 sub-record count at block +0xc0, the sub-records at the third onwards."""
+    offs = struct.unpack_from("<26I", rec, 0x10)
+    at = 0x10 + offs[0]
+    count = struct.unpack_from("<H", rec, at + 0xc0)[0]
+    return at, [0x10 + offs[2 + i] for i in range(count)]
+
+
+P_SPRITE = 3   # CPtclSprt00 (FUN_001bbe10): its T at block +0xd0, its A (atlas) at +0xf6
+
+
+def particles(recs, vs, p_ids=()):
+    """(P ids, T ids, A ids) the V / G ids (G with G_FLAG) reach, plus p_ids: P records and what their sprites draw."""
+    ps = set(p for p in p_ids if ("P", p) in recs)
+    for v in vs:
+        data = record(recs, "V", v)
+        kids = [(data[0x24], struct.unpack_from("<H", data, 0x26)[0])] if v & G_FLAG else             [(data[4 + j * 44], struct.unpack_from("<H", data, 6 + j * 44)[0])
+             for j in range(struct.unpack_from("<H", data, 0)[0])]
+        ps |= {c for k, c in kids if k == 0 and ("P", c) in recs}
+    ts, As = set(), set()
+    for p in ps:
+        rec = recs["P", p]
+        at, _ = p_param(rec)
+        if rec[at + 1] == P_SPRITE:
+            t, a = struct.unpack_from("<h", rec, at + 0xd0)[0], struct.unpack_from("<h", rec, at + 0xf6)[0]
+            if ("T", t) in recs and ("A", a) in recs:
+                ts.add(t)
+                As.add(a)
+    return sorted(ps), sorted(ts), sorted(As)
+
+
 def picture(raw):
     _, rgba, pic = decode_picture(raw, 0x80 if raw[5] == 1 else 0x10)
     return {"width": pic["width"], "height": pic["height"], "rgba": rgba}
@@ -126,9 +160,12 @@ def mesh(mod):
     return verts, idx
 
 
-def write_bank(lines, bank, recs, v_ids, e_ids):
+def write_bank(lines, bank, recs, v_ids, e_ids, p_ids=()):
     vs, es, skipped = closure(recs, v_ids, e_ids)
+    ps, p_textures, atlases = particles(recs, vs, p_ids)
     textures, models = {}, {}
+    for t in p_textures:
+        textures.setdefault(t, picture(recs["T", t]))
     for e in es:
         rec = recs["E", e]
         kind, tex = rec[1], struct.unpack_from("<H", rec, 4)[0]
@@ -178,13 +215,14 @@ def write_bank(lines, bank, recs, v_ids, e_ids):
     lines.append(f"static const NfxModel {p}_models[] = {{" + ",".join(
         f"{{{m},{len(mesh(recs['M', m][0])[0])},{len(mesh(recs['M', m][0])[1])},{p}_m{m}_vertices,{p}_m{m}_indices,"
         f"{tex_ids.index(model_tex[m]) if model_tex[m] in tex_ids else -1}}}" for m in sorted(models)) + "};")
-    for kind, ids in (("V", vs), ("E", es)):
+    for kind, ids in (("V", vs), ("E", es), ("P", ps), ("A", atlases)):
         for i in ids:
             lines += [f"static const unsigned char {p}_{kind}{i}[] __attribute__((aligned(4))) = {{",
                       array_lines(record(recs, kind, i), str, 32), "};"]
-        lines.append(f"static const NfxRecord {p}_{kind}[] = {{" + ",".join(f"{{{i},{p}_{kind}{i}}}" for i in ids) + "};")
+        lines.append(f"static const NfxRecord {p}_{kind}[] = {{" + (",".join(f"{{{i},{p}_{kind}{i}}}" for i in ids) or "{0,0}") + "};")
     lines.append(f"static const NfxBank {p} = {{{p}_V,{len(vs)},{p}_E,{len(es)},{p}_textures,{len(tex_ids)},"
-                 f"{p}_models,{len(models)}}};")
+                 f"{p}_models,{len(models)},{p}_P,{len(ps)},{p}_A,{len(atlases)}}};")
+    skipped["P"] = len(ps)
     return len(vs), len(es), len(tex_ids), len(models), skipped
 
 
@@ -201,7 +239,7 @@ def main():
              "typedef struct { int id, width, height; const unsigned char *pixels; const unsigned int *palette; } NfxTexture;",
              "typedef struct { float u, v, nx, ny, nz, x, y, z; } NfxVertex;",
              "typedef struct { int id, vertex_count, index_count; const NfxVertex *vertices; const unsigned short *indices; int texture; } NfxModel;",
-             "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; } NfxBank;"]
+             "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; const NfxRecord *p; int p_count; const NfxRecord *a; int a_count; } NfxBank;"]
     summary = []
     summary.append(write_bank(lines, 0, records(read(167)), ORB_V, ORB_E))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E))
@@ -213,7 +251,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5), summary):
-        print(f"bank {bank}: {v} V, {e} E, {t} textures, {m} models; not ported: {skipped['P']} P, {skipped['G']} G children")
+        print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 
 if __name__ == "__main__":
