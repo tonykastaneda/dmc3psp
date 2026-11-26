@@ -828,9 +828,14 @@ flinch js05, stun js14, launched js04, death js16.
   its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;
   what lands (the ball 1200 heavy, a trap 650, the cross 800) hurts Dante with that damage. The bomb (em037 [25], textures [24]: the
   ball attack's projectile, `0054de00` entry 0x19 + 2 x variant) and the trap's hand ([27], textures [26], motions [28]:
-  `0054caa0`'s +0x70 / +0x74 / +0x78) are drawn as his own models, rigid at rest (`tools/prepare_jester_props.py`,
-  `jester_projectiles_draw`): the bomb tumbles in flight and the hand rises out of the floor by its arming frame [estimates:
-  the hand's motions aren't played]. The cross and the bomb play the game's effects from em037 [10] (NFX_JESTER): the cross V0x3f9 once and V0x3f8
+  `0054caa0`'s +0x70 / +0x74 / +0x78) are drawn as his own models (`tools/prepare_jester_props.py`,
+  `jester_projectiles_draw`): the bomb tumbles in flight [estimate]; the hand plays PAC [28]:0,
+  a nonlooping 120-frame motion on its 18-bone rig with its original three-weight skin. Its transform stays at
+  floor y=500, pitched -90 degrees and randomly yawed (`0054caa0`); it does not rise/sink by a guessed offset.
+  Its opacity follows `0054d080` / `0054d0e0` / `0054d120`: +12 per native tick to 128, hold for >50 ticks,
+  then -12 to zero; its animation continues independently until the 180-frame actor lifetime expires.
+  The throw hold includes its first 30 body frames before the emitter starts, so the trap actually reaches
+  its native >180-frame spawn wait instead of being cancelled early. The cross and the bomb play the game's effects from em037 [10] (NFX_JESTER): the cross V0x3f9 once and V0x3f8
   looping on its frame (`0054d610`: at him, facing Dante turned 45 degrees), V0x3fa as it ends (`0054dc70`); the bomb
   V0x417 in flight (`0054e710`) and V0x41c as it goes off (`0054edc0`). Their P particles aren't ported: the bomb's burst
   and the trap's warning ring are motes; the trap's G0x1c8 (`0054c1e0`) isn't in his pack. Between attacks he idles as the game: 0x64
