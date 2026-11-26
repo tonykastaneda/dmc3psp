@@ -36,6 +36,8 @@
 #include "soul_eater_scripts.h"
 #include "arachne_scripts.h"
 #include "jester.h"
+#include "lady_boss.h"
+static LadyBrain lady_brain;
 
 /* The real logic of CEm000 / CComEm000, the Seven Hell at this model: see docs/ENEMY_AI.md.
  * Three layers, as on the disc:
@@ -2774,6 +2776,7 @@ void enemy_draw(void) {
         if (e->kind == ENEMY_VANGUARD) {vanguard_select((int)(e-enemies));vanguard_draw();continue;}
         update_pose(elapsed, rate > 0 ? 1.0f / (float)rate : 0.0f, turn++, count);
         draw_one();
+        if (e->kind == ENEMY_LADY) lady_draw_wire(&lady_brain);
     }
     arrows_draw();
     jester_projectiles_draw(&jester_world);
@@ -6210,8 +6213,6 @@ static void fallen_hit_glue(HitKind kind, float from_x, float from_z) {
 }
 
 /* ---- Lady (lady_boss.c decides; here her body). Her health is the Enemy's own, for the boss bar. */
-#include "lady_boss.h"
-static LadyBrain lady_brain;
 static int lady_motion_id[LADY_M_COUNT] = {-2};
 static void lady_play(int m, int restart) {
     int id;
@@ -6259,6 +6260,8 @@ static void lady_update_glue(float f, float px, float py, float pz) {
     if (floor_under(e->pos[0], e->pos[1] + 50.0f, e->pos[2], &g)) b->floor_y = g;
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done;
+    evaluate_pose();
+    lady_wire_pose(b, world_rot[9].m, world_pos[9]);
     {
         int before = b->action, before_step = b->step;
         {

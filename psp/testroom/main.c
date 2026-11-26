@@ -1041,6 +1041,8 @@ static float doppel_trail[DOPPEL_FRAMES][4];
 static int doppel_head;
 
 static int bench_no_stage, bench_no_texture, bench_no_lighting, bench_ring = 320;
+static int cmp_test_camera;
+static float cmp_test_eye[3], cmp_test_target[3];   /* testcam: fixed evidence view; simulation camera unchanged */
 static float door_prompt_time;
 /* Standing at a door that wants a button. */
 static void door_prompt_draw(void) {
@@ -1219,6 +1221,11 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
     const FollowCamera *camera = &camera_copy;
+    if (cmp_test_camera) {
+        camera_copy.x = cmp_test_eye[0]; camera_copy.y = cmp_test_eye[1]; camera_copy.z = cmp_test_eye[2];
+        camera_copy.tx = cmp_test_target[0]; camera_copy.ty = cmp_test_target[1]; camera_copy.tz = cmp_test_target[2];
+        camera_copy.fov = 0.785398163f; camera_copy.roll = 0.0f;
+    }
     perf_render_start = sceKernelGetSystemTimeLow();
     int i;
     {
@@ -2048,6 +2055,9 @@ static void cmp_load(void) {
         else if (strncmp(line, "hitme ", 6) == 0) sscanf(line + 6, "%d %d %d", &cmp_hit_frame, &cmp_hit_kind, &cmp_hit_damage);
         else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
+        else if (strncmp(line, "testcam ", 8) == 0)
+            cmp_test_camera = sscanf(line + 8, "%f %f %f %f %f %f", &cmp_test_eye[0], &cmp_test_eye[1], &cmp_test_eye[2],
+                                      &cmp_test_target[0], &cmp_test_target[1], &cmp_test_target[2]) == 6;
         else if (strncmp(line, "faceyaw ", 8) == 0) cmp_face_yaw = atoi(line + 8);
         else if (strncmp(line, "spot ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_spot_x, &cmp_spot_z);
         else if (strncmp(line, "camlock ", 8) == 0) player_stick_yaw_lock = atoi(line + 8) ? (float)cmp_camera_yaw * 0.0174533f : 1000.0f;

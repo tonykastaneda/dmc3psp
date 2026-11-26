@@ -1239,14 +1239,23 @@ dispatch `00444c90` (+0x47c0: modes 0-0x17 her walk `00445210`, 0x18 `004455d0`,
   then 0x0c, the hop down, facing the middle (`00359c80(middle, her)`, the way she turns to a target) if he's further
   from it than she is, else away; falling 28 a frame (+0x4824 = -28) to the floor, 0x0e, then her walk (0x17).
 - **Line of sight** (`00449450`): a ray from her to him (`FUN_00201da0`).
+- **Grapple wire** (`0049e4f0`, set up by `0049e7e0`): em034 [26] hook with [19] textures, [30] five-bone cable
+  with [29] textures. The held Kalina Ann ([20]) is attached to body bone 9 with `0x5c9520`'s offset
+  (-8.4, -1, -1.3), rotated pi about Z. `0044b780` transforms its local +X direction; `00446330` fires the hook
+  50 units/frame (`0x61a520`) from `0x5c9610` (87.8, 0, 4.28) in that frame. The cable follows Kalina Ann's
+  bone 2 (65.2, 0, 4.3); `0049f020` positions five cable bones at quarters of the span, scaling their X axes by
+  segment length / 70, preserving the original skin weights. The hook stops at a collision; Lady rises along
+  the captured direction, not world up. Her preparation is 0x5d (ld610), followed by 0x5e/0x5f. On the y1200
+  relocation `0049f500` collapses the cable to the relocated hook, and landing 0x61 retires the actor.
+
 
 **In the port** (`psp/testroom/lady_boss.c`): the modes above at rank 0, each action's own motion, her turn rate,
 magazine and burst count, and her records' damage; her waypoints, walk, 0x28, 0x1a, the special picker, 0x1b and
 0x1c, her line of sight (a stage ray), her grapple (0x1d) and her ledge mode (0x1e), as decoded above. Stand-ins:
-the grapple's wire is a thin line from her up to y 1400 [estimate] while she climbs (the game's wire actor, `0049e4f0`, isn't read) and she rises straight up (its direction, `0044b780`, isn't read); the ledges aren't in
+the ledges aren't in
 the port's collision (it has only the floor there), so she perches at their y 501 until her hop; `00449120` taken as
 the ledge nearest Dante; 0x0e's slot ([2] 14) is empty, 0x61's landing plays; what 0x8f fires (one pistol shot
-[inferred]); the special gate (every 600 frames [estimate]), what 0x1b and 0x1c fire (a
+[inferred]); what 0x1b and 0x1c fire (a
 rocket on 0x56, a grenade each 0x72 [inferred]), 0x5c's motion (its slot, [6] 9, is empty: the gun's draw), her run's
 speed [estimate], shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun 500,
 grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.

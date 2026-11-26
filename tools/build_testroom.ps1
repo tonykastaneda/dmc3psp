@@ -103,6 +103,14 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "jester_p
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_jester_props.py"), $Iso.FullName, "--output", $Generated)
 }
 
+# Lady's grapple hook and cable, including the cable's native skin weights.
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "lady_wire_runtime.h")) -or
+    (Get-Item (Join-Path $Root "tools\prepare_lady_wire.py")).LastWriteTime -gt
+    (Get-Item (Join-Path $Generated "lady_wire_runtime.h")).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_lady_wire.py"), $Iso.FullName, "--output", $Generated)
+}
+
 # The missions' music (tools/gen_music.py): the rooms' BGM table and BGM_nnn.BIN tracks.
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "music_runtime.h"))) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
