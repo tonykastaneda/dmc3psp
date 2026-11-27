@@ -149,15 +149,17 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall); 610's spikes (Mission 6's stand-in);
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.
 - **Bloody Palace** (`bloody_palace.c`, docs/BLOODY_PALACE.md): ordinary EST encounters use the Normal column;
-  Palace's rank = floor/1000+1 is not yet applied to enemy stats. Portals use the original V965/V967/V964
-  water/lightning/fire effects through the existing partial native-effect runtime, with a text legend; the water
-  is brighter/more opaque than the PCSX2 reference (GS blend/particle rendering remains approximate). Arrival
+  Palace's native attack-slot budget = floor/1000+1 is applied to the shared scheduler; separate boss AI retains its own scheduling. Portals use the original V965/V967/V964
+    water/lightning/fire effects through the existing partial native-effect runtime. The portal legend is debug-only. Startup
+  smoke now expires rather than looping and uses alpha blending; sprite tiles use inset clamped linear sampling
+  (remaining GS blend/particle rendering differences are approximate). Arrival
   green/white orbs use their decoded positions and recovery values, but mote visuals, simplified falling and
-  collection within 120 cm; Lady's extra defeat pickups are omitted. Floor display stays visible, unlike the PS2's transient Level label. Arena camera
+  collection within 120 cm; Lady's extra defeat pickups are omitted. The transient Level label uses a widened substitute serif font; native position, fade and slide timing are restored. Arena camera
   initialization starts its collision sweep at Dante's head: the default safe point lies beneath the raised arena.
   Boss entrance/defeat camera sequences are skipped; boss behaviors retain their documented story-mode stand-ins.
   Boss exits use an item glow in place of their room-specific warp effects; unmapped EST enemy classes retain
   the shared enemy mapper's fallback (including some rare ordinary-floor sets and the unported chess pieces).
+  Best floor uses the port's BP_BEST.TXT sidecar and a selected-row menu label, not the PS2 memory-card/ranking UI.
   The task's requested kill-time countdown is omitted: EventTbl21 and PCSX2 show no survival timer in this PS2 mode.
 - **Rooms data**: 137's floor heights from doors and starts [inferred]; gimmicks not converted simply appear in the
   script's order [inferred]; a box over 102's platform for the ride up. `gen_rooms.py`.

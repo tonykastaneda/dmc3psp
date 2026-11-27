@@ -367,7 +367,10 @@ void nfx_update(float frames) {
         e->age += frames;
         if (e->life > 0.0f && e->age >= e->life) {
             /* Its own timeline's loop: a G's children (loop 0) play once inside a looping owner. */
-            if (seqs[e->seq].loop) e->age = fmodf(e->age, e->life);
+            /* Palace E +0x84 marks cyclic column elements. Its startup smoke
+             * (E1515, 46 frames) is not cyclic, even under a persistent STAY.
+             * Keep the established lifetime policy for other banks. */
+            if (seqs[e->seq].loop && (e->bank != NFX_PALACE || e->e[0x84])) e->age = fmodf(e->age, e->life);
             else { e->active = 0; release(e->seq); }
         } else if (e->life <= 0.0f && !owner_emitting(e->seq)) { e->active = 0; release(e->seq); }
     }
@@ -613,6 +616,12 @@ static void draw_sprite(const El *el, const Frame *f, const float eye[3], unsign
     if (!t || (color >> 24) == 0) return;
     u0 = (float)rd16(e + 12) / (float)t->width; v0 = (float)rd16(e + 14) / (float)t->height;
     u1 = u0 + (float)rd16(e + 16) / (float)t->width; v1 = v0 + (float)rd16(e + 18) / (float)t->height;
+    if (el->bank == NFX_PALACE) {
+        /* Sample within the authored tile, avoiding adjacent texels on the
+         * magnified portal sheets. Models retain repeating UVs below. */
+        if (rd16(e + 16)) { u0 += 0.5f/t->width; u1 -= 0.5f/t->width; }
+        if (rd16(e + 18)) { v0 += 0.5f/t->height; v1 -= 0.5f/t->height; }
+    }
     if (e[1] == 2) {
         /* Placed: a quad in its frame's XZ plane (E153's frost lies on the floor at rotation 0), turning
          * about its normal at its +0x148 rate. */
@@ -643,6 +652,10 @@ static void draw_sprite(const El *el, const Frame *f, const float eye[3], unsign
         }
     }
     bind(t);
+    if (el->bank == NFX_PALACE) {
+        sceGuTexFilter(GU_LINEAR,GU_LINEAR);
+        sceGuTexWrap(GU_CLAMP,GU_CLAMP);
+    }
     v = sceGuGetMemory(sizeof(SpriteVertex) * 6);
     for (i = 0; i < 6; ++i) {
         const float *p = c[corner[i]];
@@ -652,6 +665,7 @@ static void draw_sprite(const El *el, const Frame *f, const float eye[3], unsign
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, 6, 0, v);
+    if (el->bank == NFX_PALACE) sceGuTexWrap(GU_REPEAT,GU_REPEAT);
 }
 
 static void draw_model(const El *el, const Frame *f, unsigned int color) {
@@ -722,7 +736,12 @@ void nfx_draw(const float eye[3]) {
                 if (glow) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             } else {
                 sceGuColor(0xffffffffu);
-                if (i == 0 || pass == 1) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffff);
+                /* E1515 is the water portal's finite grey startup smoke,
+                 * not a light source. The columns/rings keep their own pass. */
+                const NfxBank *b=bank_of(el->bank);
+                int smoke=el->bank==NFX_PALACE && el->e==find(b->e,b->e_count,1515);
+                if (smoke) sceGuBlendFunc(GU_ADD,GU_SRC_ALPHA,GU_ONE_MINUS_SRC_ALPHA,0,0);
+                else if (i == 0 || pass == 1) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffff);
                 draw_sprite(el, &f, eye, color);
             }
         }

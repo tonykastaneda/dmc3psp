@@ -13,6 +13,7 @@
 
 #include "menu_runtime.h"
 #include "sfx.h"
+#include "bloody_palace.h"
 
 #define SCR_W 480
 #define SCR_H 272
@@ -205,7 +206,7 @@ float menu_font_width(float height, const char *text) {
     return w;
 }
 
-float menu_font_draw(float x, float y, float height, const char *text, unsigned int color) {
+float menu_font_draw_scaled(float x, float y, float height, float width_scale, const char *text, unsigned int color) {
     float k = height / (float)MENU_GLYPH_CELL, start = x;
     if (!header || MENU_GLYPH_ATLAS < 0) return 0.0f;
     sceGuDisable(GU_DEPTH_TEST);
@@ -222,10 +223,14 @@ float menu_font_draw(float x, float y, float height, const char *text, unsigned 
         if (c < 0 || c >= 95) c = '?' - 32;
         g = &menu_glyphs[c];
         if (c) sprite((float)g->u0 / texture_w, (float)g->v0 / texture_h, (float)g->u1 / texture_w, (float)g->v1 / texture_h,
-                      x - g->left * k, y, x - g->left * k + (float)(g->u1 - g->u0) * k, y + height, color);
-        x += g->advance * k;
+                      x - g->left * k * width_scale, y, x - g->left * k * width_scale + (float)(g->u1 - g->u0) * k * width_scale, y + height, color);
+        x += g->advance * k * width_scale;
     }
     return x - start;
+}
+
+float menu_font_draw(float x, float y, float height, const char *text, unsigned int color) {
+    return menu_font_draw_scaled(x,y,height,1.0f,text,color);
 }
 
 /* A screen-unit box's corners in PSP pixels, spread as unit_quad does. */
@@ -383,6 +388,14 @@ static void draw_missions(const MenuChoice *c, int row) {
     layout_spread = SPREAD;
     layout_dx = 0.0f;
     draw_quad(GROUP_MISSION_HEADING, 0, BRIGHT);
+    if (row==ROW_PALACE) {
+        char best[16]; float width;
+        snprintf(best,sizeof best,"%d",bp_best_floor());
+        width=menu_font_width(18,"BEST LEVEL");
+        menu_font_draw(352-width*0.5f,190,18,"BEST LEVEL",BRIGHT);
+        width=menu_font_width(26,best);
+        menu_font_draw(352-width*0.5f,210,26,best,BRIGHT);
+    }
     /* Turbo sits in the bottom right corner, as on the HD Collection: against the screen's edge. */
     if (c->turbo) {
         const Quad *q = group_quad(GROUP_MISSION_TAGS, TAG_TURBO);

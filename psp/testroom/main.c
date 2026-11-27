@@ -1216,6 +1216,7 @@ static void draw_debug_menu(int viewer) {
     sceGuTexFlush();
     sceGuColor(0xffffffffu);
     draw_text(x, y, "DEBUG");
+    if (bp_active()) draw_text(8, 8, "PALACE PORTALS +1 / +10 / +100");
     for (i = 0; i < DEBUG_ITEMS; ++i) {
         sceGuColor(i == debug_cursor ? 0xff40e0ffu : 0xffffffffu);
         if (i == debug_cursor) draw_text(x - 12, y + 16 + i * 12, ">");
@@ -1497,7 +1498,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
         else hud_draw(player);
-        bp_draw();
+        if (!debug_open && !pause_active) bp_draw();
         if (!credits_fight_active()) {
             float hp, maximum;
             if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);
@@ -3220,6 +3221,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     msg_room_fought = 0;
     mission_room = room;
     bp_enter(room_number(room));
+    enemy_set_attack_slot_limit(bp_attack_slot_limit());
     {   /* Bosses this room's script spawns get their model's buffers now, behind the loading screen (enemy.c). */
         const RoomScript *rs = &missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room];
         PalaceOp po;
@@ -3942,6 +3944,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
+    enemy_set_attack_slot_limit(1);   /* Includes the Debug Room path, which skips enter_room. */
     if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
     music_stop();   /* the rooms' music from here (music_room) */
     vanguard_set_difficulty(choice->difficulty);
@@ -4087,6 +4090,7 @@ int main(int argc, char *argv[]) {
     music_init(game_dir);
     sfx_init(game_dir);
     credits_fight_init(game_dir);
+    bp_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
