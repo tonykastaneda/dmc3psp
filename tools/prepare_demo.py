@@ -201,9 +201,13 @@ def scm_rig(data: bytes):
                 mesh["indices"].extend(base + v for v in f)
             if len(mesh["indices"]) > start:
                 blend = data[0x30 + index * 48 + 8] & 0x0f   # its blend, as a MOD object's (demo 59's neon sign: 2)
+                # A piece is scenery: drawn unlit at its baked vertex colour, as the stage is (x1.25, prepare_stage
+                # STAGE_BRIGHTNESS), one grey level per draw (the pieces' colours are near-grey). Lit like a character
+                # demo 9's night sky (ss510_04, baked 92) came out bright blue where the PS2's is dark.
+                shade = min(255, round(sum(sum(c[:3]) for c in colors) / (3 * max(1, len(colors))) * 1.25))
                 mesh["objects"].append({"texture": texture, "index_start": start, "index_count": len(mesh["indices"]) - start,
                                         "source": index,   # the SCM object: a .hid keys these, not the sub-meshes
-                                        "mode": blend if blend in (2, 3, 4) else 0})
+                                        "mode": blend if blend in (2, 3, 4) else 0, "shade": shade})
     skel = {"count": node_count, "parents": parent, "local": [r[:3] for r in records],
             "world": [(0.0, 0.0, 0.0)] * node_count}
     return skel, mesh, order, [r[4:7] for r in records]
@@ -599,7 +603,10 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
         object_at = align(blob)
         for o in mesh["objects"]:
             # Bits 16-19: the object's blend (its MOD record's byte 8, prepare_skinned_model.build_mesh).
+            # Bit 20: an SCM piece's object, drawn unlit at the grey level in bits 24-31 (its baked colour).
             t = a["tex_ids"].get(o["texture"], 0) | (o.get("mode", 0) & 0xF) << 16
+            if "shade" in o:
+                t |= 1 << 20 | (o["shade"] & 0xFF) << 24
             blob += struct.pack("<3I", t, o["index_start"], o["index_count"])
         motion_at = align(blob)
         blob += bytes(32 * len(a["motions"]))

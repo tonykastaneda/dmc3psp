@@ -272,6 +272,19 @@ Shots taken by the cutscene's own frame (`demoshot N`) and slot-by-slot hiding (
   in place: the port's tighter framing leaves it just outside the frame (with `rawfov 1` its corner shows at the
   left edge; the PS2 shows it whole). That is the cutscene fov fit (`demo_screen_fov`), not a missing object.
 
+- **SCM pieces are scenery: unlit at their baked colour.** `scm_rig` dropped the pieces' vertex colours, so the
+  cast's lights lit them like characters: demo 9's night sky (`ss510_04`, a cloud layer baked 92) came out bright blue
+  where the PS2's is dark. Each piece object now carries its average baked colour x1.25 (as the stage's
+  `STAGE_BRIGHTNESS`; the pieces' colours are near-grey) in its texture word (bit 20, level in bits 24-31) and is drawn
+  unlit at it (`demo.c`). Demo 59's toppled chair is now dark as on the PS2.
+- Spot-checked against new PCSX2 recordings (`analysis/ref/cast/m4_open_ps2.mp4`, `m7_open_ps2.mp4`): demo 16
+  (Mission 7, Lady) matches shot for shot (`demo16_compare.png`; the PS2 hazier: its screen effects); demo 9
+  (Mission 4, Vergil and Arkham) matches in framing and poses after the sky fix (`demo9_compare.png`). Still off in
+  demo 9: its banners (`ss510_00/01.efm`, cloth on `ss510_05`) are bright tan in the port and a dim red-brown on the
+  PS2 (their per-vertex words average 211, so it isn't baked colour: how effect models are lit isn't traced); the
+  PS2's stars over the sky aren't drawn. Mission 5's opening (demo 11) didn't play from mission select before the
+  briefing, so it isn't recorded.
+
 Weapon placement checked against PCSX2 (`analysis/testroom/demo3_weapons_compare.png`, `demo59_weapons_compare.png`):
 Rebellion in demo 3 (overhead, thrown, pointed at the end) matches; demo 59's sword was missing from the desk (now
 held there). Still open in demo 59: the book (in `ss506_00`, slot 8) is missing from the desk at frame 3040 and open in

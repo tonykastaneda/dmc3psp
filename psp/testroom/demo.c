@@ -956,8 +956,15 @@ void demo_draw(void) {
             /* The object's blend (its MOD record's byte 8, model_blend.h): 2 adds (eye highlights), 3 subtracts
              * (Arkham's veins), 4 subtracts the colour whole, else normal. Blending stays on in demos. */
             if (mode >= 2) model_object_blend(mode, 1);
+            if (obj[k].texture & (1u << 20)) {
+                /* An SCM piece's object: scenery, unlit at its baked colour (prepare_demo scm_rig), as the stage. */
+                unsigned int g = obj[k].texture >> 24;
+                sceGuDisable(GU_LIGHTING);
+                sceGuColor(0xff000000u | g << 16 | g << 8 | g);
+            }
             sceGumDrawArray(GU_TRIANGLES, DEMO_VTYPE, (int)obj[k].count, idx + obj[k].first, a->skinned);
             if (near) near_clip_draw(a->skinned, idx + obj[k].first, (int)obj[k].count, DEMO_VTYPE & ~GU_INDEX_16BIT);
+            if (obj[k].texture & (1u << 20)) { sceGuEnable(GU_LIGHTING); sceGuColor(0xffffffffu); }
             if (mode >= 2) model_object_blend(0, 1);
         }
     }
