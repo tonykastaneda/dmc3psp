@@ -136,3 +136,16 @@ A full `-Regenerate` rebuild is checked in `bp_merge_verified2_280.png` and Miss
 `bp_merge_m19_mirror_20.png` / `_35.png` (bank 11, V490/P113). Startup now reads the requested mode before
 allocating its menu or test street: holding the unused 5.4 MiB street reserve caused the 10.5 MiB menu
 allocation to fail after the larger merged effect banks. Test capture buffers are allocated afterward.
+
+## Portal polish
+
+The oversized white sheet remains with `nopfx 1` (`bp_polish_no_p_280.png`), identifying an E-layer problem.
+E1515 is the water portal's 46-frame startup smoke; E +0x84 is zero there, while the cyclic column records
+set it. A persistent STAY previously restarted every finite E. Palace now restarts only its cyclic records,
+alpha-blends E1515, and clamps linear sampling inside each sprite tile with a half-texel inset. The authored
+size is preserved (the native sprite /16 initial-size and /2048 growth units already matched).
+The shared P first-draw colour expansion is cl3's identical fix from `2e3e16d`; a host regression checks a
+transparent one-colour burst whose unused corners are bright. `bp_polish_smoke_fixed_280.png` shows the
+columns without the repeated white sheet, at 58 FPS; the P pool drops no instances. Other banks keep their
+existing E lifetime/blend policy. PS2 references: `polish_ps2_portals_later.png`, `_final.png` and the earlier
+`ps2_portals_compare3.png`, all in local `build/bloody_palace`.

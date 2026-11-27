@@ -117,6 +117,9 @@ static void keys_start(Inst *s, const unsigned char *keys) {
     s->kidx = 0; s->kdone = 0;
     s->ktimer = (float)rs16(keys);
     memcpy(s->col, keys + 4, 16);
+    /* key 0 as the colour count says (one colour fills every corner): the game ticks the colour before it first draws,
+     * so a fresh burst never shows key 0's unused corners (white in Nausika's P443) */
+    keys_lerp(s, 0.0f, 4);
 }
 static void keys_step(Inst *s, float dt, int n) {
     const unsigned char *k = s->keys;

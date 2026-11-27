@@ -141,8 +141,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.
 - **Bloody Palace** (`bloody_palace.c`, docs/BLOODY_PALACE.md): ordinary EST encounters use the Normal column;
   Palace's rank = floor/1000+1 is not yet applied to enemy stats. Portals use the original V965/V967/V964
-  water/lightning/fire effects through the existing partial native-effect runtime, with a text legend; the water
-  is brighter/more opaque than the PCSX2 reference (GS blend/particle rendering remains approximate). Arrival
+  water/lightning/fire effects through the existing partial native-effect runtime, with a text legend. Startup
+  smoke now expires rather than looping and uses alpha blending; sprite tiles use inset clamped linear sampling
+  (remaining GS blend/particle rendering differences are approximate). Arrival
   green/white orbs use their decoded positions and recovery values, but mote visuals, simplified falling and
   collection within 120 cm; Lady's extra defeat pickups are omitted. Floor display stays visible, unlike the PS2's transient Level label. Arena camera
   initialization starts its collision sweep at Dante's head: the default safe point lies beneath the raised arena.
