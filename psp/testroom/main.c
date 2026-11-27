@@ -5215,6 +5215,7 @@ int main(int argc, char *argv[]) {
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
+                    { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }
                     { int s_; fprintf(report, "upd sum/max/slow(us):"); for (s_ = 0; s_ < 20; ++s_) fprintf(report, " %u/%u/%u", prof_acc[s_], prof_max[s_], prof_slow[s_]); fprintf(report, "\n"); }
                     { char bt[200]; enemy_spawn_timing(bt, sizeof bt); fprintf(report, "%s\n", bt); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());

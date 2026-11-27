@@ -145,4 +145,5 @@ void enemy_push_out(float *x, float *z, float y, float r);
 
 void enemy_spawn_timing(char *out, int size);   /* tests: each boss's first and later spawn time (us) */
 void enemy_preload_class(int spawn_class);   /* a room load: a boss its script spawns gets his model's buffers now */
+void enemy_big_moves(char *out, int size);   /* tests: moves over 3 m a frame by kind */
 #endif
