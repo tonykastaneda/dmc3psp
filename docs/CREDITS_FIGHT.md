@@ -1,7 +1,7 @@
 # The ending-credits fight (Mission 20, room 012): reference
 
 After Vergil (room 411) and demos 57 and 58, Mission 20 enters **room 012, start 0**, the ruined street. Dante,
-in his ending model (open coat), fights the street's enemies with **Lady as an ally**. Meanwhile the staff credits
+in his usual model, fights the street's enemies with **Lady as an ally**. Meanwhile the staff credits
 fade in and out over the action, and a **kill counter** runs at the top right. After a fixed time the screen fades
 to black on "PRESENTED BY CAPCOM". With **100 or more kills** an extra line appears. Then demo 59, demo 60 and
 Mission Clear.
@@ -169,9 +169,19 @@ In step 2 she also checks her timer +0x4840 and her distance to Dante:
 - **0x2f** (`FUN_004480f0`): she moves to a spot and goes back to 0x30 within 100 of it (`0x61a464`).
   [I: the spot is near Dante: she regroups with him.]
 
-Not decoded:
-- Whether enemies target or hurt her.
-- How much her shots do, and whether they count as Dante's kills (the counter counts every death [I]).
+**Her shots' damage.** Her bullet is made by `FUN_00483ad0` (0x470 bytes, vtable 0x6106a0). It's given her ally flag
+at +0x46d. `FUN_004c89b0` sets up the bullet's hit with **team 3** (hits Dante) or, for the ally, **team 1** (hits
+enemies), using the same attack record either way: **0x5cbc40, damage 80**. The next record, 0x5cbc80, is 500. The
+port applies it in its own health units (a Pride's 250 is 6): 2 of Dante's pistol hits a bullet, and 18 heavy ones
+for the rocket's 1500 (`record_damage`), stopping when the target dies.
+
+**Her aim pose.** Action 0x49 is PAC [5] slot 27 (`ld527`, 7488 bytes on the disc). It's now exported and played.
+
+**Enemies and her.** The Seven Hells' code (0x2c0000-0x2dffff) gets its target from the player (game+0xc, read in 16
+functions) and nothing in it refers to her or the ally flag. Only the hostile Lady calls `FUN_003595b0(10, ...)`
+and makes the boss gauge (`FUN_00443520`). [I: enemies don't target or hurt her, as in the port.]
+
+Not decoded: whether her kills count (the counter counts every death [I]).
 
 In the capture she stays close to Dante the whole time, shooting the nearest Prides with her pistols and now and
 then the launcher.
@@ -258,18 +268,17 @@ in `analysis/testroom/` (local).
 
 **Stand-ins** (also in StandIns.md):
 - **The counter's place:** matched to the capture.
-- **Lady's damage on enemies:** each of her shots counts as one of Dante's hits of its weight. Only her target can
-  take them.
+- **Lady's damage on enemies:** her attack records' damage (80 a bullet, 1500 the rocket), given as that many of
+  Dante's hits in the port's health units. Only her target can take them.
 - **Lady's estimates and gaps:**
   - Her rocket counter's fill, 0x85's three shots and the rocket's frame are estimates.
-  - 0x49's aim pose is replaced by the drawn guns.
-  - Enemies don't attack her.
+  - Enemies don't attack her [inferred: their AI targets the player, section 5].
 - **The freeze:** op 7e [3] / [4] stop and resume all of Dante's and the enemies' updates [inferred: task groups 5
   and 6].
 - **Not used by the port:** EST ops 10 and 11, and what sets game+10. The port's ending flag is "Mission 20,
   room 012".
 - **The music:** whatever the room's BGM table plays. The capture has no audio, so the credits' track isn't checked.
-- **Dante's model:** his usual one, not the PS2's open-coat ending model.
+- **Dante's model:** not a stand-in. The PS2 draws his usual Mission 20 model here (open coat, bare chest: `analysis/testroom/dante_ps2_vs_port.png`, the capture against the port). The ending flag (game+10) in the player constructors (002b6450, 002bdd20, 002c49b0, 0034c5a0, 003534c0, 0041c240, 0042a7c0) only skips a HUD part (FUN_0033b610); nothing there swaps his model.
 - **Pages:** cut to 256 colours, and loaded from the memory stick as each slot frees.
 
 **The full flow** (`credits_full`, Mission 20 from room 411 with `tools/tests/mission20_clear.scene`): Vergil falls,

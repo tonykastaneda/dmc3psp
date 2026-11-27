@@ -6921,11 +6921,17 @@ static void lady_update_glue(float f, float px, float py, float pz) {
             lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, sight);
             if (b->ally && b->ally_hit && target) {
                 ++ally_landed;
-                /* Her shot on its target: as a hit of Dante's of its weight (her damage on them isn't decoded). */
+                /* Her shot on its target, with its attack record's damage. Her bullet (FUN_00483ad0, vtable 0x6106a0)
+                 * takes the ally flag (+0x46d); FUN_004c89b0 then gives its hit team 1, which hits enemies, not
+                 * Dante, with the same record (0x5cbc40: 80). The rocket is record_damage's 1500. In the port's health
+                 * (ENEMY_HEALTH a Pride's 250) that's 2 of Dante's pistol hits, or 18 heavy ones, each through the
+                 * target's own hit code, until it dies. */
                 Enemy *was = e;
                 float lx = e->pos[0], lz = e->pos[2];
+                int heavy = b->ally_hit == 2, units = (int)(b->ally_hit_damage * ENEMY_HEALTH / 250.0f + 0.5f), n;
                 e = target;
-                enemy_hit(b->ally_hit == 2 ? HIT_HEAVY : HIT_PISTOL, lx, lz);
+                for (n = 0; n < units && e->active && e->plan != P_DEATH; n += heavy ? 2 : 1)
+                    enemy_hit(heavy ? HIT_HEAVY : HIT_PISTOL, lx, lz);
                 e = was;
             }
         }
