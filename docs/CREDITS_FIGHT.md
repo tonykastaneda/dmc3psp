@@ -275,3 +275,18 @@ in `analysis/testroom/` (local).
 **The full flow** (`credits_full`, Mission 20 from room 411 with `tools/tests/mission20_clear.scene`): Vergil falls,
 demos 57 and 58 play, and room 012 starts the street on its own (`credits on=1 ... ally=1 mode=0x33` at the run's end).
 The run stopped at frame 18000, 2 frames into the street. The street's own course is covered by the direct runs above.
+
+**Frame rate.** PPSSPP PERF.TXT, the street with Lady, 4 enemies and a page up:
+
+| Run | Frames a second | Update | Skin | Draw |
+|---|---|---|---|---|
+| `credits_perf` (stills only), 1800 frames | 56-59 | ~2.0 ms (max 13-26) | 1.5 ms | 8.3-9.0 ms |
+| `credits_perf_vid` (`--video`) | 20-23 | ~2.0 ms | 1.5 ms | 9.1-9.8 ms |
+| `m2_perf` (Mission 2's street, the port's usual) | 39-58 | 2.2-10 ms | 1.5 ms | 6.0 ms |
+
+- The 20 FPS in the step-2 stills came from `--video`: it has the game write a BMP of every frame. The frame's own
+  costs are the same with or without it, about 12 ms of a 16.7 ms frame.
+- Without video the street holds 56-59, at or above the port's usual rate. Mission 2's street dips to about 40 in
+  its fights.
+- The periodic 13-26 ms update spike (2-3 missed frames a second) is there in every room, not just the street.
+- Nothing in the street was changed for speed.
