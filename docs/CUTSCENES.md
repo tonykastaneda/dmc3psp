@@ -249,6 +249,17 @@ Shots taken by the cutscene's own frame (`demoshot N`) and slot-by-slot hiding (
 - Test lines: `demoshot N` (a still at the cutscene's own frame N, `name_dN.png`), `demohide N` (slot N not drawn;
   -2 no effects, -3 no actors).
 
+- **A per-object `.hid` clip lasts its Life** [inferred]: 203 of 208 such clips keep their keys within an authored
+  Life; the 5 others all have Life 10, the placeholder for "until the next clip" (33 clips), with keys well past it.
+  So a clip with a Life over 10 ends there (shown again) unless another clip of that slot begins first. Demo 59's
+  `ss506_00_c01_1.hid` (Life 300) no longer hides its object for the whole cutscene.
+- **Comparing by time drifts.** The PCSX2 recordings (10 fps) drift from the demo clock by up to about 2 s over a
+  cutscene, so a still at a predicted time can be another moment (demo 3's coat cut, frame 1684, looked like a
+  different camera: it isn't). Comparison sheets pick the PS2 frame that looks most like the port's within +-3 s of
+  the predicted time: `demo3_weapons_compare.png`, `demo5_demoshot_compare.png` (4 of 4 match),
+  `demo59_demoshot_compare.png` (3 of 4; at frame 2300 the PS2 shows the photo on the table and no Dante, the port
+  his legs and no photo; at 3580 the object in his hand differs: open).
+
 Weapon placement checked against PCSX2 (`analysis/testroom/demo3_weapons_compare.png`, `demo59_weapons_compare.png`):
 Rebellion in demo 3 (overhead, thrown, pointed at the end) matches; demo 59's sword was missing from the desk (now
 held there). Still open in demo 59: the book (in `ss506_00`, slot 8) is missing from the desk at frame 3040 and open in

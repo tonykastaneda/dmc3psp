@@ -299,6 +299,7 @@ static void stage_hide_apply(int clear) {
     int k;
     memset(want, 0, sizeof want);
     if (!clear && head) {
+        /* after the fades, lights (low half of light_count), Program clips and fogs (its high half) */
         const unsigned int *programs = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) +
                                                               (head->light_count & 0xffffu) * sizeof(DemoLight));
         const unsigned int *count = programs + 1 + *programs * 6 +   /* each Program clip is 24 bytes */
