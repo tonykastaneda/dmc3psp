@@ -53,10 +53,37 @@ static void royal_spawn_glue(void) {
     e->fade = 0.0f;
     e->timer = 0.0f;
 }
+/* A posed bone's world place: bone 0 is +0x504's first record, whose +0x104 is the matrix the Queen's V0x31b /
+ * V0x390 ride (0x437ab0; the record layout as the Rook's beams' 0x440d70 reads it). */
+static void royal_bone_world(int bone, const float local[3], float out[3]) {
+    const float (*r)[3] = world_rot[bone].m;
+    const float *t = world_pos[bone];
+    float c = cosf(e->yaw), s = sinf(e->yaw), l[3];
+    l[0] = t[0] + r[0][0] * local[0] + r[0][1] * local[1] + r[0][2] * local[2];
+    l[1] = t[1] + r[1][0] * local[0] + r[1][1] * local[1] + r[1][2] * local[2];
+    l[2] = t[2] + r[2][0] * local[0] + r[2][1] * local[1] + r[2][2] * local[2];
+    out[0] = e->pos[0] + l[0] * c + l[2] * s; out[1] = e->pos[1] + l[1]; out[2] = e->pos[2] + l[2] * c - l[0] * s;
+}
+/* em021 [6] rows 2 and 3: kind 1 (hit) on bone 1, (0, 120, 50) r 120 and (0, 230, 30) r 70, tested as test_attack
+ * tests an enemy's spheres against Dante's body. */
+static int royal_queen_capsules(float px, float py, float pz) {
+    static const float caps[2][4] = {{0.0f, 120.0f, 50.0f, 120.0f}, {0.0f, 230.0f, 30.0f, 70.0f}};
+    int k;
+    for (k = 0; k < 2; ++k) {
+        float w[3], near_y, x, y, z, reach = caps[k][3] + DANTE_RADIUS;
+        royal_bone_world(1, caps[k], w);
+        near_y = w[1] < py + DANTE_LOW ? py + DANTE_LOW : w[1] > py + DANTE_HIGH ? py + DANTE_HIGH : w[1];
+        x = w[0] - px; y = w[1] - near_y; z = w[2] - pz;
+        if (x * x + y * y + z * z < reach * reach) return 1;
+    }
+    return 0;
+}
 static void royal_events(RoyalBody *b, float px, float py, float pz) {
     int slot = (int)(e - enemies);
     float at[3] = {b->pos[0], b->pos[1], b->pos[2]};
-    float bone[3] = {b->pos[0], b->pos[1] + 150.0f, b->pos[2]};   /* [stand-in] +0x504 +0x104's bone isn't read */
+    float bone[3], zero[3] = {0.0f, 0.0f, 0.0f};
+    if (e->kind == ENEMY_QUEEN) { evaluate_pose(); royal_bone_world(0, zero, bone); }
+    else { bone[0] = b->pos[0]; bone[1] = b->pos[1]; bone[2] = b->pos[2]; }
     unsigned ev = b->events;
     (void)px; (void)py; (void)pz;
     if (ev & ROYAL_EV_LAND) nfx_spawn_p(NFX_STATIC, 44, at, b->yaw, 0);   /* FUN_0040a2a0's P44 */
@@ -133,10 +160,10 @@ static void royal_update_glue(float f, float px, float py, float pz) {
     }
     if (e->kind == ENEMY_QUEEN) royal_command(queen_think(&queen_brain[slot], f, px, py, pz, royal_command(-1), ai_unit));
     else royal_command(king_think(&king_brain[slot], f, px, py, pz, royal_command(-1), ai_unit));
-    /* [stand-in] walls: the room's floor ends them (no floor under the new place puts the piece back and stops a
-     * charge), not the collision's +0xcac flags. */
+    /* [stand-in] walls, not the collision's +0xcac flags: the room's floor ending, or a step up of more than 60 cm (the
+     * board's raised squares), puts the piece back and stops a charge. */
     b->wall = 0;
-    if (!floor_under(b->pos[0], b->pos[1] + 300.0f, b->pos[2], &g)) {
+    if (!floor_under(b->pos[0], b->pos[1] + 2000.0f, b->pos[2], &g) || g > b->pos[1] + 60.0f) {
         b->pos[0] = old[0]; b->pos[2] = old[2]; b->wall = 1;
     }
     e->pos[0] = b->pos[0]; e->pos[1] = b->pos[1]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
@@ -153,12 +180,15 @@ static void royal_update_glue(float f, float px, float py, float pz) {
         int live = e->kind == ENEMY_QUEEN ? queen_brain[slot].hitting : king_brain[slot].blast.hitting;
         if (!live) e->hit_done = 0;
         else if (!e->hit_done && attacks_on) {
-            int reach = e->kind == ENEMY_QUEEN ? queen_reaches(&queen_brain[slot], px, py, pz)
+            int reach = e->kind == ENEMY_QUEEN ? royal_queen_capsules(px, py, pz)
                                                : king_blast_reaches(&king_brain[slot].blast, px, py, pz);
             if (reach) {
                 e->hit_done = 1;
                 land_attack(1);
                 landed_damage = e->kind == ENEMY_QUEEN ? QUEEN_DAMAGE : KING_DAMAGE;
+                if (giga_log_len < (int)sizeof(giga_log_text) - 60)
+                    giga_log_len += snprintf(giga_log_text + giga_log_len, sizeof(giga_log_text) - giga_log_len,
+                                             "%s hits dante t=%.0f\n", e->kind == ENEMY_QUEEN ? "queen" : "king", royal_t[slot]);
             }
         }
     }
