@@ -7026,7 +7026,7 @@ static void lady_hit_glue(HitKind kind) {
  * are the game's models (tools/prepare_jester_props.py): the bomb tumbles as it flies [estimate];
  * the hand plays [28]:0 on its own 18-bone rig at the native floor transform. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
  * and V0x3f8 looping on its frame (0054d610: at him, facing Dante turned 45 degrees, turning with it), V0x3fa as it
- * ends (0054dc70); the bomb V0x417 in flight (0054e710: P486-P489 with it) and V0x41c as it goes off (0054edc0: P531
+ * ends (0054dc70); the bomb as it goes off: V0x417, the blast (0054e710: P486-P489 with it), and V0x41c (0054edc0: P531
  * and E1616); the P particles are pfx.c's. Stand-in: the trap's warning ring is motes. */
 #include "jester_props_runtime.h"
 static Motion jester_hand_motion;
@@ -7118,7 +7118,7 @@ static void jester_prop_draw(int which, const float pos[3], float yaw, float pit
 }
 void jester_projectiles_draw(const JesterProjectiles *w) {
     static const float still[3] = {0.0f, 0.0f, 0.0f};
-    static int cross_fx, bomb_fx[JESTER_SHOTS], bomb_phase[JESTER_SHOTS];
+    static int cross_fx, bomb_phase[JESTER_SHOTS];
     static float cross_at[3], cross_yaw;
     int i, k;
     /* The cross: its effects while it's out, V0x3fa where it was as it ends. */
@@ -7134,14 +7134,15 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         cross_fx = 0;
         nfx_spawn(NFX_JESTER, 0x3fa, cross_at, cross_yaw, 0);
     }
-    /* The bomb: V0x417 riding it in flight, V0x41c as it goes off. */
+    /* The bomb goes off (0054e710: its timer +0xc84 out, 2500 from the arena's middle, or a hit): V0x417, the blast
+     * (its P486-P489 8-18 frames in), once, where it is; then its next state (0054edc0) V0x41c (P531). */
     for (i = 0; i < JESTER_SHOTS; ++i) {
         const JesterShot *p = &w->shots[i];
         int phase = p->active && p->kind == 0 ? p->phase : -1;
-        if (phase == 1 && !nfx_alive(bomb_fx[i])) bomb_fx[i] = nfx_spawn(NFX_JESTER, 0x417, p->pos, p->yaw, 1);
-        else if (phase == 1) nfx_move(bomb_fx[i], p->pos, p->yaw);
-        if (phase != 1 && bomb_fx[i]) { nfx_kill(bomb_fx[i]); bomb_fx[i] = 0; }
-        if (phase == 2 && bomb_phase[i] != 2) nfx_spawn(NFX_JESTER, 0x41c, p->pos, p->yaw, 0);
+        if (phase == 2 && bomb_phase[i] != 2) {
+            nfx_spawn(NFX_JESTER, 0x417, p->pos, p->yaw, 0);
+            nfx_spawn(NFX_JESTER, 0x41c, p->pos, p->yaw, 0);
+        }
         bomb_phase[i] = phase;
     }
     for (i = 0; i < JESTER_SHOTS; ++i) {

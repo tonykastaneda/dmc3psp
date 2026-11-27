@@ -451,7 +451,7 @@ the V / E / G closure of its Effect tracks' V, E and G clips (records, textures,
 (NFX_DEMO), and the clips {start, V / E, id, place, scale, the slot and bone it rides (SpTrackNo counts the Set section's
 lines: slot (n - 2) / 3; SpFlag -1: none)}. demo.c starts them on their frame and moves those on a bone. Of 1510 clips, 590
 are V, 275 E and 533 G (generators: emitters, NATIVE_FX.md, played since the rebake that added them; demo 11's
-summoning glow is one). 112 P clips (particle programs) aren't played, and timelines that only reach P show nothing.
+summoning glow is one). The 112 P clips (particle programs) and the V / G timelines' P children play through pfx.c (NATIVE_FX.md "P effects"; the bake's 'PFX1' tables).
 
 **Speed**: the demo clock is the PSP's real time, 60 frames a second, whatever the game's speed (Turbo) or a test's step.
 
@@ -470,7 +470,6 @@ gameplay capsules (spine and both legs), so the chains can't hang through him. `
 is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`);
 bone 8 is X and bone 6 takes that axis.
 
-Not yet: P effects.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when
