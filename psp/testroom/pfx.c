@@ -20,7 +20,7 @@
 
 #include "nfx.h"
 
-#define MAX_INST 64
+#define MAX_INST 96   /* demo 8 (Lady's missiles) peaks past 64 */
 #define MAX_PARTS 24
 #define PI 3.14159265f
 

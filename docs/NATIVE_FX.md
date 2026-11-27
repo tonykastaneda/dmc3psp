@@ -233,7 +233,7 @@ y, width, height, then an s8 centre. UVs are x / width .. (x + width - 1) / widt
 
 ### The port
 
-- One `Inst` per main and per fake (64 at most, a start past that is dropped; 24 particles each), with the owner's frame followed while the
+- One `Inst` per main and per fake (96 at most, a start past that is dropped and counted; demo 8 and 24 peak at 89; 24 particles each), with the owner's frame followed while the
   owning V / G lives (`nfx_frame`), which it keeps alive while it plays (a reference, `nfx_unref` at its end); `nfx_kill` on the root
   ends them at once.
 - Drawn after nfx's elements: sprites as textured triangles, the rest untextured, depth tested, not written.
