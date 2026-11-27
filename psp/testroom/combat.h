@@ -83,6 +83,9 @@ typedef struct {
     unsigned char gates[COMBAT_GATES]; /* 0 closed, 1 buffer, 2 open */
     int pending;           /* action buffered while its gate was 1 */
     int active;            /* attack-active window (window 0 byte 1 bit 0x80) */
+    float guard_frames;    /* frames since the guard began (player+0x3c8c) */
+    int guard_type;        /* the last blow's guard result (player+0x3c80, FUN_004416f0): 0/1 block, 2 break, 3/4 the
+                            * timed blocks, 5 (not reached), 6 not blocked */
     int window_bits;       /* window 0 byte 0 bit 0 (1, player+0x24d1) and byte 1 bit 0x40 (0x40, the second blade) */
     float last_root[3];    /* root translation sampled last frame (for deltas) */
     float phase_time;      /* seconds in the current move */

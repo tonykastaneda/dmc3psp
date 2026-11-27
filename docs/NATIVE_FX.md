@@ -299,20 +299,27 @@ The game's weapon trails are their own class (vtable 0x605e20, 0x6c0 bytes; `FUN
 Dante's: the shared weapon object (`FUN_002953c0`, fed by `FUN_002954b0` while player +0x24ed is set) makes type 0, kind 3,
 model **M34** of his pack (a 34-segment strip 127 cm long whose texture's left part is a soft white streak); Agni &
 Rudra's object (`FUN_00296ae0`) types 1 / 2, kind 2, **M30** (fire, on Agni, while +0x24ed & 0x80) and **M31** (wind, on
-Rudra, while & 0x40) of A&R's pack. The port (`fx.c` trails, `main.c`) draws a strip over the frame's path, 127 cm out
-from the weapon's grip, textured with those models' textures (`native_fx.py` exports them as 10034 / 10030 / 10031) over
-the rectangle the models map, added, fading over 0.14 s. Not ported: the models' own bending through the 11 matrices
-(their bone weights), and which other weapon classes make type 0 (the port draws it for Rebellion and Nevan, as before).
+Rudra, while & 0x40) of A&R's pack. The models are 33 bones in a row 2 cm apart, one bone a vertex. The
+build (`FUN_0030aa50`) makes 33 frames from the last 11 samples (one a frame, `FUN_0030a380`): 4 a segment, the
+rotation blended 1 / 0.75 / 0.5 / 0.25 between samples i and i + 1 (0x5abd60), the place a quadratic B-spline (0x5abd30:
+1 0 0, 0.5625 0.375 0.0625, 0.25 0.5 0.25, 0.0625 0.375 0.5625 over the midpoint i / i + 1, sample i + 1, the midpoint
+i + 1 / i + 2), the first the newest sample itself; scaled by +0x8c..0x94 (1). Alpha (`FUN_00309d30`): up by +9 a frame
+to +8 while fed, down by +9 to +10 from +0xc frames after the last feed (type 0: 128 / 16 / 0 / 3; 1 / 2: 128 / 24 / 8 /
+5). The port (`fx.c` mtrails, `main.c`) does the same: `native_fx.py` writes the models as `trail_runtime.h` (each
+vertex's offset from its bone's rest place) and their textures as 10034 / 10030 / 10031; drawn added. Not read: the
+blend +0x70 / +0x71 and +0x98 / +0x9c of kind 3, and which other weapon classes make type 0 (the port: Rebellion and
+Nevan).
 
 ## Dante's effects
 
 | Effect | Where | Port |
 | --- | --- | --- |
 | E&I V0x22, Shotgun V0x23, Spiral V0x228, Kalina Ann V0x21b | the muzzle flash, by shot kind (`FUN_002fbf20`; tables `0x5aa630` / `0x5aa680`: ±31 cm on the gun bone, turned down the barrel) | `bullets.c`, nfx banks 14-18 (GDATA 102-106) |
+| E&I's charge state (V0x129 + V0x15c, V0x145, impact V0x32) | the shot's kind (`FUN_002688c0` actions 130-133 -> `FUN_002698d0` -> `FUN_0026a520` / `FUN_002fbf20`): a shot from an action other than 130 with no burst left is kind 5, the charge shot (Gunslinger's 131 / 133 come from a 90-frame hold and release), and starts a burst: the next shots stay kind 5 for config chunk 11 +0x670 / 0x674 / 0x678 = 3 / 5 / 7 shots by Gunslinger level; Gunslinger's ordinary shots are kind 1, and kind 7 / 8 / 9 from the +0x2d0 / 0x2d4 / 0x2d8 = 8 / 6 / 4th of a run (+0x7db1, up to 50); a 25-frame timer (+0x2cc) runs down while he isn't in 130 / 131 and clears both (0x260cc8). Kind 5's flash is V0x129 and V0x15c, 7-9's V0x145; 5 and 7-9 land as V0x32; their shells' records (0x5a5a30): damage 10 / 30 / 12 | `ei_shot_kind` (`main.c`), `bullets_set_shot_kind`; level 2 |
 | Artemis V0xd3 | riding its shot (CPl000Shl10, `FUN_005232b0`) | yes |
 | V0xa (V0x32 charged) | where a bullet lands (`002efaa0`) | E&I and Shotgun |
 | Kalina Ann V0x21f | its rocket's burst [inferred] | yes |
-| V6 (guard types 0-2), V0x265 / 0x264 / 0x267 | a Royalguard block (`FUN_00224db0`), near the attacker | V6 only, 50 cm toward the blow |
+| V6 (guard types 0-2), V0x265 / 0x264 / 0x267, V0x269 | a Royalguard block (`FUN_00224db0`), near the attacker (0x267 on his hips); a guard break's V0x269 on his left forearm, within 25 cm (`FUN_004416f0`). The type is the judgement's (`FUN_002e7f10` -> `FUN_004416f0`): +0x3c8c, frames since the guard press (99 while it's up), against config chunk 9's windows (within 5 frames grade 3; within +0x198 / 0x19c / 0x1a0 = 0 / 8 / 10 by style level grade 4; else 0); table 0x5c9400[the blow's guard class +0x3e][grade]: class 0 `0 4 3 5`, 1 `2 2 3 5`, 2 `2 2 3 2`, 3 `6 6 3 5`, 4 `6 6 3 6` (2 a break, 6 not blocked) | all; the blows' class taken from their kind (`combat.c`) |
 | V0x83 | Air Hike, at his feet, tinted the weapon's colour (`FUN_00222700`, `FUN_002fd1c0`) | yes |
 | V0x14d (P247, 248) | Enemy Step (`FUN_00228950`) | yes |
 | V0x8e (Dante's pack, P18), P44 (V0xf2 on floor material 0xb) | Helm Breaker's landing (`FUN_00264b90`) | yes, nfx bank 20 (GDATA 97) |
@@ -330,7 +337,7 @@ the rectangle the models map, added, fading over 0.14 s. Not ported: the models'
 | Air Trick V0x26a | as 23:15 / 23:16 start (state 0x18, `FUN_00226550`, through `FUN_002086e0`; +0x28b1 picks V0x26b / 0x8f / 0x215 for other costumes) | yes, the port's streak gone |
 | Stinger (0xb), High Time (0xc), action 11 (0xd) | Stinger's dash 3:15 (`FUN_00264fe0`): G0x5f, V0x29, V0x7b (CEfcPub 0xb's case, as Beowulf's 7:31); High Time 3:11 (`FUN_002656a0`): V0xa1 + V0xf3; 3:13 (`FUN_00265950`): V0xb0 + V0xf5 | yes; 3:13 not seen (the port's action 11 didn't start from the ground in the test) |
 | Dance Macabre (0x25), the Shotgun (0x3e, 0x1b), Beowulf 124 / 125 (0x12) | 13:17 and 19:3 start the dash set (G0x5f, V0x29, V0x7b); 19:0 / 19:1 G0xb2 (the Shotgun's pack); 17:1 / 17:2 V0x189 on the right hand 35 / 6 frames in, then every 7 / 6 frames | yes, the repeats aside |
-| Royalguard's Release (0xf) | V0x29 as actions 190-197 start (24:15 / 17 / 40 / 46 / 18 / 20 / 52 / 58) | yes, keyed on those scripts: a tapped 194 that opens on 24:19 misses it |
+| Royalguard's Release (0xf) | V0x29 as actions 190-197 start, whatever motion they open on | yes (`arm_fx` "#n" entries key on the action) |
 | Artemis V0x2f4 (0x53) | 2 frames into 20:2 (action 154, `FUN_0026ebf0`), on the gun's frame | on his left hand, where the port's guns are |
-| CEfcPub ids at a motion's start, on the bone the handler names | Million Stab 10 frames into 3:8 G0x44 + G0x7d (id 0xa, Dante's pack); 13:11 V0xc7 (action 18); Cerberus 14:5 V0x262 on spine 1 (action 46); A&R 5:26 V0x287, 5:18 V0x28a, 15:0 V0x284, 15:1 V0x27e, 15:2 V0x25c, 15:7 V0x286 (actions 64, 62, 65-67, 70); Nevan 6:16 V0x2b7, 6:19 V0x2a7, 16:5's flag 2 G0x179 on the root, 16:9 V0x260, 6:26 V0x187, 6:17 V0x2b8, 6:11 V0x90 + G0x234 on the root (actions 83-87, 93-95); A&R 15:8 V0x90 + V0x273 (action 71); Beowulf 7:16 / 7:58 V0x2ba (action 120), 7:31 G0x5f + V0x29 + V0x7b (actions 121/122, id 0x58: V0x29 / 0x161 / 0xdd / 0x3bb by +0x28b1, V0x7b / 0xd5 by +0x2928; the port takes the first of each); Beowulf 7:48 V0x2a8, 7:52 V0x299, 7:15 V0x29a, 17:0 V0x18a on the right hand, 17:4 V0x90 + V0x27d, 17:3 V0x27b (actions 113, 117-119, 123, 126, 128) | `arm_fx` in `main.c`, banks 20-24. 13:11 has no port move. 6:19, 16:5's flag, 7:48 and 7:52 aren't reached: the port's chains for those actions play other motions |
+| CEfcPub ids at a motion's start, on the bone the handler names | Million Stab 10 frames into 3:8 G0x44 + G0x7d (id 0xa, Dante's pack); 13:11 V0xc7 (action 18); Cerberus 14:5 V0x262 on spine 1 (action 46); A&R 5:26 V0x287, 5:18 V0x28a, 15:0 V0x284, 15:1 V0x27e, 15:2 V0x25c, 15:7 V0x286 (actions 64, 62, 65-67, 70); Nevan 6:16 V0x2b7, 6:19 V0x2a7, 16:5's flag 2 G0x179 on the root, 16:9 V0x260, 6:26 V0x187, 6:17 V0x2b8, 6:11 V0x90 + G0x234 on the root (actions 83-87, 93-95); A&R 15:8 V0x90 + V0x273 (action 71); Beowulf 7:16 / 7:58 V0x2ba (action 120), 7:31 G0x5f + V0x29 + V0x7b (actions 121/122, id 0x58: V0x29 / 0x161 / 0xdd / 0x3bb by +0x28b1, V0x7b / 0xd5 by +0x2928; the port takes the first of each); Beowulf 7:48 V0x2a8, 7:52 V0x299, 7:15 V0x29a, 17:0 V0x18a on the right hand, 17:4 V0x90 + V0x27d, 17:3 V0x27b (actions 113, 117-119, 123, 126, 128) | `arm_fx` in `main.c`, banks 20-24. 13:11 has no port move. The handlers' paths: action 86 starts V0x2a7 with 6:35 (87 with 6:19); 93 is one 16:5 (V0x90 at its start, V0x38e on flag 1, G0x179 on flag 2); 113 starts V0x2a8 76 frames into 7:7 (never, with 7:7's length) or with the charged release 7:7 / 7:47 / 7:48; 117 / 118 V0x299 23 frames into 7:14 or with the release 7:14 / 7:51 / 7:52 |
 | CEfcPub ids not yet wired | 3:52 (action 207, after a timer), 13:4 / 7:12 id 0xe (no case: nothing), 24:x V0x2a6 (actions 190-197, when +0x3c86 is set), the Royalguard 24:x V0x266, 0:0 V0x31f, V0xdd + V0x328 (0:52 / 6:0) and V0x36e | their timers and conditions aren't traced yet; CEfcPub's update (`FUN_00335500`) isn't read either, so a looping one ends with its move in the port |

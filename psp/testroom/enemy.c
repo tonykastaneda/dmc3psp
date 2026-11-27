@@ -89,6 +89,7 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 /* Ebony & Ivory's ordinary bullet: its record (0x5a5a30, copied by the bullet's constructor 002efaa0) +4, the damage.
  * docs/VANGUARD_SPEC.md. */
 #define DANTE_BULLET_DAMAGE 10.0f
+float enemy_bullet_damage = DANTE_BULLET_DAMAGE;   /* bullets.c sets the shot's record's damage (its kind) */
 /* Bosses' health from their classes' parameter blocks (+0x2c, the value FUN_002f0560 starts the health with). */
 #define NEVAN_MAX 7000
 #define BEOWULF_MAX 10000
@@ -1681,7 +1682,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (!e->active) return;
     if (e->kind == ENEMY_VANGUARD) vanguard_select((int)(e-enemies));
     if (e->kind == ENEMY_LEVIATHAN) {
-        float damage=kind==HIT_PISTOL ? DANTE_BULLET_DAMAGE : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
+        float damage=kind==HIT_PISTOL ? enemy_bullet_damage : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
         if (leviathan_boss_dying()) return;
         ++hits;
         if(leviathan_boss_hit(leviathan_boss_target(),damage,mortal)) {e->plan=P_DEATH;died();}
@@ -1744,7 +1745,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
         if (gun) {
             /* A bullet does its record's damage (0x5a5a30 +4: 10), a quarter of a unit of health (a Pride's 250 is
              * ENEMY_HEALTH): kept until it makes a whole one. It still flinches it as a light hit. */
-            e->bullet_hp += DANTE_BULLET_DAMAGE;
+            e->bullet_hp += enemy_bullet_damage;
             if (e->bullet_hp >= 250.0f / ENEMY_HEALTH) { e->bullet_hp -= 250.0f / ENEMY_HEALTH; --e->health; }
         } else e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
@@ -4022,7 +4023,7 @@ static void jester_hit(HitKind kind) {
     fx_hit_spark(at);
     if (mortal) {
         /* The port's hit values (as the Vanguard's: 42 light, 84 heavy; a bullet its record's 10), scaled as the row says. */
-        float dmg = gun ? DANTE_BULLET_DAMAGE : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        float dmg = gun ? enemy_bullet_damage : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
         dmg *= stunned ? 1.0f : 0.01f;
         e->ar_health -= dmg;
         if (e->ar_health <= 0.0f) {
@@ -4869,7 +4870,7 @@ static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z) {
     if (mortal) {
         /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet its record's 10 (DANTE_BULLET_DAMAGE). Agni's fire is weak to
          * Cerberus's ice (the guide): twice the damage is an estimate. */
-        damage = kind == HIT_PISTOL ? DANTE_BULLET_DAMAGE : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        damage = kind == HIT_PISTOL ? enemy_bullet_damage : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
         if (e->kind == ENEMY_AGNI && kind != HIT_PISTOL && hit_weapon == 1) damage *= 2.0f;
         e->ar_health -= damage;
         if (e->ar_health <= 0.0f) {

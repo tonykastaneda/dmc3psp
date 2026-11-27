@@ -2004,16 +2004,16 @@ static const ArmFx arm_fx[] = {
     /* Artemis action 154 (FUN_0026ebf0, id 0x53): V0x2f4 2 frames into 20:2, on the gun (FUN_002e1d90: weapon 7's
      * frame; the port's guns are in the left hand). */
     {"20:2", 2, NFX_GUN_ARTEMIS, BONE_L_HAND, 1, 0x2f4},
-    /* Royalguard's Release (actions 190-197, FUN_0027d9f0 / 0027e130, id 0xf): V0x29 (the default costume's) as it
-     * starts; V0x2a6 too when +0x3c86 is set [not told apart]. */
-    {"24:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:40", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:46", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:18", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:20", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:52", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:58", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    /* Royalguard's Release (actions 190-197, FUN_0027d9f0 / 0027e130, id 0xf): V0x29 (the default costume's) as the
+     * action starts, whichever motion it opens on; V0x2a6 too when +0x3c86 is set [not told apart]. */
+    {"#190", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#191", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#192", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#193", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#194", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#195", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#196", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#197", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
     {"17:2", 6, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xa1},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xf3},
@@ -2031,7 +2031,8 @@ static const ArmFx arm_fx[] = {
     {"15:7", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x286},
     {"6:16", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b7},     /* actions 84/85 (FUN_00276150, id 0x36) */
     {"6:17", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b8},     /* its 6:17 (id 0x37) */
-    {"6:19", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},     /* actions 86/87 (FUN_00276640, id 0x35) */
+    {"6:19", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},     /* actions 86/87 (FUN_00276640, id 0x35): 87's 6:19, 86's 6:35 */
+    {"6:35", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},
     {"6:11", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 83 (FUN_00275410): V0x90 and id 0x55 on the root */
     {"6:11", 0, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x234 | 0x8000},
     {"15:8", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* A&R action 71 (FUN_002746d0): V0x90 and id 0x54 */
@@ -2043,11 +2044,20 @@ static const ArmFx arm_fx[] = {
     {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
     {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
     {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
-    {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},   /* action 93 on its flag 2 (FUN_00277550, id 0x10) */
+    {"16:5", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 93 (FUN_00277550): V0x90 as it starts, V0x38e on */
+    {"16:5", -2, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* flag 1, id 0x10 (G0x179 on the root) on flag 2 */
+    {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},
     {"16:9", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x260},     /* action 94 (FUN_00277730, id 0x3a) */
     {"6:26", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x187},     /* action 95 (FUN_00277d70, id 0x31) */
-    {"7:48", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},   /* action 113 (FUN_0027a1f0, id 0x33) */
-    {"7:52", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},   /* actions 117/118 (FUN_0027af70, id 0x2f) */
+    /* action 113 (FUN_0027a1f0, id 0x33): 76 frames into 7:7 uncharged, else as the release after 7:27 starts (7:7 /
+     * 7:47 / 7:48); actions 117/118 (FUN_0027af70, id 0x2f): 23 frames into 7:14, else as the release after 7:29 starts
+     * (7:14 / 7:51 / 7:52). */
+    {"7:7", 76, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:47", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:48", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:14", 23, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
+    {"7:51", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
+    {"7:52", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
     {"7:15", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x29a},   /* action 119 (FUN_0027b6c0, id 0x30) */
     {"17:0", 0, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x18a}, /* action 123 (FUN_0027c740, id 0x32, +0x13b4: bone 13) */
     {"17:4", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 126 (FUN_0027d280): V0x90, then id 0x39 */
@@ -2086,7 +2096,7 @@ static int update_devil_fx(const Player *p) {   /* after the pose, before update
 #define ARM_FOLLOW 12
 static char arm_fx_log[256];   /* tests: "script:id frame" of each started, in FOCUS_DONE.TXT */
 static void update_arm_fx(const Combat *c, const Player *p) {
-    static int last_script = -1, last_bits, last_move = -1;
+    static int last_script = -1, last_bits, last_move = -1, last_action;
     static float last_frame, since;
     static struct { int handle, at; } follow[ARM_FOLLOW];
     const char *key = combat_script_key(c->script);
@@ -2095,11 +2105,14 @@ static void update_arm_fx(const Combat *c, const Player *p) {
     if (restarted) { since = 0.0f; last_bits = 0; prev = -1.0f; }
     else since += c->frame - last_frame;
     rise = (c->window_bits | (c->active ? 0x80 : 0)) & ~last_bits;
-    for (i = 0; c->script >= 0 && i < (int)(sizeof(arm_fx) / sizeof(arm_fx[0])); ++i) {
+    for (i = 0; c->script >= 0 && i < (int)(sizeof(arm_fx) / sizeof(arm_fx[0])); ++i) {   /* "#n" entries too */
         const ArmFx *a = &arm_fx[i];
         int go;
-        if (strcmp(a->script, key) != 0) continue;
-        go = a->when > 0 ? prev < a->when && since >= a->when
+        if (a->script[0] == '#') {   /* "#n": as action n starts, whatever its motion */
+            if (atoi(a->script + 1) != c->action || c->action == last_action) continue;
+            go = 1;
+        } else if (strcmp(a->script, key) != 0) continue;
+        else go = a->when > 0 ? prev < a->when && since >= a->when
            : a->when == 0 ? c->script != last_script || c->move != last_move   /* not a held move's loop */
            : a->when == -2 ? c->flag == 1
            : a->when == -3 ? c->flag == 2
@@ -2123,6 +2136,7 @@ static void update_arm_fx(const Combat *c, const Player *p) {
         } else follow[i].handle = 0;
     last_script = c->script;
     last_move = c->move;
+    last_action = c->action;
     last_frame = c->frame;
     last_bits = c->window_bits | (c->active ? 0x80 : 0);
 }
@@ -2157,50 +2171,79 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
     last_vy = p->vy;
     (void)was_on_ground; (void)last_vy;
 
-    /* The blade's sweep (docs/NATIVE_FX.md "Blade trails"): the game's weapon trail (FUN_00309030), fed while the attack
-     * window is open (FUN_0030bce0). The shared weapon object (FUN_002953c0 / 002954b0) has type 0: model M34 (Dante's
-     * pack), 127 cm out from the weapon's frame, while +0x24ed is set; Agni & Rudra's (FUN_00296ae0) types 1 / 2: M30 on
-     * Agni while bit 0x80, M31 on Rudra while bit 0x40 (A&R's pack). Drawn as a textured strip over the frames' path
-     * [the PS2 bends the model through its last 11 frames]. */
+    /* The blade's sweep (docs/NATIVE_FX.md "Blade trails"): the game's weapon trail (FUN_00309030), sampling the weapon's
+     * frame every frame and fed while the attack window is open (FUN_0030bce0). The shared weapon object (FUN_002953c0 /
+     * 002954b0) has type 0, model M34 (Dante's pack), fed while +0x24ed is set; Agni & Rudra's (FUN_00296ae0) types 1 /
+     * 2: M30 on Agni while bit 0x80, M31 on Rudra while bit 0x40 (A&R's pack). */
     {
         int slot;
         for (slot = 0; slot < 2; ++slot) {
             int ar = p->melee_weapon == 2, on;
             const WeaponPlace *place;
-            if (combat_move_is_gun(c->move) || p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
-            on = ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40));
-            if (!on) continue;
+            if (p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
+            on = !combat_move_is_gun(c->move) && (ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40)));
             place = combat_weapon_place(c, p, p->melee_weapon, slot);
             if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
-                /* The blade runs along the model's +Z: the third column of place_rotation. */
+                /* The weapon's frame: his yaw, the bone's rotation, the placement's (Rz Ry Rx), at the placement. */
                 const float *e = place->rot;
                 float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
-                float axis[3] = {cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx};
-                float base[3], tip[3], wb[3], wt[3], len = 127.0f;
+                float r[3][3] = {{cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx},
+                                 {sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx},
+                                 {-sy, cy * sx, cy * cx}};
+                float sw = sinf(p->yaw), cw = cosf(p->yaw), br[3][3], wr[3][3], o[3], wo[3];
                 const float *bp = pose.world_pos[place->bone];
-                const Mat3 *br = &pose.world_rot[place->bone];
-                int k;
-                for (k = 0; k < 3; ++k) {
-                    float t[3];
-                    int j;
-                    for (j = 0; j < 3; ++j) t[j] = place->pos[j] + axis[j] * len;
-                    base[k] = bp[k] + br->m[k][0] * place->pos[0] + br->m[k][1] * place->pos[1] + br->m[k][2] * place->pos[2];
-                    tip[k] = bp[k] + br->m[k][0] * t[0] + br->m[k][1] * t[1] + br->m[k][2] * t[2];
+                const Mat3 *bm = &pose.world_rot[place->bone];
+                int a, b, k;
+                for (a = 0; a < 3; ++a) for (b = 0; b < 3; ++b)
+                    br[a][b] = bm->m[a][0] * r[0][b] + bm->m[a][1] * r[1][b] + bm->m[a][2] * r[2][b];
+                for (b = 0; b < 3; ++b) {
+                    wr[0][b] = cw * br[0][b] + sw * br[2][b];
+                    wr[1][b] = br[1][b];
+                    wr[2][b] = -sw * br[0][b] + cw * br[2][b];
                 }
-                model_to_world(p, base, wb);
-                model_to_world(p, tip, wt);
-                /* The models' texture rectangles: M34 u 0.009-0.459, v 0.012-0.507; M30 / M31 the left half. */
-                if (ar) fx_trail_add_slot(slot, wb, wt, 0xffffffffu, NFX_ARM_AGNI, slot ? 10031 : 10030, 0.0f, 0.5f, 0.0f, 1.0f);
-                else fx_trail_add_slot(0, wb, wt, 0xffffffffu, NFX_DANTE, 10034, 0.009f, 0.459f, 0.012f, 0.507f);
+                for (k = 0; k < 3; ++k) o[k] = bp[k] + bm->m[k][0] * place->pos[0] + bm->m[k][1] * place->pos[1] + bm->m[k][2] * place->pos[2];
+                model_to_world(p, o, wo);
+                fx_trail_sample(slot, ar ? (slot ? 31 : 30) : 34, wr, wo, on);
             }
         }
     }
 }
 
+/* Ebony & Ivory's charge state (FUN_002688c0, actions 130-133; FUN_002698d0; the reset at 0x260cc8), Gunslinger
+ * level 2 (the full moveset), config chunk 11: each shot counts (+0x7db1, up to 50) and restarts a 25-frame timer
+ * (+0x2cc) that runs down only while he isn't in action 130 / 131, clearing the count and the burst at 0. A shot from
+ * an action other than 130 with no burst left starts one: kind 5, the charge shot, for it and the next 7 (+0x678;
+ * levels 0 / 1: 3 / 5). Else Gunslinger's ordinary shots are kind 1, and from the 4th of a run (+0x2d8; 8 / 6) kind 9
+ * (levels 0 / 1: 7 / 8); other styles' kind 0. */
+static int focus_cmp;
+static int ei_count, ei_burst;
+static float ei_timer;
+static int ei_shot_kind(const Combat *c, const Player *p) {
+    int kind;
+    if (ei_burst == 0) {
+        if (c->action != 130) { kind = 5; ei_burst = 7; }
+        else kind = p->style == STYLE_GUNSLINGER ? 1 : 0;
+    } else kind = 5;
+    if (ei_burst) --ei_burst;
+    if (ei_count < 50) ++ei_count;
+    ei_timer = 25.0f;
+    if (kind == 1 && ei_count >= 4) kind = 9;
+    return kind;
+}
+
 static void fire_pending_shots(Combat *c, const Player *p, float dt) {
     int shots = combat_take_shots(c);
     bullets_update(dt);
+    if (c->action != 130 && c->action != 131 && ei_timer > 0.0f) {
+        ei_timer -= dt * 60.0f;
+        if (ei_timer <= 0.0f) ei_count = ei_burst = 0;
+    }
     while (shots-- > 0) {
+        if (p->gun_weapon == 5) {
+            int kind = ei_shot_kind(c, p);
+            bullets_set_shot_kind(kind);
+            if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 8) sprintf(arm_fx_log + strlen(arm_fx_log), "ei%d ", kind);
+        }
         int bone = BONE_L_HAND;
         float s = sinf(p->yaw), co = cosf(p->yaw), hx, hz, muzzle[3], target[3];
         if (p->gun_weapon == 5 && (c->shot_hand++ & 1)) bone = BONE_R_HAND;
@@ -5084,21 +5127,42 @@ int main(int argc, char *argv[]) {
              * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
             combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
             if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
-            if (focus_cmp && frames == cmp_hit_frame)
-                combat_player_hit_kind(&combat, &player, player.x + sinf(player.yaw) * 100.0f, player.z + cosf(player.yaw) * 100.0f, cmp_hit_kind, (float)cmp_hit_damage);
-            if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
+            {
+            int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
+            float blow_damage = 0.0f;
+            if (landed) { blow_kind = enemy_attack_kind(heavy); blow_damage = enemy_attack_damage(); }
+            if (focus_cmp && frames == cmp_hit_frame) {   /* "hitme": a blow from 1 m ahead, through the same path */
+                landed = 1; blow_kind = cmp_hit_kind; blow_damage = (float)cmp_hit_damage;
+                from_x = player.x + sinf(player.yaw) * 100.0f; from_z = player.z + cosf(player.yaw) * 100.0f;
+            }
+            if (landed) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit_kind(&combat, &player, from_x, from_z, enemy_attack_kind(heavy), enemy_attack_damage())) {
+                if (combat_player_hit_kind(&combat, &player, from_x, from_z, blow_kind, blow_damage)) {
                     fx_hit_spark(chest);
+                    if (combat.guard_type == 2) {
+                        /* A guard break (FUN_004416f0): V0x269 on his left forearm (+0x13a0), within 25 cm at random. */
+                        float at[3], l[3];
+                        int k;
+                        for (k = 0; k < 3; ++k) l[k] = pose.world_pos[BONE_L_FOREARM][k] + ((float)(rand() % 51) - 25.0f);
+                        model_to_world(&player, l, at);
+                        nfx_spawn(NFX_STATIC, 0x269, at, player.yaw, 0);
+                    }
+                    if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
+                        sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", combat.guard_type, frames, (int)combat.guard_frames);
                     if(focus_cmp)vanguard_note("player_hurt",player.health);
                 } else {
-                    /* A Royalguard block (FUN_00224db0): V6 (guard types 0-2; 3 / 4 / 5 play V0x265 / 0x264 / 0x267,
-                     * not told apart here) near the attacker's bone, facing Dante: taken 50 cm toward the blow. */
+                    /* A Royalguard block (FUN_00224db0): V6 (guard types 0-2), V0x265 (3), V0x264 (4) near the attacker's
+                     * bone, facing Dante: taken 50 cm toward the blow; V0x267 (5) on his hips. */
                     float dx = from_x - player.x, dz = from_z - player.z, dl = sqrtf(dx * dx + dz * dz);
                     float at[3] = {chest[0] + (dl > 1.0f ? dx / dl * 50.0f : 0.0f), chest[1], chest[2] + (dl > 1.0f ? dz / dl * 50.0f : 0.0f)};
-                    if (!nfx_spawn(NFX_STATIC, 6, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
+                    int gt = combat.guard_type, v = gt == 3 ? 0x265 : gt == 4 ? 0x264 : gt == 5 ? 0x267 : 6;
+                    if (gt == 5) arm_point(0, &player, BONE_HIPS, at);
+                    if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
+                        sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", gt, frames, (int)combat.guard_frames);
+                    if (!nfx_spawn(NFX_STATIC, v, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
                     if(focus_cmp)vanguard_note("player_guard",player.health);
                 }
+            }
             }
             {
                 /* Bodies shove him after his own wall pass, so the shove has to meet the walls too: an enemy
