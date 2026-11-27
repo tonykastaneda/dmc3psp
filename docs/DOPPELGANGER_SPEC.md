@@ -52,7 +52,7 @@ does something simpler. A line that doesn't say is decoded. Values are quoted at
 ## 4. In the port (`psp/testroom/doppelganger_boss.c`, `tools/prepare_doppelganger.py`)
 
 The pick of section 3 and the light of section 2, at rank 0. Approximations:
-- **Which sixth:** the crest nearest by angle round the middle; within 550 of the middle is the middle [estimate].
+- **Region selection:** now decoded as the seven-disc selector below. The choice/placement of a dark escape region still uses the port's heuristic.
 - **Damage** only lands while his sixth is lit or he's reeling; otherwise the blade goes through him (the
   walkthrough). A crest opening on him stuns him for 150 frames (reaction motions 26-28) [the stun's form and length
   are the port's]. Damage taken as Vergil's (42 light, 84 heavy, × 1.1; Easy × 2).
@@ -70,3 +70,31 @@ The pick of section 3 and the light of section 2, at rank 0. Approximations:
 Room 139, Mission 17 (`tools/tests/mission17_end.scene`): he rises, comes up out of Dante's shadow and lands his combo
 and Stinger, flies onto the crest Dante opens and shuts it, sinks away when lit; hits pass through him in the dark and
 land in the light. Not compared with the PS2 yet.
+
+## Region selector follow-up
+
+`3c4660` calls **3c47a0** for Doppelganger and Dante and stores the results at **+21fc / +2210**.
+The selector tests indices **6 down to 0** and returns the first containing disc; it returns **-1** if none
+contains the point. Index 6 uses **550**, all others **600**. Thus the earlier 550 value was real; assigning
+all remaining points to their nearest crest angle was the error.
+
+Centres come from **5b7950**, seven 16-byte vectors: X/Z are (2500,1485), (3364,1980), (3364,3020),
+(2500,3515), (1636,3020), (1636,1980), (2500,2500). These are inside the wall crests, not the crest positions.
+`3c4840` computes planar Euclidean distance, converts it to an integer and calls integer abs (`124ec0`),
+then the selector tests **<= radius**. Consequently distance 550.5 still classifies as middle; 551 does not.
+Centre wins overlaps; otherwise the higher peripheral index wins. There are small gaps and exterior areas
+with result -1. The exporter reads the centres into local `boss_doppel_regions.h` from the owner's ELF.
+
+The native light lookup **3c4bf0(-1)** reads the preceding byte **+2219**, not a negative array index:
+Think (`3becf0`) enables it; setup/rise entry, meteor takeoff, body blast and interrupt reactions clear it;
+rise/meteor landing enables it again. The port keeps this fallback explicitly alongside its existing state
+approximations, avoiding an out-of-bounds read and avoiding an invented angular sector in gaps.
+
+`python tools/tests/run_doppel_regions.py` checks all centres, inclusive/truncated boundaries, reverse overlap
+priority, gaps, the -1 fallback and damage in the initially lit eastern overlap (index 2 rather than 1).
+Trace lines now report actual boss/player regions instead of a placeholder -1.
+
+PPSSPP Mission17 room139: boss_doppel_regions_150.png / _330.png show the live fight; its trace
+reports middle6 then the native eastern overlap2. boss_doppel_region_gap_60.png has Dante at
+(3051,2500), with player_region=-1 in doppel_gap_log.txt. Local captures are in analysis/testroom;
+build/doppel traces and build log are in build/boss_decode.

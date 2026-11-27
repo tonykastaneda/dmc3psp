@@ -403,8 +403,8 @@ int demo_update(float dt, FollowCamera *camera) {
     c = &cams[f];
     camera->x = c->eye[0]; camera->y = c->eye[1]; camera->z = c->eye[2];
     camera->tx = c->target[0]; camera->ty = c->target[1]; camera->tz = c->target[2];
-    camera->fov = c->fov * (3.14159265f / 180.0f);   /* [inferred: vertical, as the port's] */
-    camera->roll = 0.0f;
+    camera->fov = c->fov * (3.14159265f / 180.0f);   /* channel 12, degrees; the projection takes it as vertical */
+    camera->roll = c->roll;   /* channel 13, already radians */
     return 1;
 }
 
@@ -739,11 +739,14 @@ static int demo_lights(const float c[3]) {
     return 1;
 }
 
-/* The demo's frame (demo.h): the cameras' fov taken over a 326-line frame of which the PSP's 272 show [estimate:
- * fitted to PCSX2 (widescreen, 16:9 as the PSP) in demo 59, where Dante's size then matches; the fov's own convention
- * isn't read]. The bars leave 0.712 of the screen's height (measured in PCSX2, demos 3, 5, 59).  */
+/* The demo's frame (demo.h). A cutscene's projection uses demo_screen_fov, the 326-line fit: subjects about a
+ * fifth larger than channel 12 raw (272 of a 326-line frame). That raw angle is what FUN_001ac750 builds (1/tan of
+ * half of it; the screen height cancels) and it frames wider than the PS2 stills, so the fit is a stand-in. Test
+ * line "rawfov 1" (demo_raw_fov) passes the raw angle. The bars leave 0.712 of the height (measured in PCSX2,
+ * demos 3, 5, 59). */
 #define DEMO_FRAME_H 326.0f
 #define DEMO_SHOWN 0.712f
+int demo_raw_fov;
 float demo_screen_fov(float fov) {
     return 2.0f * atanf(tanf(fov * 0.0087266f) * 272.0f / DEMO_FRAME_H) * 57.29578f;
 }

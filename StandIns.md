@@ -15,16 +15,19 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
   `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
-  [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
+  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
   (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
   read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
   matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
-- **Cutscene framing and colour** (`demo.c`): the cameras' fov over a 326-line frame [estimate: fitted to PCSX2 in
-  demo 59]; the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as colour scale and ambient [inferred
-  from values]. Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so backgrounds are sharper
-  and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
+- **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
+  colour scale and ambient [inferred from values]. The cutscene field of view is the 326-line fit (`demo_screen_fov`)
+  [stand-in]: channel 12's raw angle (`FUN_001ac750`, the screen height cancels) frames wider than the PS2 stills
+  (demo 5 frames 300 and 1260, demo 59 frame 700; `sky5_300.png`, `sky5_1260.png`, `sky59_700.png`) and the fit
+  matches them (`fit5_300.png`, `fit5_1260.png`, `fit59_700.png`). Test line `rawfov 1` passes the raw angle.
+  Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so
+  backgrounds are sharper and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near
+  plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
   and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
@@ -115,13 +118,13 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
 - **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
   the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
-- **Vergil**: gravity 1 [inferred]; effect 0x338 is a hit spark; his drop lands where Dante stands; his hit reaction
+- **Vergil**: effect 0x338 is a hit spark; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
-- **Geryon**: gallop laps 12 [approximation]; both bodies play motion n for action n [inferred]; the cart's missiles'
+- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
   path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
   runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
-- **Doppelganger**: the middle region within 550 [estimate]; which dark sixth he comes up in [inferred]; his coat
+- **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority); which dark sixth he comes up in [inferred]; his coat
   rigid (its cloth em031_01.clt isn't run); his sword's offset [inferred]; the crests' lighting is a glow.
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.
 - **Arkham**: one fight runs both rounds; Vergil joins the second as Dante's partner (Dante's input a frame late, as the

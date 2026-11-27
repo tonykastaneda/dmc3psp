@@ -51,14 +51,14 @@ def direct_table(chunk, part):
     return out
 
 
-def compile_scripts(chunk, caps):
+def compile_scripts(chunk, caps, table_end=None):
     """Every script of banks 0-3 as flat ops. Banks are the action ranges of FUN_004e0fc0: actions 0-1 are
     bank 0, 2-5 and 0x11-0x13 bank 1 (action - 2), 0x14 bank 2, 0x15 and up bank 3 (action - 0x15)."""
     u16 = lambda at: struct.unpack_from("<H", chunk, at)[0]
     i16 = lambda at: struct.unpack_from("<h", chunk, at)[0]
     banks = direct_table(chunk, u16(0))
     motion_groups = direct_table(chunk, u16(2))
-    ends = sorted(banks + [u16(2)])
+    ends = sorted(banks + [u16(2)] + ([table_end] if table_end is not None else []))
     ops, starts = [], []
     for bank, table in enumerate(banks):
         count = min(u16(table) // 2, (min(x for x in ends if x > table) - table) // 2)

@@ -4075,7 +4075,7 @@ static int ar_room = -1;
 void enemy_set_room(int room) { ar_room = room; }
 static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
 static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
-void enemy_ar_force(int state) { ar_force = state; }
+void enemy_ar_force(int state) { if(!vergil_boss_test_state(state)) ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
 

@@ -16,6 +16,7 @@
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "model_runtime.h"
 #include "boss_doppel_runtime.h"
+#include "boss_doppel_regions.h"
 
 /* CEm034 at AI rank 0. Frames and distances keep the original 60 Hz / centimetre units. Addresses are
  * SLUS_213.61's; see docs/DOPPELGANGER_SPEC.md. */
@@ -49,14 +50,14 @@ static const float crest_pos[6][2] = {
 #define CREST_R 160.0f
 #define CENTRE_X 2500.0f
 #define CENTRE_Z 2500.0f
-#define CENTRE_R 550.0f               /* [estimate] inside this the middle region (7th, lit only with all six) */
+#define CENTRE_R 550                  /* 3c47a0; peripheral areas use 600, tested 6 down to 0. */
 static const short opposite[6] = {3, 4, 5, 0, 1, 2};   /* DAT_005b7a30 */
 
 static struct {
     int active, dying, hidden, state, step, motion_slot, rank, lit[7], landed, landed_heavy, hit_done, flee_to;
     float pos[3], yaw, hp, timer, frame, floor_y, speed, landed_x, landed_z, landed_damage, stagger_cool, think_time;
     float dante[3], dante_yaw, previous_frame, fade;
-    int motion, previous_motion, tick;
+    int motion, previous_motion, tick, outside_lit;
     float target[3];
 } db;
 
@@ -84,14 +85,15 @@ static void turn_toward(float yaw, float rate) {
     float d = wrap_angle(yaw - db.yaw);
     db.yaw = wrap_angle(db.yaw + fmaxf(-rate, fminf(rate, d)));
 }
+static int region(float x,float z);
 static void trace(const char *event) {
     FILE *f;
     if (!trace_on) return;
     f = fopen(trace_path, "a");
     if (!f) return;
-    fprintf(f, "t=%d f=%d %s state=%#x step=%d motion=%d frame=%.1f hp=%.0f lit=%d%d%d%d%d%d%d region=%d hidden=%d pos=%.0f,%.0f,%.0f d=%.0f\n",
+    fprintf(f, "t=%d f=%d %s state=%#x step=%d motion=%d frame=%.1f hp=%.0f lit=%d%d%d%d%d%d%d region=%d player_region=%d hidden=%d pos=%.0f,%.0f,%.0f d=%.0f\n",
             db.tick, testroom_frame, event, db.state, db.step, db.motion_slot, db.frame, db.hp, db.lit[0], db.lit[1], db.lit[2],
-            db.lit[3], db.lit[4], db.lit[5], db.lit[6], -1, db.hidden, db.pos[0], db.pos[1], db.pos[2], dist2(db.pos, db.dante));
+            db.lit[3], db.lit[4], db.lit[5], db.lit[6], region(db.pos[0],db.pos[2]), region(db.dante[0],db.dante[2]), db.hidden, db.pos[0], db.pos[1], db.pos[2], dist2(db.pos, db.dante));
     fclose(f);
 }
 void doppelganger_boss_trace(const char *path) {
@@ -102,24 +104,23 @@ void doppelganger_boss_trace(const char *path) {
 static void set_state(int state);
 
 /* ---- Light ---------------------------------------------------------------------------------------------- */
-/* Which sixth of the arena a point is in (the crest it's nearest by angle round the centre), or 6, the middle. */
+/* 3c47a0: first containing disc in reverse table order; 3c4840 truncates planar distance to int. */
 static int region(float x, float z) {
-    float dx = x - CENTRE_X, dz = z - CENTRE_Z, best = 1e9f;
-    int i, r = 6;
-    if (dx * dx + dz * dz < CENTRE_R * CENTRE_R) return 6;
-    for (i = 0; i < 6; ++i) {
-        float cx = crest_pos[i][0] - CENTRE_X, cz = crest_pos[i][1] - CENTRE_Z;
-        float d = fabsf(wrap_angle(atan2f(dx, dz) - atan2f(cx, cz)));
-        if (d < best) { best = d; r = i; }
+    int i;
+    for (i=6;i>=0;--i) {
+        float dx=x-doppel_regions[i][0],dz=z-doppel_regions[i][1];
+        if ((int)sqrtf(dx*dx+dz*dz)<=(i==6?CENTRE_R:600)) return i;
     }
-    return r;
+    return -1;
 }
+/* Native 3c4bf0(-1) reads +2219, the state-controlled flag before the seven area flags. */
+static int region_lit(int r) { return r==-1?db.outside_lit:r>=0 && r<7 && db.lit[r]; }
 static void update_middle(void) {
     int i, all = 1;
     for (i = 0; i < 6; ++i) all &= db.lit[i];
     db.lit[6] = all;
 }
-static int in_light(void) { return db.lit[region(db.pos[0], db.pos[2])]; }
+static int in_light(void) { return region_lit(region(db.pos[0], db.pos[2])); }
 
 void doppelganger_boss_strike(float x, float y, float z, float yaw, float reach) {
     int i;
@@ -137,7 +138,7 @@ void doppelganger_boss_strike(float x, float y, float z, float yaw, float reach)
         trace("crest open");
         /* Caught in it, he's stunned (the walkthrough; states 0x23/0x24 follow the light) [the stun's form is the
          * port's: a reeling motion, hittable] */
-        if (!db.hidden && db.lit[region(db.pos[0], db.pos[2])] && db.state != S_STAGGER) set_state(S_STAGGER);
+        if (!db.hidden && in_light() && db.state != S_STAGGER) set_state(S_STAGGER);
     }
 }
 static void put_out(int crest) {
@@ -166,6 +167,9 @@ static int motion_done(void) {
 static int loops(int slot) { return slot <= 2; }   /* 0:0-0:2: idle, walk, run */
 static void set_state(int state) {
     db.state = state;
+    /* +2219: Think enables the outside-area fallback; takeoff, blast and reactions clear it. */
+    if(state==S_THINK)db.outside_lit=1;
+    else if(state==S_START || state==S_METEOR || state==S_ALL_LIT || state==S_BLAST || state==S_STAGGER)db.outside_lit=0;
     db.step = 0;
     db.timer = 0.0f;
     db.hit_done = 0;
@@ -218,8 +222,8 @@ static void think(void) {
     float d = dist2(db.pos, db.dante);
     int mine = region(db.pos[0], db.pos[2]), his = region(db.dante[0], db.dante[2]), i;
     if (db.lit[6]) { set_state(S_ALL_LIT); return; }
-    if (db.lit[mine] && db.stagger_cool <= 0.0f) { set_state(S_SINK); db.flee_to = dark_region_near(db.pos[0], db.pos[2]); return; }
-    if (!db.lit[his] && d > 700.0f) { set_state(S_EMERGE); return; }
+    if (region_lit(mine) && db.stagger_cool <= 0.0f) { set_state(S_SINK); db.flee_to = dark_region_near(db.pos[0], db.pos[2]); return; }
+    if (!region_lit(his) && d > 700.0f) { set_state(S_EMERGE); return; }
     for (i = 0; i < 6; ++i) if (db.lit[i] && !db.lit[opposite[i]] && unit_random() < 0.35f) {
         db.flee_to = i;
         set_state(S_METEOR);
@@ -313,7 +317,7 @@ static void ai_step(float f) {
             float t = fminf(1.0f, db.frame / 40.0f), dd = dist2(db.pos, db.target);
             if (dd > 20.0f) move_forward(fminf(dd, 35.0f * f) / f, f);
             db.pos[1] = db.floor_y + sinf(t * PI) * 300.0f;
-            if (db.frame >= 40.0f) { db.pos[1] = db.floor_y; put_out(db.flee_to); db.step = 2; play(10); }
+            if (db.frame >= 40.0f) { db.pos[1] = db.floor_y; put_out(db.flee_to); db.outside_lit=1; db.step = 2; play(10); }
         }
         if (db.step == 2 && motion_done()) set_state(S_THINK);
         break;

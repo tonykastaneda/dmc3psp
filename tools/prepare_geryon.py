@@ -18,6 +18,7 @@ from mot_ps2 import parse_mot
 from prepare_skinned_model import (array_lines, build_mesh, decode_textures, indexed_texture, pac_list,
                                    pnst_entries, vec)
 from decimate import slim_mesh
+from prepare_vergil import compile_scripts, OP_PLAY, OP_WAIT, OP_EVENT, OP_GOTO
 
 SLOT = 134
 PARTS = (("horse", 9), ("cart", 13), ("missile", 3), ("sphere", 5), ("small", 7))
@@ -101,6 +102,39 @@ def write_motions(pack, output):
     return manifest
 
 
+def write_gallop_windows(pack, output):
+    """Mode-0 horse scripts 10/11: count window(0,0), not MOT wraps."""
+    ops, starts = compile_scripts(pack[12], [], table_end=len(pack[12]))
+    motions = pac_list(pack[11])
+    rows = []
+    for action in (16, 17):
+        begin, end = starts[0][action:action+2]
+        intervals = []
+        motion = start = stop = None
+        plays = []
+        for pc, (op, a, b, c) in enumerate(ops[begin:end], begin):
+            if op == OP_PLAY:
+                motion = a
+                plays.append(pc)
+                start = parse_mot(motions[a])["loop_start"] if b < 0 else b
+            elif op == OP_WAIT:
+                if a or b < 0: raise ValueError("Gallop window requires a frame wait")
+                stop = b
+            elif op == OP_EVENT:
+                if (a, b) != (0, 1): raise ValueError("Unexpected gallop event")
+                if motion != action or stop <= start: raise ValueError("Invalid gallop clip")
+                intervals.append(float(stop-start))
+            elif op == OP_GOTO:
+                if len(plays)!=2 or b!=plays[1]: raise ValueError("Gallop must repeat its second clip")
+        if len(intervals) != 2: raise ValueError("Expected two windows in each gallop program")
+        rows.append(intervals)
+    text = "/* Horse [12] scripts 10/11: window(0,0)=1 after each clip wait. Local disc data. */\n#pragma once\n"
+    text += "static const float geryon_gallop_windows[2][2] = {" + ",".join(
+        "{"+",".join(f"{n:.6f}f" for n in row)+"}" for row in rows)+"};\n"
+    (output / "boss_geryon_windows.h").write_text(text, encoding="ascii")
+    return rows
+
+
 def generate(iso_path, output):
     output.mkdir(parents=True, exist_ok=True)
     with Iso9660(iso_path) as iso:
@@ -110,8 +144,9 @@ def generate(iso_path, output):
     pack = pnst_entries(data)
     parts = write_models(pack, output)
     motions = write_motions(pack, output)
+    windows = write_gallop_windows(pack, output)
     (output / "boss_geryon_manifest.json").write_text(json.dumps(
-        {"slot": SLOT, "pack_sha256": hashlib.sha256(data).hexdigest(), "parts": parts, "motions": motions},
+        {"slot": SLOT, "pack_sha256": hashlib.sha256(data).hexdigest(), "parts": parts, "motions": motions, "gallop_windows": windows},
         indent=2) + "\n", encoding="utf-8")
     print(f"Geryon: {len(parts)} parts, {len(motions)} motions -> {output}")
 

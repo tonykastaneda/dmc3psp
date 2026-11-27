@@ -60,9 +60,9 @@ fix above wasn't the cause. Two things were:
   4 and the like). `prepare_skinned_model.build_mesh` keeps the byte (`mode`), `prepare_demo` packs it in an object's
   texture word (bits 16-19) and `demo.c` blends by it, without writing depth.
 
-Still different from the PS2 there (not textures): the PS2 frames cm027 tighter (brow to lip; the port shows crown
-to lip), so the cameras' fov is likely not vertical as the port takes it. The darker, warmer light and the faint veins
-came with the Light track (below).
+The live camera's channel 12 is a vertical field of view (`FUN_001ac750` builds the projection with
+m11 = 1/tan of half that angle) and channel 13 is roll in radians. cm027's tighter crop is the pre-rendered movie
+(below), not a different fov. The darker, warmer light and the faint veins came with the Light track (below).
 
 **The Light track** was the shared cause of the lighting differences (Arkham's face lit darker and warmer on the PS2,
 the ending's Dante under blue moonlight). The port lit demos with the room's fixed key / fill (ambient 0x90), so
@@ -136,23 +136,34 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   the palette fix); FASTOCTREE had posterised the smooth sky into blotches. Every room's and demo's stage is rebaked.
 - **Letterbox.** The PS2 draws demos with cinema bars, 0.712 of the height showing (measured in PCSX2 in demos 3, 5
   and 59): `demo_letterbox`, 39 lines top and bottom.
-- **Framing.** PCSX2 runs with widescreen patches (16:9 like the PSP). Taken as a vertical fov over the PSP's 272
-  lines, the port framed wider than the PS2; over a 326-line frame Dante's size matches in demo 59
-  (`demo_screen_fov`) [estimate: fitted; the fov's own convention isn't read].
+- **Framing.** Channel 12 is the vertical angle (`FUN_001ac750`: the Y scale is 1/tan of half that angle, and the
+  screen-height halfword is in the focal length and again in the Y divisor, so the height cancels). Drawn raw across
+  the PSP's 272 lines that angle frames wider than the PS2 stills, so a cutscene uses the 326-line fit
+  (`demo_screen_fov`, `2*atan(tan(fov/2)*272/326)`) [stand-in, fitted to the PCSX2 stills]. The picture stays the
+  full 16:9 width, so a demo shows more to either side than a 4:3 television and there are no side bars. Test line
+  `rawfov 1` passes channel 12 raw. Evidence, against the PS2 halves of `demo5_sky_compare.png`, `demo3_compare.png`
+  and `demo59_compare.png`: raw demo 5 frame 1260 (`sky5_1260.png`) brings the hooded figure fully in, where the
+  still holds it at the right edge, and `fit5_1260.png` matches the still; raw frame 300 (`sky5_300.png`) shows a
+  figure at the right edge the still crops, and `fit5_300.png` matches; raw demo 59 frame 700 (`sky59_700.png`) has
+  Dante smaller, and `fit59_700.png` matches. With the fit active, `fov5_1260.png` matches `fit5_1260.png` and
+  `fov59_700.png` matches `fit59_700.png`. Demos 3, 5, 6, 16, 44 and 53 were checked at wide frames; the extra
+  width is more of the same stage, so none is cropped back to 4:3.
 - **The characters' colour.** The Program track's No 5 (a colour scale, 128 = 1.0: demo 1 210 200 180, demo 47 15 20
   25) and No 6 (their ambient: 30 20 20 in demos 1-5) [inferred from their values] scale the demo's lights and set
   the ambient (`demo_program_colour`), replacing the by-eye 0x30 ambient where a demo sets them. Arkham's face in demo
   5 is now warm like the PS2's. The world's ValidType 3 lights stay off characters: tried, they darkened him.
 - Not ported: the ScrEfc screen effects (FCS / DOF depth-of-field blur, GFG fog, SGA glow, BGA / BGO, ATF): a
   full-screen blur pass is too costly for the PSP in a demo, so the PS2's soft backgrounds and haze aren't there;
-  demo 3's over-the-shoulder shot (frame 1260) shows holes in Dante's shoulder (the PSP drops triangles crossing its
-  near plane, here 50 cm; a nearer plane put the eye inside his collar).
+  demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
 
 **Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm
 in front of Dante's chest while it looks at enemies metres away. With the near plane at a third of the eye-to-target
 distance capped at 50 cm, his whole front was cut away and the port showed the inside of his back through the
 gaps (the "holes"). The PS2 shows his chest and mouth there (`analysis/testroom/near_plane_demo3.png`). The cap is now
 25 cm (`main.c` render_scene); wide shots show no depth fighting (demo 5) and frame times are unchanged.
+Frame 360 of the same demo is the same gap seen from behind: the PS2 shows Dante's back and coat, the 50 cm shots
+(`fr3_360.png`, and cl2's `fin3_360.png` which used the 326-line fit) show the street through where he stands, and
+the 25 cm cap draws a dark surface across the right of the frame (`n3_360_360.png`).
 - At 25 cm a dark slab with a light edge (likely Rebellion, `wp100`) sits in front of the eye on the right of that
   frame; the PS2 shows the street there. At 40 cm the slab goes but his chest is cut again, so the PS2's near plane
   alone doesn't explain it: the weapon's place in that cut is still to check.
@@ -165,8 +176,8 @@ gaps (the "holes"). The PS2 shows his chest and mouth there (`analysis/testroom/
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
 Arkham's blob (demo 53) were looked at in the port only (no save state reaches those demos): their textures and
-faces read right. Still different, not textures: the cameras' framing (fov), the stages' light (the PS2's ending street
-is bluer), and a black slab across demo 53's frame 2300 (its stage).
+faces read right. Still different, not textures: the stages' light (the PS2's ending street
+is bluer).
 
 **The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
 FIX 0x80, Cd − Cs; 5-15 are on no character); bits 4 and 5 (0x10 / 0x20, values 16-19 and 48, nearly all on EFM
@@ -297,7 +308,9 @@ pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone
 at (frame - SetFrame) / ClipScale + SkipFrame from its start, MOT's Hermite with per-frame slopes, a key with bit 15
 clear linear to the next) and DSTG_nnn.BIN (slot 00's `.scm` and texture set through `tools/prepare_stage.py --scm --ptx`,
 its play area the cameras' reach). `psp/testroom/demo.c` plays it at 60 frames a second: the stage and the camera
-(field of view as the port's vertical one [inferred]). Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
+(channel 12 as a vertical field of view, then the 326-line fit `demo_screen_fov` [stand-in]; channel 13 as roll).
+The picture is the full 16:9 width, with the cinema bars above and below; test line `rawfov 1` passes channel 12
+raw. Gameplay uses the same wider frame. Room 421 texture 6, the crack page that drew as a black plate across demo 53's frame 2300, is added, so the plate no longer replaces the stone. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
 arena through its cuts. **The cast**: each model slot's MOD (slimmed as the enemies'), its texture set (8-bit, swizzled), its motion clips
 (MOT, streamed: the BIN keeps all but the motions resident, 1.5 MB for demo 5, and reads a clip's MOT 20 frames before
 it starts, freeing it after). Two things the demos showed: **a cutscene MOT stores a bone's translation records first**,
