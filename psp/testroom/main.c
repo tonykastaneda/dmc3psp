@@ -1954,6 +1954,10 @@ static const ArmFx arm_fx[] = {
     {"23:17", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
     {"23:11", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
     {"23:11", 0, NFX_STATIC, BONE_HIPS, 1, 0x295},
+    /* Air Trick (state 0x18, FUN_00226550) as it starts: V0x26a through FUN_002086e0 (the default costume's; +0x28b1
+     * picks V0x26b / 0x8f / 0x215 for others). */
+    {"23:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x26a},
+    {"23:16", 0, NFX_STATIC, BONE_HIPS, 1, 0x26a},
     /* Stinger's dash (actions 7/8, FUN_00264fe0, id 0xb): G0x5f, V0x29, V0x7b, as Beowulf's 7:31. High Time (action
      * 10, FUN_002656a0, id 0xc): V0xa1 + V0xf3; action 11's 3:13 (FUN_00265950, id 0xd): V0xb0 + V0xf5. */
     {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
@@ -2127,21 +2131,6 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
     was_on_ground = p->on_ground;
     last_vy = p->vy;
     (void)was_on_ground; (void)last_vy;
-    {
-        /* Fast Trickster moves leave a streak behind him. */
-        static float last_chest[3];
-        float chest[3] = {p->x, p->y + 100.0f, p->z};
-        float dx = chest[0] - last_chest[0], dy = chest[1] - last_chest[1], dz = chest[2] - last_chest[2];
-        float step = dx * dx + dy * dy + dz * dz;
-        switch (c->move) {
-        /* The dash and Sky Star play the game's V0xc0 (arm_fx); Air Trick's isn't found yet. */
-        case MOVE_TR_AIR_TRICK: case MOVE_TR_AIR_TRICK_AIR:
-            if (step > 15.0f * 15.0f && step < 300.0f * 300.0f) fx_streak(last_chest, chest);
-            break;
-        default: break;
-        }
-        memcpy(last_chest, chest, sizeof(chest));
-    }
 
     /* The blade's sweep (docs/NATIVE_FX.md "Blade trails"): the game's weapon trail (FUN_00309030), fed while the attack
      * window is open (FUN_0030bce0). The shared weapon object (FUN_002953c0 / 002954b0) has type 0: model M34 (Dante's
