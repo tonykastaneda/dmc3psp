@@ -84,6 +84,9 @@ typedef struct {
     unsigned char gates[COMBAT_GATES]; /* 0 closed, 1 buffer, 2 open */
     int pending;           /* action buffered while its gate was 1 */
     int active;            /* attack-active window (window 0 byte 1 bit 0x80) */
+    float rg_gauge;        /* Royalguard's gauge (player+0x3c88): blocked damage, up to 9000 (level 2) */
+    float rg_invuln;       /* frames left that blows are ignored after a just block (+0x2af0) */
+    int rg_release_level;  /* the gauge's level (+0x3c86, 0-3) the last Release started with */
     float guard_frames;    /* frames since the guard began (player+0x3c8c) */
     int guard_type;        /* the last blow's guard result (player+0x3c80, FUN_004416f0): 0/1 block, 2 break, 3/4 the
                             * timed blocks, 5 (not reached), 6 not blocked */
