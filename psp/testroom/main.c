@@ -1998,16 +1998,16 @@ static const ArmFx arm_fx[] = {
     /* Artemis action 154 (FUN_0026ebf0, id 0x53): V0x2f4 2 frames into 20:2, on the gun (FUN_002e1d90: weapon 7's
      * frame; the port's guns are in the left hand). */
     {"20:2", 2, NFX_GUN_ARTEMIS, BONE_L_HAND, 1, 0x2f4},
-    /* Royalguard's Release (actions 190-197, FUN_0027d9f0 / 0027e130, id 0xf): V0x29 (the default costume's) as it
-     * starts; V0x2a6 too when +0x3c86 is set [not told apart]. */
-    {"24:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:40", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:46", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:18", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:20", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:52", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
-    {"24:58", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    /* Royalguard's Release (actions 190-197, FUN_0027d9f0 / 0027e130, id 0xf): V0x29 (the default costume's) as the
+     * action starts, whichever motion it opens on; V0x2a6 too when +0x3c86 is set [not told apart]. */
+    {"#190", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#191", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#192", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#193", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#194", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#195", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#196", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#197", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
     {"17:2", 6, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xa1},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xf3},
@@ -2025,7 +2025,8 @@ static const ArmFx arm_fx[] = {
     {"15:7", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x286},
     {"6:16", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b7},     /* actions 84/85 (FUN_00276150, id 0x36) */
     {"6:17", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b8},     /* its 6:17 (id 0x37) */
-    {"6:19", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},     /* actions 86/87 (FUN_00276640, id 0x35) */
+    {"6:19", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},     /* actions 86/87 (FUN_00276640, id 0x35): 87's 6:19, 86's 6:35 */
+    {"6:35", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},
     {"6:11", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 83 (FUN_00275410): V0x90 and id 0x55 on the root */
     {"6:11", 0, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x234 | 0x8000},
     {"15:8", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* A&R action 71 (FUN_002746d0): V0x90 and id 0x54 */
@@ -2037,11 +2038,20 @@ static const ArmFx arm_fx[] = {
     {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
     {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
     {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
-    {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},   /* action 93 on its flag 2 (FUN_00277550, id 0x10) */
+    {"16:5", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 93 (FUN_00277550): V0x90 as it starts, V0x38e on */
+    {"16:5", -2, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* flag 1, id 0x10 (G0x179 on the root) on flag 2 */
+    {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},
     {"16:9", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x260},     /* action 94 (FUN_00277730, id 0x3a) */
     {"6:26", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x187},     /* action 95 (FUN_00277d70, id 0x31) */
-    {"7:48", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},   /* action 113 (FUN_0027a1f0, id 0x33) */
-    {"7:52", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},   /* actions 117/118 (FUN_0027af70, id 0x2f) */
+    /* action 113 (FUN_0027a1f0, id 0x33): 76 frames into 7:7 uncharged, else as the release after 7:27 starts (7:7 /
+     * 7:47 / 7:48); actions 117/118 (FUN_0027af70, id 0x2f): 23 frames into 7:14, else as the release after 7:29 starts
+     * (7:14 / 7:51 / 7:52). */
+    {"7:7", 76, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:47", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:48", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:14", 23, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
+    {"7:51", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
+    {"7:52", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
     {"7:15", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x29a},   /* action 119 (FUN_0027b6c0, id 0x30) */
     {"17:0", 0, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x18a}, /* action 123 (FUN_0027c740, id 0x32, +0x13b4: bone 13) */
     {"17:4", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 126 (FUN_0027d280): V0x90, then id 0x39 */
@@ -2080,7 +2090,7 @@ static int update_devil_fx(const Player *p) {   /* after the pose, before update
 #define ARM_FOLLOW 12
 static char arm_fx_log[256];   /* tests: "script:id frame" of each started, in FOCUS_DONE.TXT */
 static void update_arm_fx(const Combat *c, const Player *p) {
-    static int last_script = -1, last_bits, last_move = -1;
+    static int last_script = -1, last_bits, last_move = -1, last_action;
     static float last_frame, since;
     static struct { int handle, at; } follow[ARM_FOLLOW];
     const char *key = combat_script_key(c->script);
@@ -2089,11 +2099,14 @@ static void update_arm_fx(const Combat *c, const Player *p) {
     if (restarted) { since = 0.0f; last_bits = 0; prev = -1.0f; }
     else since += c->frame - last_frame;
     rise = (c->window_bits | (c->active ? 0x80 : 0)) & ~last_bits;
-    for (i = 0; c->script >= 0 && i < (int)(sizeof(arm_fx) / sizeof(arm_fx[0])); ++i) {
+    for (i = 0; c->script >= 0 && i < (int)(sizeof(arm_fx) / sizeof(arm_fx[0])); ++i) {   /* "#n" entries too */
         const ArmFx *a = &arm_fx[i];
         int go;
-        if (strcmp(a->script, key) != 0) continue;
-        go = a->when > 0 ? prev < a->when && since >= a->when
+        if (a->script[0] == '#') {   /* "#n": as action n starts, whatever its motion */
+            if (atoi(a->script + 1) != c->action || c->action == last_action) continue;
+            go = 1;
+        } else if (strcmp(a->script, key) != 0) continue;
+        else go = a->when > 0 ? prev < a->when && since >= a->when
            : a->when == 0 ? c->script != last_script || c->move != last_move   /* not a held move's loop */
            : a->when == -2 ? c->flag == 1
            : a->when == -3 ? c->flag == 2
@@ -2117,6 +2130,7 @@ static void update_arm_fx(const Combat *c, const Player *p) {
         } else follow[i].handle = 0;
     last_script = c->script;
     last_move = c->move;
+    last_action = c->action;
     last_frame = c->frame;
     last_bits = c->window_bits | (c->active ? 0x80 : 0);
 }
