@@ -20,6 +20,12 @@ The layouts are those already used for em008: scale curves at `+0x88/+0x8e/+0xa8
 
 Inferred, not decoded:
 
+- (Decoded since) A model element whose texture chunk is the 16-byte `"1"` (0x31) reference is dropped by the game
+  (`FUN_001f1760`) unless its spawner hands it a texture (+0x7a2 / +0x79c: Cerberus's shells do); the port's twin /
+  M54 fallback below covers those spawner-given cases. And an element with **+0x211** set takes its textures from
+  model **+0x212** (its geometry stays +0x28's): 54 of the shared pack's model elements do, the Devil Trigger's rune
+  lattice among them. `native_fx.py` / `prepare_demo.py` export that model, `nfx.c` draw_model binds its texture.
+
 - E kind 5 records with `+0x1d` or `+0x56` set are drawn additively (glows); the others alpha-blended.
 - An effect model whose texture chunk is the 16-byte reference takes the textures of a twin model with the same
   vertices (M43 is M15). Failing that, it takes the icicle model M54's ice texture.
@@ -172,7 +178,8 @@ Common to every class (offsets in the block):
 | +0x6c | Colour keys: four of 0x14 bytes (s16 frames, then four RGBA corners, 0x80 = 1.0); +0xbc on, +0xbd loop, +0xbe how many colours (`DAT_00590010`: 1, 2 or 4) |
 
 Colour (`FUN_001f8ce0` / `FUN_001f8e40`): from key i towards key (i + 1) & 3 over key i's frames, for i = 0, 1, 2; then
-done, or again with the loop flag. One colour fills every corner; two put the second on corners 1 and 2.
+done, or again with the loop flag. One colour fills every corner; two put the second on corners 1 and 2. The
+colour is applied as a burst starts (the game ticks it before the first draw), so key 0's unused corners never show.
 
 Sprites (class 3):
 
@@ -230,7 +237,7 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | `00462f90` Mission 19's mirrors (CStageSetMirror) | V0x1ea (P113) | each mirror as it shatters | yes (`mission19.c`, nfx bank 11, GDATA 758); the lit glow E0x2e0 is a model with an undecoded 1-byte texture reference: stand-in kept |
 | `004203a0` / `004203c0` a struck crystal (CStageSetCrystal) | V0x1c (P78), V4 (P24) for type 2, V554 (P160, 345, 346) for type 3 | at it | yes (`nfx_crystal_break`: Mission 13's 233, Secret Mission 10; V554 from GDATA 526 as bank 12) |
 | `00493590` the Nausika's blows (CStageSetNausika) | V0x22c / V0x22b (P257, 258 / P259) | where a blow lands | yes (`nausika.c`, GDATA 694 as bank 13; light / heavy by the hit record's +2 [inferred]) |
-| `00492630` the Nausika | V0x352 (P443) | looping on a bone | no (its bone and scale undecoded) |
+| `00492630` the Nausika | V0x352 (G512: P443 every 8 frames) | looping on a bone | yes (bone taken 150 up at its middle) |
 | `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` the Arachne's landings (states 0x23, 0x32, 0x28, 0x2b) | 44 | dust at its six legs' bones (+0x104 matrices); 0x32's events 1 / 2 one at its body | yes (any landing, legs 110 cm out round it) |
 | `00264b90` | 44 | (Dante's code range; not traced) | no |
 
@@ -242,7 +249,6 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | The Damned Bishop's fireball (CEm017Shl00, `00513430`) | V0x210 (P245, 309) | the Bishop's spell isn't decoded (`bishop.c` stands in) |
 | CEm022Shl00 (`0043ea30`) | V0x36c (P349) | its owner isn't identified yet |
 | The Soul Eater's state 0x11 (`00433e00`) | V0x1d8 (P306, 466) | that state isn't ported |
-| The Nausika's aura (`00492630`) | V0x352 (P443) | its bone and scale undecoded |
 | Agni & Rudra's states 36, 55 (`003a5ee0`, `003a8c60`), `003a94c0`, `003aa960` | P44, V0x30f / V0x2e5 / V0x2f6 | their landings and steps aren't located in the port's scripts |
 | Nevan's swarm bats as she's struck (`003c8ab0`) | V0x386 (P339) | the swarm's break on her hit isn't ported |
 | Dante's own moves and shells (`002d...`, `002fbf20`, CPl000Shl10 ...) | many | the moveset's owners' code |
@@ -279,3 +285,52 @@ the port's demo 123 (`analysis/testroom/demo123b.mp4`), side by side in `analysi
 missile shots, the muzzle flash, the missiles' smoke trails and bursts and the burning demons match in place, size and
 colour. The one difference found, the demons' fire (G79 → E275) going out after a second where the PS2's burns on, was
 the no-end generator rule above, now fixed.
+
+## Blade trails
+
+The game's weapon trails are their own class (vtable 0x605e20, 0x6c0 bytes; `FUN_00309030(type, frame)` makes one,
+`FUN_0030bce0` feeds it a frame while the attack window is open, `FUN_00309d30` updates it, `FUN_0030a530` /
+`FUN_0030ad70` draw). Its type indexes a table of 0xb0-byte entries at 0x5ad4b0 (0x5ace80 under a flag at 0x1d0cd1f):
+- +0 kind: 0 / 1 a strip of points (two a sample: entry +0x30 and +0x40 in the frame, a 0x4340-byte buffer), 2 / 3 a
+  model (entry +0x74, from the effect model bank) bent through the frame's last 11 matrices (a 0x2c0 ring); 3 also takes
+  the blend +0x70 / +0x71 and +0x98 / +0x9c.
+- +4 the sampling interval, +8 / +9 / +10 alpha up to, step and floor, +0xc frames without a sample before it fades,
+  +0x10 colour.
+Dante's: the shared weapon object (`FUN_002953c0`, fed by `FUN_002954b0` while player +0x24ed is set) makes type 0, kind 3,
+model **M34** of his pack (a 34-segment strip 127 cm long whose texture's left part is a soft white streak); Agni &
+Rudra's object (`FUN_00296ae0`) types 1 / 2, kind 2, **M30** (fire, on Agni, while +0x24ed & 0x80) and **M31** (wind, on
+Rudra, while & 0x40) of A&R's pack. The port (`fx.c` trails, `main.c`) draws a strip over the frame's path, 127 cm out
+from the weapon's grip, textured with those models' textures (`native_fx.py` exports them as 10034 / 10030 / 10031) over
+the rectangle the models map, added, fading over 0.14 s. Not ported: the models' own bending through the 11 matrices
+(their bone weights), and which other weapon classes make type 0 (the port draws it for Rebellion and Nevan, as before).
+
+## Dante's effects
+
+| Effect | Where | Port |
+| --- | --- | --- |
+| E&I V0x22, Shotgun V0x23, Spiral V0x228, Kalina Ann V0x21b | the muzzle flash, by shot kind (`FUN_002fbf20`; tables `0x5aa630` / `0x5aa680`: ±31 cm on the gun bone, turned down the barrel) | `bullets.c`, nfx banks 14-18 (GDATA 102-106) |
+| Artemis V0xd3 | riding its shot (CPl000Shl10, `FUN_005232b0`) | yes |
+| V0xa (V0x32 charged) | where a bullet lands (`002efaa0`) | E&I and Shotgun |
+| Kalina Ann V0x21f | its rocket's burst [inferred] | yes |
+| V6 (guard types 0-2), V0x265 / 0x264 / 0x267 | a Royalguard block (`FUN_00224db0`), near the attacker | V6 only, 50 cm toward the blow |
+| V0x83 | Air Hike, at his feet, tinted the weapon's colour (`FUN_00222700`, `FUN_002fd1c0`) | yes |
+| V0x14d (P247, 248) | Enemy Step (`FUN_00228950`) | yes |
+| V0x8e (Dante's pack, P18), P44 (V0xf2 on floor material 0xb) | Helm Breaker's landing (`FUN_00264b90`) | yes, nfx bank 20 (GDATA 97) |
+| V0x90 | kicks off a wall / an enemy (E235 is in the port already); the start of Cerberus's 14:3 (action 45, `FUN_00272210`) and Beowulf's 7:10 charge (action 115, `FUN_0027abf0`), on the weapon | the two charges; the kick: E235 alone |
+| Cerberus V0x252 | 40 frames into 14:4 (action 45), on the weapon | nfx bank 21 (GDATA 98) |
+| Agni & Rudra V0x288, V0x285 | the start of 5:25 (action 57, `FUN_00272c70`) and of 5:23 (actions 58-60, `FUN_00273150`), on Rudra | nfx bank 22 (GDATA 99) |
+| Agni & Rudra V0x37e / V0x37d; G0x1cc / V0x302 | as each blade's attack window opens (+0x24ed 0x80 Agni, 0x40 Rudra; the weapon, `FUN_00296ae0`): in action 56 (5:9); in actions 64 (5:30 / 5:26 / 5:11) and 71 (15:8-10) | yes |
+| Nevan V0x38e, V0x2c1 | as window 0 byte 0 bit 0 turns on (+0x24d1): action 81/82's finishers 6:33 / 6:9 / 6:10 (V0x38e) and its 6:14 / 6:40 swing (V0x2c1) (`FUN_00274c70`), action 88's 6:34 (`FUN_00276ac0`); action 92's 16:4 on its flag 1 (`FUN_00277350`) | nfx bank 23 (GDATA 100) |
+| Beowulf V0x382 | 17 frames into 7:11 (action 115), where his hips are then (not following them) | nfx bank 24 (GDATA 101) |
+| (where they hang) | the player's +0x1380[n] is his model's bone list (24 a form, the model's +0xb0 call in `FUN_0024fb90`; `FUN_002e2070` / `FUN_002e20c0` add the form's 0 / 24 / 48), +0x104 its matrix: +0x1380 the root, +0x1384 the hips, +0x1388 spine 0, +0x13b8 the pelvis. So V0x90, V0x288 / 0x285 and V0x382 hang on his hips, Cerberus's V0x252 on the root, Nevan's on spine 0. The A&R ones are the weapon object's own +0x108 / +0x104 frames | `update_arm_fx` in `main.c`: the bones; for A&R the weapon placement's origin; turned by Dante's yaw only |
+| Devil Trigger V0xdc, E0x140, V0x3c (bank 0) | as it starts (`FUN_00244b20` -> `FUN_002298f0(1)` -> CEfcPub 0x20 + weapon): V0xdc, the red rune lattice, on his hips tinted the weapon's colour (`FUN_002fd1c0`); while it lasts E0x140 (tinted) and V0x3c looping there. A weapon change in it (`FUN_0021f500`: 4 then 3) ends those and starts them again in the new colour (CEfcPub 0x42 + weapon) without V0xdc; its end (2) ends them | `update_devil_fx`; the port's glow only if they can't start. The PS2 also shows a lattice burst as it ends whose source isn't found |
+| Million Stab V0x90 | its start (action 14, `FUN_00266220`), on his hips | yes |
+| (CEfcPub) | `FUN_002fbec0(id, frame, player)`: ids 0-9, 0x27, 0x28, 0x40, 0x41 are the gun flashes (`FUN_002fbf20`); the others make a CEfcPub object (`FUN_00331f90`, 0xb0 bytes, vtable 0x606cf0: id +0xa0, frame +0x80, owner +0x90) whose first update (`FUN_00332240`) is a 110-case switch on the id starting V / G / E effects (the Devil Trigger's, the Devil Arms' charges, ...); 71 callers in Dante's handlers | the Devil Trigger's and the ones below |
+| Trickster's dash (id 0x1c), Sky Star (0x2e) | V0xc0 on his hips as the dash's 23:x starts (state 0x16, `FUN_00225c90`); Sky Star (state 0x17, `FUN_002261b0`) V0xc0 and V0x295. The +0x28b1 costume picks V0x160 / V0x3b9 / V0x3ba for others | yes; the port's streak and seal are gone |
+| Air Trick V0x26a | as 23:15 / 23:16 start (state 0x18, `FUN_00226550`, through `FUN_002086e0`; +0x28b1 picks V0x26b / 0x8f / 0x215 for other costumes) | yes, the port's streak gone |
+| Stinger (0xb), High Time (0xc), action 11 (0xd) | Stinger's dash 3:15 (`FUN_00264fe0`): G0x5f, V0x29, V0x7b (CEfcPub 0xb's case, as Beowulf's 7:31); High Time 3:11 (`FUN_002656a0`): V0xa1 + V0xf3; 3:13 (`FUN_00265950`): V0xb0 + V0xf5 | yes; 3:13 not seen (the port's action 11 didn't start from the ground in the test) |
+| Dance Macabre (0x25), the Shotgun (0x3e, 0x1b), Beowulf 124 / 125 (0x12) | 13:17 and 19:3 start the dash set (G0x5f, V0x29, V0x7b); 19:0 / 19:1 G0xb2 (the Shotgun's pack); 17:1 / 17:2 V0x189 on the right hand 35 / 6 frames in, then every 7 / 6 frames | yes, the repeats aside |
+| Royalguard's Release (0xf) | V0x29 as actions 190-197 start (24:15 / 17 / 40 / 46 / 18 / 20 / 52 / 58) | yes, keyed on those scripts: a tapped 194 that opens on 24:19 misses it |
+| Artemis V0x2f4 (0x53) | 2 frames into 20:2 (action 154, `FUN_0026ebf0`), on the gun's frame | on his left hand, where the port's guns are |
+| CEfcPub ids at a motion's start, on the bone the handler names | Million Stab 10 frames into 3:8 G0x44 + G0x7d (id 0xa, Dante's pack); 13:11 V0xc7 (action 18); Cerberus 14:5 V0x262 on spine 1 (action 46); A&R 5:26 V0x287, 5:18 V0x28a, 15:0 V0x284, 15:1 V0x27e, 15:2 V0x25c, 15:7 V0x286 (actions 64, 62, 65-67, 70); Nevan 6:16 V0x2b7, 6:19 V0x2a7, 16:5's flag 2 G0x179 on the root, 16:9 V0x260, 6:26 V0x187, 6:17 V0x2b8, 6:11 V0x90 + G0x234 on the root (actions 83-87, 93-95); A&R 15:8 V0x90 + V0x273 (action 71); Beowulf 7:16 / 7:58 V0x2ba (action 120), 7:31 G0x5f + V0x29 + V0x7b (actions 121/122, id 0x58: V0x29 / 0x161 / 0xdd / 0x3bb by +0x28b1, V0x7b / 0xd5 by +0x2928; the port takes the first of each); Beowulf 7:48 V0x2a8, 7:52 V0x299, 7:15 V0x29a, 17:0 V0x18a on the right hand, 17:4 V0x90 + V0x27d, 17:3 V0x27b (actions 113, 117-119, 123, 126, 128) | `arm_fx` in `main.c`, banks 20-24. 13:11 has no port move. 6:19, 16:5's flag, 7:48 and 7:52 aren't reached: the port's chains for those actions play other motions |
+| CEfcPub ids not yet wired | 3:52 (action 207, after a timer), 13:4 / 7:12 id 0xe (no case: nothing), 24:x V0x2a6 (actions 190-197, when +0x3c86 is set), the Royalguard 24:x V0x266, 0:0 V0x31f, V0xdd + V0x328 (0:52 / 6:0) and V0x36e | their timers and conditions aren't traced yet; CEfcPub's update (`FUN_00335500`) isn't read either, so a looping one ends with its move in the port |

@@ -40,5 +40,9 @@ void fx_guard_flash(const float at[3]);       /* Royalguard */
 
 /* A blade's streak: call each frame with the blade's base and tip while it's swinging. */
 void fx_trail_add(const float base[3], const float tip[3], unsigned int color);
+/* A sweep in slot 0 / 1, textured with nfx bank's texture tex (-1: plain) over the rectangle u0..u1 (along it, newest
+ * first) by v0..v1 (hilt to tip). */
+void fx_trail_add_slot(int slot, const float base[3], const float tip[3], unsigned int color, int bank, int tex,
+                       float u0, float u1, float v0, float v1);
 
 #endif
