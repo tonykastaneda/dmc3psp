@@ -1275,7 +1275,15 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     /* Material alpha: without this the lit vertex alpha is 0 and the alpha
      * test discards every Dante pixel. */
     sceGuAmbientColor(0xffffffff);
-    sceGuClearColor(mission_mode ? 0xff000000u : CLEAR_COLOR);   /* past the edge of a room: dark, not grey-blue */
+    {
+        /* Past the edge of a room: dark, not grey-blue. Mission 20's ending street: its fog colour, with fog on
+         * for the 3D pass (credits_fight.c) and the stage's colours doubled (stage_set_double). */
+        unsigned int clear = mission_mode ? 0xff000000u : CLEAR_COLOR;
+        int fog = credits_fight_fog(&clear);
+        if (fog) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
+        stage_set_double(fog);
+        sceGuClearColor(clear);
+    }
     sceGuClearDepth(0);
     sceGuClear(GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT);
 
@@ -1458,6 +1466,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
+    sceGuDisable(GU_FOG);   /* the 2D pass isn't fogged */
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
         else hud_draw(player);
@@ -2187,7 +2196,8 @@ static void cmp_load(void) {
         else if ((cmp_events[cmp_event_count].every = 0, sscanf(line, "%11s %d %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last, &cmp_events[cmp_event_count].every)) >= 3) ++cmp_event_count;
     }
     fclose(f);
-    if (cmp_frames > CMP_MAX_FRAMES) cmp_frames = CMP_MAX_FRAMES;
+    /* Runs may go past the per-frame log (CMP_MAX_FRAMES): it keeps their first frames (Mission 20 whole needs ~30000). */
+    if (cmp_frames > 4 * CMP_MAX_FRAMES) cmp_frames = 4 * CMP_MAX_FRAMES;
 }
 static int cmp_seen_frame = -1;   /* the last frame cmp_pad ran */
 static void cmp_pad(int frame, PlayerInput *input) {
