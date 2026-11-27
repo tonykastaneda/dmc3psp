@@ -403,6 +403,7 @@ ENEMY_KINDS = (
     # The Soul Eater (class 16, EST 34), em016.pac: GDATA 126 (a PNST), pack 11 in the table at 0x58e740. [0] textures,
     # [1] its body (an EFM laid out as a MOD, 24 bones), [3] its six wing chains (em016_00.clt), [8] its motions.
     ("soul", 126, 1, None),
+    ("knight", 127, 7, None),
 
 )
 AR_SLOT = 131
@@ -1052,6 +1053,10 @@ def main() -> None:
         if raw:
             parsed = parse_mot(raw)
             motions.append({"name": f"dp{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    for slot, raw in enumerate(pac_list(pawn_pack[8])):
+        if raw:
+            parsed=parse_mot(raw)
+            motions.append({"name":f"cn{slot:02d}","data":raw[:parsed["bytes_used"]],"parsed":parsed})
     # Agni & Rudra's: "arNN" by their slot in [11].
     for slot, raw in enumerate(pac_list(ar_pack[11])):
         if not raw:

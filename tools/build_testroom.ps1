@@ -38,7 +38,8 @@ New-Item -ItemType Directory -Force -Path $Build, $Objects, $Generated | Out-Nul
 Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\check_credit.py"))
 
 $Header = Join-Path $Generated "model_runtime.h"
-if ($Regenerate -or -not (Test-Path -LiteralPath $Header)) {
+if ($Regenerate -or -not (Test-Path -LiteralPath $Header) -or
+    (Get-Item -LiteralPath (Join-Path $Root 'tools\prepare_skinned_model.py')).LastWriteTime -gt (Get-Item -LiteralPath $Header).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     if (-not $Iso) { throw "The source ISO is required to generate the Dante model data" }
     $Python = (Get-Command python -ErrorAction Stop).Source

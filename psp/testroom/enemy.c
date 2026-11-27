@@ -34,6 +34,7 @@ int model_blend_off;
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
+#include "chess_knight_runtime.h"
 #include "nfx.h"
 #include "beowulf_scripts.h"
 #include "soul_eater_scripts.h"
@@ -348,6 +349,9 @@ static int pawn_init(void);
 static void greed_tick(int slot, float f, float px, float pz);
 static void coffins_update(float f);
 static void coffins_reset(void);
+static void knight_spawn(void);
+static void knight_update(float f,float px,float py,float pz);
+static void knight_hit(HitKind kind);
 static void pawn_spawn(void);
 static void pawn_update(float f, float px, float py, float pz);
 static void pawn_hit(HitKind kind);
@@ -497,6 +501,7 @@ static int kind_health(int kind) {
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
     case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
+    case ENEMY_KNIGHT: return ENEMY_HEALTH * 1000 / 250; /* 5c07f0+2c */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1300 / 250;   /* 0x5c32a0 +0x2c (class 11, copied by FUN_00342450) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * BEOWULF_MAX / 250;   /* 0x5b84e0 +0x2c (class 33, FUN_002d95a4) */
@@ -617,6 +622,7 @@ static void spawn_one_body(int kind, float x, float z) {
     if (kind == ENEMY_FALLEN) { fallen_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
+    if (kind == ENEMY_KNIGHT) { knight_spawn(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_BEOWULF) { beowulf_spawn_glue(); return; }
     if (kind == ENEMY_SOUL) { soul_spawn_glue(); return; }
@@ -892,7 +898,8 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
     if (spawn_class == 35) return ENEMY_PAWN;
-    if (spawn_class >= 36 && spawn_class <= 38) return ENEMY_PAWN;   /* the other chessmen (Missions 14, 16): the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
+    if (spawn_class == 36) return ENEMY_KNIGHT;
+    if (spawn_class == 38) return ENEMY_PAWN;   /* the other chessmen (Missions 14, 16): the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
@@ -1086,6 +1093,7 @@ static int is_ar(void) { return e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA;
  * (tools/prepare_agni_rudra.py), Beowulf (tools/prepare_beowulf.py). The Seven Hells' kinds return 0. */
 typedef struct { const EnemyAiOp *ops; const short *starts; int scripts; const EnemyAiCap *caps; int caps_count;
                  const ArAttack *attacks; int attack_count; const int *motions; int motion_count; } ScriptBank;
+static int cn_motion_map[4];
 static int ar_motion_map[AR_SCRIPTS];
 #define BW_MOTIONS 43
 static int bw_motion_map[BW_MOTIONS];
@@ -1094,12 +1102,13 @@ static int se_motion_map[SE_MOTIONS];
 #define AN_MOTION_IDS 312   /* the Arachne's script motion ids, g * 100 + n */
 static int an_motion_map[AN_MOTION_IDS];
 static const ScriptBank *script_bank(void) {
+    static const ScriptBank knight = {cn_ops,cn_starts,14,cn_caps,8,cn_attacks,2,cn_motion_map,4};
     static const ScriptBank agni = {ar_ops_0, ar_starts_0, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
     static const ScriptBank rudra = {ar_ops_1, ar_starts_1, AR_SCRIPTS, ar_caps, AR_CAPS, ar_attacks, 22, ar_motion_map, AR_SCRIPTS};
     static const ScriptBank beowulf = {bw_ops, bw_starts, BW_SCRIPTS, bw_caps, BW_CAPS, bw_attacks, BW_ATTACKS, bw_motion_map, BW_MOTIONS};
     static const ScriptBank soul = {se_ops, se_starts, SE_SCRIPTS, se_caps, SE_CAPS, se_attacks, SE_ATTACKS, se_motion_map, SE_MOTIONS};
     static const ScriptBank arachne = {an_ops, an_starts, AN_SCRIPTS, an_caps, AN_CAPS, an_attacks, AN_ATTACKS, an_motion_map, AN_MOTION_IDS};
-    return e->kind == ENEMY_AGNI ? &agni : e->kind == ENEMY_RUDRA ? &rudra : e->kind == ENEMY_BEOWULF ? &beowulf :
+    return e->kind == ENEMY_KNIGHT ? &knight : e->kind == ENEMY_AGNI ? &agni : e->kind == ENEMY_RUDRA ? &rudra : e->kind == ENEMY_BEOWULF ? &beowulf :
            e->kind == ENEMY_SOUL ? &soul : e->kind == ENEMY_ARACHNE ? &arachne : 0;
 }
 static int script_event;   /* the last script event the runner met this frame, + 1 (0: none) */
@@ -1753,6 +1762,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_FALLEN) { ++hits; fallen_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
+    if (e->kind == ENEMY_KNIGHT) { knight_hit(kind); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_SOUL) { ++hits; soul_hit_glue(kind); return; }
@@ -2256,6 +2266,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_FALLEN) { fallen_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_KNIGHT) { knight_update(f,px,py,pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_BEOWULF) { beowulf_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_SOUL) { soul_update_glue(f, px, py, pz); return; }
@@ -7175,3 +7186,5 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         }
     }
 }
+
+#include "knight.inc"

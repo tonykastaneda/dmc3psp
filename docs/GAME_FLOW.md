@@ -410,7 +410,7 @@ other pieces (not identified by name; the walkthrough's "new chess-type demon" t
 In the port (`psp/testroom/mission14.c`): the route plays from 237 to Mission Clear in PPSSPP. Stand-ins: the
 adjudicator takes 20 melee hits of any weapon (no style rank, no Hyper Fist), drawn as a stone block, and takes
 COLLISION 201 with it (`STORY_WALLS`); 236 runs groups 2-6 one after another from the start, its panels stay as the
-stage has them; EST 36 and 37 spawn as Pawns; the wagon is Mission 11's door from 239 to 240.
+stage has them; EST36 uses the Knight; EST37 uses the Bishop (its spell cycle still approximate); the wagon is Mission 11's door from 239 to 240.
 
 ### Mission 15: "The gatecrasher"
 
@@ -487,7 +487,7 @@ In the port: the route plays from 106 to Mission Clear in PPSSPP. Stand-ins and 
   and shoots, lobs grenades that beep and burst, fires Kalina Ann's rocket, and escapes backwards with her repel
   gun when Dante's close. Motions are read from their root paths; timings, damage and health are estimates; her
   guns and shots aren't models.
-- Mission Clear comes as Lady is beaten (`CLEAR_ROOMS`), not by climbing 119. The chessmen of EST 36 and 38 spawn as Pawns; The Fallen
+- Mission Clear comes as Lady is beaten (`CLEAR_ROOMS`), not by climbing 119. EST36 uses the Knight; EST38 still spawns as a Pawn; The Fallen
   are Mission 15's (`fallen.c`).
 
 ### Mission 17: "Inner-demons"
