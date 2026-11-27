@@ -29,6 +29,7 @@ import argparse
 import json
 import os
 import math
+import re
 import struct
 import subprocess
 import sys
@@ -518,10 +519,16 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
         # each of the model's objects, counts as on [its per-object channels: not yet]).
         switches = []   # (start, scale, mode 0 off / 1 on / 2 per object, first frame, channels)
         for hclip in (tracks.get(("Hide", slot)) or {"clips": []})["clips"]:
-            hid = str(hclip.get("Hide", ""))
-            if not hid:
-                continue
+            hid = str(hclip.get("Hide", "") or "")
             start, scale = float(hclip.get("SetFrame", 0.0)), float(hclip.get("ClipScale", 1.0) or 1.0)
+            if not hid:
+                # HideKind without a file: H hides the slot, D shows it (A plays a .hid). These were skipped, so
+                # pieces meant to stay hidden showed: demo 3's ss001_01 (slot 35, hidden until 2964), its
+                # coats in slots 32 / 33.
+                kind = str(hclip.get("HideKind", "")).upper()[:1]
+                if kind in ("H", "D"):
+                    switches.append((start, scale, 0 if kind == "H" else 1, 0.0, []))
+                continue
             if hid.lower() in ("dispoff.hid", "dispon.hid") or not files.get(hid):
                 switches.append((start, scale, 0 if hid.lower() == "dispoff.hid" else 1, 0.0, []))
             else:
@@ -641,7 +648,6 @@ def subtitles(iso_path: Path, demo: int, timeline):
     """The Message track's lines, in English (the record's second language file: Japanese, English, then two more):
     each "# Msg n" block's text, its <PS x y> place (PS2 640 x 448 screen) and <SZ size>, shown from its clip's frame
     for the sum of its <WT frames> waits (<IT 0>: all at once; <FO 0> then clears it)."""
-    import re
     elf = demo_unpack.gen_enemy_ai.Elf(demo_unpack.EXE.read_bytes())
     rec = demo_unpack.demo_record(elf, demo)
     clips = [c for t in timeline["tracks"] if t["kind"] == "Message" for c in t["clips"] if c.get("No") is not None]
@@ -696,6 +702,86 @@ def bake_audio(iso_path: Path, timeline, out: Path, demo: int):
     path.write_bytes(struct.pack("<4s2If", b"DAU1", rate, len(samples) // 2, start) + bytes(nibbles))
     print(f"  sound: {package}.adx, {len(samples) / 2 / rate:.1f} s from frame {start:.0f} -> {path.name}")
     return path
+
+
+def stage_hide_events(timeline, files):
+    """The stage slot's Hide clips as (demo frame, SCM object, hidden) events in order (see main)."""
+    slot = next((t["slot"] for t in timeline["tracks"] if t["kind"] == "Model" for c in t["clips"]
+                 if str(c.get("Model", "")).lower().startswith("st") and str(c.get("Model", "")).lower().endswith(".scm")), None)
+    track = next((t for t in timeline["tracks"] if t["kind"] == "Hide" and t["slot"] == slot), None)
+    if slot is None or not track:
+        return []
+    events = []
+    for clip in sorted(track["clips"], key=lambda c: float(c.get("SetFrame", 0.0))):
+        start, scale = float(clip.get("SetFrame", 0.0)), float(clip.get("ClipScale", 1.0) or 1.0)
+        hid = str(clip.get("Hide", "") or "")
+        channels = []
+        if hid and hid.lower() not in ("dispon.hid", "dispoff.hid") and files.get(hid):
+            try:
+                first, channels = parse_hid(files[hid])
+            except (ValueError, struct.error):
+                channels = []
+        if not hid and str(clip.get("HideKind", "")).upper()[:1] == "H":
+            events.append((start, 0xfffe, 1))   # HideKind H: the whole stage hidden
+            continue
+        events.append((start, 0xffff, 0))   # a clip begins: every object shown, then its own keys
+        for obj, keys in enumerate(channels):
+            if not keys:
+                continue
+            events.append((start, obj, 0 if keys[0][1] else 1))   # before its first key: that key's state
+            for local, shown in keys:
+                events.append((start + max(0.0, local - first) * scale, obj, 0 if shown else 1))
+    events.sort(key=lambda e: e[0])
+    return events
+
+
+def piece_prop_events(timeline, files, room_bin):
+    """A cutscene staged in a game room: its ss pieces textured from the room (left out of the cast) are the room's
+    own placed props. Each prop batch (8th word 256 + its index) whose bounds sit inside a piece's follows that piece's
+    H / D (DispOff / DispOn) hide clips: (demo frame, prop tag - 1, hidden). Demo 3's ss001_01 is hidden until 2964."""
+    if not room_bin or not room_bin.exists():
+        return []
+    s = room_bin.read_bytes()
+    hdr = struct.unpack_from("<4s7I4f6f6I2f2I", s, 0)
+    batches, batch_table, chunk_table = hdr[3], hdr[19], hdr[-1]
+    props = {}
+    for i in range(batches):
+        row = struct.unpack_from("<8I", s, batch_table + 32 * i)
+        if row[7] < 256:
+            continue
+        for k in range(row[4], row[4] + row[5]):
+            c = struct.unpack_from("<2I6f", s, chunk_table + 32 * k)
+            lo, hi = props.setdefault(row[7], ([1e30] * 3, [-1e30] * 3))
+            for a in range(3):
+                lo[a] = min(lo[a], c[2 + a]); hi[a] = max(hi[a], c[5 + a])
+    events = []
+    for track in timeline["tracks"]:
+        if track["kind"] != "Model" or not track["clips"]:
+            continue
+        clip = track["clips"][0]
+        name = str(clip.get("Model", ""))
+        if not name.lower().endswith(".scm") or name.lower().startswith("st") or clip.get("Texture") in files \
+                or not files.get(name):
+            continue
+        try:
+            _, mesh, _, _ = scm_rig(files[name])
+        except (ValueError, struct.error):
+            continue
+        ps = mesh["positions"]
+        plo = [min(p[a] for p in ps) - 100.0 for a in range(3)]
+        phi = [max(p[a] for p in ps) + 100.0 for a in range(3)]
+        tags = [t for t, (lo, hi) in props.items()
+                if all(plo[a] <= (lo[a] + hi[a]) * 0.5 <= phi[a] for a in range(3))
+                and all(hi[a] - lo[a] <= (phi[a] - plo[a]) * 1.2 for a in range(3))]
+        hide = next((t for t in timeline["tracks"] if t["kind"] == "Hide" and t["slot"] == track["slot"]), None)
+        for h in sorted((hide or {"clips": []})["clips"], key=lambda c: float(c.get("SetFrame", 0.0))):
+            hid = str(h.get("Hide", "") or "").lower()
+            kind = "H" if hid == "dispoff.hid" else "D" if hid == "dispon.hid" else str(h.get("HideKind", "")).upper()[:1]
+            if kind in ("H", "D"):
+                events += [(float(h.get("SetFrame", 0.0)), t - 1, 1 if kind == "H" else 0) for t in tags]
+        if tags:
+            print(f"  piece {name} (slot {track['slot']}): the room's props {[t - 256 for t in tags]}")
+    return events
 
 
 LIGHT_RECORD = 80
@@ -786,8 +872,23 @@ def main():
     blob += struct.pack("<I", len(programs))
     for start, no, arg in programs:
         blob += struct.pack("<fI4f", start, no, *(arg + [0.0] * (4 - len(arg))))
+<<<<<<< HEAD
     fogs = bake_fog(timeline)
     blob += fogs   # right after the Program clips; their count is the high half of +0x3c
+=======
+    # Then the stage's own hide track (its model slot's Hide clips: a cut's .hid keys the stage's SCM objects one by
+    # one; demo 3 hides the walls in front of its later cameras): u32 count, then {f32 demo frame, u16 object, u16
+    # hidden}, by frame. A clip without a .hid shows them all. The stage's batches carry object + 1 (prepare_stage).
+    events = stage_hide_events(timeline, files)
+    room_match = re.match(r"st(\d+)", next((str(c.get("Model", "")).lower() for t in timeline["tracks"] if t["kind"] == "Model"
+                                            for c in t["clips"] if str(c.get("Model", "")).lower().startswith("st")), ""))
+    if room_match and not (work / "model" / f"st{room_match.group(1)}.scm").exists():
+        events = sorted(events + piece_prop_events(timeline, files, args.output / f"ROOM_{room_match.group(1)}.BIN"),
+                        key=lambda e: e[0])
+    blob += struct.pack("<I", len(events))
+    for frame, obj, hidden in events:
+        blob += struct.pack("<f2H", frame, obj, hidden)
+>>>>>>> wt/cl2
     tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))
@@ -809,7 +910,6 @@ def main():
     room_bin = None
     if stage_clip and not ((work / "model" / stage_clip["Model"]).exists() and (work / "model" / str(stage_clip.get("Texture"))).exists()):
         # A room's own stage (st232 is room 232): the room's BIN as built for the missions (tools/gen_rooms.py).
-        import re
         import shutil
         m = re.match(r"st(\d+)", stage_clip["Model"].lower())
         room_bin = args.output / f"ROOM_{m.group(1)}.BIN" if m else None

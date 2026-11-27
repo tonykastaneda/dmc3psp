@@ -719,9 +719,12 @@ def main():
             shop = parse_shop_area(data)
             if shop and name not in SHOPS:
                 SHOPS[name] = shop
+    # A room's stage is rebuilt when the stage tools are newer than it (they were cached forever: rooms built on
+    # 2026-11-04 missed the exact palettes and the SCM object tags cutscenes hide by).
+    tools_time = max(Path(__file__).with_name(n).stat().st_mtime for n in ("prepare_stage.py", "scm_ps2.py"))
     for name, slot in SLOTS.items():
         out = args.output / f"ROOM_{name}.BIN"
-        if not out.exists():
+        if not out.exists() or out.stat().st_mtime < tools_time:
             subprocess.run([sys.executable, str(Path(__file__).with_name("prepare_stage.py")), str(args.iso), "--output", str(out), "--slot", str(slot)], check=True)
 
     names = list(SLOTS)
