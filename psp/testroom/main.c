@@ -62,6 +62,7 @@ int testroom_frame;
 #include "fx.h"
 #include "nfx.h"
 #include "hud.h"
+#include "credits_fight.h"
 #include "orbs.h"
 #include "rebellion_runtime.h"
 #include "ebony_runtime.h"
@@ -604,6 +605,7 @@ static void enemy_died(int kind, float x, float y, float z) {
     /* FUN_00366f10: from the body's root + 70, with the floor at the root - 100: 170 cm over his feet. */
 
     orbs_burst(x, y + 170.0f, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
+    credits_fight_kill(kind);   /* M20's ending street counts them (credits_fight.c) */
 }
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
@@ -1442,13 +1444,14 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (show_bones) draw_bones();
 
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
-        hud_draw(player);
-        {
+        if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
+        else hud_draw(player);
+        if (!credits_fight_active()) {
             float hp, maximum;
             if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);
             else hud_draw_boss(NULL, 0, 0);
         }
-        if (mission_mode && menu_loaded()) {
+        if (mission_mode && menu_loaded() && !credits_fight_active()) {
             /* The Red Orbs held, top right: brighter for a moment when one's collected. */
             char text[24];
             float since = orbs_since_collected(), k = since < 2.0f ? 1.0f : since < 3.0f ? 3.0f - since : 0.0f;
@@ -3237,9 +3240,10 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     if (focus_cmp && cmp_enemy_audit > 1) held = 0; /* Audit rooms directly without solving their item puzzles. */
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     if(mission_choice.mission==20 && room_number(mission_room)==12){
-        /* EventTbl20 op 8c 13620 then wait 300; cinematic side effects omitted. */
+        /* EventTbl20's room 12 script: credits_fight.c. */
+        if(!credits_fight_active())credits_fight_begin();
         m20_ending_frames+=dt*60;
-        if(m20_ending_frames>=13920 && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
+        if(credits_fight_update(dt*60) && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
     }
     if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
     fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
@@ -3816,7 +3820,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     pickup_caption_time = 0.0f;
     mission10_reset();
     mission13_reset(choice->difficulty);
-    m20_ending_frames=0;m20_boss_defeated=0;
+    m20_ending_frames=0;m20_boss_defeated=0;credits_fight_reset();
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();

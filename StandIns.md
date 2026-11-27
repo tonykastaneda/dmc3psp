@@ -127,6 +127,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   shatter, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
+- **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded); Dante keeps his usual model (the PS2's open-coat ending model isn't loaded).
 - **Secret Missions**: 600's goal [inferred]; 605's 60 s limit [estimate]; 608's wagons (CStageSetTruck's timetable,
   the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall); 610's spikes (Mission 6's stand-in);
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.
