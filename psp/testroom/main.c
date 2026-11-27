@@ -1959,6 +1959,20 @@ static const ArmFx arm_fx[] = {
     {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
     {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
     {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    /* The same set starts Dance Macabre's 13:17 (action 200, FUN_00266b90, id 0x25) and the Shotgun's 19:3 (action 146,
+     * FUN_0026de00, id 0x3e). The Shotgun's 19:0 / 19:1 (actions 144 / 145, FUN_0026d6b0 / 0026da00, id 0x1b): G0xb2. */
+    {"13:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"13:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"13:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    {"19:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"19:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"19:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    {"19:0", 0, NFX_GUN_SHOTGUN, BONE_HIPS, 1, 0xb2 | 0x8000},
+    {"19:1", 0, NFX_GUN_SHOTGUN, BONE_HIPS, 1, 0xb2 | 0x8000},
+    /* Beowulf actions 124 / 125 (FUN_0027cb00 / 0027cf70, id 0x12): V0x189 on the right hand 35 / 6 frames in [the
+     * handlers repeat it every 7 / 6 frames after; not ported]. */
+    {"17:1", 35, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
+    {"17:2", 6, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xa1},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xf3},
     {"3:13", 0, NFX_DANTE, BONE_HIPS, 1, 0xb0},
