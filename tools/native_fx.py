@@ -298,11 +298,14 @@ def main():
     summary.append(write_bank(lines, 19, records(read(830)), (965,967,964), ()))
     # 20 Dante's own effect pack (GDATA 97): Helm Breaker's landing V0x8e (FUN_00264b90).
     effects = next(p for p in pnst_entries(read(97)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
-    summary.append(write_bank(lines, 20, records(effects), (0x8e,), ()))
+    summary.append(write_bank(lines, 20, records(effects), (0x8e, 0xc7, 0x44 | G_FLAG, 0x7d | G_FLAG), ()))
     # 21-24 the Devil Arms' packs (GDATA 98 Cerberus, 99 Agni & Rudra, 100 Nevan, 101 Beowulf): their action handlers'
     # effects (FUN_00272210, 00272c70, 00273150, 00296ae0, 00274c70, 00276ac0, 00277350, 0027abf0).
-    for bank, slot, vs in ((21, 98, (0x252,)), (22, 99, (0x288, 0x285, 0x37e, 0x37d, 0x302, 0x1cc | G_FLAG)),
-                           (23, 100, (0x38e, 0x2c1)), (24, 101, (0x382,))):
+    # And their CEfcPub ids' (FUN_00332240; docs/NATIVE_FX.md "Dante's effects").
+    for bank, slot, vs in ((21, 98, (0x252, 0x262)),
+                           (22, 99, (0x288, 0x285, 0x37e, 0x37d, 0x302, 0x1cc | G_FLAG, 0x287, 0x28a, 0x284, 0x27e, 0x25c, 0x286)),
+                           (23, 100, (0x38e, 0x2c1, 0x2b7, 0x2a7, 0x260, 0x187, 0x179 | G_FLAG)),
+                           (24, 101, (0x382, 0x29a, 0x18a, 0x27b, 0x2a8, 0x299, 0x27d))):
         effects = next(p for p in pnst_entries(read(slot)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
         summary.append(write_bank(lines, bank, records(effects), vs, ()))
     args.output.mkdir(parents=True, exist_ok=True)

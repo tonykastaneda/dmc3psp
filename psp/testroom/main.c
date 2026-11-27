@@ -1908,7 +1908,7 @@ static void arm_point(const Combat *c, const Player *p, int at, float out[3]) {
 
 /* The Devil Arms' own effects, from their action handlers (docs/NATIVE_FX.md, "Dante's effects"). when: 0 as the
  * script starts, n > 0 n frames into it, -1 / -0x40 / -0x80 as window 0 byte 0 bit 0 / byte 1 bit 0x40 / 0x80
- * turns on, -2 on its flag 1 (+0x24d5). at: arm_point's. follow: the PS2 gives it the frame (+0x90 / +0x94)
+ * turns on, -2 / -3 on its flag 1 / 2 (+0x24d5). at: arm_point's. follow: the PS2 gives it the frame (+0x90 / +0x94)
  * rather than a place. */
 typedef struct { const char *script; short when; unsigned char bank, at, follow; unsigned short id; } ArmFx;
 static const ArmFx arm_fx[] = {
@@ -1940,6 +1940,29 @@ static const ArmFx arm_fx[] = {
     {"16:4", -2, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* action 92 (FUN_00277350), Swordmaster's */
     {"7:10", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* Beowulf action 115 (FUN_0027abf0): its charge */
     {"7:11", 17, NFX_ARM_BEOWULF, BONE_HIPS, 0, 0x382},  /* and 17 frames into the blow, where his hips are then */
+    /* CEfcPub (FUN_002fbec0 -> FUN_00332240) ids the handlers start with a motion, on the bone they name. */
+    {"3:8", 10, NFX_DANTE, BONE_HIPS, 1, 0x44 | 0x8000}, /* Million Stab, 10 frames in (FUN_00266220, id 0xa) */
+    {"3:8", 10, NFX_DANTE, BONE_HIPS, 1, 0x7d | 0x8000},
+    {"13:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xc7},         /* action 18 (FUN_00268150, id 0x11) */
+    {"14:5", 0, NFX_ARM_CERBERUS, BONE_SPINE1, 1, 0x262},/* action 46 (FUN_00272470, id 0x29) */
+    {"5:26", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x287},      /* action 64 (FUN_00272e20, id 0x5a) */
+    {"5:18", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x28a},      /* action 62 (FUN_00273970, id 0x49) */
+    {"15:0", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x284},      /* actions 65-67, 70 (FUN_00273d40 .. 002744c0) */
+    {"15:1", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x27e},
+    {"15:2", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x25c},
+    {"15:7", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x286},
+    {"6:16", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b7},     /* actions 84/85 (FUN_00276150, id 0x36) */
+    {"6:19", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},     /* actions 86/87 (FUN_00276640, id 0x35) */
+    {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},   /* action 93 on its flag 2 (FUN_00277550, id 0x10) */
+    {"16:9", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x260},     /* action 94 (FUN_00277730, id 0x3a) */
+    {"6:26", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x187},     /* action 95 (FUN_00277d70, id 0x31) */
+    {"7:48", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},   /* action 113 (FUN_0027a1f0, id 0x33) */
+    {"7:52", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},   /* actions 117/118 (FUN_0027af70, id 0x2f) */
+    {"7:15", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x29a},   /* action 119 (FUN_0027b6c0, id 0x30) */
+    {"17:0", 0, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x18a}, /* action 123 (FUN_0027c740, id 0x32, +0x13b4: bone 13) */
+    {"17:4", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 126 (FUN_0027d280): V0x90, then id 0x39 */
+    {"17:4", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x27d},
+    {"17:3", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x27b},   /* action 128 (FUN_0027d6d0, id 0x2b) */
 };
 /* The Devil Trigger's look (CEfcPub ids 0x20-0x24 / 0x42-0x46, FUN_002298f0 -> FUN_00332240): as it starts, V0xdc
  * on his hips tinted the melee weapon's colour; while it lasts, E0x140 (tinted) and V0x3c looping there. A change of
@@ -1970,7 +1993,7 @@ static int update_devil_fx(const Player *p) {   /* after the pose, before update
     return devil_fx_aura[0] || devil_fx_aura[1];
 }
 
-#define ARM_FOLLOW 8
+#define ARM_FOLLOW 12
 static char arm_fx_log[256];   /* tests: "script:id frame" of each started, in FOCUS_DONE.TXT */
 static void update_arm_fx(const Combat *c, const Player *p) {
     static int last_script = -1, last_bits, last_move = -1;
@@ -1989,6 +2012,7 @@ static void update_arm_fx(const Combat *c, const Player *p) {
         go = a->when > 0 ? prev < a->when && since >= a->when
            : a->when == 0 ? c->script != last_script || c->move != last_move   /* not a held move's loop */
            : a->when == -2 ? c->flag == 1
+           : a->when == -3 ? c->flag == 2
            : (rise & (a->when == -1 ? 1 : -a->when)) != 0;
         if (go) {
             float at[3];
