@@ -7,6 +7,7 @@
 
 /* Mission Select's Debug Room: the empty Mission 2 street with the training dummies. */
 #define MENU_DEBUG_ROOM 99
+#define MENU_BLOODY_PALACE 21
 typedef struct {
     int mission;      /* 1 to 4, or MENU_DEBUG_ROOM */
     int difficulty;   /* 0 Easy, 1 Normal */

@@ -65,6 +65,7 @@ int testroom_frame;
 #include "hud.h"
 #include "credits_fight.h"
 #include "heapstat.h"
+#include "bloody_palace.h"
 #include "orbs.h"
 #include "rebellion_runtime.h"
 #include "ebony_runtime.h"
@@ -1471,6 +1472,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
         else hud_draw(player);
+        bp_draw();
         if (!credits_fight_active()) {
             float hp, maximum;
             if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);
@@ -2041,6 +2043,8 @@ static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
 static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1) or looping P (2) 2 m before Dante */
 static int cmp_heap_leave, cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
+static int cmp_bp_floor, cmp_bp_visits, cmp_bp_boss=-1, cmp_bp_group=-1;
+static int cmp_bp_warp[32][2], cmp_bp_warps;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
@@ -2142,6 +2146,10 @@ static void cmp_load(void) {
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
         else if (strncmp(line, "creditsat ", 10) == 0) cmp_credits_at = atoi(line + 10);   /* tests: M20's street from this frame */
+        else if (strncmp(line, "bpstart ", 8) == 0) sscanf(line+8,"%d %d %d %d",&cmp_bp_floor,&cmp_bp_visits,&cmp_bp_boss,&cmp_bp_group);
+        else if (strncmp(line, "bpwarp ", 7) == 0 && cmp_bp_warps<32) {
+            if (sscanf(line+7,"%d %d",&cmp_bp_warp[cmp_bp_warps][0],&cmp_bp_warp[cmp_bp_warps][1])==2) ++cmp_bp_warps;
+        }
         else if (strncmp(line, "creditskills ", 13) == 0) cmp_credits_kills = atoi(line + 13);   /* tests: ... with these kills */
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
@@ -2191,6 +2199,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "ownall ", 7) == 0) cmp_ownall = atoi(line + 7);
         else if (strncmp(line, "m6got ", 6) == 0) cmp_m6_got = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
+        else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
@@ -2429,6 +2438,7 @@ static int m20_boss_defeated;
 static int m8_clears_seen;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
+static int bp_portal_fx[3];
 #define ROOMS_MAX 256
 static unsigned char rooms_cleared[ROOMS_MAX / 8];   /* this mission: a room's fight doesn't come back */
 static int room_is_cleared(int r) { return r >= 0 && r < ROOMS_MAX && (rooms_cleared[r >> 3] >> (r & 7) & 1); }
@@ -2898,8 +2908,8 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 7) m7_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 15) m15_hit(player->x, player->y, player->z, player->yaw, reach);   /* mission15.c: the portals */
-    if (mission_choice.mission == 17) doppelganger_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* 139's crests */
-    if (mission_choice.mission == 19) arkham_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* his Legions */
+    if (mission_choice.mission == 17 || bp_active()) doppelganger_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* 139/439's crests */
+    if (mission_choice.mission == 19 || bp_active()) arkham_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* his Legions */
     if (mission_choice.mission == 19) m19_mirror_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));   /* 405's mirrors */
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
@@ -3037,6 +3047,18 @@ static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
     if (!mission_mode || mission_room == ROOM_NONE) return;
+    if (bp_active()) {
+        int i;
+        for (i=0;i<rooms[mission_room].door_count;++i) if (bp_portal_ready(i)) {
+            const RoomDoor *d=&rooms[mission_room].doors[i];
+            if (i>=3 || !bp_portal_fx[i]) key_glow(d->box);
+        }
+        {
+            float at[3],up[3]={0,12,0};
+            int kind=bp_pickup_position(at);
+            if (kind) fx_mote(at,up,18,8,0.3f,kind==12?0xff60ff60u:0xffffffffu);
+        }
+    }
     if(mission_choice.mission==8) {mission8_draw();nausika_draw();leviathan_boss_draw_preview();}
     if(mission_choice.mission==13)mission13_draw();
     sceGuDisable(GU_TEXTURE_2D);
@@ -3086,8 +3108,14 @@ static void mission_gimmicks_draw(void) {
 /* One step of this room's script: spawns, waits. Returns 1 once it has finished. */
 static int script_run(float dt, float floor_y) {
     const RoomScript *script = &missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][mission_room];
-    while (script_at < script->count) {
-        const RoomOp *op = &script->ops[script_at];
+    PalaceOp palace_op;
+    while (bp_active() ? bp_op(script_at,&palace_op) : script_at < script->count) {
+        RoomOp copied;
+        const RoomOp *op;
+        if (bp_active()) {
+            copied=(RoomOp){palace_op.op,palace_op.a,palace_op.b,palace_op.c,palace_op.d};
+            op=&copied;
+        } else op=&script->ops[script_at];
         if (script_wait > 0.0f) {
             if (script_waiting_alive >= 0 && enemy_alive_count() > script_waiting_alive) return 0;
             script_waiting_alive = -1;
@@ -3143,7 +3171,13 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     int m10_previous=mission_room>=0?room_number(mission_room):-1;
     char path[320];
     
+    float palace_start[4];
     const float *s = rooms[room].starts[start];
+    if (bp_active() && room_number(room)==433) {
+        /* EventTbl21 +0x481c: op 5a [2500,0,1700,-201,0], keeping the entry yaw. */
+        memcpy(palace_start,s,sizeof palace_start);
+        palace_start[0]=2500;palace_start[1]=0;palace_start[2]=1700;s=palace_start;
+    }
     menu_show_loading();
     enemy_set_count(0, player->x, player->z);
     orbs_clear();
@@ -3156,6 +3190,13 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     music_room(mission_choice.mission, atoi(rooms[room].file + 5));   /* its on-enter BGM (event op 0x70) */
     msg_room_fought = 0;
     mission_room = room;
+    bp_enter(room_number(room));
+    memset(bp_portal_fx,0,sizeof bp_portal_fx);
+    if (bp_active()) {
+        int number=room_number(room);
+        vergil_boss_set_variant(number==444?2:number==443?1:0);
+        geryon_boss_start_on_ground(number==438);
+    }
     if(mission_choice.mission==8) {
         int number=atoi(rooms[room].file+5);
         mission8_enter(number);nausika_enter(number);
@@ -3196,6 +3237,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     }
     /* Doors can face the wrong way for the camera, and nothing else stops him walking through a shut one. */
     script_at = room_is_cleared(room) ? missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room].count : 0;
+    if (bp_active()) script_at=0;
     if (mission_mode && mission_choice.mission == 6 && m6_enter(room_number(room))) script_at = 0;   /* mission6.c */
     /* The spike traps (needles.c): Mission 6's 125 until its Essence is taken, Mission 17's 131 once a mission (its
      * flag 1), Secret Mission 11's 610 each time it's entered. */
@@ -3283,6 +3325,29 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         || (mission_choice.mission == 11 && m11_script_held(room_number(mission_room)));
     if (focus_cmp && cmp_enemy_audit > 1) held = 0; /* Audit rooms directly without solving their item puzzles. */
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
+    bp_update(dt*60.0f,done && enemy_alive_count()==0);
+    if (bp_active()) {
+        float at[3],floor_y;int kind;
+        if (bp_pickup_position(at)) {
+            if (!stage_floor(at[0],at[1]+50,at[2],0,&floor_y)) floor_y=player->y;
+            bp_pickup_fall(dt*60.0f,floor_y);
+            kind=bp_pickup_collect(player->x,player->y,player->z);
+            /* 0x2f3750: type 12 -> +10000 HP (or 300 red orbs at full HP),
+             * type 15 -> +5000 raw DT = five runes. Tables 0x5aa560/570/580. */
+            if (kind==12) {
+                if (player->health>=player->health_max) shop_state.red_orbs+=300;
+                else player->health=fminf(player->health_max,player->health+10000.0f);
+            } else if (kind==15) player->dt_energy=fminf(player->dt_max,player->dt_energy+5.0f);
+        }
+    }
+    if (bp_active() && room_number(mission_room)>=423 && room_number(mission_room)<=432) {
+        static const int portal_v[3]={965,967,964};
+        for (i=0;i<3 && i<rooms[mission_room].door_count;++i) if (bp_portal_ready(i) && !bp_portal_fx[i]) {
+            const RoomDoor *d=&rooms[mission_room].doors[i];
+            float at[3]={d->box[0],d->box[1]+17.0f,d->box[2]};
+            bp_portal_fx[i]=nfx_spawn(NFX_PALACE,portal_v[i],at,0,1);
+        }
+    }
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20's room 12 script: credits_fight.c. */
         if(!credits_fight_active()){credits_fight_begin();if(focus_cmp && cmp_credits_at)credits_fight_skip((float)cmp_credits_at);if(focus_cmp && cmp_credits_kills)credits_fight_test_kills(cmp_credits_kills);}
@@ -3317,6 +3382,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
         }
     }
+    if (bp_active()) doppelganger_boss_dante(player->yaw);
     if (mission_choice.mission == 15) {
         static int m15_tick;
         m15_update(dt);
@@ -3597,6 +3663,28 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
      * wave dies, without entering the blocking Mission Clear menu or taking
      * a scripted exit. Ordinary audit mode still exercises normal routes. */
     if (focus_cmp && cmp_enemy_audit == 2) return 0;
+    if (bp_active()) {
+        int near=0;
+        if (bp_finished()) return 1;
+        for (i=0;i<rooms[mission_room].door_count;++i) {
+            const RoomDoor *d=&rooms[mission_room].doors[i];
+            if (fabsf(player->x-d->box[0])>d->box[3]*0.5f+60.0f ||
+                fabsf(player->z-d->box[2])>d->box[5]*0.5f+60.0f ||
+                player->y<d->box[1]-100.0f || player->y>d->box[1]+d->box[4]+100.0f) continue;
+            near=1;
+            if (doors_armed && bp_portal_ready(i)) {
+                int next,start; char name[24];
+                door_prompt_time=1.0f;
+                if (d->press && !(pressed & PSP_CTRL_CIRCLE)) continue;
+                if (bp_route(i,&next,&start)) {
+                    snprintf(name,sizeof name,"ROOM_%03d.BIN",next);
+                    enter_room(room_named(name),start,player,camera); return 0;
+                }
+            }
+        }
+        if (!near) doors_armed=1;
+        return 0;
+    }
     if (mission_choice.mission == 12 || mission_choice.mission == 11) {
         int next = 0, start = 0;
         if (mission_choice.mission == 12 ? m12_room_done(room_number(mission_room), &next, &start)
@@ -3815,6 +3903,8 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 }
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    bp_reset(choice->mission==BLOODY_PALACE_MISSION);
+    if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
     music_stop();   /* the rooms' music from here (music_room) */
     vanguard_set_difficulty(choice->difficulty);
     cerberus_boss_set_difficulty(choice->difficulty);
@@ -3884,6 +3974,10 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     {
         /* A test can begin the mission in another room ("startroom"); play always starts where the game does. */
         int first = missions[choice->mission - 1].first_room, start = missions[choice->mission - 1].first_start, i;
+        if (bp_active()) {
+            char name[24]; snprintf(name,sizeof name,"ROOM_%03d.BIN",bp_floor()==9999?444:423+bp_floor()/1000);
+            first=room_named(name);
+        }
         for (i = 0; cmp_start_room >= 0 && i < (int)(sizeof(rooms) / sizeof(rooms[0])); ++i) {
             char want[16];
             snprintf(want, sizeof(want), "ROOM_%03d.BIN", cmp_start_room);
@@ -3966,21 +4060,6 @@ int main(int argc, char *argv[]) {
     }
     combat_reset(&combat);
 
-    {
-        /* The Mission 2 street (st001) if STAGE.BIN is next to the EBOOT. */
-        char path[320];
-        path_in_game_dir(path, sizeof(path), "STAGE.BIN");
-        if (stage_load(path)) {
-            const StageInfo *si = stage_info();
-            player_spawn[0] = si->spawn[0];
-            player_spawn[1] = si->spawn[1];
-            player_spawn[2] = si->spawn[2];
-            player_spawn[3] = si->spawn_yaw;
-            player_room_limit = 1.0e9f;
-            player_floor_fn = stage_floor;
-            camera_auto_follow = 1;  /* st001's only camera zone is a follow zone */
-        }
-    }
     autotest = game_file_exists("AUTOEXIT.TXT");
     focus = game_file_exists("FOCUS.TXT");
     if (focus) {
@@ -4043,6 +4122,22 @@ int main(int argc, char *argv[]) {
         }
     }
     if (recording) autotest = 0;
+    {
+        char path[320];
+        /* Allocate the large menu before stage reserves/capture buffers.
+         * Menu runs load their selected room below; street tests need only the street. */
+        if ((!focus && !autotest && !recording && !tour) || cmp_menu) {
+            path_in_game_dir(path,sizeof path,"MENU.BIN");
+            menu_load(path);
+        } else {
+            path_in_game_dir(path,sizeof path,"STAGE.BIN");
+            if (stage_load(path)) {
+                const StageInfo *si=stage_info();
+                player_spawn[0]=si->spawn[0];player_spawn[1]=si->spawn[1];player_spawn[2]=si->spawn[2];player_spawn[3]=si->spawn_yaw;
+                player_room_limit=1.0e9f;player_floor_fn=stage_floor;camera_auto_follow=1;
+            }
+        }
+    }
     if (autotest || recording || focus) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
     /* Training dummy in the middle of the street (or ahead of Dante in the grid room). */
@@ -4112,7 +4207,7 @@ int main(int argc, char *argv[]) {
         combat_hit_fn = breakable_hit;
         menu_shop = &shop_state;
         menu_set_mission_mask(MISSION_PRESENT_MASK);
-        if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
+        if (menu_loaded() && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;
             mission_stage = 2;   /* what's loaded */
             mission_choice.mission = 1;
@@ -4138,6 +4233,10 @@ int main(int argc, char *argv[]) {
             }
             start_mission(&mission_choice, &player, &camera);
             draw_buffer = menu_draw_buffer;
+        }
+        if (!mission_mode && !stage_loaded()) {
+            path_in_game_dir(path,sizeof path,"STAGE.BIN");
+            stage_load(path);
         }
     }
     last_time = sceKernelGetSystemTimeLow();
@@ -4424,6 +4523,14 @@ int main(int argc, char *argv[]) {
                         player.x=core?4978:5700;player.y=core?-70:75;player.z=core?3100:3400;
                         player.yaw=3.14159265f;player.vy=0;player.on_ground=1;
                         cmp_lv_auto_target=core;combat_reset(&combat);start_camera(&player,&camera);
+                    }
+                }
+                for (g=0;bp_active() && g<cmp_bp_warps;++g) {
+                    int portal=cmp_bp_warp[g][1];
+                    if (cmp_bp_warp[g][0]==frames && portal>=0 && portal<rooms[mission_room].door_count) {
+                        const RoomDoor *d=&rooms[mission_room].doors[portal];
+                        player.x=d->box[0];player.y=d->box[1]+10;player.z=d->box[2];
+                        doors_armed=1;debug_pressed|=PSP_CTRL_CIRCLE;
                     }
                 }
                 for (g = 0; g < cmp_goto_count; ++g) {
@@ -5043,6 +5150,7 @@ int main(int argc, char *argv[]) {
                     { char cl[200]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
+                    { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

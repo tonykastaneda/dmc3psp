@@ -61,9 +61,49 @@ fix above wasn't the cause. Two things were:
   texture word (bits 16-19) and `demo.c` blends by it, without writing depth.
 
 Still different from the PS2 there (not textures): the PS2 frames cm027 tighter (brow to lip; the port shows crown
-to lip), so the cameras' fov is likely not vertical as the port takes it; the PS2 lights the face darker and warmer;
-the subtracted veins read stronger in the port (the PS2's are a faint darkening under its darker lighting). The
-gameplay models (`enemy_mesh` merges objects by texture; the player) don't carry the blend yet.
+to lip), so the cameras' fov is likely not vertical as the port takes it. The darker, warmer light and the faint veins
+came with the Light track (below).
+
+**The Light track** was the shared cause of the lighting differences (Arkham's face lit darker and warmer on the PS2,
+the ending's Dante under blue moonlight). The port lit demos with the room's fixed key / fill (ambient 0x90), so
+every face came out bright and neutral. What the game does:
+
+- `FUN_00218fc0` parses a clip: ValidType (+0x121), IsMinus (+0x122), Type (+0x123), Life (+0x124), Src / Dst Pos,
+  Force, Range and Rgb (u16 x3), MoveType. `FUN_002569c0` starts it: Force and Range kept as 1 / x² (`FUN_00133bd0`),
+  a light record at clip +0x30; `FUN_0027fb10` runs it each frame (its life counts down by ClipScale; Type 1 eases
+  Src to Dst over it) and `FUN_0027fc80` files it: ValidType bit 8 into the scene's one slot (+0x40), the rest into
+  its light list (+0x14).
+- `FUN_0027f230` lights a model (called from the model draws `FUN_001aa110` / `001aa360` / `001aa540`) with flags: a
+  light whose ValidType, less bit 4, is 1 reaches models with flag 1 or 2, 2 those with flag 2 (the characters), 3
+  those with flag 1 (the stage); bit 4 lights only models asking for it (flag 0x10); the slot's light comes first.
+  `FUN_0027f610` makes each one: the vector to it, w 1 / Force²; its colour (negated if IsMinus), w 1 / Range²; and
+  its rank, 1 − d² / Range² clamped at 0 (a 0 range: 1). `FUN_0027f7e0` keeps the three best ranked.
+- The VU1 microcode that shades with them isn't read: the port takes a light's strength as 1 − d² / Force² (a 0
+  force: whole) and its colour / 128 [inferred], at each actor's centre, as a PSP directional light toward it.
+
+`prepare_demo.bake_lights` bakes the clips (80 bytes each, after the fades; their count at the header's +0x3c) and
+`demo.c` demo_lights sets them per actor, with an ambient of 0x30 [stand-in, by eye]. Checked against PCSX2:
+`analysis/testroom/arkham_face_lit_compare.png` (demo 1's cm027) and `ending_dante_lit_compare.png` (demo 59, from
+the Mission 20 credits state, `analysis/ref/cast/credits_to_ending.mp4`).
+
+**The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
+credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
+demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
+Arkham's blob (demo 53) were looked at in the port only (no save state reaches those demos): their textures and
+faces read right. Still different, not textures: the cameras' framing (fov), the stages' light (the PS2's ending street
+is bluer), and a black slab across demo 53's frame 2300 (its stage).
+
+**The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
+FIX 0x80, Cd − Cs; 5-15 are on no character); bits 4 and 5 (0x10 / 0x20, values 16-19 and 48, nearly all on EFM
+effect models) are flags not known yet, so 0x12 now adds and 0x13 subtracts where both were drawn normal before.
+`Dmc3ModelObject` carries it (`blend`, 0 where a generator leaves it out) and `model_blend.h` sets it for the
+enemies (`enemy_mesh` merges objects by texture and blend, the blended groups drawn last: one more draw for a kind
+that has any), Arkham, Cerberus and the demos. Gameplay Dante (pl000) has none. Where it shows
+(`analysis/testroom/blend_enemies_grid.png`, `blend_cerberus_pair.png`, `blend_arkham_pair.png`; left `noblend 1`,
+right as now): Cerberus's ice (all of `[12]`-`[15]`, additive, now drawn after the heads), Arkham's blob (13
+additive objects), the Abyss's vein layer (object 1, subtractive), the Blood-goyle's red layers, the Arachne's
+abdomen, the Hells' eyes (object 16), the Fallen's spear tip, the Soul Eater (all additive). Not yet compared with
+the PS2 for these (no save state reaches them); the Abyss's body is near white in the port with or without it.
 
 The game's story scenes are **demos**. Event op `02 D` plays demo D and section `09 D` of the mission's event table
 decides what follows (docs/EVENT_SCRIPTS.md). Some demos are pre-rendered movies (`.sfd` in MDATA1.AFS / MDATA2.AFS);

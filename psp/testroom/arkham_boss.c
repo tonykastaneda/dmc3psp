@@ -15,6 +15,7 @@
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "model_runtime.h"
+#include "model_blend.h"
 #include "boss_arkham_runtime.h"
 
 /* Arkham, class 35 (vtable 0x60a9a0, update 3d1390, alive 3d2220). Frames and distances keep the original 60 Hz /
@@ -384,20 +385,26 @@ static void skin_part(int part, const Transform *bones) {
 }
 static void draw_part(int part) {
     const ArkhamMesh *m = &arkham_parts[part];
-    int i, bound = -1;
-    for (i = 0; i < m->objects_count; ++i) {
-        const Dmc3ModelObject *o = &m->objects[i];
-        if ((int)o->texture != bound) {
-            const Dmc3Texture *t;
-            bound = (int)o->texture;
-            if (bound >= ARKHAM_TEXTURE_COUNT) bound = 0;
-            t = &arkham_textures[bound];
-            sceGuClutLoad(32, arkham_palettes[bound]);
-            sceGuTexImage(0, t->width, t->height, t->width, textures[bound]);
-            sceGuTexFlush();
+    int i, bound = -1, pass, was = sceGuGetStatus(GU_BLEND);
+    /* Opaque objects first, then the ones that blend (their MOD byte 8: the body's glowing seams are additive). */
+    for (pass = 0; pass < 2; ++pass) {
+        for (i = 0; i < m->objects_count; ++i) {
+            const Dmc3ModelObject *o = &m->objects[i];
+            if ((o->blend != 0) != pass) continue;
+            if ((int)o->texture != bound) {
+                const Dmc3Texture *t;
+                bound = (int)o->texture;
+                if (bound >= ARKHAM_TEXTURE_COUNT) bound = 0;
+                t = &arkham_textures[bound];
+                sceGuClutLoad(32, arkham_palettes[bound]);
+                sceGuTexImage(0, t->width, t->height, t->width, textures[bound]);
+                sceGuTexFlush();
+            }
+            if (pass) model_object_blend(o->blend, was);
+            sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[part] + o->index_start, vertices[part]);
         }
-        sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[part] + o->index_start, vertices[part]);
     }
+    model_object_blend(0, was);
 }
 static void place(const float at[3], float yaw) {
     ScePspFVector3 p = {at[0], at[1], at[2]};

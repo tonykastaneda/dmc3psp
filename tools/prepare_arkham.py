@@ -57,8 +57,8 @@ def write_models(pack, output):
         for field in ("bones", "weights"):
             lines += [f"static const unsigned char {prefix}_{field}[][3] = {{", array_lines(mesh[field], triple), "};"]
         lines += [f"static const Dmc3ModelObject {prefix}_objects[] = {{",
-                  array_lines(mesh["objects"], lambda o: "{%d,%d,%d}" %
-                              (o["index_start"], o["index_count"], o["texture"])), "};"]
+                  array_lines(mesh["objects"], lambda o: "{%d,%d,%d,%d}" %
+                              (o["index_start"], o["index_count"], o["texture"], o.get("mode", 0))), "};"]
         fields = ("positions", "normals", "local", "rest", "uvs", "bones", "weights", "parents", "indices", "objects")
         table.append("{" + ",".join(f"{prefix}_{field}" for field in fields) +
                      f",{len(mesh['positions'])},{len(mesh['indices'])},{len(mesh['objects'])},{skeleton['count']}" + "}")
