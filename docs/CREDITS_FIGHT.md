@@ -321,6 +321,31 @@ kills, the last the Hell Vanguard, the card, then demo 59.
 |---|---|---|
 | `vgskin_before` / `vgskin_after` (test street, the Vanguard alone) | 53-56 / 53-56 | 12.8 / 9.0 ms |
 | `vg_perf` / `vg_perf2` (the street, fastwaves, the Vanguard up) | 29-30 / 52-54 | 16.0-16.7 / 11.8 ms |
+**The camera-up drop (Nov 27).** A shot at frame 900 looked up into the fog at 30-40 FPS. The sky wasn't the cause.
+The FOCUS log's `upd` line (main.c's PROF sections, and the gaps between them) found three costs:
+- **Dante held in a ±960 box.** Since master's mode-first startup, only the test street's boot set
+  `player_room_limit` (and `player_floor_fn`, `camera_auto_follow`). Every mission kept player.c's default, 960.
+  - Whenever he moved he was clamped to ±960, and the wall sweep walked him back across the room in 15 cm steps.
+  - That cost 4-10 ms on 211 of 1500 frames, and pinned him at the street's edge (the camera against a wall:
+    the "sky" shot).
+  - The menu branch now sets them as boot did before.
+- **The staff pages' reads.** A page read whole at once took about 13 ms on the PSP's clock. Now sceIoOpenAsync /
+  sceIoReadAsync run while the slot is free, polled a frame at a time. The roll's slow frames went from 8 to 1 (a
+  page due before its read is done).
+- **The sky pass** drew every chunk of every BATCH_SKY set, culled or not. It now uses `chunk_visible`, which tests
+  the sides and the eye, not the far plane.
+  - Draw: the Palace's room 423 (7,782 sky vertices) 8.0 → 6.8 ms; the street 9.8 → 9.3 ms. The shots are the same
+    (the Palace's differs only in the FPS digits).
+  - The rooms with sky sets: 012, 423-425, 427-432, 434, 442, 444.
+
+`stage_collide` also skips a wall triangle out of reach by its bounds (the per-frame log is unchanged over
+1500 frames). In a focus run, `mission_update` spends about 12 ms every 30 frames on M6_LOG.TXT; `notrace 1` turns
+that off along with the bosses' logs.
+
+| Run (room 012, 1500 frames, `notrace 1`) | Frames a second | Update |
+|---|---|---|
+| before (`sky_gap`) | 53.4 (dips to 36) | 2.8 ms |
+| after (`sky_fix1`) | 58.6 (47 in the loading second) | 1.7 ms |
 
 ## 9. The street's look (fog, sky, brightness)
 
