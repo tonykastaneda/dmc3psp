@@ -176,7 +176,8 @@ Common to every class (offsets in the block):
 | +0x6c | Colour keys: four of 0x14 bytes (s16 frames, then four RGBA corners, 0x80 = 1.0); +0xbc on, +0xbd loop, +0xbe how many colours (`DAT_00590010`: 1, 2 or 4) |
 
 Colour (`FUN_001f8ce0` / `FUN_001f8e40`): from key i towards key (i + 1) & 3 over key i's frames, for i = 0, 1, 2; then
-done, or again with the loop flag. One colour fills every corner; two put the second on corners 1 and 2.
+done, or again with the loop flag. One colour fills every corner; two put the second on corners 1 and 2. The
+colour is applied as a burst starts (the game ticks it before the first draw), so key 0's unused corners never show.
 
 Sprites (class 3):
 
@@ -234,7 +235,7 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | `00462f90` Mission 19's mirrors (CStageSetMirror) | V0x1ea (P113) | each mirror as it shatters | yes (`mission19.c`, nfx bank 11, GDATA 758); the lit glow E0x2e0 is a model with an undecoded 1-byte texture reference: stand-in kept |
 | `004203a0` / `004203c0` a struck crystal (CStageSetCrystal) | V0x1c (P78), V4 (P24) for type 2, V554 (P160, 345, 346) for type 3 | at it | yes (`nfx_crystal_break`: Mission 13's 233, Secret Mission 10; V554 from GDATA 526 as bank 12) |
 | `00493590` the Nausika's blows (CStageSetNausika) | V0x22c / V0x22b (P257, 258 / P259) | where a blow lands | yes (`nausika.c`, GDATA 694 as bank 13; light / heavy by the hit record's +2 [inferred]) |
-| `00492630` the Nausika | V0x352 (P443) | looping on a bone | no (its bone and scale undecoded) |
+| `00492630` the Nausika | V0x352 (G512: P443 every 8 frames) | looping on a bone | yes (bone taken 150 up at its middle) |
 | `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` the Arachne's landings (states 0x23, 0x32, 0x28, 0x2b) | 44 | dust at its six legs' bones (+0x104 matrices); 0x32's events 1 / 2 one at its body | yes (any landing, legs 110 cm out round it) |
 | `00264b90` | 44 | (Dante's code range; not traced) | no |
 
@@ -246,7 +247,6 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | The Damned Bishop's fireball (CEm017Shl00, `00513430`) | V0x210 (P245, 309) | the Bishop's spell isn't decoded (`bishop.c` stands in) |
 | CEm022Shl00 (`0043ea30`) | V0x36c (P349) | its owner isn't identified yet |
 | The Soul Eater's state 0x11 (`00433e00`) | V0x1d8 (P306, 466) | that state isn't ported |
-| The Nausika's aura (`00492630`) | V0x352 (P443) | its bone and scale undecoded |
 | Agni & Rudra's states 36, 55 (`003a5ee0`, `003a8c60`), `003a94c0`, `003aa960` | P44, V0x30f / V0x2e5 / V0x2f6 | their landings and steps aren't located in the port's scripts |
 | Nevan's swarm bats as she's struck (`003c8ab0`) | V0x386 (P339) | the swarm's break on her hit isn't ported |
 | Dante's own moves and shells (`002d...`, `002fbf20`, CPl000Shl10 ...) | many | the moveset's owners' code |

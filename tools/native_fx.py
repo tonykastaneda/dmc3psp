@@ -281,8 +281,8 @@ def main():
     # 12 a stage effect pack (GDATA 526; 646 has the same): the crystals' V554 (a type-3 crystal struck, FUN_004203c0).
     summary.append(write_bank(lines, 12, records(read(526)), (554,), ()))
     # 13 the Nausika's effect pack (GDATA 694): CStageSetNausika's blows (V0x22b / V0x22c, FUN_00493590) and its
-    # aura (V0x352 on a bone, FUN_00492630: not played, see nausika.c).
-    summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c), ()))
+    # aura (V0x352 on a bone, FUN_00492630).
+    summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c, 0x352), ()))
     # 14-18 Dante's guns' effect packs (GDATA 97 + w: 102 E&I, 103 Shotgun, 104 Artemis, 105 Spiral, 106 Kalina Ann):
     # their muzzle flashes (FUN_002fbf20), Artemis's shot (CPl000Shl10, FUN_005232b0) and Kalina Ann's burst.
     for bank, slot, vs in ((14, 102, (0x22, 0xa, 0x32)), (15, 103, (0x23, 0xa, 0x32)), (16, 104, (0xd3,)), (17, 105, (0x228,)), (18, 106, (0x21b, 0x21f))):
