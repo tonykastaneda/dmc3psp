@@ -269,6 +269,8 @@ def main():
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
     summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, (), AGNI_RUDRA_P))
     summary.append(write_bank(lines, 5, records(pac_list(read(140))[10]), JESTER_V, ()))
+    chess = records(pac_list(read(127))[1])
+    summary.append(write_bank(lines, 25, chess, sorted(n for kind,n in chess if kind == 'V'), ()))
     # 6 em008's pack (GDATA 120, PNST chunk 24): the Hell Vanguard's P312 only (its V / E are vanguard_fx.py's).
     summary.append(write_bank(lines, 6, records(pnst_entries(read(120))[24]), (), (), (312,)))
     # 7 em028's effect pack (GDATA 133, PAC entry 9): Nevan's. Action 22's V0x199 (FUN_003b6c90) and her bats' P
@@ -310,10 +312,8 @@ def main():
                            (24, 101, (0x382, 0x29a, 0x18a, 0x27b, 0x2a8, 0x299, 0x27d, 0x2ba, 0x189))):
         effects = next(p for p in pnst_entries(read(slot)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
         summary.append(write_bank(lines, bank, records(effects), vs, (), (), (30, 31) if bank == 22 else ()))   # A&R's trails
-    # 25 em017's pack (GDATA 127, PAC entry 1), every chessman's: the castle's V0x390 and V0x1fa (FUN_00408dd0).
     # 26 em021's pack (GDATA 128, PAC entry 1): the Queen's charge V0x31b / V0x242 (FUN_00437ab0) and the King's blast
     # V0x36c / V0x233 (FUN_0043ea30, 0043ebe0). docs/CHESS_ROYALS_SPEC.md.
-    summary.append(write_bank(lines, 25, records(pac_list(read(127))[1]), (0x390, 0x1fa), ()))
     summary.append(write_bank(lines, 26, records(pac_list(read(128))[1]), (0x31b, 0x242, 0x36c, 0x233), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
@@ -340,7 +340,7 @@ def main():
                "static const unsigned short trail_m%d_indices[] = {%s};" % (m, ", ".join(map(str, idx))),
                "#define TRAIL_M%d_VERTICES %d" % (m, len(verts)), "#define TRAIL_M%d_INDICES %d" % (m, len(idx))]
     (args.output / "trail_runtime.h").write_text("\n".join(tl) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 25, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

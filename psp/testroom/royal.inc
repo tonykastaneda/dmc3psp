@@ -40,6 +40,12 @@ static void royal_spawn_glue(void) {
     for (k = 0; k < 4; ++k) royal_fx[slot][k] = 0;
     e->motion = -1;
     b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw; b->floor_y = e->pos[1];
+    {
+        ChessPiece *p = enemy_chess_actor();
+        memset(p, 0, sizeof *p);
+        p->est = e->kind == ENEMY_QUEEN ? 39 : 40;
+        p->alternate_percent = chess_alternate_chance(p->est, 0);
+    }
     if (e->kind == ENEMY_QUEEN) queen_spawn(&queen_brain[slot], (float)e->health, 0);
     else king_spawn(&king_brain[slot], (float)e->health, 0);
     royal_play(b->motion, 1);
@@ -114,6 +120,17 @@ static void royal_update_glue(float f, float px, float py, float pz) {
     b->yaw = e->yaw;
     b->frame = e->frame; b->done = e->done; b->hp = (float)e->health;
     if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) b->floor_y = e->floor_y = g;
+    {
+        ChessPiece *p = enemy_chess_actor();
+        /* the King gone: the master's death cascade (+0x3bc bit 0x8000) */
+        if (p->kill) {
+            p->kill = 0; e->health = 0; e->plan = P_DEATH; e->timer = 0.0f; p->busy = 0;
+            for (k = 0; k < 4; ++k) royal_fx_kill(k);
+            died();
+            return;
+        }
+        if (p->command == ROYAL_CMD_CASTLE) { b->dest[0] = p->destination[0]; b->dest[1] = p->destination[1]; b->dest[2] = p->destination[2]; }
+    }
     if (e->kind == ENEMY_QUEEN) royal_command(queen_think(&queen_brain[slot], f, px, py, pz, royal_command(-1), ai_unit));
     else royal_command(king_think(&king_brain[slot], f, px, py, pz, royal_command(-1), ai_unit));
     /* [stand-in] walls: the room's floor ends them (no floor under the new place puts the piece back and stops a
@@ -124,6 +141,9 @@ static void royal_update_glue(float f, float px, float py, float pz) {
     }
     e->pos[0] = b->pos[0]; e->pos[1] = b->pos[1]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     e->air = e->pos[1] > e->floor_y + 5.0f;
+    /* For the master: the castle is busy (+0x110 0x48000000); the royals never queue for a turn (their wait ends in
+     * 004095f0 on its own, not sub-state 2's grant). */
+    { ChessPiece *p = enemy_chess_actor(); p->busy = b->busy; p->swap_blocked = b->busy; p->waiting = 0; }
     if (b->restart || e->done) { royal_play(b->motion, b->restart); b->restart = 0; }
     royal_events(b, px, py, pz);
     royal_t[slot] += f;
@@ -155,6 +175,7 @@ static void royal_hit_glue(HitKind kind, float from_x, float from_z) {
             e->health = 0;
             e->plan = P_DEATH;
             e->timer = 0.0f;
+            enemy_chess_actor()->busy = 0;
             for (k = 0; k < 4; ++k) royal_fx_kill(k);
             died();
             return;
@@ -165,13 +186,17 @@ static void royal_hit_glue(HitKind kind, float from_x, float from_z) {
     royal_hit(b, kind == HIT_LAUNCH, kind == HIT_HEAVY || kind == HIT_SLAM, from_x, from_z);
     e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2];
 }
-/* The chess master's command for this piece: -1 reads it, else writes it back. [stand-in until chess.c's
- * enemy_chess_actor() reaches master: no master, so no commands; the pieces wait and move on their own] */
+/* The chess master's command for this piece (chess.c's actor +0x488): -1 reads it, else writes back what the brain
+ * left (cleared when taken). Tests' "royalcmd" lines are handed in as if the master gave them. */
 static int royal_test_cmd[ENEMY_MAX];
 static int royal_command(int command) {
     int slot = (int)(e - enemies);
-    if (command < 0) return royal_test_cmd[slot];
-    royal_test_cmd[slot] = command;
+    ChessPiece *p = enemy_chess_actor();
+    if (command < 0) {
+        if (royal_test_cmd[slot]) { p->command = royal_test_cmd[slot]; royal_test_cmd[slot] = 0; }
+        return p->command;
+    }
+    p->command = command;
     return command;
 }
 void enemy_royal_command(int command) {

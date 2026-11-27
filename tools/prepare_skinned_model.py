@@ -403,6 +403,7 @@ ENEMY_KINDS = (
     # The Soul Eater (class 16, EST 34), em016.pac: GDATA 126 (a PNST), pack 11 in the table at 0x58e740. [0] textures,
     # [1] its body (an EFM laid out as a MOD, 24 bones), [3] its six wing chains (em016_00.clt), [8] its motions.
     ("soul", 126, 1, None),
+    ("knight", 127, 7, None),
     # The Damned Queen and King (CEm021, EST 39 / 40), em021.pac (GDATA 128, pack 13): [0] textures, [1] effects, the
     # Queen [2]-[6] (body, motions, scripts, capsule list, capsules), the King [7]-[11]. docs/CHESS_ROYALS_SPEC.md.
     ("queen", 128, 2, None),
@@ -1057,6 +1058,10 @@ def main() -> None:
         if raw:
             parsed = parse_mot(raw)
             motions.append({"name": f"dp{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    for slot, raw in enumerate(pac_list(pawn_pack[8])):
+        if raw:
+            parsed=parse_mot(raw)
+            motions.append({"name":f"cn{slot:02d}","data":raw[:parsed["bytes_used"]],"parsed":parsed})
     # Agni & Rudra's: "arNN" by their slot in [11].
     for slot, raw in enumerate(pac_list(ar_pack[11])):
         if not raw:
@@ -1093,9 +1098,11 @@ def main() -> None:
             print(f"Beowulf bw{slot:02d}: not a MOT ({error}), skipped")
             continue
         motions.append({"name": f"bw{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
-    raw=pac_list(pawn_pack[13])[1]  # Bishop death; idle clip 0 has duplicate keys rejected by the parser.
-    parsed=parse_mot(raw)
-    motions.append({"name":"bi01","data":raw[:parsed["bytes_used"]],"parsed":parsed})
+    for slot,raw in enumerate(pac_list(pawn_pack[13])):
+        if raw:
+            # Native Bishop casting keys repeat frame92 to switch tangents; keep the original blob.
+            parsed=parse_mot(raw,allow_equal_frames=True)
+            motions.append({"name":f"bi{slot:02d}","data":raw[:parsed["bytes_used"]],"parsed":parsed})
     # The Blood-goyle's: "gbNN" from [8], one a state (motion N plays in state N).
     for slot, raw in enumerate(pac_list(goyle_pack[8])):
         if not raw:

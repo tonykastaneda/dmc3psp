@@ -34,7 +34,7 @@ import struct
 HEADER_SIZES = (0x30, 0x40, 0x50, 0x60, 0x70, 0x80)  # by bone count: weapons have few, the Enigma 42
 
 
-def parse_mot(data: bytes):
+def parse_mot(data: bytes, *, allow_equal_frames=False):
     if len(data) < 0x34 or data[4:8] != b"MOT\0":
         raise ValueError("Not a DMC3 MOT")
     header_size = struct.unpack_from("<I", data, 0)[0]
@@ -84,7 +84,7 @@ def parse_mot(data: bytes):
             else:
                 raw_frame = struct.unpack_from("<H", data, key_at)[0]
             frame = raw_frame & 0x7FFF
-            if frame <= last_frame:
+            if frame < last_frame or (frame == last_frame and not allow_equal_frames):
                 raise ValueError(f"Channel {len(channels)} key frames not increasing")
             last_frame = frame
             if kind == 1:

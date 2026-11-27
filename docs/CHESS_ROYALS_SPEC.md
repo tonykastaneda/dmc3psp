@@ -206,4 +206,8 @@ blast.
   - on 20 the Queen turns, winds up for 60 frames, charges for 84 (50 + 50 × rand) and lands;
   - on 20 the King's blast object charges for 60 frames (62 at the scene's 2-frame step), blasts, and ends at 240;
   - the King also attacked on his own after staying within 350 of Dante.
-- Not yet wired to the chess master (codex's `chess.c`): `royal_command` reads only the test line.
+- On the chess master (`chess.c`, docs/CHESS.md):
+  - `royal.inc` reads and clears `enemy_chess_actor()`'s command (20 the response, 30 the castle with its destination);
+  - it reports `busy` while castling, and they never queue as waiting;
+  - the King-death `kill` ends them;
+  - the test line `royalcmd frame command` hands its command in as the master would.

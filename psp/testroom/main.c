@@ -622,7 +622,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "FALLEN", "LADY", "BISHOP", "ABYSS"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "FALLEN", "LADY", "BISHOP", "ABYSS", "SOUL", "KNIGHT"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */
@@ -4414,6 +4414,7 @@ int main(int argc, char *argv[]) {
         focus_cmp = strncmp(text, "cmp", 3) == 0;
         if (focus_cmp) {
             cmp_load();
+            if (bench_trace) enemy_trace_start(); /* mission-scene actor traces too */
             if (cmp_enemy_audit) {
                 path_in_game_dir(path, sizeof(path), "ENEMY_AUDIT.CSV");
                 enemy_audit_start(path);

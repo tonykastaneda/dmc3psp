@@ -8,10 +8,9 @@
  *   - landed, if Dante is within 170 cm (FUN_004387f0) and within 90 degrees of its front, it attacks
  *     (FUN_00438a50): it waits 40 frames (40 - rank x 6), then plays its motion; else it thinks again;
  *   - between moves (FUN_00408320) a wait counted down by 3 x 1000 / max(distance, 1000) a frame.
- * The pieces take their turns from a chess master (commands at +0x488) that isn't ported: the wait's length, the
- * choice of the double hop, the strike's reach and its damage, and the Pawn's health are estimates. */
+ * The shared chess master now grants turns through chess.c (43f160); the idle wait comes from409690's
+ * per-piece tables. This actor still approximates the strike collision/damage and its health. */
 #define PAWN_HEALTH (ENEMY_HEALTH * 300 / 250)
-#define PAWN_WAIT 90.0f          /* [estimate] the master's turn */
 #define PAWN_REACH 170.0f        /* FUN_004387f0: 170 cm, a quarter turn either side */
 enum { PW_THINK, PW_RISE, PW_FALL, PW_WAIT, PW_STRIKE, PW_DEATH };
 static int pawn_motion = -1;
@@ -25,6 +24,11 @@ static void pawn_state(int s) {
     e->timer = 0.0f;
     e->step = 0;
     e->done = 0;
+    enemy_chess_actor()->busy=s!=PW_THINK && s!=PW_DEATH;
+    if(s==PW_THINK) {
+        enemy_chess_actor()->waiting=0;enemy_chess_actor()->waited=0;
+        e->wake=chess_wait(35,0,0,ai_unit());
+    }
 }
 static void pawn_spawn(void) {
     e->plan = P_WATCH;
@@ -32,8 +36,9 @@ static void pawn_spawn(void) {
     e->frame = 0.0f;
     e->fade = 0.0f;
     e->vel[0] = e->vel[1] = e->vel[2] = 0.0f;
+    enemy_chess_actor()->est=35;
+    enemy_chess_actor()->alternate_percent=chess_alternate_chance(35,0);
     pawn_state(PW_THINK);
-    e->timer = -ai_unit() * PAWN_WAIT;   /* not all on the same beat */
 }
 static int pawn_facing(float px, float pz, float reach) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz);
@@ -66,8 +71,11 @@ static void pawn_update(float f, float px, float py, float pz) {
     switch (e->action) {
     case PW_THINK:
         e->frame = 0.0f;
-        if (e->timer > 0.0f) e->timer += f * (3.0f * 1000.0f / fmaxf(d, 1000.0f) - 1.0f);
-        if (e->timer > PAWN_WAIT) pawn_hop(d > 600.0f && ai_unit() < 0.3f);   /* [estimate] the double hop when far */
+        e->timer += f*(chess_wait_step(d,0)-1);
+        if(e->timer>e->wake) {
+            ChessPiece *p=enemy_chess_actor();p->waiting=1;p->waited+=f;
+            if(p->command>=10) { int doubled=p->command==15;p->command=0;p->waiting=0;pawn_hop(doubled); }
+        }
         e->pos[1] = e->floor_y;
         break;
     case PW_RISE:
