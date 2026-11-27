@@ -68,9 +68,13 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   shown, his idle's turn rate [inferred], the bomb and the hand trap are his own models but rigid (the hand's motions aren't played: it rises and sinks by an estimate), the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes, a bullet's stun value 8
   [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
-  (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit
-  records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300
-  as record 12 [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
+  (inference). The pedestal climb, the guard and the hops are the game's; stand-ins: a blow's "Dante's +5 is 0-2" (a
+  guarded blade counts 2) is taken as always, and its "+5 is 3, +6 his id" (counts 2 in a swing) as never [inferred];
+  Dante's recoil from a guarded blow (the hit's +0x34) isn't modelled; a wall's push for the leap (vtable +0x1c0) is
+  read as the walls pass moving him over 1 cm since his own move [inferred]; the survivor's moves below each health
+  mark (57 / 58) aren't picked (their shots aren't decoded); the pedestal's sword flash (0x3b3 / 0x3b4) isn't shown and
+  the landings' effects (0x2c, 0x2e5) are dust; the effects (0x311 / 0x312 a burst within 300 as record 12
+  [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed

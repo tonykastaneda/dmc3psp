@@ -876,15 +876,20 @@ script runner, so motions, hit windows, caps and damage are the game's. Health 7
 1800 frames (lists `0x5cf6d0`, records `0x5cf600`); the healthier brother takes flags 0x12 / 0x22 (role 1, he
 attacks) and the other 0x213 / 0x223 (role 2, no attack permission: he works round Dante to the far side by the
 flank, `003ad5d0`). Ported from the decoding below: the attack timer, the zones, the attack choice
-and the lone brother's moves; the survivor takes up both swords. The brain's order is the game's: Dante beyond
-his side line turns him (state 0, `FUN_003af2c0`), then the reaction to Dante's move (`FUN_003aeec0`, below):
-Agni hops back (21), Rudra guards (23), the survivor never; a blow in the guard's first phase is turned (22, 24:
-a hit), after which he counters at once from the second attack table. A blow that throws (`FUN_003a2ab0` /
+and the lone brother's moves. The brain's order is the game's: the formation's 0x8000 (the climb, below), then Dante
+beyond his side line turns him (state 0, `FUN_003af2c0`), then the reaction to Dante's move (`FUN_003aeec0`, below):
+Agni takes his guard stance (21), Rudra his (23), the survivor never. A blow that throws (`FUN_003a2ab0` /
 `FUN_003a2c00`, vtable +0xe4 / +0xe0) knocks him back, 37 struck from in front, 38 from behind (which of Dante's
 hits are those is inferred: the port's heavy, slam and launch). The pair's opening (64, below) is the game's
-(`ar_opening`; Rudra going 60 frames after Agni reads +0x2ee0 as their place in the pair, an inference). Not yet:
-the pedestal climb (63) and team moves, the hops (16-21) beyond their scripts, the guard stances the scripts set (`FUN_003a1a50` turns hits while one
-is up), the game's own effects (the charged blades are the game's V588 / V589 from em026 [18], with their generators, looping while the charge lasts but riding his hand, not the sword's matrix [estimate]; the slam's fire and wind bursts 0x311 / 0x312 are a stand-in: their E part is a 6-frame flash and the rest P particles, so the port's burst, hurting within 300 cm as attack record 12 [estimate]), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
+(`ar_opening`; Rudra going 60 frames after Agni reads +0x2ee0 as their place in the pair, an inference).
+**The survivor** (`ar_climb`, `ar_pedestal`, `ar_pounce`): his brother down, the controller's formation 9 sends him
+up his statue's head (63), where he takes up both swords (59 / 60, the second drawn in his other hand), and leaps
+down at Dante (56); from then on he's alone (+0x2ee7 = 0). **The guard** (`ar_hit`): the stances (21 / 23 / 25) and
+his swings' own guard turn blows from in front as `FUN_003a1a50` does (below). **The hops** (`ar_hop_run`) and the
+leap (11, `ar_leap`), the stun (36, `ar_stun`) and the leaps 56 / 65 move by the game's speeds and accelerations
+(`FUN_003b0090` / `FUN_003b02b0`), off the floor by their own fall. Not yet: the survivor's moves below each health
+mark (57 / 58, `FUN_003aeca0`: they fire shots through `FUN_004ea5f0`, not decoded), Dante's recoil from a guarded
+blow (the hit's +0x34), the game's own effects (the charged blades are the game's V588 / V589 from em026 [18], with their generators, looping while the charge lasts but riding his hand, not the sword's matrix [estimate]; the slam's fire and wind bursts 0x311 / 0x312 are a stand-in: their E part is a 6-frame flash and the rest P particles, so the port's burst, hurting within 300 cm as attack record 12 [estimate]; the pedestal's sword flash 0x3b3 / 0x3b4 and the landings' 0x2c / 0x2e5 are dust), and the script events. The slam (52-54, `003a8200`) plays its scripts by swords (61-64, or 65-68 with both; gp tables `0x6195a0`) and bursts at frame 165.
 Dashes use their records' speeds; other states move by root motion. A looping script gives way after 150 frames.
 They start as statues (ar71/ar72) and wake within 900 cm, when struck, or after 600 frames (the game plays a
 cutscene). One boss bar for both.
@@ -900,7 +905,7 @@ cutscene). One boss bar for both.
   land), 12-15 a move from table (`003b0450(n)`), 16-20 another (`003b09c0(n)`), 21/23/25 the reactions to Dante's
   attacks by sword set (gp table `0x6195e0`: 21, 23, 25), 22-26 → 28-35, 27-29 → 36-38, 30/31 → 39-41,
   32/35 → 45, 33/34 → 42-44, 37 → 50, 38 → 51, 39 death → 52, 40/41 → 53, 42-45 → 55-58, 46-49 → 87-90,
-  50 → 59, 51 → 60, 55 → 69, 56/65 → 77, 57/58 → 84-86, 59 → 80/78/82, 60 → 81/79/83.
+  50 → 59, 51 → 60, 55 → 69, 56 → 74-77, 65 → 75-77, 57/58 → 84-86, 59 → 78/80/82, 60 → 79/81/83.
 - **The brain** (`003acfb0` with his brother up, `003ace70` alone), in order: the pair's opening (`003aedd0`, state
   64); Dante in an odd sector (+0x2df5 bit 0, below) → **state 0, a turn** (ar26 at 0x888 a frame); a reaction to
   Dante's move (`003aeec0`); an attack when allowed (`003ade30`); else a move (`003ad5d0` paired, `003ad180` alone).
@@ -930,14 +935,54 @@ cutscene). One boss bar for both.
   and 300 frames; 0x1f waiting (turning 0x100) for his brother to be in state 64 past step 0x1d (or to have no opening
   flag), or the 300 to run out (then idle); 0x28 a wait of 60 × the brothers' count (+0x2ee0); 0x32 script 2; 0x33
   script 3 at (0, 3, 0) and 16; 0x34 script 4 with 300 frames; 0x35 at him (turning 0x800), landing or zone under 2
-  ends it (zone under 4 by its clock: state 0x41); 0x36 twenty frames still; 0x37 back to idle (state 2). State 63
-  (`003aad50`): the same start, then (`003b09c0(5)`) up to y 960 onto his pedestal: state 59 at (3065, 960, 1780)
-  (Agni) or 60 at (1930, 960, 1778) (Rudra), setting the room's flag bit 1 / 2 (+0x18 +0x5c). The brain (`003acfb0`)
-  takes 63 first, when its flags +0x2ede hold 0x8000 (`003af2f0`); `003ac9c0` copies them each frame from the pair
-  manager's member row (+0x2ed8, +0x27c); what sets 0x8000 there isn't in the exported code.
-- **Guard** (`003a1a50`, a hit while a script's guard is up): by the hit's kind and Dante's sector, turned (vtable
-  +0x34 on the hit, +0xe8, effect by the record) or taken (+0x38, effect +0x34's id); 0x2ec4 counts, past +0x2ec5 the
-  hit gets through. Needs Dante's hit records, which the port doesn't model.
+  ends it (zone under 4 by its clock: state 0x41); 0x36 twenty frames still; 0x37 back to idle (state 2).
+  "Within 100" and the turns aren't to Dante before step 0x1e: `003af970` sets the target (+0x150, distance +0x164) in
+  64 to the floor before his pedestal (2860 Agni's / 2170 Rudra's, 2200) with +0x2de7 = 1 (Dante nearer z 4000 than
+  2200, `00481350`) or (2862 / 2133, 4000) without, then (2500, 3000) to step 0x1d, then Dante.
+- **The survivor** (formation 9, `004810f0`: the pair's count falling to one, of two). Record 9 gives his row 0x8000
+  for 999999 frames; `003ac9c0` copies it to +0x2ede, and the pair's brain (`003acfb0`, run while +0x2ee7 = 1) takes
+  **state 63** first (`003af2f0`). 63 (`003aad50`, steps +5; target the floor before his pedestal as in 64): 0 beyond
+  100 script 26 (else 0x14); 1 five frames; 2 turning 0x888 until done; 0xa script 2; 0xb script 3, speeding 3 a frame
+  to 16; 0xc turning 0x800, then script 4; 0xd in the air until within 150; 0x14 still; 0x15 **hop 5** (target
+  (2500, 3000)): past y 960 he's set at (3065, 960, 1780) (Agni, +0x2dd4 = 0) or (1930, 960, 1778) (Rudra) in state
+  59 / 60, setting the room's flag bit 1 / 2 (+0x18 +0x5c); landing short, 63 starts over. The pedestal is the top of
+  his giant statue's head. **59 / 60** (`003aa180` 0 / 1): 0 script 78 / 79, facing +z, clocks 173 and 110; 0xa at 110
+  the sword's flash (`003ac670`: effect 0x3b3 / 0x3b4, sound 0x59); 0xb at 173 clock 215; 0x14 then script 80 / 81
+  and 95; 0x1e then 0x28: from the script's frame 112 **both swords** (+0x2f40 = 2, block `0x61a760`, +0x2ee7 = 0 so
+  `003ace70` from then on, +0x2ee5 = 0, `003af8a0` / `003af8e0`); 0x29 script 82 / 83; 0x2a at its frame 300 set at
+  (3061 / 1958, 939, 1816) with both blades charged (`003ac280` 0 and 1); its end → **state 56** with gravity on.
+  **56 / 65** (`003a94c0` 0 / 1): 0 script 74, turning 0x800; 0xa (56) its end, or (65) at once: script 75, up at 45
+  slowing 2; 0x14 its end, 76; 0x15 past the top falling 3 a frame to 30, turning 0x5b74b0[rank] + 0x100 (0xc0);
+  0x1e landed: 77, effect 0x2e5; then idle. Steps 0x14-0x1e go ahead at (distance − 350) / 10 + 10, 10-30 (10 with
+  Dante beyond the side line). **57 / 58** (`003a9980`, chosen by `003aeca0` for the survivor once his health
+  fraction falls to the next of 0.8, 0.65, 0.5, 0.35, 0.2 (`0x5b7480`); 57 Agni, 58 Rudra): scripts 84, 85 (looped
+  `0x5b7460[rank]` = 1), 86, firing shots through `003a9e90` / `004ea5f0` (not decoded).
+- **Hops** (`003b09c0(n)`, records `0x5b76d0` + 0x40 n, phase at +6): +0 the turn (`0x5b7410`: 0, 0x100, 0x300,
+  0x800, 0x1000), +4 four scripts (22-25: take-off, rise, fall, landing), +0xc the speed up, then the rise's y, x, z
+  accelerations and x, z caps, the fall's y acceleration and y cap, x, z accelerations and caps (local x right, z
+  ahead; `003b0090` runs x and z to their caps, `003b02b0` y). 0: up 50, −3 a frame, falling to 25; 1 / 2 the same,
+  12 ahead / back; 3 / 4 up 40, 10 right / left; 5 (the climb) up 40, −0.5, falling to 20, turning 0x1000. Phases: 0
+  take-off; 1 its end, the rise; 0xa / 0xb past the top, the fall; 0x14 / 0x15 landed (vtable +0x1bc), the landing
+  (effect 0x2c, `003ac750`); 0x1e still; 0x1f from its frame 85 `003acd50` may end it; 0x28 done. States 16-20 are
+  hops 0-4, then idle. **The leap** (11, `003a3860`): 2; 3 speeding 3 a frame to 16, turning 0x800; 4 for 5 frames,
+  or until a wall pushes him (vtable +0x1c0, `002575a0`: the push past 1 cm); then 5 slowing 1.5 a frame (from frame
+  25 `003acd50` may end it), and after a wall's stop with Dante beyond 350 in front, hop 1 (state 17). The survivor
+  with both swords flies on to within 350 and lands slamming (91 + swords, `003a3e30`).
+- **Guard** (`003a1a50`, vtable +0xc4, a hit while the guard for its kind is up: +0x1e4 blades, +0x1e5 bullets). The
+  stances 21 / 23 / 25 (`003a4270` / `4770` / `4c70`, by swords: gp `0x6195e0`) raise both to 2 and play 27 then 29
+  (30, 32; 33, 35), turning 0x800 for 20 frames. The attacks 42-49 and the parries 30, 31, 33, 34 raise +0x1e4 by the
+  script's flag 0 (op 3, over the swings; `003af800`): 4 while +0x2ee5 (blows met in a swing) < +0x2ee6 − 1, else 3;
+  +0x2ee6 = `0x619580[rank]` (1 at rank 0), doubled with both swords. A blow from Dante's odd sector (behind) is
+  taken. From in front: mode 2 counts +0x2ec4 (a blade 2, when Dante's +5 is 0-2; a bullet 1), and `003a27f0` (vtable
+  +0xf8) sends a blade past +0x2ec5 (`0x619588[rank]`: 11) to 27-29 (`0x619598`, the guard broken: script 36-38,
+  counter permission), else 22 / 24 / 26 (`0x619590`: the hold 28 / 31 / 34 then 29 / 32 / 35 if he's attacked since
+  (+0x2de5), else only the lowering; counter permission 2); a bullet past 11 clears +0x2de5. Modes 3 / 4 send a blade
+  to `003a24d0` (vtable +0xe8): +0x2ee5 up by 1 (2 when Dante's +5 is 3 and +6 his id), under +0x2ee6 the parry by the
+  swing he's in (34 from 34 / 45 / 49, 33 from 33 / 44 / 48, 31 from 31 / 43 / 47, 30 from 30 / 42 / 46, else 32 or 35
+  by swords), at it **36**; mode 4 also turns Dante's blow back (+0x34 on the hit). **36** (`003a5ee0`): 46, +0x2ee5 = 0,
+  charge off, counter permission 4; 47 for `0x5b7420[rank]` = 150; 48: from frame 66 up at 24.4, from 75 falling 2 a
+  frame to 30, spinning 14° a frame over frames 60-85 (`003aff80`); landed 49 (the survivor's blades recharged), from
+  frame 102 `003acd50` may end it.
 - **Moves** (`003ad180` alone): beyond 1000 leap (11) unless role ≥ 3, then on a 12-frame wait 12; 650-1000 → 12, or
   3, or 14/15 at random; 350-650 → 12, 4, 14/15, or 13 when role ≥ 4; nearer → 4 or 13. Paired (`003ad5d0`) adds the
   flank: 14 / 6-7 / 15 / 9-10 / 3-4 for flank 4 / 3 / 2 / 1 / 0.
