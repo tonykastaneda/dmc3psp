@@ -27,6 +27,8 @@
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "swizzle.h"
 #include "model_runtime.h"   /* Dmc3Vec3 / Dmc3Uv / Dmc3ModelObject / Dmc3Texture types */
+#include "model_blend.h"
+int model_blend_off;
 #include "enemy_runtime.h"
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
@@ -2696,6 +2698,8 @@ static void update_pose(float elapsed, float interval, int index, int count) {
 
 static void draw_one(void) {
     int i, bound = -1, translucent, blend_was = 0;
+    unsigned int blend_on = 0;
+    int blend_before = 0;
     if (e->hidden) return;
     const EnemyModel *m = &enemy_models[e->kind];
     const EnemyTextureSet *set = &enemy_texture_sets[m->texture_set];
@@ -2740,6 +2744,11 @@ static void draw_one(void) {
             sceGuTexImage(0, set->textures[bound].width, set->textures[bound].height, set->textures[bound].width, tex[bound]);
             sceGuTexFlush();
         }
+        if (o->blend != blend_on) {
+            if (!blend_on) blend_before = sceGuGetStatus(GU_BLEND);
+            model_object_blend(o->blend, blend_before);
+            blend_on = o->blend;
+        }
         if (m->object_scroll[i] >= 0) {
             /* A .TSC scroll (FUN_0019daf0): the texture slides, wrapping. */
             const float *uv = scroll_uv[e->kind][m->object_scroll[i]];
@@ -2752,6 +2761,7 @@ static void draw_one(void) {
         }
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[e->kind] + o->index_start, e->vertices);
     }
+    if (blend_on) model_object_blend(0, blend_before);
     if (e->kind == ENEMY_GOYLE || e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { sceGuAmbientColor(0xffffffffu); sceGuColor(0xffffffffu); sceGuEnable(GU_TEXTURE_2D); }
     if (e->kind != ENEMY_ENIGMA && e->kind != ENEMY_GOYLE) {
         /* The weapon in its hand: a Seven Hell's scythe. The Enigma's bows are part of its body. */

@@ -5,6 +5,7 @@
  * The demo's demo_clock runs at 60 frames a second. Not yet: hide tracks, cloth, effects, messages, fades and sound. */
 #include "demo.h"
 
+#include "model_blend.h"
 #include "motion.h"
 #include "nfx.h"
 #include "stage.h"
@@ -643,13 +644,11 @@ void demo_draw(void) {
                 sceGuTexFlush();
             }
             if (hide && !object_shown(hide, (unsigned int)k)) continue;
-            /* The object's blend (its MOD record's byte 8, the GS ALPHA table 0x566ec0 [inferred]): 2 adds
-             * (Cs*As + Cd, eye highlights), 3 subtracts (Cd - Cs*As, Arkham's veins), else normal. */
-            if (mode == 2) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffffu);
-            else if (mode == 3) sceGuBlendFunc(GU_REVERSE_SUBTRACT, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffffu);
-            if (mode >= 2) sceGuDepthMask(GU_TRUE);   /* an overlay: it doesn't hide what's drawn after it */
+            /* The object's blend (its MOD record's byte 8, model_blend.h): 2 adds (eye highlights), 3 subtracts
+             * (Arkham's veins), 4 subtracts the colour whole, else normal. Blending stays on in demos. */
+            if (mode >= 2) model_object_blend(mode, 1);
             sceGumDrawArray(GU_TRIANGLES, DEMO_VTYPE, (int)obj[k].count, idx + obj[k].first, a->skinned);
-            if (mode >= 2) { sceGuDepthMask(GU_FALSE); sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0); }
+            if (mode >= 2) model_object_blend(0, 1);
         }
     }
     sceGuDisable(GU_BLEND);

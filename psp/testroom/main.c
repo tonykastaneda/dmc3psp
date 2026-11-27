@@ -2181,6 +2181,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "ownall ", 7) == 0) cmp_ownall = atoi(line + 7);
         else if (strncmp(line, "m6got ", 6) == 0) cmp_m6_got = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
+        else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {

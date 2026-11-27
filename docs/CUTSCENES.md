@@ -62,8 +62,19 @@ fix above wasn't the cause. Two things were:
 
 Still different from the PS2 there (not textures): the PS2 frames cm027 tighter (brow to lip; the port shows crown
 to lip), so the cameras' fov is likely not vertical as the port takes it; the PS2 lights the face darker and warmer;
-the subtracted veins read stronger in the port (the PS2's are a faint darkening under its darker lighting). The
-gameplay models (`enemy_mesh` merges objects by texture; the player) don't carry the blend yet.
+the subtracted veins read stronger in the port (the PS2's are a faint darkening under its darker lighting).
+
+**The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
+FIX 0x80, Cd − Cs; 5-15 are on no character); bits 4 and 5 (0x10 / 0x20, values 16-19 and 48, nearly all on EFM
+effect models) are flags not known yet, so 0x12 now adds and 0x13 subtracts where both were drawn normal before.
+`Dmc3ModelObject` carries it (`blend`, 0 where a generator leaves it out) and `model_blend.h` sets it for the
+enemies (`enemy_mesh` merges objects by texture and blend, the blended groups drawn last: one more draw for a kind
+that has any), Arkham, Cerberus and the demos. Gameplay Dante (pl000) has none. Where it shows
+(`analysis/testroom/blend_enemies_grid.png`, `blend_cerberus_pair.png`, `blend_arkham_pair.png`; left `noblend 1`,
+right as now): Cerberus's ice (all of `[12]`-`[15]`, additive, now drawn after the heads), Arkham's blob (13
+additive objects), the Abyss's vein layer (object 1, subtractive), the Blood-goyle's red layers, the Arachne's
+abdomen, the Hells' eyes (object 16), the Fallen's spear tip, the Soul Eater (all additive). Not yet compared with
+the PS2 for these (no save state reaches them); the Abyss's body is near white in the port with or without it.
 
 The game's story scenes are **demos**. Event op `02 D` plays demo D and section `09 D` of the mission's event table
 decides what follows (docs/EVENT_SCRIPTS.md). Some demos are pre-rendered movies (`.sfd` in MDATA1.AFS / MDATA2.AFS);
