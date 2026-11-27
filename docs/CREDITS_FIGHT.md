@@ -274,7 +274,16 @@ in `analysis/testroom/` (local).
 
 **The full flow** (`credits_full`, Mission 20 from room 411 with `tools/tests/mission20_clear.scene`): Vergil falls,
 demos 57 and 58 play, and room 012 starts the street on its own (`credits on=1 ... ally=1 mode=0x33` at the run's end).
-The run stopped at frame 18000, 2 frames into the street. The street's own course is covered by the direct runs above.
+Test runs may now go to 72000 frames, so the whole mission fits. `m20_whole3` (30000 frames, after the lighting and
+the master merge of Nov 26 evening) runs Vergil, demos 57 and 58, the street to clock 13920 with 100 spawns and 100
+kills, the last the Hell Vanguard, the card, then demo 59.
+
+- **The 100th enemy.** Before 499e089 that run ended on 99 kills with no card. Room 012 has only 64-128 KB of heap
+  left (the FOCUS log's `heap` line). The Vanguard came into an enemy slot that had never had one, its skinning
+  buffers couldn't be allocated, and `vanguard_spawn` gave up, so the slot dropped him unseen and uncounted.
+  - A slot now takes over the buffers of one whose Vanguard is gone (slot 0's from `vanguard_init`) before it
+    allocates.
+  - The `credits` line now reports `spawns`, `fails` (no free slot) and `last` (the last kill's kind) for this.
 
 **Frame rate.** PPSSPP PERF.TXT, the street with Lady, 4 enemies and a page up:
 
