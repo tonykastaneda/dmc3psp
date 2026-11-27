@@ -1313,14 +1313,17 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
              * near plane follows the eye's distance to its target, a third of it, 4-25 cm: demo 3's frame 1240 puts
              * the eye in front of Dante's chest while it looks at enemies metres away, and a 50 cm cap cut his whole
              * front off (the PS2 shows his chest and mouth there). What still crosses is clipped (near_clip.h).
-             * Channel 12 is a vertical angle (the PS2's FUN_001ac750). The 16:9 screen keeps that angle and
-             * shows more to the sides, the same wider frame gameplay uses. The 326-line fit (demo_screen_fov)
-             * is not applied. The cinema bars are drawn later. */
+             * Channel 12 is a vertical angle (the PS2's FUN_001ac750: Y scale 1/tan of half the angle, and the
+             * screen height cancels). Drawn raw across these 272 lines the picture is wider than the PS2 stills,
+             * so a cut uses the 326-line fit (demo_screen_fov) [stand-in]. Test line "rawfov 1" passes the decoded
+             * angle. The 16:9 screen keeps that vertical angle and shows more to the sides. The cinema bars are
+             * drawn later. */
             float dx = camera->tx - camera->x, dy = camera->ty - camera->y, dz = camera->tz - camera->z;
             float near = sqrtf(dx * dx + dy * dy + dz * dz) * 0.33f;
+            float use = demo_raw_fov ? fov : demo_screen_fov(fov);
             if (near < 4.0f) near = 4.0f;
             if (near > 25.0f) near = 25.0f;
-            sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
+            sceGumPerspective(use, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
         }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
         else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
@@ -2454,6 +2457,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }
         else if (strncmp(line, "nearclip ", 9) == 0) { extern int near_clip_off; near_clip_off = !atoi(line + 9); }
+        else if (strncmp(line, "rawfov ", 7) == 0) demo_raw_fov = atoi(line + 7);   /* tests: 1 passes channel 12 raw */
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {

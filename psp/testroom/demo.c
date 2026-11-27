@@ -739,11 +739,14 @@ static int demo_lights(const float c[3]) {
     return 1;
 }
 
-/* The demo's frame (demo.h). Channel 12 is a vertical angle (FUN_001ac750); the projection passes it across the
- * PSP's 272 lines and does not call demo_screen_fov. That rescale is the fit that matches the PCSX2 stills (subjects
- * about a fifth larger: 272 of a 326-line frame). The bars leave 0.712 of the height (measured in PCSX2, demos 3, 5, 59).  */
+/* The demo's frame (demo.h). A cutscene's projection uses demo_screen_fov, the 326-line fit: subjects about a
+ * fifth larger than channel 12 raw (272 of a 326-line frame). That raw angle is what FUN_001ac750 builds (1/tan of
+ * half of it; the screen height cancels) and it frames wider than the PS2 stills, so the fit is a stand-in. Test
+ * line "rawfov 1" (demo_raw_fov) passes the raw angle. The bars leave 0.712 of the height (measured in PCSX2,
+ * demos 3, 5, 59). */
 #define DEMO_FRAME_H 326.0f
 #define DEMO_SHOWN 0.712f
+int demo_raw_fov;
 float demo_screen_fov(float fov) {
     return 2.0f * atanf(tanf(fov * 0.0087266f) * 272.0f / DEMO_FRAME_H) * 57.29578f;
 }

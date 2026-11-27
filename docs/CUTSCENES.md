@@ -136,14 +136,18 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   the palette fix); FASTOCTREE had posterised the smooth sky into blotches. Every room's and demo's stage is rebaked.
 - **Letterbox.** The PS2 draws demos with cinema bars, 0.712 of the height showing (measured in PCSX2 in demos 3, 5
   and 59): `demo_letterbox`, 39 lines top and bottom.
-- **Framing.** Channel 12 is the vertical angle (`FUN_001ac750`) and is drawn across the full 16:9 width, so a
-  demo shows more to either side than a 4:3 television and there are no side bars. The fitted 326-line rescale
-  (`demo_screen_fov`) is not applied. Against the PS2 halves of `demo5_sky_compare.png`, `demo3_compare.png` and
-  `demo59_compare.png` that raw angle is wider than the stills: demo 5 frame 1260 holds the hooded figure at the
-  right edge there and brings it fully in here (`analysis/testroom/sky5_1260.png`); frame 300 shows a figure at the
-  right edge the still crops (`sky5_300.png`); demo 59 frame 700's Dante is smaller (`sky59_700.png`). The 326-line
-  fit matches those stills (`fit5_1260.png`, `fit5_300.png`, `fit59_700.png`) and stays unused. Demos 3, 5, 6, 16, 44
-  and 53 were checked at wide frames; the extra width is more of the same stage, so none is cropped back to 4:3.
+- **Framing.** Channel 12 is the vertical angle (`FUN_001ac750`: the Y scale is 1/tan of half that angle, and the
+  screen-height halfword is in the focal length and again in the Y divisor, so the height cancels). Drawn raw across
+  the PSP's 272 lines that angle frames wider than the PS2 stills, so a cutscene uses the 326-line fit
+  (`demo_screen_fov`, `2*atan(tan(fov/2)*272/326)`) [stand-in, fitted to the PCSX2 stills]. The picture stays the
+  full 16:9 width, so a demo shows more to either side than a 4:3 television and there are no side bars. Test line
+  `rawfov 1` passes channel 12 raw. Evidence, against the PS2 halves of `demo5_sky_compare.png`, `demo3_compare.png`
+  and `demo59_compare.png`: raw demo 5 frame 1260 (`sky5_1260.png`) brings the hooded figure fully in, where the
+  still holds it at the right edge, and `fit5_1260.png` matches the still; raw frame 300 (`sky5_300.png`) shows a
+  figure at the right edge the still crops, and `fit5_300.png` matches; raw demo 59 frame 700 (`sky59_700.png`) has
+  Dante smaller, and `fit59_700.png` matches. With the fit active, `fov5_1260.png` matches `fit5_1260.png` and
+  `fov59_700.png` matches `fit59_700.png`. Demos 3, 5, 6, 16, 44 and 53 were checked at wide frames; the extra
+  width is more of the same stage, so none is cropped back to 4:3.
 - **The characters' colour.** The Program track's No 5 (a colour scale, 128 = 1.0: demo 1 210 200 180, demo 47 15 20
   25) and No 6 (their ambient: 30 20 20 in demos 1-5) [inferred from their values] scale the demo's lights and set
   the ambient (`demo_program_colour`), replacing the by-eye 0x30 ambient where a demo sets them. Arkham's face in demo
@@ -304,8 +308,9 @@ pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone
 at (frame - SetFrame) / ClipScale + SkipFrame from its start, MOT's Hermite with per-frame slopes, a key with bit 15
 clear linear to the next) and DSTG_nnn.BIN (slot 00's `.scm` and texture set through `tools/prepare_stage.py --scm --ptx`,
 its play area the cameras' reach). `psp/testroom/demo.c` plays it at 60 frames a second: the stage and the camera
-(channel 12 as a vertical field of view, channel 13 as roll). That angle is drawn across the full 16:9 width, with
-the cinema bars above and below; gameplay uses the same wider frame. Room 421 texture 6, the crack page that drew as a black plate across demo 53's frame 2300, is added, so the plate no longer replaces the stone. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
+(channel 12 as a vertical field of view, then the 326-line fit `demo_screen_fov` [stand-in]; channel 13 as roll).
+The picture is the full 16:9 width, with the cinema bars above and below; test line `rawfov 1` passes channel 12
+raw. Gameplay uses the same wider frame. Room 421 texture 6, the crack page that drew as a black plate across demo 53's frame 2300, is added, so the plate no longer replaces the stone. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
 arena through its cuts. **The cast**: each model slot's MOD (slimmed as the enemies'), its texture set (8-bit, swizzled), its motion clips
 (MOT, streamed: the BIN keeps all but the motions resident, 1.5 MB for demo 5, and reads a clip's MOT 20 frames before
 it starts, freeing it after). Two things the demos showed: **a cutscene MOT stores a bone's translation records first**,

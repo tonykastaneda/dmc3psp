@@ -21,8 +21,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
   matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
 - **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
-  colour scale and ambient [inferred from values]. The 326-line fov fit is not applied (channel 12 goes to the
-  projection as a vertical angle). Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so
+  colour scale and ambient [inferred from values]. The cutscene field of view is the 326-line fit (`demo_screen_fov`)
+  [stand-in]: channel 12's raw angle (`FUN_001ac750`, the screen height cancels) frames wider than the PS2 stills
+  (demo 5 frames 300 and 1260, demo 59 frame 700; `sky5_300.png`, `sky5_1260.png`, `sky59_700.png`) and the fit
+  matches them (`fit5_300.png`, `fit5_1260.png`, `fit59_700.png`). Test line `rawfov 1` passes the raw angle.
+  Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so
   backgrounds are sharper and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near
   plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
