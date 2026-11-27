@@ -15,7 +15,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
   `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: their P / G effects and cloth aren't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
+  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth isn't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
   [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
@@ -34,8 +34,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
-  throws, Geryon's missiles, Vergil's 0x338, Agni & Rudra's 0x311 / 0x312 (the charged blades' 0x24c / 0x24d are the game's, riding the hand), Cerberus's unported
-  particle programs, the Vanguard's P312 dissolve). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
+  trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
+  particle programs). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
+- **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
+  camera-facing emitter's axes from the eye and world up (not the camera's own up); fake
+  sprite layers face the camera; the sheet's top taken as a sprite's top; Line02 isn't ported.
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
   flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
@@ -65,11 +68,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
-  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes; ordinary E&I stun uses the native raw10 x1.75, the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
+  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects (the bomb's with its P particles), the trap's ring is motes; ordinary E&I stun uses the native raw10 x1.75, the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit
-  records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300
-  as record 12 [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
+  records); the second attack table after a guard; the hops' records; the slam hurting within 300
+  as record 12 [estimate], its effects at the hand's floor point [estimate]. `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
@@ -83,7 +86,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
-- **Cerberus**: two particle programs stand in. CERBERUS_SPEC.md.
+- **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
+  the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
 - **Vergil**: gravity 1 [inferred]; effect 0x338 is a hit spark; his drop lands where Dante stands; his hit reaction
   isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
@@ -97,7 +101,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   game), but plays Dante's moveset on his body (his own isn't ported), with no coat or sword, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
   rigid, their count and the summon clock's reload [estimates]; his hits' damage not from records; demo 53 / 328 not
   played. `arkham_boss.c`, ARKHAM_SPEC.md, PortJobs.
-- **Hell Vanguard**: the P312 dissolve. VANGUARD_EFFECTS.md.
+- **Hell Vanguard**: the model's fade out and in round P312 (the game hides and shows it). VANGUARD_EFFECTS.md.
 
 ## Missions and rooms
 
