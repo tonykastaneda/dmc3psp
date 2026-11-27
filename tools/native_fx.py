@@ -52,6 +52,13 @@ JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c,
 SHARED_TEXTURE = 54
 
 
+def _is_effect_pack(p):
+    try:
+        return bool(records(p))
+    except Exception:
+        return False
+
+
 def records(pack):
     names, body = pnst_entries(pack)
     chunks = pnst_entries(body)
@@ -165,10 +172,12 @@ def mesh(mod):
     return verts, idx
 
 
-def write_bank(lines, bank, recs, v_ids, e_ids, p_ids=()):
+def write_bank(lines, bank, recs, v_ids, e_ids, p_ids=(), model_ids=()):
     vs, es, skipped = closure(recs, v_ids, e_ids)
     ps, p_textures, atlases = particles(recs, vs, p_ids)
     textures, models = {}, {}
+    for m in model_ids:   # drawn by the port's own code (the blade trails' models)
+        models.setdefault(m, None)
     for t in p_textures:
         textures.setdefault(t, picture(recs["T", t]))
     for e in es:
@@ -176,6 +185,8 @@ def write_bank(lines, bank, recs, v_ids, e_ids, p_ids=()):
         kind, tex = rec[1], struct.unpack_from("<H", rec, 4)[0]
         if kind == 5:
             models.setdefault(struct.unpack_from("<H", rec, 0x28)[0], None)
+            if rec[0x211]:   # its textures are model +0x212's (FUN_001f1760); that model is exported for them
+                models.setdefault(struct.unpack_from("<H", rec, 0x212)[0], None)
         elif tex != 0xFFFF:
             textures.setdefault(tex, picture(recs["T", tex]))
     model_tex = {}
@@ -247,8 +258,11 @@ def main():
              "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; const NfxRecord *p; int p_count; const NfxRecord *a; int a_count; } NfxBank;"]
     summary = []
     # P44 (dust): the Arachne's landings start it from the shared pack (FUN_003fb580 and its kin).
-    # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0).
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c), ORB_E, (44,)))
+    # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0). V6: a Royalguard block (FUN_00224db0).
+    # V0x83: Air Hike (FUN_00222700); V0x14d: Enemy Step (FUN_00228950); V0x90: Cerberus's and Beowulf's charges start
+    # (FUN_00272210, FUN_0027abf0) and kicks off a wall or an enemy. V0xdc, E0x140, V0x3c: the Devil Trigger (CEfcPub,
+    # FUN_00332240 ids 0x20-0x24 / 0x42-0x46). G0x5f, V0x29, V0x7b: CEfcPub 0x58 (Beowulf's 7:31) for the default costume.
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90, 0xdc, 0x3c, 0x5f | G_FLAG, 0x29, 0x7b, 0xc0, 0x295, 0x26a, 0x265, 0x264, 0x267, 0x269, 0x2a6), ORB_E + (0x140,), (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
@@ -273,15 +287,55 @@ def main():
     # 12 a stage effect pack (GDATA 526; 646 has the same): the crystals' V554 (a type-3 crystal struck, FUN_004203c0).
     summary.append(write_bank(lines, 12, records(read(526)), (554,), ()))
     # 13 the Nausika's effect pack (GDATA 694): CStageSetNausika's blows (V0x22b / V0x22c, FUN_00493590) and its
-    # aura (V0x352 on a bone, FUN_00492630: not played, see nausika.c).
-    summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c), ()))
+    # aura (V0x352 on a bone, FUN_00492630).
+    summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c, 0x352), ()))
+    # 14-18 Dante's guns' effect packs (GDATA 97 + w: 102 E&I, 103 Shotgun, 104 Artemis, 105 Spiral, 106 Kalina Ann):
+    # their muzzle flashes (FUN_002fbf20), Artemis's shot (CPl000Shl10, FUN_005232b0) and Kalina Ann's burst.
+    for bank, slot, vs in ((14, 102, (0x22, 0xa, 0x32)), (15, 103, (0x23, 0xa, 0x32, 0xb2 | G_FLAG)), (16, 104, (0xd3, 0x2f4)), (17, 105, (0x228,)), (18, 106, (0x21b, 0x21f))):
+        pack = pnst_entries(read(slot))
+        effects = next(p for p in pack if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
+        summary.append(write_bank(lines, bank, records(effects), vs, ()))
     # st423's effect bank (GDATA 830), shared by the ten Palace arena variants.
     # STAY 100/101/102 explicitly name V965/V967/V964 (water/lightning/fire).
-    # Leave 14-18 free for cl3's gun banks, reported in the run coordination log.
     summary.append(write_bank(lines, 19, records(read(830)), (965,967,964), ()))
+    # 20 Dante's own effect pack (GDATA 97): Helm Breaker's landing V0x8e (FUN_00264b90).
+    effects = next(p for p in pnst_entries(read(97)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
+    summary.append(write_bank(lines, 20, records(effects), (0x8e, 0xc7, 0x44 | G_FLAG, 0x7d | G_FLAG, 0xa1, 0xf3, 0xb0, 0xf5), (), (), (34,)))
+    # 21-24 the Devil Arms' packs (GDATA 98 Cerberus, 99 Agni & Rudra, 100 Nevan, 101 Beowulf): their action handlers'
+    # effects (FUN_00272210, 00272c70, 00273150, 00296ae0, 00274c70, 00276ac0, 00277350, 0027abf0).
+    # And their CEfcPub ids' (FUN_00332240; docs/NATIVE_FX.md "Dante's effects").
+    for bank, slot, vs in ((21, 98, (0x252, 0x262)),
+                           (22, 99, (0x288, 0x285, 0x37e, 0x37d, 0x302, 0x1cc | G_FLAG, 0x287, 0x28a, 0x284, 0x27e, 0x25c, 0x286, 0x273)),
+                           (23, 100, (0x38e, 0x2c1, 0x2b7, 0x2a7, 0x260, 0x187, 0x179 | G_FLAG, 0x2b8, 0x234 | G_FLAG)),
+                           (24, 101, (0x382, 0x29a, 0x18a, 0x27b, 0x2a8, 0x299, 0x27d, 0x2ba, 0x189))):
+        effects = next(p for p in pnst_entries(read(slot)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
+        summary.append(write_bank(lines, bank, records(effects), vs, (), (), (30, 31) if bank == 22 else ()))   # A&R's trails
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19), summary):
+    # The blade trails' models (docs/NATIVE_FX.md "Blade trails"): M34 (Dante's pack), M30 / M31 (A&R's), 33 bones in a
+    # row 2 cm apart, one bone a vertex; each vertex as its offset from its bone's rest place, for fx.c to carry on the
+    # trail's 33 frames.
+    from mod_skeleton import parse_skin, parse_skeleton
+    tl = ["/* Generated by tools/native_fx.py from the PS2 disc. */", "#pragma once",
+          "typedef struct { float u, v; int bone; float x, y, z; } TrailVertex;"]
+    for slot, m in ((97, 34), (99, 30), (99, 31)):
+        effects = next(p for p in pnst_entries(read(slot)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
+        mod = records(effects)["M", m][0]
+        obj = parse_mod(mod, True)[0][0]
+        sk = parse_skeleton(mod)
+        bones, weights, _ = parse_skin(mod, obj["bone_offset"], obj["weight_offset"], obj["vertex_count"], sk["count"])
+        verts = []
+        for pos, uv, bn, w in zip(obj["positions"], obj["uvs"], bones, weights):
+            k = bn[max(range(3), key=lambda i: w[i])]
+            rest = sk["world"][k]
+            verts.append("{%s, %s, %d, %s, %s, %s}" % (c_float(uv[0]), c_float(uv[1]), k, c_float(pos[0] - rest[0]),
+                                                       c_float(pos[1] - rest[1]), c_float(pos[2] - rest[2])))
+        idx = [i for f in obj["faces"] for i in f]
+        tl += ["static const TrailVertex trail_m%d_vertices[] = {" % m, "    " + ",\n    ".join(verts), "};",
+               "static const unsigned short trail_m%d_indices[] = {%s};" % (m, ", ".join(map(str, idx))),
+               "#define TRAIL_M%d_VERTICES %d" % (m, len(verts)), "#define TRAIL_M%d_INDICES %d" % (m, len(idx))]
+    (args.output / "trail_runtime.h").write_text("\n".join(tl) + "\n", encoding="ascii")
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

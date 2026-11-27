@@ -560,7 +560,9 @@ def main() -> None:
                 tris.extend(subdivide(tri, play))
             if tris:
                 kind = 2 if sub["texture"] in blend_textures else (1 if sub["texture"] in alpha_textures else 0)
-                batches.append([sub["texture"], kind, tris, 0, 0, sky, obj.get("blend", 0)])
+                # Each stage batch carries its SCM object (index + 1, the batch's 8th word): a cutscene's stage hide
+                # track hides objects one by one (demo 3's walls in front of its later cameras; stage.c).
+                batches.append([sub["texture"], kind, tris, 0, 0, sky, obj.get("blend", 0), oi + 1 if oi < 255 else 0])
 
     # Coplanar overlap check between batches (z-fighting candidates).
     planes = {}
@@ -659,7 +661,10 @@ def main() -> None:
             # A STAY set reaching far overhead is the room's sky (st012's model 0, "light scr", up to y 45052):
             # flagged so the runtime draws it first, past the stage's far plane.
             sky = s["kind"] == "STAY" and max(v[1] for t in subdivided for v in t) > SKY_HEIGHT
-            batches.append([texture, kind_flag, subdivided, 0, gimmicks.LIFT_TAG if kind == "LIFT" else numbers.get(s["index"], 0), sky])
+            # Its 8th word: 256 + the prop's place in the room's list, so a cutscene can hide it with the piece it stands in
+            # for (prepare_demo.stage_hide_events: a demo's ss pieces textured from the room are the room's props).
+            batches.append([texture, kind_flag, subdivided, 0, gimmicks.LIFT_TAG if kind == "LIFT" else numbers.get(s["index"], 0), sky,
+                            0, 256 + s["index"] if s["index"] < 256 else 0])
             prop_batches += 1
 
     # Room 216, the Temperance Wagon's ride: its TRUCK set (CStageSetTruck, FUN_004865e0 / 004867b0) turns its parts
@@ -742,10 +747,10 @@ def main() -> None:
                            min(v[0] for v in pts), min(v[1] for v in pts), min(v[2] for v in pts),
                            max(v[0] for v in pts), max(v[1] for v in pts), max(v[2] for v in pts)))
             first += len(g) * 3
-        struct.pack_into("<7I", blob, batch_table + 32 * slot, texture, batch_first, first - batch_first,
+        struct.pack_into("<8I", blob, batch_table + 32 * slot, texture, batch_first, first - batch_first,
                          (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0) | (8 if len(batches[bi]) > 5 and batches[bi][5] else 0)
                          | (16 if blend_of(bi) == 2 else 32 if blend_of(bi) == 3 else 0),
-                         chunk_first, len(chunks) - chunk_first, group)
+                         chunk_first, len(chunks) - chunk_first, group, batches[bi][7] if len(batches[bi]) > 7 else 0)
     chunk_table = align(blob)
     for c in chunks:
         blob += struct.pack("<2I6f", *c)

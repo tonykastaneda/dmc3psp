@@ -24,7 +24,8 @@
 
 typedef struct { char magic[4]; unsigned int frames, camera, textures, texture_count, actors, actor_count, reserved;
                  unsigned int subtitles, subtitle_count, fades, fade_count, fx_bank, fx_clips, fx_count,
-                 light_count; /* the Light clips, right after the fades */ } DemoHeader;
+                 light_count; /* low 16: Light clips, right after the fades. High 16: ScrEfc GFG clips,
+                                  * after the Program colour clips (0 in a bin baked before fog). */ } DemoHeader;
 /* A Light clip (tools/prepare_demo.py bake_lights): its start and frames, ValidType, IsMinus, Type 1 (eased Src to Dst). */
 typedef struct { float start, frames; unsigned char valid, minus, ease, pad;
                  float src_pos[3], src_force, src_range, src_rgb[3], dst_pos[3], dst_force, dst_range, dst_rgb[3], pad2; } DemoLight;
@@ -289,7 +290,34 @@ int demo_start(int demo, const char *dir) {
     return 1;
 }
 
+/* The stage's hide track (prepare_demo: after the Program clips and the fog records, u32 count then {f32 frame, u16
+ * object, u16 hidden}; object 0xffff shows all): each object's state now, onto the stage's batches (tagged object + 1).
+ * +0x3c holds the light count in its low half and the fog count in its high half; a fog record is 24 bytes. */
+#define STAGE_HIDE_OBJECTS 511   /* 0-254 the stage's SCM objects, 255-510 the room's props (prepare_demo) */
+static void stage_hide_apply(int clear) {
+    unsigned char want[STAGE_HIDE_OBJECTS];
+    int k;
+    memset(want, 0, sizeof want);
+    if (!clear && head) {
+        /* after the fades, lights (low half of light_count), Program clips and fogs (its high half) */
+        const unsigned int *programs = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) +
+                                                              (head->light_count & 0xffffu) * sizeof(DemoLight));
+        const unsigned int *count = programs + 1 + *programs * 6 +   /* each Program clip is 24 bytes */
+                                    (head->light_count >> 16) * 6;   /* each fog record is 24 bytes (DemoFog) */
+        const struct { float frame; unsigned short obj, hidden; } *e = (const void *)(count + 1);
+        unsigned int i;
+        for (i = 0; i < *count && e[i].frame <= demo_clock; ++i) {
+            if (e[i].obj == 0xffff) memset(want, 0, 255);   /* the SCM objects only, not the props */
+            else if (e[i].obj == 0xfffe) memset(want, 1, 255);   /* HideKind H: the stage's objects hidden */
+            else if (e[i].obj < STAGE_HIDE_OBJECTS) want[e[i].obj] = (unsigned char)e[i].hidden;
+        }
+    }
+    for (k = 0; k < STAGE_HIDE_OBJECTS; ++k)
+        stage_set_object_hidden(k + 1, want[k]);   /* every frame: a stage reload clears them */
+}
+
 void demo_stop(void) {
+    stage_hide_apply(1);
     sound_stop();
     demo_cloth_reset();
     if (blob) { nfx_reset(); nfx_set_demo_bank(0, 0); }
@@ -354,6 +382,7 @@ static void effect_place(const DemoEffect *e, float out[3]) {
 }
 
 /* The Effect tracks' V, E, G and P effects (nfx's NFX_DEMO bank), started as the clock passes their frame. */
+int demo_hide_slot = -1;   /* test "demohide N": that model slot isn't drawn (which piece is which); -2: no effects */
 static void demo_effects(float dt) {
     const DemoEffect *fx;
     unsigned int i;
@@ -397,14 +426,15 @@ int demo_update(float dt, FollowCamera *camera) {
     demo_clock += dt * 60.0f;
     if (demo_clock >= (float)head->frames) { playing = 0; return 0; }
     demo_stream();
-    demo_effects(dt);
+    stage_hide_apply(0);
+    if (demo_hide_slot != -2) demo_effects(dt);   /* test "demohide -2": no Effect track */
     cams = (const DemoCamera *)(blob + head->camera);
     f = (unsigned int)demo_clock;
     c = &cams[f];
     camera->x = c->eye[0]; camera->y = c->eye[1]; camera->z = c->eye[2];
     camera->tx = c->target[0]; camera->ty = c->target[1]; camera->tz = c->target[2];
-    camera->fov = c->fov * (3.14159265f / 180.0f);   /* [inferred: vertical, as the port's] */
-    camera->roll = 0.0f;
+    camera->fov = c->fov * (3.14159265f / 180.0f);   /* channel 12, degrees; the projection takes it as vertical */
+    camera->roll = c->roll;   /* channel 13, already radians */
     return 1;
 }
 
@@ -441,6 +471,20 @@ static void load_motion(Actor *a, int k) {
     a->motion_data[k] = data;
 }
 
+/* The motion clip a slot plays now: the one running, else the last one begun, held at its end (a clip's end doesn't
+ * drop the model to its rest pose at the origin: demo 59's sword, wp122, keeps its place on the desk after its one
+ * 154-frame clip; ss506_00 between its clips). -1 before its first. */
+static int demo_clip_now(const Actor *a) {
+    const DemoMotionClip *c = (const DemoMotionClip *)(blob + a->d->motion_at);
+    int k, clip = -1, held = -1;
+    float latest = -1.0f;
+    for (k = 0; k < a->d->motions; ++k) {
+        if (demo_clock >= c[k].set && demo_clock < c[k].end) clip = k;
+        if (c[k].set <= demo_clock && c[k].set > latest) { latest = c[k].set; held = k; }
+    }
+    return clip >= 0 ? clip : held;
+}
+
 static void demo_stream(void) {
     int i, k, loads = 0, best_i = -1, best_k = -1;
     float best = 1e9f;
@@ -452,7 +496,7 @@ static void demo_stream(void) {
         if (!a->d) continue;
         c = (const DemoMotionClip *)(blob + a->d->motion_at);
         for (k = 0; k < a->d->motions; ++k) {
-            int wanted = demo_clock >= c[k].set - 40.0f && demo_clock < c[k].end;
+            int wanted = (demo_clock >= c[k].set - 40.0f && demo_clock < c[k].end) || k == demo_clip_now(a);
             if (wanted && !a->motion_data[k] && c[k].set < best) { best = c[k].set; best_i = i; best_k = k; }
             else if (!wanted && a->motion_data[k]) {
                 free(a->motions[k].channels); a->motions[k].channels = 0; a->motions[k].channel_count = 0;
@@ -504,8 +548,7 @@ static void pose(Actor *a, int depth) {
         base_rot = t;
         attached = 1;
     }
-    for (k = 0; k < d->motions; ++k)
-        if (demo_clock >= clips[k].set && demo_clock < clips[k].end) clip = k;
+    clip = demo_clip_now(a);
     if (clip >= 0 && !a->motion_data[clip]) load_motion(a, clip);
     if (clip >= 0 && a->motion_data[clip] && a->motions[clip].channel_count) {
         const Motion *m = &a->motions[clip];
@@ -644,27 +687,36 @@ static int object_shown(const DemoHideClip *h, unsigned int k) {
     return (int)shown;
 }
 
-/* The demo's lights on one actor, as the game picks them for a character (FUN_0027f230 with flag 2): the Light clips
- * running now whose ValidType (less bit 4) is 1 (everything) or 2 (characters), 3 being the stage's; the three that
- * reach it best by 1 - d^2 / Range^2 (FUN_0027f610 / FUN_0027f7e0; a 0 range reaches everywhere), a ValidType 8 one
- * (the scene's own slot, +0x40) first. Each light's strength 1 - d^2 / Force^2 (a 0 force: whole) and its colour /
- * 128 [inferred: the VU1 lighting isn't read; 0x80 is 1.0 as the GS's colours]. On the PSP, per actor: a directional
- * light from its centre toward each, the strength taken at the centre. IsMinus lights (they subtract) are left out.
- * Returns 0 (the room's lights stay) when the demo has no Light clips. */
+/* The demo's lights on one actor (FUN_0027f230). A CDraw's light flag defaults to 2 (FUN_00281010, the word at
+ * +1476). The model clip's Light key is the only writer (FUN_00219dc0, short at +1762; the update at 0x2366cc):
+ * 0 leaves 2, 1 sets 2, 2 sets 1. Class 3 needs flag 1. No stage slot sets Light, and demos 3, 5 and 59 set none,
+ * so the stage keeps flag 2 and these ValidType 3 clips reach no model. The draw ORs 0xC (FUN_001aa110) and still
+ * does not add that bit. The stage mesh stays the baked colour (stage.c): multiplying these class-1 and class-2
+ * lights onto it misses the PS2 stills (docs/CUTSCENES.md). Clips running now whose ValidType, less bit 4, is 1 or
+ * 2; the three best by 1 - d^2 / Range^2 (a 0 range reaches everywhere); a ValidType 8 one (the scene slot) first.
+ * Strength 1 - d^2 / Force^2 (a 0 force: whole) and colour / 128 [inferred: the VU1 lighting isn't read]. On the
+ * PSP, per actor, a directional light from its centre. IsMinus lights are left out. Returns 0 when there are no
+ * Light clips. */
 #define DEMO_AMBIENT 0xff303030u   /* [stand-in, by eye] when the demo's Program track sets no No 6 */
 typedef struct { float start; unsigned int no; float arg[4]; } DemoProgram;
+/* ScrEfc GFG, after the Program clips: depth fog from MinAlpha/128 at StartZ to MaxAlpha/128 at EndZ. */
+typedef struct { float start, life, z0, z1; unsigned int color; unsigned char min_a, max_a, type, pad; } DemoFog;
+static unsigned int demo_light_n(void) { return head->light_count & 0xffffu; }
+static const DemoProgram *demo_programs(unsigned int *count) {
+    const unsigned char *p = blob + head->fades + head->fade_count * sizeof(DemoFade) + demo_light_n() * sizeof(DemoLight);
+    *count = *(const unsigned int *)p;
+    return (const DemoProgram *)(p + 4);
+}
 /* The Program track's colour clips in force now (prepare_demo: No 5 the characters' colour scale, 128 = 1.0; No 6
  * their ambient) [inferred from their values: demo 5 sets 128 128 128 and 30 20 20, demo 1 210 200 180]. */
 static void demo_program_colour(float scale[3], float ambient[3], int *has_ambient) {
-    const unsigned int *count;
     const DemoProgram *p;
-    unsigned int i;
+    unsigned int i, count;
     int k;
     for (k = 0; k < 3; ++k) { scale[k] = 1.0f; ambient[k] = 0.0f; }
     *has_ambient = 0;
-    count = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) + head->light_count * sizeof(DemoLight));
-    p = (const DemoProgram *)(count + 1);
-    for (i = 0; i < *count && p[i].start <= demo_clock; ++i) {
+    p = demo_programs(&count);
+    for (i = 0; i < count && p[i].start <= demo_clock; ++i) {
         for (k = 0; k < 3; ++k) {
             if (p[i].no == 5) scale[k] = p[i].arg[k] / 128.0f;
             else ambient[k] = p[i].arg[k] / 128.0f;
@@ -683,10 +735,10 @@ static int demo_lights(const float c[3]) {
     struct { float dir[3], rgb[3], rank; } pick[4];
     float scale[3], ambient[3];
     int i, k, n = 0, special = -1, has_ambient;
-    if (!head->light_count) return 0;
+    if (!demo_light_n()) return 0;
     demo_program_colour(scale, ambient, &has_ambient);
     l = (const DemoLight *)(blob + head->fades + head->fade_count * sizeof(DemoFade));
-    for (i = 0; i < (int)head->light_count; ++i) {
+    for (i = 0; i < (int)demo_light_n(); ++i) {
         const DemoLight *x = &l[i];
         float t, pos[3], force, range, rgb[3], d[3], d2, rank, strength, len;
         int cls = x->valid & 0xfb;
@@ -739,13 +791,68 @@ static int demo_lights(const float c[3]) {
     return 1;
 }
 
-/* The demo's frame (demo.h): the cameras' fov taken over a 326-line frame of which the PSP's 272 show [estimate:
- * fitted to PCSX2 (widescreen, 16:9 as the PSP) in demo 59, where Dante's size then matches; the fov's own convention
- * isn't read]. The bars leave 0.712 of the screen's height (measured in PCSX2, demos 3, 5, 59).  */
+/* The demo's frame (demo.h). A cutscene's projection uses demo_screen_fov, the 326-line fit: subjects about a
+ * fifth larger than channel 12 raw (272 of a 326-line frame). That raw angle is what FUN_001ac750 builds (1/tan of
+ * half of it; the screen height cancels) and it frames wider than the PS2 stills, so the fit is a stand-in. Test
+ * line "rawfov 1" (demo_raw_fov) passes the raw angle. The bars leave 0.712 of the height (measured in PCSX2,
+ * demos 3, 5, 59). */
 #define DEMO_FRAME_H 326.0f
 #define DEMO_SHOWN 0.712f
+int demo_raw_fov;
+int demo_no_fog;
 float demo_screen_fov(float fov) {
     return 2.0f * atanf(tanf(fov * 0.0087266f) * 272.0f / DEMO_FRAME_H) * 57.29578f;
+}
+
+/* ScrEfc GFG on this frame. Strength is MinAlpha/128 at StartZ and MaxAlpha/128 at EndZ (128 = 1, as a fade's
+ * alpha). sceGuFog reaches full colour at its far, so that far is where the same line would hit 1 [inferred:
+ * the GS draw that would clamp past EndZ isn't what was read]. A flat strength uses a very long ramp. The sky
+ * pass is left unfogged. "nofog 1" skips it. */
+int demo_fog(void) {
+    const DemoFog *f;
+    unsigned int i, nprog, at;
+    float a0, a1, z0, z1, span, slope, near, far;
+    if (demo_no_fog || !playing || !head || !(head->light_count >> 16)) return 0;
+    f = (const DemoFog *)(demo_programs(&nprog) + nprog);
+    at = 0xffffffffu;
+    for (i = 0; i < (head->light_count >> 16); ++i)
+        if (demo_clock >= f[i].start && demo_clock < f[i].start + f[i].life) at = i;
+    if (at == 0xffffffffu) return 0;
+    a0 = (float)f[at].min_a * (1.0f / 128.0f);
+    a1 = (float)f[at].max_a * (1.0f / 128.0f);
+    if (a0 < 0.0f) a0 = 0.0f;
+    if (a1 < 0.0f) a1 = 0.0f;
+    if (a0 > 1.0f) a0 = 1.0f;
+    if (a1 > 1.0f) a1 = 1.0f;
+    if (a0 <= 0.0f && a1 <= 0.0f) return 0;
+    z0 = f[at].z0;
+    z1 = f[at].z1;
+    if (z1 < z0) {
+        float swap = z0;
+        z0 = z1;
+        z1 = swap;
+        swap = a0;
+        a0 = a1;
+        a1 = swap;
+    }
+    span = z1 - z0;
+    if (span < 1.0f) span = 1.0f;
+    slope = (a1 - a0) / span;
+    if (slope < 0.00002f) {
+        float level = a0 > a1 ? a0 : a1;
+        if (level <= 0.0f) return 0;
+        if (level >= 0.999f) { near = 0.0f; far = 1.0f; }
+        else {
+            slope = (1.0f - level) / 200000.0f;
+            near = z0 - level / slope;
+            far = near + 1.0f / slope;
+        }
+    } else {
+        near = z0 - a0 / slope;
+        far = near + 1.0f / slope;
+    }
+    sceGuFog(near, far, (f[at].color & 0x00ffffffu) | 0xff000000u);
+    return 1;
 }
 
 void demo_letterbox(void) {
@@ -815,6 +922,7 @@ void demo_draw(void) {
         const DemoHideClip *hide;
         int near = 0;
         if (!a->d) continue;
+        if (a->d->slot == demo_hide_slot || demo_hide_slot == -3) continue;   /* test "demohide N" (-3: all) */
         obj = (const DemoObject *)(blob + a->d->object_at);
         idx = (const unsigned short *)(blob + a->d->index_at);
         if (demo_clock < a->d->shown_from || demo_clock >= a->d->shown_to) continue;

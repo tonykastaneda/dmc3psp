@@ -9,7 +9,8 @@ typedef struct { float u, v, nx, ny, nz, x, y, z; } ClipVertex;
 
 #define NEAR_CLIP_MAX_VERTICES 8192
 
-static float mz[4];      /* the model-view matrix's z row: a point's view-space z = mz . (x, y, z, 1) */
+/* mz: the model-view matrix's z row (a point's view-space z = mz . (x, y, z, 1)); eye: the camera in model space */
+static float mz[4], eye[3];
 static float plane;      /* clip just in front of the GE's near plane (its depth, a little more) */
 static int stat_tested, stat_clipped, stat_added;
 /* Off by default: in PPSSPP the GE draws near-crossing triangles clipped already, and the clipper cost about 2 ms a
@@ -21,6 +22,14 @@ int near_clip_off = 1;
 static const void *cached;
 static int cached_count, cached_crossing;
 static float depths[NEAR_CLIP_MAX_VERTICES];
+/* The display list is shared (256 KB): culled chunks draw through a 16-bit index list into their own vertices, 2 bytes
+ * a kept vertex, within this many bytes a frame (past it, a chunk draws whole). */
+#define NEAR_CULL_BUDGET 32768
+static int cull_budget;
+/* A cutscene's stage at the eye: 2 (default) the GE drops near-crossing triangles itself (GU_CLIP_PLANES off for the stage,
+ * free); 1 the CPU drops them (near_cull_draw, about 1.4 ms in demo 3's close-up); 0 clipped (a wall in front of the
+ * lens). Test line "nearcull N". */
+int near_cull_on = 2;
 
 void near_clip_begin(void) {
     ScePspFMatrix4 model, view, proj, mv;
@@ -30,9 +39,13 @@ void near_clip_begin(void) {
     sceGumMatrixMode(GU_MODEL);
     gumMultMatrix(&mv, &view, &model);
     mz[0] = mv.x.z; mz[1] = mv.y.z; mz[2] = mv.z.z; mz[3] = mv.w.z;
+    eye[0] = -(mv.x.x * mv.w.x + mv.x.y * mv.w.y + mv.x.z * mv.w.z);
+    eye[1] = -(mv.y.x * mv.w.x + mv.y.y * mv.w.y + mv.y.z * mv.w.z);
+    eye[2] = -(mv.z.x * mv.w.x + mv.z.y * mv.w.y + mv.z.z * mv.w.z);
     /* sceGumPerspective: z.z = (f + n) / (n - f), w.z = 2fn / (n - f), so n = w.z / (z.z - 1). */
     plane = (proj.z.z != 1.0f ? proj.w.z / (proj.z.z - 1.0f) : 10.0f) * 1.05f;
     cached = 0;
+    cull_budget = NEAR_CULL_BUDGET;
 }
 
 static float depth3(float x, float y, float z) {   /* distance in front of the eye (the view looks down -z) */
@@ -104,6 +117,50 @@ int near_clip_draw(const void *vertices, const unsigned short *indices, int coun
     ++stat_clipped;
     stat_added += n / 3;
     return n / 3;
+}
+
+int near_cull_box(const float mn[3], const float mx[3]) {
+    float lo = 1e30f, hi = -1e30f, gap = 0.0f, reach = plane * 1.3f;
+    int c;
+    /* Only a box the near plane's rectangle can reach: its corners are within 1.24 near-distances of the eye at a 40-degree
+     * fov and 16:9, so 1.3 (a box beside the camera
+     * straddles the plane's depth too but holds nothing in front of the lens). */
+    for (c = 0; c < 3; ++c) {
+        float d = eye[c] < mn[c] ? mn[c] - eye[c] : eye[c] > mx[c] ? eye[c] - mx[c] : 0.0f;
+        gap += d * d;
+    }
+    if (gap > reach * reach) return 0;
+    for (c = 0; c < 8; ++c) {
+        float d = depth3(c & 1 ? mx[0] : mn[0], c & 2 ? mx[1] : mn[1], c & 4 ? mx[2] : mn[2]);
+        if (d < lo) lo = d;
+        if (d > hi) hi = d;
+    }
+    return lo < plane && hi > plane;
+}
+
+int near_cull_draw(const void *vertices, int count, int vtype) {
+    typedef struct { float u, v; unsigned int colour; float x, y, z; } StageVertex;
+    const StageVertex *v = (const StageVertex *)vertices;
+    int i, dropped = 0, start = 0;
+#define BEHIND(k) (depth3(v[k].x, v[k].y, v[k].z) < plane)
+    if (count > 65535 || cull_budget < 64) {
+        sceGumDrawArray(GU_TRIANGLES, vtype, count, 0, vertices);   /* no room left this frame: as it is */
+        return 0;
+    }
+    /* One pass: the kept runs draw straight from the chunk's vertices (no copy, no index list); a dropped triangle
+     * ends a run. Each draw costs the display list about 16 bytes. */
+    for (i = 0; i + 2 < count; i += 3) {
+        if (!(BEHIND(i) || BEHIND(i + 1) || BEHIND(i + 2))) continue;
+        ++dropped;   /* reaches behind the plane: dropped */
+        if (i > start) {
+            sceGumDrawArray(GU_TRIANGLES, vtype, i - start, 0, v + start);
+            cull_budget -= 16;
+        }
+        start = i + 3;
+    }
+    if (count > start) sceGumDrawArray(GU_TRIANGLES, vtype, count - start, 0, v + start);
+#undef BEHIND
+    return dropped;
 }
 
 void near_clip_stats(int *tested, int *clipped, int *added) {

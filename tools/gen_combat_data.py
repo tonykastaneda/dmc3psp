@@ -6,7 +6,8 @@ Inputs (analysis/moveset, see docs/MOVESET_RE.md):
 
 Emits, for the scripts the test room plays:
   - the runtime motion name and an event list in motion frames:
-      EV_ACTIVE  a=1/0   window 0 byte 1 bit 0x80 (attack active, +0x24ed)
+      EV_ACTIVE  a=1/0   window 0 byte 1 bit 0x80 (attack active, +0x24ed); b: byte 0 bit 0 (+0x24d1)
+                         | byte 1 bit 0x40 (the second blade active)
       EV_HIT     a=n     window 0 byte 2 0x2n (FUN_002e21a0: discrete hit,
                          e.g. each stab of Million Stab)
       EV_GATE    a=n, b=state   window 1: 0x3n -> 1 buffer, 0x2n -> 0
@@ -25,6 +26,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from moveset_phases import ACTIONS, WEAPON_NAMES
 
 SCRIPTS = ["18:4", "18:5", "18:6", "18:7",
+           # Release by the gauge's level (FUN_0027d9f0 / 0027e130, combat.c release_script)
+           "24:37", "24:38", "24:39", "24:41", "24:42", "24:43", "24:45", "24:47",
+           "24:49", "24:50", "24:51", "24:53", "24:54", "24:55", "24:57", "24:59",
            # Dante hit: flinches 1:0 / 1:15 / 1:1, heavy 1:2 / 1:3, getting up 1:7 / 1:9, recovery 1:6, landing 1:14
            "1:0", "1:15", "1:1", "1:2", "1:3", "1:7", "1:9", "1:6", "1:14",   # Twosome Time's other set (+0x3c6d = 1, table 0x595564)
            "3:3", "3:4", "3:5", "3:6", "3:7", "3:8", "3:9", "3:10", "3:11",
@@ -79,7 +83,9 @@ def events(script):
             motion = runtime_name(lay[0]["file"], lay[0]["index"])
             start = -1 if op["frame"] == 0x7FFF else op["frame"]
         elif op["op"] == 3:
-            out.append((frame, "EV_ACTIVE", 1 if raw[2] & 0x80 else 0, 0))
+            # b: window 0 byte 0 bit 0 (+0x24d1, the Nevan swings' effect cue) | byte 1 bit 0x40 (+0x24ed, the
+            # second blade's, Rudra's: FUN_00296ae0)
+            out.append((frame, "EV_ACTIVE", 1 if raw[2] & 0x80 else 0, (raw[1] & 1) | (raw[2] & 0x40)))
             out.append((frame, "EV_PLACE", raw[2] & 0x3F, 0))  # weapon placement state, +0x24d2
             if raw[5]:   # window 0 byte 4 -> player+0x24d5 (one-shot; handlers branch on it)
                 out.append((frame, "EV_FLAG", raw[5], 0))

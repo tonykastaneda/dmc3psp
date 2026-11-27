@@ -7,6 +7,7 @@
 #include "cerberus_boss.h"
 #include "leviathan_boss.h"
 #include "fx.h"
+#include "nfx.h"
 #include "stage.h"
 
 #define MAX_BULLETS 48
@@ -22,6 +23,7 @@ typedef struct {
     float velocity[3];  /* cm/s */
     float life;
     unsigned int color;
+    int fx;             /* Artemis's shot: its V0xd3 riding it */
 } Bullet;
 
 static Bullet bullets[MAX_BULLETS];
@@ -54,6 +56,7 @@ static Bullet *new_bullet(void) {
 
 /* Does the segment a-b pass through the dummy's upright capsule? Returns the
  * fraction along it, or -1. */
+static int shot_kind_now;   /* the E&I shot in flight's PS2 kind (bullets_set_shot_kind) */
 static float one_enemy_segment_hit(const float a[3], const float b[3]) {
     float e[3], dx, dz, len2, t, cx, cz, y;
     if (!enemy_active()) return -1.0f;
@@ -101,8 +104,13 @@ static int hitscan(int kind, const float from[3], const float to[3]) {
     if (t >= 0.0f) {
         hit = 1;
         for (k = 0; k < 3; ++k) end[k] = from[k] + (end[k] - from[k]) * t;
-    } else if (wall < 1.0f) {
-        fx_wall_spark(end);
+    }
+    if (hit || wall < 1.0f) {
+        /* Where a shot lands: V0xa (its shell, 002efaa0; V0x32 for a charged one, not told apart here), from the E&I
+         * pack, the Shotgun's own for its pellets; Spiral's keeps the port's spark. */
+        int bank = kind == BULLET_SHOTGUN ? NFX_GUN_SHOTGUN : kind == BULLET_EBONY_IVORY ? NFX_GUN_EI : -1;
+        int charged = kind == BULLET_EBONY_IVORY && (shot_kind_now == 5 || shot_kind_now >= 7);   /* the shell's flag 1 */
+        if (bank < 0 || !nfx_spawn(bank, charged ? 0x32 : 0xa, end, atan2f(to[0] - from[0], to[2] - from[2]), 0)) fx_wall_spark(end);
     }
     if (kind == BULLET_SPIRAL) fx_tracer(from, end, guns[kind].color, 6.0f);
     return hit;
@@ -113,8 +121,16 @@ void bullets_fire(int kind, const float muzzle[3], const float yaw, int has_targ
     enemy_gun_aimed(muzzle[0], muzzle[2]);   /* Blood-goyles near him may dodge (their state 0's check) */
     bullets_fire_one(kind, muzzle, yaw, has_target, target);
 }
+/* The next E&I shot's kind (FUN_002698d0 / 0026a520: 0 ordinary, 5 the charge shot's, 7-9 Gunslinger's rapid fire
+ * upgraded), set by main.c's charge state; its flash, impact and damage (the shell's record, 0x5a5a30 + kind * 0x40:
+ * kinds 7-9 share record 7). */
+static int next_shot_kind;
+extern float enemy_bullet_damage;
+void bullets_set_shot_kind(int kind) { next_shot_kind = kind; }
 static void bullets_fire_one(int kind, const float muzzle[3], const float yaw, int has_target, const float target[3]) {
     float to[3], d[3], len;
+    shot_kind_now = kind == BULLET_EBONY_IVORY ? next_shot_kind : 0;
+    next_shot_kind = 0;
     int k;
     if (kind < 0 || kind >= BULLET_KIND_COUNT) return;
     ++shots_fired;
@@ -130,7 +146,21 @@ static void bullets_fire_one(int kind, const float muzzle[3], const float yaw, i
     len = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
     if (len < 1.0f) return;
     for (k = 0; k < 3; ++k) d[k] /= len;
-    fx_muzzle(muzzle, d, guns[kind].color);
+    /* The gun's own flash (FUN_002fbf20, by the shot's kind, from the gun's effect pack GDATA 97 + w as nfx banks
+     * 14-18): E&I V0x22, the Shotgun V0x23, Spiral V0x228, Kalina Ann V0x21b, on the muzzle along the shot. Artemis's
+     * shot (CPl000Shl10) carries its own (V0xd3, below). The charge levels' (V0x129 / V0x145, V0x137 / 0x14b / 0x158)
+     * and the ground-level shots' dust (V0x7b / V0x15c) aren't told apart by the port's guns. */
+    {
+        static const short flash[BULLET_KIND_COUNT][2] = {
+            [BULLET_EBONY_IVORY] = {NFX_GUN_EI, 0x22}, [BULLET_SHOTGUN] = {NFX_GUN_SHOTGUN, 0x23},
+            [BULLET_ARTEMIS] = {-1, 0}, [BULLET_SPIRAL] = {NFX_GUN_SPIRAL, 0x228}, [BULLET_KALINA_ANN] = {NFX_GUN_KALINA, 0x21b}};
+        int v = flash[kind][1];
+        if (kind == BULLET_EBONY_IVORY) v = shot_kind_now == 5 ? 0x129 : shot_kind_now >= 7 ? 0x145 : 0x22;
+        if (flash[kind][0] < 0 || !nfx_spawn(flash[kind][0], v, muzzle, atan2f(d[0], d[2]), 0))
+            fx_muzzle(muzzle, d, guns[kind].color);
+        /* FUN_002fbf20: the charge shot's (kinds 1 / 4 there) also V0x15c, the shared pack's. */
+        if (kind == BULLET_EBONY_IVORY && shot_kind_now == 5) nfx_spawn(NFX_STATIC, 0x15c, muzzle, atan2f(d[0], d[2]), 0);
+    }
     /* Shots run the gun's whole range, past the aim point. */
     for (k = 0; k < 3; ++k) to[k] = muzzle[k] + d[k] * guns[kind].range;
     if (guns[kind].speed > 0.0f) {
@@ -157,7 +187,12 @@ static void bullets_fire_one(int kind, const float muzzle[3], const float yaw, i
         if (any) { enemy_hit(guns[kind].hit, muzzle[0], muzzle[2]); ++hits_landed; }
         return;
     }
-    if (hitscan(kind, muzzle, to)) { enemy_hit(kind==BULLET_EBONY_IVORY?HIT_PISTOL:guns[kind].hit, muzzle[0], muzzle[2]); ++hits_landed; }
+    if (hitscan(kind, muzzle, to)) {
+        static const float record_damage[10] = {10, 10, 16, 15, 10, 30, 50, 12, 12, 12};   /* 0x5a5a30 +4 */
+        if (kind == BULLET_EBONY_IVORY) enemy_bullet_damage = record_damage[shot_kind_now];
+        enemy_hit(kind==BULLET_EBONY_IVORY?HIT_PISTOL:guns[kind].hit, muzzle[0], muzzle[2]); ++hits_landed;
+        enemy_bullet_damage = 10.0f;
+    }
 }
 
 void bullets_update(float dt) {
@@ -166,7 +201,7 @@ void bullets_update(float dt) {
         Bullet *b = &bullets[i];
         if (!b->active) continue;
         b->life -= dt;
-        if (b->life <= 0.0f) { b->active = 0; continue; }
+        if (b->life <= 0.0f) { b->active = 0; if (b->fx) { nfx_kill(b->fx); b->fx = 0; } continue; }
         if (b->moving) {
             float next[3], s, t;
             int done = 0;
@@ -184,10 +219,18 @@ void bullets_update(float dt) {
                 b->a[k] = next[k] - b->velocity[k] * 0.03f;
                 b->b[k] = next[k];
             }
-            fx_projectile(b->a, b->b, b->color);
+            if (b->kind == BULLET_ARTEMIS) {
+                float yaw = atan2f(b->velocity[0], b->velocity[2]);
+                if (!nfx_alive(b->fx)) b->fx = nfx_spawn(NFX_GUN_ARTEMIS, 0xd3, b->b, yaw, 1);
+                else nfx_move(b->fx, b->b, yaw);
+                if (!b->fx) fx_projectile(b->a, b->b, b->color);
+            } else fx_projectile(b->a, b->b, b->color);
             if (done) {
                 b->active = 0;
-                if (b->kind == BULLET_KALINA_ANN) fx_explosion(next);
+                if (b->fx) { nfx_kill(b->fx); b->fx = 0; }
+                /* Kalina Ann's rocket bursts in V0x21f (its pack's; the one Lady's rocket plays) [inferred: its shell's
+                 * code isn't traced] */
+                if (b->kind == BULLET_KALINA_ANN) { if (!nfx_spawn(NFX_GUN_KALINA, 0x21f, next, 0.0f, 0)) fx_explosion(next); }
                 else fx_wall_spark(next);
             }
         }

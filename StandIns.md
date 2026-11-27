@@ -15,16 +15,24 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
   `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
-  [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
+  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
   (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
   read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
-  matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
-- **Cutscene framing and colour** (`demo.c`): the cameras' fov over a 326-line frame [estimate: fitted to PCSX2 in
-  demo 59]; the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as colour scale and ambient [inferred
-  from values]. Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so backgrounds are sharper
-  and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
+  matched by eye]; IsMinus lights left out. The stage is the baked SCM colour: no stage clip sets Light, so it keeps
+  flag 2 and ValidType 3 stays idle, and the class-2 lights are not multiplied onto the bake (demos 3, 5 and 59;
+  docs/CUTSCENES.md).
+- **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
+  colour scale and ambient [inferred from values]. The cutscene field of view is the 326-line fit (`demo_screen_fov`)
+  [stand-in]: channel 12's raw angle (`FUN_001ac750`, the screen height cancels) frames wider than the PS2 stills
+  (demo 5 frames 300 and 1260, demo 59 frame 700; `sky5_300.png`, `sky5_1260.png`, `sky59_700.png`) and the fit
+  matches them (`fit5_300.png`, `fit5_1260.png`, `fit59_700.png`). Test line `rawfov 1` passes the raw angle.
+  Cutscene fog is the ScrEfc GFG track through sceGuFog (`demo_fog`): MinAlpha/128 at StartZ to MaxAlpha/128 at
+  EndZ, colour MaxColor. The far distance is extended so the factor at EndZ equals that fraction, because hardware
+  fog reaches full colour at its far [inferred]. The sky dome is left unfogged. Not ported: SGA glow (a feedback
+  bloom: Scale, DirNum, Feedback, Attenuate, an 8x16 kernel) and the FCS / DOF full-screen blur. There is no
+  reduced-resolution framebuffer pass, and that blur does not fit under about 1.5 ms, so backgrounds stay sharper
+  than the PS2's where those clips run. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
   and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
@@ -48,6 +56,21 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera's own up); fake
   sprite layers face the camera; the sheet's top taken as a sprite's top; Line02 isn't ported.
+- **The Devil Arms' effects** (`update_arm_fx`, NATIVE_FX.md "Dante's effects"): on their bones' positions, turned by
+  Dante's yaw only (not the bone's frame); A&R's on the weapon placement's origin, not the weapon object's frames;
+  Nevan's V0x2c1 / V0x38e start on any 6:14 / 6:40 / 6:9 / 6:10 / 6:33 as the window bit turns on, not only in
+  action 81 / 82's phases. Nevan's V0x38e dome reads whiter and more solid than the PS2's (analysis/ref/pfx/nevan_ab.png).
+- **Royalguard's judgement** (`combat_player_hit_kind`, NATIVE_FX.md): the blow's guard class (+0x3e) is taken
+  from its hit kind (knockdown kinds class 1, others 0) [estimate]; the style level is 2; grade 5 (+0x3c82) is unreachable in the
+  game's own code (set only after a type-5 block, which needs it); the result-1 table (on the record's +0x18) isn't read; a guard break takes the blow's own damage (profile 0x11, `FUN_002e8af0`, isn't read); a normal block's chip damage and Release's
+  counter results 1 / 2 (`FUN_004421f0`'s defence profiles, a table at gp-0x757c, not located: the blow's own damage),
+  the attacker's recoil from the counter, and Release's damage from the gauge (+0x2a1c) aren't carried (the port's blows are in
+  units of health).
+- **Blade trails** (`fx.c` mtrails): the game's trail models bent through the last 11 weapon frames, type 0 added and types 1 / 2
+  alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the rotations blended linearly and renormalised [FUN_00133ab0 not
+  read]. NATIVE_FX.md "Blade trails".
+- **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
+  PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
   flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
