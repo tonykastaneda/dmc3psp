@@ -7,6 +7,7 @@
 #include "cerberus_boss.h"
 #include "leviathan_boss.h"
 #include "fx.h"
+#include "nfx.h"
 #include "stage.h"
 
 #define MAX_BULLETS 48
@@ -22,6 +23,7 @@ typedef struct {
     float velocity[3];  /* cm/s */
     float life;
     unsigned int color;
+    int fx;             /* Artemis's shot: its V0xd3 riding it */
 } Bullet;
 
 static Bullet bullets[MAX_BULLETS];
@@ -130,7 +132,17 @@ static void bullets_fire_one(int kind, const float muzzle[3], const float yaw, i
     len = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
     if (len < 1.0f) return;
     for (k = 0; k < 3; ++k) d[k] /= len;
-    fx_muzzle(muzzle, d, guns[kind].color);
+    /* The gun's own flash (FUN_002fbf20, by the shot's kind, from the gun's effect pack GDATA 97 + w as nfx banks
+     * 14-18): E&I V0x22, the Shotgun V0x23, Spiral V0x228, Kalina Ann V0x21b, on the muzzle along the shot. Artemis's
+     * shot (CPl000Shl10) carries its own (V0xd3, below). The charge levels' (V0x129 / V0x145, V0x137 / 0x14b / 0x158)
+     * and the ground-level shots' dust (V0x7b / V0x15c) aren't told apart by the port's guns. */
+    {
+        static const short flash[BULLET_KIND_COUNT][2] = {
+            [BULLET_EBONY_IVORY] = {NFX_GUN_EI, 0x22}, [BULLET_SHOTGUN] = {NFX_GUN_SHOTGUN, 0x23},
+            [BULLET_ARTEMIS] = {-1, 0}, [BULLET_SPIRAL] = {NFX_GUN_SPIRAL, 0x228}, [BULLET_KALINA_ANN] = {NFX_GUN_KALINA, 0x21b}};
+        if (flash[kind][0] < 0 || !nfx_spawn(flash[kind][0], flash[kind][1], muzzle, atan2f(d[0], d[2]), 0))
+            fx_muzzle(muzzle, d, guns[kind].color);
+    }
     /* Shots run the gun's whole range, past the aim point. */
     for (k = 0; k < 3; ++k) to[k] = muzzle[k] + d[k] * guns[kind].range;
     if (guns[kind].speed > 0.0f) {
@@ -166,7 +178,7 @@ void bullets_update(float dt) {
         Bullet *b = &bullets[i];
         if (!b->active) continue;
         b->life -= dt;
-        if (b->life <= 0.0f) { b->active = 0; continue; }
+        if (b->life <= 0.0f) { b->active = 0; if (b->fx) { nfx_kill(b->fx); b->fx = 0; } continue; }
         if (b->moving) {
             float next[3], s, t;
             int done = 0;
@@ -184,10 +196,18 @@ void bullets_update(float dt) {
                 b->a[k] = next[k] - b->velocity[k] * 0.03f;
                 b->b[k] = next[k];
             }
-            fx_projectile(b->a, b->b, b->color);
+            if (b->kind == BULLET_ARTEMIS) {
+                float yaw = atan2f(b->velocity[0], b->velocity[2]);
+                if (!nfx_alive(b->fx)) b->fx = nfx_spawn(NFX_GUN_ARTEMIS, 0xd3, b->b, yaw, 1);
+                else nfx_move(b->fx, b->b, yaw);
+                if (!b->fx) fx_projectile(b->a, b->b, b->color);
+            } else fx_projectile(b->a, b->b, b->color);
             if (done) {
                 b->active = 0;
-                if (b->kind == BULLET_KALINA_ANN) fx_explosion(next);
+                if (b->fx) { nfx_kill(b->fx); b->fx = 0; }
+                /* Kalina Ann's rocket bursts in V0x21f (its pack's; the one Lady's rocket plays) [inferred: its shell's
+                 * code isn't traced] */
+                if (b->kind == BULLET_KALINA_ANN) { if (!nfx_spawn(NFX_GUN_KALINA, 0x21f, next, 0.0f, 0)) fx_explosion(next); }
                 else fx_wall_spark(next);
             }
         }

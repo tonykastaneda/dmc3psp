@@ -52,6 +52,13 @@ JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c,
 SHARED_TEXTURE = 54
 
 
+def _is_effect_pack(p):
+    try:
+        return bool(records(p))
+    except Exception:
+        return False
+
+
 def records(pack):
     names, body = pnst_entries(pack)
     chunks = pnst_entries(body)
@@ -275,9 +282,15 @@ def main():
     # 13 the Nausika's effect pack (GDATA 694): CStageSetNausika's blows (V0x22b / V0x22c, FUN_00493590) and its
     # aura (V0x352 on a bone, FUN_00492630: not played, see nausika.c).
     summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c), ()))
+    # 14-18 Dante's guns' effect packs (GDATA 97 + w: 102 E&I, 103 Shotgun, 104 Artemis, 105 Spiral, 106 Kalina Ann):
+    # their muzzle flashes (FUN_002fbf20), Artemis's shot (CPl000Shl10, FUN_005232b0) and Kalina Ann's burst.
+    for bank, slot, vs in ((14, 102, (0x22,)), (15, 103, (0x23,)), (16, 104, (0xd3,)), (17, 105, (0x228,)), (18, 106, (0x21b, 0x21f))):
+        pack = pnst_entries(read(slot))
+        effects = next(p for p in pack if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
+        summary.append(write_bank(lines, bank, records(effects), vs, ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 
