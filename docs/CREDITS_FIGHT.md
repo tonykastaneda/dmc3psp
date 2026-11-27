@@ -274,7 +274,16 @@ in `analysis/testroom/` (local).
 
 **The full flow** (`credits_full`, Mission 20 from room 411 with `tools/tests/mission20_clear.scene`): Vergil falls,
 demos 57 and 58 play, and room 012 starts the street on its own (`credits on=1 ... ally=1 mode=0x33` at the run's end).
-The run stopped at frame 18000, 2 frames into the street. The street's own course is covered by the direct runs above.
+Test runs may now go to 72000 frames, so the whole mission fits. `m20_whole3` (30000 frames, after the lighting and
+the master merge of Nov 26 evening) runs Vergil, demos 57 and 58, the street to clock 13920 with 100 spawns and 100
+kills, the last the Hell Vanguard, the card, then demo 59.
+
+- **The 100th enemy.** Before 499e089 that run ended on 99 kills with no card. Room 012 has only 64-128 KB of heap
+  left (the FOCUS log's `heap` line). The Vanguard came into an enemy slot that had never had one, its skinning
+  buffers couldn't be allocated, and `vanguard_spawn` gave up, so the slot dropped him unseen and uncounted.
+  - A slot now takes over the buffers of one whose Vanguard is gone (slot 0's from `vanguard_init`) before it
+    allocates.
+  - The `credits` line now reports `spawns`, `fails` (no free slot) and `last` (the last kill's kind) for this.
 
 **Frame rate.** PPSSPP PERF.TXT, the street with Lady, 4 enemies and a page up:
 
@@ -289,4 +298,40 @@ The run stopped at frame 18000, 2 frames into the street. The street's own cours
 - Without video the street holds 56-59, at or above the port's usual rate. Mission 2's street dips to about 40 in
   its fights.
 - The periodic 13-26 ms update spike (2-3 missed frames a second) is there in every room, not just the street.
-- Nothing in the street was changed for speed.
+- Nothing in the street was changed for speed until the Vanguard (below).
+
+**The Vanguard's cost** (Nov 26, after the 100th enemy was fixed and actually came):
+- With him up, the street fell to 30 FPS. Draw went from about 10 ms to 16-17 ms, with the stage chunks unchanged.
+- On his own in the test street he cost about 7.5 ms more draw than a Pride (12.8 ms against 5.2).
+- Most of that was his CPU skinning (`vanguard.c` `skin_part`). For every vertex and influence the robes rebuilt and
+  multiplied their bone's matrix, and every part subtracted the bone's rest position.
+- Now each bone's transform is made once per part, with the rest offset folded into its translation.
+- The shots before and after match within float rounding (largest difference 4 of 255).
+
+| Run | Frames a second | Draw |
+|---|---|---|
+| `vgskin_before` / `vgskin_after` (test street, the Vanguard alone) | 53-56 / 53-56 | 12.8 / 9.0 ms |
+| `vg_perf` / `vg_perf2` (the street, fastwaves, the Vanguard up) | 29-30 / 52-54 | 16.0-16.7 / 11.8 ms |
+
+## 9. The street's look (fog, sky, brightness)
+
+Before this the port's street was nearly black with purple enemies (a matched view averaged 28/13/23 against the
+PS2's 97/58/81). Three causes, each checked in PCSX2:
+
+- **Fog.** Room 012's LIG2 header has a second colour, (95, 90, 100). The game keeps a float copy at 0xec4ed0.
+  Turning it red in PCSX2 turns the sky and the street red, more with distance, so it's the room's fog colour.
+  - The port draws the 3D pass with `sceGuFog` in that colour, and clears the screen to it (the sky's colour behind
+    the dome). The 2D pass (counter, roll) isn't fogged. `credits_fight_fog()`, called from `render_scene`.
+  - The fog's distances aren't in the room's data that was read. Near 0 / far 4100 cm is fitted to the fog factor
+    measured in PCSX2: red fog against the normal one, about 0.17 at 0-1000 cm [estimate].
+- **The sky dome.** st012's model 0 ("light scr") is a cloud dome up to y 45052, past the port's 16000 far plane.
+  Stage sets reaching above 12000 are flagged (batch flag 8) and drawn first, without depth, with the far plane at
+  80000 (50c1a9c).
+- **Brightness.** The PS2 shows st012's stage at about 3.5 times the port's usual stage brightness (1.25 times the
+  vertex colour). Measured with PCSX2 and the port at the same camera, with the fog's share taken out.
+  - `tools/prepare_stage.py` bakes slot 320 (st012) at half of 1.25 × 3.5. The runtime draws it with
+    `GU_FRAGMENT_2X` (`stage_set_double`), so colours can go past 255 the way the PS2's doubled vertex colour does.
+  - Why the PS2 draws this room brighter isn't decoded (the room's material or light records) [estimate].
+
+Matched view (eye 2906/1088/1950, `analysis/testroom/match2_vs.png`, local): the port averages 91/61/81 against the
+PS2's 97/58/81.

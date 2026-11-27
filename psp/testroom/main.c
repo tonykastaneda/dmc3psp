@@ -1808,9 +1808,7 @@ static void dummy_record_pad(int frame, PlayerInput *input) {
 /* MEMORY.TXT, written at every boot: what the real hardware has left once
  * everything is loaded, for sizing the rest of the moveset. The largest block
  * is found by allocating (and touching) it, not computed. */
-static void write_memory_report(unsigned int boot_us, int motions_loaded) {
-    char path[320];
-    FILE *f;
+static void heap_probe(size_t *total_out, size_t *largest_out) {
     size_t step = 16u * 1024u * 1024u, total = 0, largest = 0;
     void *blocks[64];
     int count = 0, i;
@@ -1827,6 +1825,13 @@ static void write_memory_report(unsigned int boot_us, int motions_loaded) {
         }
     }
     for (i = 0; i < count; ++i) free(blocks[i]);
+    *total_out = total; *largest_out = largest;
+}
+static void write_memory_report(unsigned int boot_us, int motions_loaded) {
+    char path[320];
+    FILE *f;
+    size_t total, largest;
+    heap_probe(&total, &largest);
     path_in_game_dir(path, sizeof(path), "MEMORY.TXT");
     f = fopen(path, "w");
     if (!f) return;
@@ -3106,7 +3111,7 @@ static int script_run(float dt, float floor_y) {
                     sy = lift_y + 50.0f;
                 }
                 enemy_spawn_height(sy);
-                enemy_add_class(op->a, sx, sz);
+                credits_fight_spawned(enemy_add_class(op->a, sx, sz));   /* tests: the street's spawns (credits_fight.c) */
             }
             if(mission_choice.mission==2 && op->a==26 && focus_cmp)
                 vanguard_note("encounter_enemies",(float)enemy_count());
@@ -5029,7 +5034,8 @@ int main(int argc, char *argv[]) {
                     { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
-                    { char cl[160]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
+                    { char cl[200]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
+                    { size_t t, l; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);
