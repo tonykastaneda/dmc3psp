@@ -21,5 +21,6 @@ void pfx_draw(const float eye[3]);
 int pfx_live(void);           /* instances running */
 void pfx_enable(int on);      /* tests ("nopfx 1"): 0 starts no P effects */
 int pfx_live_prims(void);     /* their primitives (sprites, triangles, lines) */
+int pfx_started(void);        /* tests: main instances started since boot */
 
 #endif

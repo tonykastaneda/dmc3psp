@@ -64,14 +64,14 @@ static unsigned int seed = 0x2545f491u;
 /* A cutscene's own effects (tools/prepare_demo.py bake_effects): its records, textures and models point into the
  * demo's data, which outlives them (nfx_set_demo_bank(0, 0) before it goes). */
 static NfxBank demo_bank;
-static NfxRecord *demo_v, *demo_e;
+static NfxRecord *demo_v, *demo_e, *demo_p, *demo_a;
 static NfxTexture *demo_textures;
 static NfxModel *demo_models;
 void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
     const unsigned int *h;
     unsigned int i;
-    free(demo_v); free(demo_e); free(demo_textures); free(demo_models);
-    demo_v = demo_e = 0; demo_textures = 0; demo_models = 0;
+    free(demo_v); free(demo_e); free(demo_textures); free(demo_models); free(demo_p); free(demo_a);
+    demo_v = demo_e = demo_p = demo_a = 0; demo_textures = 0; demo_models = 0;
     memset(&demo_bank, 0, sizeof demo_bank);
     if (!blob || !at) return;
     h = (const unsigned int *)(blob + at);   /* v, e, texture, model counts; their tables */
@@ -104,6 +104,22 @@ void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
     demo_bank.e = demo_e; demo_bank.e_count = (int)h[1];
     demo_bank.textures = demo_textures; demo_bank.texture_count = (int)h[2];
     demo_bank.models = demo_models; demo_bank.model_count = (int)h[3];
+    /* Then, after 'PFX1': the P and A records' counts and tables (pfx.c), as V / E */
+    if (h[8] == 0x31584650u) {
+        demo_p = calloc(h[9] + 1, sizeof *demo_p);
+        demo_a = calloc(h[10] + 1, sizeof *demo_a);
+        if (!demo_p || !demo_a) return;
+        for (i = 0; i < h[9]; ++i) {
+            const unsigned int *r = (const unsigned int *)(blob + h[11]) + 2 * i;
+            demo_p[i].id = (unsigned short)r[0]; demo_p[i].data = blob + r[1];
+        }
+        for (i = 0; i < h[10]; ++i) {
+            const unsigned int *r = (const unsigned int *)(blob + h[12]) + 2 * i;
+            demo_a[i].id = (unsigned short)r[0]; demo_a[i].data = blob + r[1];
+        }
+        demo_bank.p = demo_p; demo_bank.p_count = (int)h[9];
+        demo_bank.a = demo_a; demo_bank.a_count = (int)h[10];
+    }
 }
 
 static const NfxBank *bank_of(int b) {
@@ -199,19 +215,21 @@ static int new_node(int bank, int id, int parent) {
     }
     return i;
 }
-/* A one-child timeline of our own: the V record format with a single E child at delay 0. */
+/* A one-child timeline of our own: the V record format with a single E (kind 1) or P (kind 0) child at delay 0. */
 static unsigned char single[MAX_SEQ][48];
-static int new_single(int bank, int e_id, int parent) {
+const unsigned char *nfx_record(int bank, int kind, int id);
+static int new_single_kind(int bank, int kind, int e_id, int parent) {
     const NfxBank *b = bank_of(bank);
     int i;
-    if (!find(b->e, b->e_count, e_id)) return -1;
+    if (kind ? !find(b->e, b->e_count, e_id) : !nfx_record(bank, 'P', e_id)) return -1;
     for (i = 0; i < MAX_SEQ && seqs[i].active; ++i) {}
     if (i >= MAX_SEQ) return -1;
     memset(single[i], 0, sizeof(single[i]));
-    single[i][0] = 1; single[i][4] = 1; single[i][6] = (unsigned char)e_id; single[i][7] = (unsigned char)(e_id >> 8);
+    single[i][0] = 1; single[i][4] = (unsigned char)kind; single[i][6] = (unsigned char)e_id; single[i][7] = (unsigned char)(e_id >> 8);
     { float one = 1.0f; int k; for (k = 0; k < 3; ++k) memcpy(single[i] + 4 + 32 + k * 4, &one, 4); }
     return new_seq(bank, single[i], parent);
 }
+static int new_single(int bank, int e_id, int parent) { return new_single_kind(bank, 1, e_id, parent); }
 static int root_at(int i, const float pos[3], float yaw, int loop) {
     if (i < 0) return 0;
     memcpy(seqs[i].pos, pos, sizeof(seqs[i].pos));
@@ -291,13 +309,9 @@ static void start_p(int bank, int id, int i, const unsigned char *child, const F
     root = root_of(&seqs[i]);
     pfx_spawn(bank, nfx_record(bank, 'P', id), &where, owner, handle_of((int)(root - seqs)), seqs[i].g ? 0 : seqs[i].loop);
 }
+static int root_at(int i, const float pos[3], float yaw, int loop);
 int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop) {
-    PfxFrame f;
-    float c = cosf(yaw), sn = sinf(yaw);
-    memset(&f, 0, sizeof(f));
-    f.m[0][0] = c; f.m[0][2] = sn; f.m[1][1] = 1.0f; f.m[2][0] = -sn; f.m[2][2] = c;
-    memcpy(f.p, pos, sizeof(f.p));
-    return pfx_spawn(bank, nfx_record(bank, 'P', p_id), &f, 0, 0, loop);
+    return root_at(new_single_kind(bank, 0, p_id, -1), pos, yaw, loop);
 }
 
 static void release(int seq) {
