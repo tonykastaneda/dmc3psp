@@ -90,7 +90,7 @@ blast.
   once action 3 is running, the command is cleared.
 - **Landing** (both pieces, after every move and the Queen's attack):
   - they fall at −3.2 × step a frame² until the ground (`FUN_0042eb00`);
-  - `FUN_0040a2a0(5.0)` starts effect 0x2c on the piece (+0x360) with a shake strength of 5 (+0xf80, +0xf3c = 1);
+  - `FUN_0040a2a0(5.0)` starts P44 (dust) on the piece (+0x360) with a shake strength of 5 (+0xf80, +0xf3c = 1);
   - sound 0x14 plays from the piece's bank (`FUN_00359da0` maps EST 39 / 40 to banks 0x15 / 0x16);
   - then back to the wait.
 
@@ -110,16 +110,16 @@ blast.
   2. She takes the four points again and picks the **nearest** one. She turns toward its 8-way heading (+0x480) at
      the action's turn speed.
   3. Once she faces it:
-     - effect G0x31b starts on a bone of her model (+0x504's +0x104);
-     - effect G0x242 starts at her feet: a lane along her heading, its matrix scaled (1, 1, 30);
+     - effect V0x31b starts on a bone of her model (+0x504's +0x104);
+     - effect V0x242 starts at her feet: a lane along her heading, its matrix scaled (1, 1, 30);
      - motion 3 plays.
   4. Sound 0x37 plays. She holds for 60 − 3 × rank frames.
-  5. Effect G0x390 starts on the same bone, then motion 7. The charge timer is `FUN_00409690`'s 50 + 50 × rand.
+  5. Effect V0x390 starts on the same bone, then motion 7. The charge timer is `FUN_00409690`'s 50 + 50 × rand.
   6. She charges along +0x480:
      - the speed (+0x68) starts at 40;
      - each frame it gains +0x78 × step, capped at 50 and never under 35;
      - +0x78 starts at 5 + 2 × rank and loses 0.3 × step a frame, down to −1;
-     - G0x242's lane is stretched to half the time left;
+     - V0x242's lane is stretched to half the time left;
      - hitting a wall (the collision's +8 & 0x30000) ends the charge at once.
   7. When the timer runs out, the three effects stop and motion 8 plays. Then she lands, unless both of these hold:
      the roll is under 75 % and +0x490 was already 0. In that case she waits 60 frames and charges again.
@@ -143,13 +143,13 @@ blast.
   0x43ebe0, start 0x43ea30). At the motion's end he goes back to the wait.
 - **The attack object** stands on the King and lives 240 frames:
   - **Frames 0–60, the charge.**
-    - Effect G0x36c follows it.
+    - Effect V0x36c follows it.
     - Sound 0x3d plays (bank 0x16).
     - Its hit volume (`FUN_002942e0` with the King's record 0x5bfc50) starts at radius 100, height 5, growing 1 a
       frame, and doesn't hit.
   - **Frame 60, the blast.**
     - Sound 0x3f plays.
-    - G0x36c gives way to **G0x233**.
+    - V0x36c gives way to **V0x233**.
     - The volume becomes **radius 1500**, its height + 280.
   - **Frames 60–90:** it hits (`FUN_002946a0` only while 150 < time left < 180), for 2500 by the record.
   - It is deleted at 240.
@@ -158,9 +158,9 @@ blast.
 
 - **The castle, 11** (`00408dd0`). The master's command 30 (+0x488 = 0x1e, read in the alive function 0x406830) starts
   it, with the destination at +0x310.
-  1. Sound 0x2c plays. Effect G0x390 starts at the feet.
+  1. Sound 0x2c plays. Effect V0x390 starts at the feet.
   2. For 30 frames the piece drifts 9 % of the way to the destination each frame, turning to face it.
-  3. It is set down on the destination. Effect G0x1fa plays there and the hold is 180 frames.
+  3. It is set down on the destination. Effect V0x1fa plays there and the hold is 180 frames.
   4. It falls and lands: shake 5, sound 0x14.
   5. When the hold ends, the Rook (EST 38) goes straight to its attack (action 3); everyone else waits.
   6. +0x110 gets 0x48000000 (busy, swap blocked) throughout.
@@ -180,8 +180,11 @@ blast.
 
 ## For the port
 
-- The models, motions and clip tables are [2]–[4] and [7]–[9] of GDATA 128. The effects are G ids from em021's [1]
-  PNST.
+- The models, motions and scripts are [2]–[4] and [7]–[9] of GDATA 128.
+- The effects are V records (FUN_00208590 type 3; type 0 is P):
+  - em021's pack [1] has V0x31b, V0x242, V0x36c and V0x233;
+  - em017's pack (GDATA 127 [1], every chessman's) has the castle's V0x390 and V0x1fa;
+  - the landing's FUN_0040a2a0 starts P44, the shared dust.
 - The pieces' timing, moves and attacks above are exact. Still to check against PCSX2:
   - which bone +0x504 +0x104 is (the Queen's effects' anchor);
   - the motions' look against the PS2.
