@@ -86,6 +86,13 @@ every face came out bright and neutral. What the game does:
 `analysis/testroom/arkham_face_lit_compare.png` (demo 1's cm027) and `ending_dante_lit_compare.png` (demo 59, from
 the Mission 20 credits state, `analysis/ref/cast/credits_to_ending.mp4`).
 
+**Blocky faces in captures are PPSSPP's setting, not the port.** `demo.c` (and every model draw) asks for bilinear
+(`sceGuTexFilter(GU_LINEAR, GU_LINEAR)`) on full-size pages (no mips, no downscale: `pl103_02`'s face page is 256x128
+as on the disc). The shared `ppsspp.ini` forces Nearest (`TextureFiltering = 2`), which overrides it in every
+`ppsspp_scene.py` capture. `--filter auto` runs one scene with the game's own filtering (`--appendconfig`, the
+shared ini untouched): `analysis/testroom/filt_d1_4130.png` beside `lit_d1_4130.png` (same frame, Nearest). A PSP
+filters as asked, so it shows the smooth one.
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
