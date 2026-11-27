@@ -88,7 +88,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
-- **Cerberus**: two particle programs stand in. CERBERUS_SPEC.md.
+- **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
+  the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
 - **Vergil**: gravity 1 [inferred]; effect 0x338 is a hit spark; his drop lands where Dante stands; his hit reaction
   isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.

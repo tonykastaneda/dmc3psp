@@ -96,11 +96,11 @@ Effect ids are those its code passes to `FUN_00208590(type, id, ...)` (type 0 P,
 | Chain break | V180 (0xb4) | `002a4e10` |
 | Scratch, swipe, dash wind-up | V173, V174, V172 | `002a1ad0`, `002a1ba0`, `0029f980` |
 
-Stand-ins for unported particle programs. These use em025's own elements, but where and how often they're
-placed is the port's choice:
+| Punch, ev2-5 at the paw | P58 (0x3a) at 2 and 4, P59 (0x3b) at 3 and 5: ×1.4 (-50, 10, 0), ×1.2 (-40, 0, 70), ×1.2 (-40, 0, 70), ×1 (-20, 20, 0) in the paw's frame | `002a0510` |
 
-- **The punch's travelling ice line** (P58/P59): small E199 spikes (model M55) along the spike shells' path.
-- **The breath mist** (G44/G23/G45): E284 clouds along the breath spheres and the phase-1 sweep box.
+Stand-in: **the breath mist** (G44/G23/G45, generators of V73 / E281 / V75 started in `002a2530`): E284 clouds along
+the breath spheres and the phase-1 sweep box, where and how often the port's choice. The punch's mist takes the
+paw's offsets in the body's frame and doesn't ride the paw [estimate].
 
 ## Not done
 

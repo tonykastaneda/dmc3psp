@@ -32,6 +32,8 @@ CERBERUS_V = (
     126, 691, 118, 150, 151, 78, 66,
 )
 CERBERUS_E = (291, 251, 199, 284)
+# The punch's ice mist, on the paw (FUN_002a0510): P58 (0x3a) at events 2 and 4, P59 (0x3b) at 3 and 5.
+CERBERUS_P = (58, 59)
 # E2 (in V72, V180): model M18 scaled 0.1 -> 60 in 20 frames, an 18 m sphere at full white. Its GS blend isn't
 # read, and drawn as an ordinary blend it fills the screen with white slabs, so it's left out.
 SKIP_E = {2}
@@ -242,7 +244,7 @@ def main():
              "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; const NfxRecord *p; int p_count; const NfxRecord *a; int a_count; } NfxBank;"]
     summary = []
     summary.append(write_bank(lines, 0, records(read(167)), ORB_V, ORB_E))
-    summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E))
+    summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
