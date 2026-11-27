@@ -2040,7 +2040,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
 static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1) or looping P (2) 2 m before Dante */
-static int cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
+static int cmp_heap_leave, cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
@@ -2145,6 +2145,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "creditskills ", 13) == 0) cmp_credits_kills = atoi(line + 13);   /* tests: ... with these kills */
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
+        else if (strncmp(line, "heapleave ", 10) == 0) cmp_heap_leave = atoi(line + 10);   /* tests: from frame 2, hold all but this many KB of the heap */
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
         else if (strncmp(line, "gigaorb ", 8) == 0) { if (cmp_orb_count < 8) cmp_orb_at[cmp_orb_count++] = atoi(line + 8); }
         else if (strncmp(line, "onboss ", 7) == 0) sscanf(line + 7, "%d %d", &cmp_onboss_from, &cmp_onboss_part);
@@ -4389,6 +4390,7 @@ int main(int argc, char *argv[]) {
             if (cmp_force_at && frames == cmp_force_at) enemy_ar_force(cmp_force_state);
     if (cmp_mirror_at && frames == cmp_mirror_at) m19_test_mirror(cmp_mirror_k);
             if (focus_cmp && cmp_clear_minions && frames%cmp_clear_minions==0) enemy_clear_minions();
+            if (focus_cmp && cmp_heap_leave > 0 && frames >= 2) { static void *volatile held; size_t t, lg; heap_probe(&t, &lg); while (t > (size_t)cmp_heap_leave * 1024u + 65536u && (held = malloc(65536)) != 0) t -= 65536; cmp_heap_leave = 0; }
             {
                 int g, k;
                 for (g = 0; g < cmp_place_count; ++g) {
