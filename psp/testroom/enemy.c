@@ -85,6 +85,9 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 /* How much a Pride takes, in units of a light hit. An estimate: on the HD Collection a maxed Dante kills
  * one in about three to five hits on Easy. The game's health and damage values aren't read yet. */
 #define ENEMY_HEALTH 6
+/* Ebony & Ivory's ordinary bullet: its record (0x5a5a30, copied by the bullet's constructor 002efaa0) +4, the damage.
+ * docs/VANGUARD_SPEC.md. */
+#define DANTE_BULLET_DAMAGE 10.0f
 /* Bosses' health from their classes' parameter blocks (+0x2c, the value FUN_002f0560 starts the health with). */
 #define NEVAN_MAX 7000
 #define BEOWULF_MAX 10000
@@ -178,6 +181,7 @@ typedef struct {
     unsigned char cloth_ready;
     float cloth_frames;
     float veil;                     /* 0 opaque; above, drawn blended with alpha 1 - veil (Nevan's fades) */
+    float bullet_hp;                /* Ebony & Ivory's damage not yet a whole unit of health (enemy_hit) */
     /* The Soul Eater (CEm016): its sight gauge (+0x4bc: 30 out of Dante's view, down while he looks), how shown it is
      * (+0x4c4, 0-30), its hover over him (+0x4b4) and when that's re-rolled (+0x4b8), its local velocity (+0x60), its
      * teleport's point (+0x3b0), its charge count (+0x448), whether a hit came while it couldn't react (+0x4d2). */
@@ -593,6 +597,7 @@ static void spawn_one_body(int kind, float x, float z) {
     e->cloth_ready = 0;
     e->cloth_frames = 0.0f;
     e->veil = 0.0f;
+    e->bullet_hp = 0.0f;
     e->active = 1;
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
@@ -1674,7 +1679,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (!e->active) return;
     if (e->kind == ENEMY_VANGUARD) vanguard_select((int)(e-enemies));
     if (e->kind == ENEMY_LEVIATHAN) {
-        float damage=kind==HIT_PISTOL ? 8.0f : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
+        float damage=kind==HIT_PISTOL ? DANTE_BULLET_DAMAGE : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
         if (leviathan_boss_dying()) return;
         ++hits;
         if(leviathan_boss_hit(leviathan_boss_target(),damage,mortal)) {e->plan=P_DEATH;died();}
@@ -1719,6 +1724,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_LADY) { if (lady_brain.ally) return; ++hits; lady_hit_glue(kind); return; }   /* the ending's ally takes none of his */
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
+    int gun = kind == HIT_PISTOL;
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
     {
@@ -1733,7 +1739,12 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
     if (mortal && !e->mirror_bound) {
-        e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        if (gun) {
+            /* A bullet does its record's damage (0x5a5a30 +4: 10), a quarter of a unit of health (a Pride's 250 is
+             * ENEMY_HEALTH): kept until it makes a whole one. It still flinches it as a light hit. */
+            e->bullet_hp += DANTE_BULLET_DAMAGE;
+            if (e->bullet_hp >= 250.0f / ENEMY_HEALTH) { e->bullet_hp -= 250.0f / ENEMY_HEALTH; --e->health; }
+        } else e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->air = 0;
             plan_set(P_DEATH);
@@ -4008,8 +4019,8 @@ static void jester_hit(HitKind kind) {
     ++hits;
     fx_hit_spark(at);
     if (mortal) {
-        /* The port's hit values (as the Vanguard's: 42 light, 84 heavy, 8 a bullet), scaled as the row says. */
-        float dmg = gun ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        /* The port's hit values (as the Vanguard's: 42 light, 84 heavy; a bullet its record's 10), scaled as the row says. */
+        float dmg = gun ? DANTE_BULLET_DAMAGE : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
         dmg *= stunned ? 1.0f : 0.01f;
         e->ar_health -= dmg;
         if (e->ar_health <= 0.0f) {
@@ -4854,9 +4865,9 @@ static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z) {
         }
     }
     if (mortal) {
-        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]. Agni's fire is weak to
+        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet its record's 10 (DANTE_BULLET_DAMAGE). Agni's fire is weak to
          * Cerberus's ice (the guide): twice the damage is an estimate. */
-        damage = kind == HIT_PISTOL ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        damage = kind == HIT_PISTOL ? DANTE_BULLET_DAMAGE : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
         if (e->kind == ENEMY_AGNI && kind != HIT_PISTOL && hit_weapon == 1) damage *= 2.0f;
         e->ar_health -= damage;
         if (e->ar_health <= 0.0f) {
@@ -6935,14 +6946,14 @@ static void lady_update_glue(float f, float px, float py, float pz) {
                 /* Her shot on its target, with its attack record's damage. Her bullet (FUN_00483ad0, vtable 0x6106a0)
                  * takes the ally flag (+0x46d); FUN_004c89b0 then gives its hit team 1, which hits enemies, not
                  * Dante, with the same record (0x5cbc40: 80). The rocket is record_damage's 1500. In the port's health
-                 * (ENEMY_HEALTH a Pride's 250) that's 2 of Dante's pistol hits, or 18 heavy ones, each through the
+                 * (ENEMY_HEALTH a Pride's 250) that's 2 light hits, or 18 heavy ones, each through the
                  * target's own hit code, until it dies. */
                 Enemy *was = e;
                 float lx = e->pos[0], lz = e->pos[2];
                 int heavy = b->ally_hit == 2, units = (int)(b->ally_hit_damage * ENEMY_HEALTH / 250.0f + 0.5f), n;
                 e = target;
                 for (n = 0; n < units && e->active && e->plan != P_DEATH; n += heavy ? 2 : 1)
-                    enemy_hit(heavy ? HIT_HEAVY : HIT_PISTOL, lx, lz);
+                    enemy_hit(heavy ? HIT_HEAVY : HIT_LIGHT, lx, lz);   /* a light hit is a unit (about 42): Dante's bullet is 10 */
                 e = was;
             }
         }

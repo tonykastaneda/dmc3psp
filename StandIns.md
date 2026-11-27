@@ -35,7 +35,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
   `main.c` ~4296, EVENT_SCRIPTS.md.
 - **Enemy health and Dante's damage**: Dante's hits are 42 light / 84 heavy (×1.1, Easy ×2, guns 20%) for every boss
-  [inferred], a bullet 8 against the Jester and the Hells [estimate]; health is the Pride's 6 light hits by eye and
+  [inferred], a bullet its record's 10 (Ebony & Ivory's, 0x5a5a30 +4) against every enemy, kept in fractions of a unit by the Hells and the like; health is the Pride's 6 light hits by eye and
   the rest in proportion to their parameter blocks. `enemy.c`, `vergil_boss.c`, `geryon_boss.c`.
 - **Hit detection on Dante's moves**: every generated move uses one stand-in reach; Quicksilver and Doppelganger styles
   aren't compared with the game; shotgun spread and tracers are stand-in effects. MOVESET_RE.md, `combat.c`.
