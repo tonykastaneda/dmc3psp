@@ -31,6 +31,7 @@ void bp_reset(int enabled) {
 }
 int bp_active(void) { return active; }
 int bp_floor(void) { return level; }
+int bp_attack_slot_limit(void) { return active?level/1000+1:1; }
 void bp_test_start(int floor, int count, int boss, int encounter) {
     if (!active) return;
     level=previous=floor<0?0:floor>9999?9999:floor;
@@ -111,8 +112,8 @@ void bp_draw(void) {
     menu_font_draw_scaled(x,249,18,2.6f,text,(alpha<<24)|0x00ffffffu);
 }
 void bp_status(char *out, int size) {
-    snprintf(out,size,"palace on=%d level=%d room=%d visits=%d group=%d clear=%.0f boss=%d finished=%d pickup=%d",
-             active,level,room_number,visits,group,clear_frames,next_boss,bp_finished(),reward);
+    snprintf(out,size,"palace on=%d level=%d room=%d visits=%d group=%d clear=%.0f boss=%d finished=%d pickup=%d attack_slots=%d",
+             active,level,room_number,visits,group,clear_frames,next_boss,bp_finished(),reward,bp_attack_slot_limit());
 }
 int bp_pickup_position(float out[3]) {
     if (!active || !reward) return 0;

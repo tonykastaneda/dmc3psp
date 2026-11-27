@@ -3202,6 +3202,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     msg_room_fought = 0;
     mission_room = room;
     bp_enter(room_number(room));
+    enemy_set_attack_slot_limit(bp_attack_slot_limit());
     {   /* Bosses this room's script spawns get their model's buffers now, behind the loading screen (enemy.c). */
         const RoomScript *rs = &missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room];
         PalaceOp po;
@@ -3924,6 +3925,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
+    enemy_set_attack_slot_limit(1);   /* Includes the Debug Room path, which skips enter_room. */
     if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
     music_stop();   /* the rooms' music from here (music_room) */
     vanguard_set_difficulty(choice->difficulty);

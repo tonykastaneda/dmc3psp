@@ -79,6 +79,7 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
  * port hasn't read (FUN_00369180). Measured on the HD Collection in Turbo: 49 swings from 4 enemies,
  * never under 3.0 real seconds apart, so it doesn't scale with game speed. */
 #define ATTACK_TOKEN_SECONDS 3.0f
+#include "attack_slots.h"
 /* The game's value comes from a mission object not read yet. 0 gives what Mission 2 on Easy shows
  * on the HD Collection: plans 27, 32, 51 and 52 only. */
 #define AI_RANK 0.0f
@@ -208,7 +209,8 @@ static float landed_x, landed_z;
 static int landed_heavy;
 static float landed_damage = -1.0f;
 static int landed_kind = -1;   /* the attack record's kind (+0x18), -1 unknown */
-static float attack_token;
+static AttackSlots attack_slots = {1,{0}};
+void enemy_set_attack_slot_limit(int limit) { attack_slots_reset(&attack_slots,limit); }
 static int mortal;
 static int dummy_kind;
 static int hit_weapon;   /* the melee weapon of the hits being dealt */
@@ -1546,10 +1548,10 @@ static void plan_set(int p) {
 
 /* Pick from the game's lists: which list by whether it may attack, which row by how far Dante is. */
 static void decide(float distance) {
-    int attack = attack_token <= 0.0f, band = 0, column = 0, i;
+    int attack = attack_slots_available(&attack_slots), band = 0, column = 0, i;
     const EnemyAiRow *row;
     float r, total = 0.0f;
-    if (attack) attack_token = ATTACK_TOKEN_SECONDS;
+    if (attack) attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
     e->gauge = 0.0f;
     const EnemyAiClass *ai = ai_class();
     while (band < ai->band_count - 1 && distance >= ai->bands[band]) ++band;
@@ -2480,7 +2482,7 @@ void enemy_update(float dt, float px, float py, float pz) {
     Enemy *selected = e;
     int i;
     ++trace_tick;
-    if (attack_token > 0.0f) attack_token -= dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f);
+    attack_slots_update(&attack_slots,dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f));
     for (i = 0; i < ENEMY_MAX; ++i) {
         float was_x, was_y, was_z;
         e = &enemies[i];
@@ -3163,8 +3165,8 @@ static void enigma_update(float f, float px, float py, float pz) {
             e->shoot_timer[k] -= f;
             if (e->shoot_timer[k] > 0.0f) continue;
             e->shoot_timer[k] = (near ? arm_near_base[k] + 200.0f * ai_unit() : arm_far_base[k] + 100.0f * ai_unit());
-            if (attack_token > 0.0f) continue;
-            attack_token = ATTACK_TOKEN_SECONDS;
+            if (!attack_slots_available(&attack_slots)) continue;
+            attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
             e->shoot_set = (signed char)k;
             e->shoot_fan = ai_unit() * 100.0f >= (near ? 80.0f : 60.0f);
             e->shoot_phase = 0;
@@ -3350,8 +3352,8 @@ static void goyle_decide(float d) {
         if (next == G_WINDUP) {
             /* An attack needs fewer than 2 attacking (FUN_002fbdc0(mgr, 1)) and the attack token (3 s). Else the
              * next row. Under 350 the game also asks a check of its own (vfunc 0x1c8) that isn't decoded. */
-            if (!attacks_on || attack_token > 0.0f || goyle_in(G_WINDUP, G_AIM, G_DIVE, G_SHOOT) >= 2) continue;
-            attack_token = 3.0f;
+            if (!attacks_on || !attack_slots_available(&attack_slots) || goyle_in(G_WINDUP, G_AIM, G_DIVE, G_SHOOT) >= 2) continue;
+            attack_slots_take(&attack_slots,3.0f);
             /* From further off it may shoot instead of diving [the port's choice; state 11's own pick isn't read]. */
             goyle_state(d > 500.0f && ai_unit() < 0.5f ? G_SHOOT : G_WINDUP);
             return;
@@ -5755,8 +5757,8 @@ static void an_decide(float px, float py, float pz) {
     rel = wrap_angle(atan2f(dx, dz) - e->yaw);
     if (ar_force >= 0) { int st = ar_force; ar_force = -1; an_go(st, px, py, pz); return; }   /* tests: "arforce frame action" */
     if (an_on_wall[me]) {
-        if (an_gate[me] > 150.0f && attack_token <= 0.0f && attacks_on) {
-            attack_token = ATTACK_TOKEN_SECONDS;
+        if (an_gate[me] > 150.0f && attack_slots_available(&attack_slots) && attacks_on) {
+            attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
             an_gate[me] = 0.0f;
             an_go(an_pick(an_wall_attack[zone], 4), px, py, pz);
         } else an_go(0x72, px, py, pz);   /* 0x5c6740: the leap down, whatever the zone */
@@ -5765,7 +5767,7 @@ static void an_decide(float px, float py, float pz) {
     if (an_gate[me] <= 150.0f || !attacks_on) { an_go(an_pick(an_move[zone], 8), px, py, pz); return; }
     if (fabsf(rel) > PI * 0.75f) { an_go(0x6c, px, py, pz); return; }   /* behind: the turn first (dot < -0.707) */
     an_gate[me] = 0.0f;
-    if (attack_token <= 0.0f) { attack_token = ATTACK_TOKEN_SECONDS; an_go(an_pick(an_attack[zone], 6), px, py, pz); }
+    if (attack_slots_available(&attack_slots)) { attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS); an_go(an_pick(an_attack[zone], 6), px, py, pz); }
     else an_go(an_pick(an_no_token[zone], 6), px, py, pz);
 }
 

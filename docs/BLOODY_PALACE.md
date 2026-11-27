@@ -38,9 +38,12 @@ Rooms 423–432 each contain **20 EST groups**. Ordinary entry uses spawn_group 
 `0x2113e0` chooses random modulo 20, scanning past bits in event **+0x798**, resets that mask when exhausted,
 and stores the group at **+0x7a0** (`0x211508`). Spawn-group -1 marks the group used, resets the mask across a
 thousand boundary, and spawns the selected group (`0x20be20`, spawn branch). EST table selection uses the
-game difficulty byte at **0x1d0d73c** (`0x2fb820`). EST opcode 12 normally sets rank; in Palace it instead sets
-rank to **floor / 1000 + 1** (`0x2fb060`, `0x2fb530`). Port rank/difficulty scaling needs an explicit stand-in
-unless implemented separately from the story difficulty.
+game difficulty byte at **0x1d0d73c** (`0x2fb820`). EST opcode 12 configures the enemy manager's **attack-slot budget**; in Palace it sets
+**floor / 1000 + 1** (`0x2fb060`, `0x2fb530`). The component at enemy-manager +0x840 has vtable
+0x60d7b0: setter 0x4257f0 caps ten slots and clears ten active/cooldown records; update 0x425850
+expires their cooldowns. This corrects the earlier interpretation as an enemy-stat rank. The shared
+enemy attack scheduler now gets 1-10 timed slots on Palace room entry; story rooms use one. Existing
+attack cooldown durations and separate boss schedulers remain unchanged.
 
 | Boss index | Room | EST group | Encounter (EST class) |
 | --- | --- | --- | --- |

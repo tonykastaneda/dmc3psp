@@ -7,6 +7,7 @@ void bp_reset(int enabled);
 void bp_enter(int room);
 int bp_active(void);
 int bp_floor(void);
+int bp_attack_slot_limit(void);
 int bp_op(int index, PalaceOp *out);
 void bp_update(float frames, int cleared);
 int bp_portal_ready(int portal);
