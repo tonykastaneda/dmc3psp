@@ -318,6 +318,9 @@ static JesterProjectiles jester_world;   /* his emitters and what they throw (je
 static void bishop_spawn_glue(void);
 static void bishop_update_glue(float f,float px,float py,float pz);
 static void bishop_hit_glue(HitKind kind,float from_x,float from_z);
+static void royal_spawn_glue(void);
+static void royal_update_glue(float f, float px, float py, float pz);
+static void royal_hit_glue(HitKind kind, float from_x, float from_z);
 static void dullahan_spawn_glue(void);
 static void fallen_spawn_glue(void);
 static void fallen_update_glue(float f, float px, float py, float pz);
@@ -493,6 +496,8 @@ static int kind_health(int kind) {
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
     case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
+    case ENEMY_QUEEN: return ENEMY_HEALTH * 1800 / 250;   /* 0x5c0030 +0x2c (CEm021 kind 0) */
+    case ENEMY_KING: return ENEMY_HEALTH * 2300 / 250;    /* 0x5bfc90 +0x2c (kind 1) */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1300 / 250;   /* 0x5c32a0 +0x2c (class 11, copied by FUN_00342450) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * BEOWULF_MAX / 250;   /* 0x5b84e0 +0x2c (class 33, FUN_002d95a4) */
     case ENEMY_SOUL: return (ENEMY_HEALTH * 200 + 125) / 250;   /* 0x5c1440 +0x2c (class 16, FUN_0049ad90) */
@@ -607,6 +612,7 @@ static void spawn_one_body(int kind, float x, float z) {
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
     if (kind == ENEMY_BISHOP) {bishop_spawn_glue();return;}
+    if (kind == ENEMY_QUEEN || kind == ENEMY_KING) { royal_spawn_glue(); return; }
     if (kind == ENEMY_DULLAHAN) { dullahan_spawn_glue(); return; }
     if (kind == ENEMY_FALLEN) { fallen_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
@@ -886,6 +892,8 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
     if (spawn_class == 35) return ENEMY_PAWN;
+    if (spawn_class == 39) return ENEMY_QUEEN;
+    if (spawn_class == 40) return ENEMY_KING;
     if (spawn_class >= 36 && spawn_class <= 38) return ENEMY_PAWN;   /* the other chessmen (Missions 14, 16): the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
@@ -1743,6 +1751,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
     if (e->kind == ENEMY_BISHOP) {++hits;bishop_hit_glue(kind,from_x,from_z);return;}
+    if (e->kind == ENEMY_QUEEN || e->kind == ENEMY_KING) { ++hits; royal_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_DULLAHAN) { ++hits; dullahan_hit_glue(kind,from_x,from_z); return; }
     if (e->kind == ENEMY_FALLEN) { ++hits; fallen_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
@@ -2246,6 +2255,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
     if(e->kind==ENEMY_BISHOP){bishop_update_glue(f,px,py,pz);return;}
+    if (e->kind == ENEMY_QUEEN || e->kind == ENEMY_KING) { royal_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_DULLAHAN) { dullahan_update_glue(f,px,py,pz); return; }
     if (e->kind == ENEMY_FALLEN) { fallen_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
@@ -2926,6 +2936,7 @@ void enemy_draw(void) {
 static float shadow_radius(int kind) {
     switch (kind) {
     case ENEMY_ARACHNE: return 150.0f;
+    case ENEMY_QUEEN: case ENEMY_KING: return 90.0f;
     case ENEMY_BEOWULF: return 120.0f;
     case ENEMY_AGNI: case ENEMY_RUDRA: return 60.0f;
     case ENEMY_WRATH: case ENEMY_FALLEN: return 60.0f;
@@ -6136,6 +6147,7 @@ static void dullahan_hit_glue(HitKind kind, float from_x, float from_z) {
 }
 
 /* Separate Bishop caster brain. */
+#include "royal.inc"
 #include "bishop.h"
 static BishopBrain bishop_brain[ENEMY_MAX];
 static int bishop_motion_id[BISHOP_M_COUNT] = {-2};

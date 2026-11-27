@@ -38,6 +38,15 @@ static void king_tests(void) {
     CHECK(hit_frames == 28,   /* 179 -> 178 is the first: the count drops before the check, as 0x43ebe0 */
            "hits for %d frames", hit_frames);
     CHECK(!king_blast_reaches(&k.blast, 1600.0f, 0.0f, 0.0f), "outside 1500");
+    /* at a 2-frame step (the port at 30 fps) the frames go 100 -> 102: the blast still starts */
+    king_spawn(&k, KING_MAX_HP, 0);
+    king_think(&k, 2.0f, 3000.0f, 0.0f, 0.0f, ROYAL_CMD_RESPOND, half);
+    for (n = 0, attack_at = -1; n < 200; n += 2) {
+        k.body.frame = (float)n; k.body.done = 0;
+        king_think(&k, 2.0f, 3000.0f, 0.0f, 0.0f, 0, half);
+        if (k.blast.active && attack_at < 0) attack_at = n;
+    }
+    CHECK(attack_at == 102, "2-frame steps: blast object at %d", attack_at);
     /* hurt with Dante within 500: attacks at once from the wait */
     king_spawn(&k, KING_MAX_HP, 0);
     king_think(&k, 1.0f, 400.0f, 0.0f, 0.0f, 0, half);

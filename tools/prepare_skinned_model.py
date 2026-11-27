@@ -403,6 +403,10 @@ ENEMY_KINDS = (
     # The Soul Eater (class 16, EST 34), em016.pac: GDATA 126 (a PNST), pack 11 in the table at 0x58e740. [0] textures,
     # [1] its body (an EFM laid out as a MOD, 24 bones), [3] its six wing chains (em016_00.clt), [8] its motions.
     ("soul", 126, 1, None),
+    # The Damned Queen and King (CEm021, EST 39 / 40), em021.pac (GDATA 128, pack 13): [0] textures, [1] effects, the
+    # Queen [2]-[6] (body, motions, scripts, capsule list, capsules), the King [7]-[11]. docs/CHESS_ROYALS_SPEC.md.
+    ("queen", 128, 2, None),
+    ("king", 128, 7, None),
 
 )
 AR_SLOT = 131
@@ -865,6 +869,7 @@ def main() -> None:
         fallen_pack = pac_list(read_slot(FALLEN_SLOT))
         lady_pack = pac_list(read_slot(LADY_SLOT))
         soul_pack = pnst_entries(read_slot(126))
+        royal_pack = pac_list(read_slot(128))
         executable = iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"])
     read_chunk = chunks.__getitem__
     texture_data = chunks[0]
@@ -996,7 +1001,7 @@ def main() -> None:
             f"static const unsigned short dmc3_beowulf_limb_indices[] = {{{','.join(map(str, flat))}}};\n"
             f"static const WeaponGroup dmc3_beowulf_limb_groups[] = {{{','.join(table)}}};\n"
             f"#define DMC3_BEOWULF_GROUP_COUNT {len(table)}\n", encoding="ascii")
-    write_enemy(args.output, {117: enemy_pack, 118: abyss_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack, 126: soul_pack}, executable)
+    write_enemy(args.output, {117: enemy_pack, 118: abyss_pack, 119: envy_pack, 124: enigma_pack, GOYLE_SLOT: goyle_pack, JESTER_SLOT: jester_pack, AR_SLOT: ar_pack, ARACHNE_SLOT: arachne_pack, NEVAN_SLOT: nevan_pack, PAWN_SLOT: pawn_pack, 123: dullahan_pack, BEOWULF_SLOT: beowulf_pack, FALLEN_SLOT: fallen_pack, LADY_SLOT: lady_pack, 126: soul_pack, 128: royal_pack}, executable)
     gen_enemy_ai.write_header(args.output / "enemy_ai_runtime.h", enemy_pack, executable, envy_pack, abyss_pack)
     write_devils(args.output, devil_packs)
 
@@ -1115,6 +1120,11 @@ def main() -> None:
             continue
         parsed = parse_mot(raw)
         motions.append({"name": f"se{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
+    # The Queen's "qnNN" ([3]: 0 the wind-up, 1 the charge's end, 2 the charge) and the King's "kg00" ([8], everything).
+    for prefix, chunk in (("qn", 3), ("kg", 8)):
+        for slot, raw in enumerate(pac_list(royal_pack[chunk])):
+            parsed = parse_mot(raw)
+            motions.append({"name": f"{prefix}{slot:02d}", "data": raw[:parsed["bytes_used"]], "parsed": parsed})
     mlines = [
         "#ifndef DMC3_MOTION_RUNTIME_H",
         "#define DMC3_MOTION_RUNTIME_H",

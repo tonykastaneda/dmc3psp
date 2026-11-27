@@ -10,7 +10,7 @@
 
 /* The kinds there are models for, in tools/prepare_skinned_model.py's ENEMY_KINDS order. */
 typedef enum {
-    ENEMY_PRIDE, ENEMY_GLUTTONY, ENEMY_LUST, ENEMY_SLOTH, ENEMY_WRATH, ENEMY_GREED, ENEMY_ENIGMA, ENEMY_GOYLE, ENEMY_JESTER, ENEMY_AGNI, ENEMY_RUDRA, ENEMY_ENVY, ENEMY_ARACHNE, ENEMY_NEVAN, ENEMY_PAWN, ENEMY_DULLAHAN, ENEMY_BEOWULF, ENEMY_FALLEN, ENEMY_LADY, ENEMY_BISHOP, ENEMY_ABYSS, ENEMY_SOUL, ENEMY_KIND_TOTAL
+    ENEMY_PRIDE, ENEMY_GLUTTONY, ENEMY_LUST, ENEMY_SLOTH, ENEMY_WRATH, ENEMY_GREED, ENEMY_ENIGMA, ENEMY_GOYLE, ENEMY_JESTER, ENEMY_AGNI, ENEMY_RUDRA, ENEMY_ENVY, ENEMY_ARACHNE, ENEMY_NEVAN, ENEMY_PAWN, ENEMY_DULLAHAN, ENEMY_BEOWULF, ENEMY_FALLEN, ENEMY_LADY, ENEMY_BISHOP, ENEMY_ABYSS, ENEMY_SOUL, ENEMY_QUEEN, ENEMY_KING, ENEMY_KIND_TOTAL
 } EnemyKind;
 /* Not a model kind: the Gigapede's head and segments, which take one enemy slot each. */
 #define ENEMY_GIGAPEDE 100
@@ -138,6 +138,8 @@ void enemy_giga_ride(float *x, float *y, float *z, int on_ground);
 int enemy_giga_focus(float out[3]);
 int enemy_giga_top_point(int part, float out[3]);
 const char *enemy_giga_log(void);
+/* Tests: the next chess command for every Queen and King (20 the response), as the chess master would give it. */
+void enemy_royal_command(int command);
 /* A sword swing: the Gigapede's spheres within reach in front of him are batted back. */
 void enemy_deflect(float px, float py, float pz, float yaw, float reach);
 void enemy_test_orb(float x, float y, float z, float yaw);   /* tests: a Gigapede sphere 7 m in front of him */   /* its states, shells and throws so far, for tests */   /* for tests: the middle of a segment's back */   /* the middle of its parts in the room, for the camera; 0 if none */

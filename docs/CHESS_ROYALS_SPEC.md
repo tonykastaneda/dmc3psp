@@ -190,3 +190,20 @@ blast.
   - the motions' look against the PS2.
 - The decision tables mean their turns come from the master (`chess.c`): 0x14 starts their attacks; the King also
   starts his own attack by distance and by hurt.
+
+## In the port
+
+- The brains are `psp/testroom/queen.c`, `king.c` and `royal.c`. enemy.c's side is `royal.inc`:
+  - the motions are qn00–02 and kg00, as the scripts map them;
+  - the effects come from nfx banks 25 (em017) and 26 (em021), plus P44 on landings;
+  - the hits are the Queen's capsules during motion 7 and the King's blast;
+  - Dante's hits take 1 / 2 and knock them as 00407fe8 does.
+- Stand-ins are in StandIns.md. Host checks: `python tools/tests/run_royal_logic.py`.
+- Checked in PPSSPP, Mission 18 room 401 (`royals401`, 1800 script frames, Dante standing; `royals401b` with test
+  line `royalcmd 300 20` / `royalcmd 900 20` handing them the master's 20):
+  - the King steps 200 cm a move, and his waits match 3 × 1000 / distance;
+  - the Queen glides onto rook and bishop lines with Dante;
+  - on 20 the Queen turns, winds up for 60 frames, charges for 84 (50 + 50 × rand) and lands;
+  - on 20 the King's blast object charges for 60 frames (62 at the scene's 2-frame step), blasts, and ends at 240;
+  - the King also attacked on his own after staying within 350 of Dante.
+- Not yet wired to the chess master (codex's `chess.c`): `royal_command` reads only the test line.

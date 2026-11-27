@@ -95,7 +95,8 @@ static void king_attack(KingBrain *k, float f) {
         k->command = ROYAL_CMD_NONE;
         b->sub = 1;
     }
-    if (b->sub == 1 && b->frame > 100.0f && b->frame < 102.0f) {
+    /* 0x434890: 100 < frame < 102, which a 1-frame step lands in once; with longer steps, the step that crosses 101 */
+    if (b->sub == 1 && b->frame > 100.0f && b->frame - f < 102.0f && b->frame - f <= 101.0f) {
         blast_start(k);
         b->sub = 2;
     }
