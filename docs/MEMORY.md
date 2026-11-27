@@ -21,7 +21,7 @@
 | `parse_ordered` (motion.c) | 3597 KB | All 1375 motions, parsed at boot. |
 | `menu_load` | 2378 KB | MENU.BIN without its pictures (was 10266 KB, below). |
 | `enemy_init` | about 1860 KB | Every kind's index and weapon buffers. |
-| Bosses' `*_init` | about 2700 KB | Vergil, Cerberus, Geryon, Arkham, the Doppelganger and the Vanguard, allocated at boot for every mission. |
+| Bosses' `*_init` | about 2700 KB | Vergil, Cerberus, Geryon, Arkham, the Doppelganger and the Vanguard. Allocated at boot for every mission until the boss data change (below). |
 | `page_load` (credits_fight.c) | 768 KB | The staff roll's three page slots. |
 | `spawn_one` | 106 KB a slot | An enemy slot's skinned vertices, made the first time the slot is used. |
 
@@ -32,8 +32,30 @@
   - They now stay in the file. `image_get` (menu.c) reads the one on screen into a single 272 KB buffer when it
     changes. Only one is drawn a frame.
   - Shots before and after are the same pixel for pixel.
+- **The bosses' model buffers (Nov 26).** Each boss module's `init` now only looks up its motions at boot.
+  - The skinned vertices, index copies and swizzled textures are made by its `load_data` at the boss's first spawn
+    (and for Vergil drawn as the partner).
+  - `X_data_release` frees them when no such boss is up. `enemy_set_count(0, ...)`, which every room change calls,
+    runs all six releases.
+  - A boss fought again (a Palace boss floor, a retry) is made again at its spawn.
+  - The Vanguard's spawn already makes or borrows its slot's vertices, so his `load_data` makes only the indices
+    and textures.
 
-Free heap after this, 300 frames into each room:
+| Room | Free before | Free after |
+|---|---|---|
+| Mission 1 | 7.5 MB | 10.4 MB |
+| Mission 20 room 012 (the street) | 6.3 MB | 9.2 MB |
+| Boss rooms with their boss up: Cerberus 6, Geryon 228, the Doppelganger 139, Arkham 421, Vergil 411, Mission 2's Vanguard | 7.5-8.3 MB | 8.4-10.4 MB |
+| Palace boss floors 433 (Cerberus) and 439 (the Doppelganger) | about 7.2 MB | 9.5 and 9.9 MB |
+
+The "before" column is the Bloody Palace merge build, whose larger effect banks use about 0.7 MB more than c91a796.
+
+Shots against a build that loads at boot (`lzold_*` / `lz_*`, the same frames):
+- Doppelganger, Arkham, Vergil and Palace floor 439: identical.
+- Geryon at frame 400: within 10/255.
+- Cerberus at frame 850: 7 single pixels of his room's ice motes. His model is the same.
+
+Free heap after the MENU.BIN change alone (c91a796, before the Palace merge), 300 frames into each room:
 
 | Room | Free |
 |---|---|

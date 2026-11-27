@@ -36,4 +36,5 @@ void vergil_boss_note(const char *event, float a, float b, float c, float d);
 /* The floor under (x, z) near height y; set by enemy.c so he walks the room's floor. */
 void vergil_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out));
 
+void vergil_boss_data_release(void);   /* frees its model's buffers unless it's active (made again at its next spawn) */
 #endif

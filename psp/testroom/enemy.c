@@ -784,6 +784,10 @@ void enemy_set_count(int count, float x, float z) {
     int i;
     if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
     if (count == 0) { coffins_reset(); giga_clear(); }
+    if (count == 0) {   /* a room change: bosses that aren't up give their model's buffers back (made again at their spawn) */
+        vergil_boss_data_release(); cerberus_boss_data_release(); geryon_boss_data_release();
+        arkham_boss_data_release(); doppelganger_boss_data_release(); vanguard_data_release();
+    }
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
