@@ -210,6 +210,21 @@ box +0xe2, inner box +0xea, no drag; one line a particle, head to tail. Two colo
 Sub-records (fakes): translation, rotation, scale at +0 / +0x10 / +0x20, rates at +0x30 / +0x36 / +0x3c, colour keys
 at +0x48 (flags +0x98). A sprite fake takes its parent's T and A.
 
+### Direct P spawns (`FUN_00208590(0, id, matrix, flags)`)
+
+Most P effects come as children of V / G records, which nfx starts by itself. These code paths start one directly;
+a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the bank's export: native_fx.py's
+`write_bank(..., p_ids)`):
+
+| Caller | P | Where, when | Port |
+| --- | --- | --- | --- |
+| `002a0510` Cerberus's punch | 58, 59 | on the paw, events 2-5 | yes |
+| `003ac750` Agni & Rudra | 44 (0x2c) | dust at the brother (+0x450), from `003a8200` as the slam lands (phase 0x1e → 0x1f), `003a2fb0`, `003a5ee0`, `003a8c60`, `003b0450`, `003b09c0` | no |
+| `003a6820` Agni & Rudra | 15 (0xf), 44 | at bone +0xcc0 from motion frame 280 (phase 2); at bone +0xcf8 from 220 (phase 1) | no |
+| `00264b90` | 44 | (player code range) | no |
+| `003c9870` | 0xeb, 0xfb, 0xcb | | no |
+| `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` | 44 | dust at six bones (+0x104 matrices) | no |
+
 ### Atlases (A records, `FUN_001ec360`)
 
 +2 frames a picture, +3 the last picture, +4 loop, +5 where a loop restarts; pictures from +6, 10 bytes each: s16 x,
