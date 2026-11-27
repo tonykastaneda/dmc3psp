@@ -27,7 +27,7 @@ FFMPEG = Path(r"C:\ffmpeg\bin\ffmpeg.exe")
 def sync():
     """The EBOOT and the data files beside it, where they changed."""
     GAME.mkdir(parents=True, exist_ok=True)
-    for src in [BUILD / "EBOOT.PBP", BUILD / "STAGE.BIN", BUILD / "MENU.BIN", *BUILD.glob("ROOM_*.BIN"), *BUILD.glob("STAGE_*.BIN"), *BUILD.glob("DEMO_*.BIN"), *BUILD.glob("DSTG_*.BIN"), *BUILD.glob("DAUD_*.BIN"), *BUILD.glob("BGM_*.BIN"), *BUILD.glob("SFX_*.BIN")]:
+    for src in [BUILD / "EBOOT.PBP", BUILD / "STAGE.BIN", BUILD / "MENU.BIN", *BUILD.glob("ROOM_*.BIN"), *BUILD.glob("STAGE_*.BIN"), *BUILD.glob("DEMO_*.BIN"), *BUILD.glob("DSTG_*.BIN"), *BUILD.glob("DAUD_*.BIN"), *BUILD.glob("BGM_*.BIN"), *BUILD.glob("SFX_*.BIN"), *BUILD.glob("STAFF_*.BIN")]:
         dst = GAME / src.name
         if src.exists() and (not dst.exists() or dst.stat().st_size != src.stat().st_size or dst.stat().st_mtime < src.stat().st_mtime):
             shutil.copy2(src, dst)

@@ -147,6 +147,7 @@ void lady_spawn(LadyBrain *b, int health) {
     b->last_mode = -1;
     b->home[0] = b->pos[0]; b->home[1] = b->pos[1]; b->home[2] = b->pos[2];
     for (i = 0; i < LADY_SHOTS; ++i) b->shots[i].on = 0;
+    b->ally = b->has_target = 0;
     act(b, L_IDLE);
 }
 
@@ -309,7 +310,124 @@ static void wire_update(LadyBrain *b, float frames) {
     }
 }
 
+/* ---- The ally (Mission 20's ending street): variant 1 sends every mode of FUN_00444c90 to 0x30, and her modes are
+ * 0x2f-0x33 (FUN_004480f0, 00448350, 00448650, 00448710, 00448010). She aims at FUN_0044c8b0's pick (the caller's
+ * target: the nearest enemy to her), shoots every 20 frames (0x61a568), the rocket once her counter (+0x4838) reaches
+ * 100 (0x61a570), and regroups behind Dante. Her shots fly at the target and only it can take them [stand-in]. */
+#define ALLY_FIRE 20.0f           /* 0x61a568 */
+#define ALLY_ROCKET 100.0f        /* 0x61a570 */
+#define ALLY_ROCKET_STEP 10.0f    /* what fills +0x4838 isn't decoded: a tenth a burst [estimate] */
+#define ALLY_REGROUP 600.0f       /* 0x61a468; Dante between 300 and 600 (0x61a46c / 0x61a470, 0x61a45c / 0x61a460) */
+#define ALLY_SPOT_NEAR 100.0f     /* 0x61a464 */
+#define ALLY_RUN_TURN (5461.0f / 65536.0f * 6.2831853f)   /* FUN_004480f0's 5461 a frame */
+#define ALLY_BURST_SHOTS 3        /* 0x85's shots [estimate: its events aren't read] */
+enum { A_REGROUP = 0x2f, A_AIM = 0x30, A_SHOOT = 0x31, A_ROCKET = 0x32, A_WAIT = 0x33 };
+
+void lady_make_ally(LadyBrain *b) {
+    b->ally = 1;
+    b->mode = A_AIM; b->step = 0;
+    b->shot_clock = b->rocket = b->regroup = 0.0f;
+}
+
+static void ally_mode(LadyBrain *b, int m) { b->mode = m; b->step = 0; }
+
+/* Like shots_update, against her target: what reaches it hurts it (the caller applies ally_hit). */
+static void ally_shots(LadyBrain *b, float f) {
+    int i;
+    for (i = 0; i < LADY_SHOTS; ++i) {
+        LadyShot *s = &b->shots[i];
+        float dx, dy, dz;
+        if (!s->on) continue;
+        s->pos[0] += s->vel[0] * f; s->pos[1] += s->vel[1] * f; s->pos[2] += s->vel[2] * f;
+        s->life -= f;
+        dx = b->target[0] - s->pos[0]; dy = b->target[1] + 100.0f - s->pos[1]; dz = b->target[2] - s->pos[2];
+        if (b->has_target && dx * dx + dz * dz < (s->kind == 2 ? 120.0f * 120.0f : 60.0f * 60.0f) && fabsf(dy) < 140.0f) {
+            if (s->kind == 2) fx_explosion(s->pos);
+            if (b->ally_hit < 2) { b->ally_hit = s->kind == 2 ? 2 : 1; b->ally_hit_damage = s->kind == 2 ? record_damage[3] : record_damage[0]; }
+            s->on = 0;
+            continue;
+        }
+        if (s->life <= 0.0f) { if (s->kind == 2) fx_explosion(s->pos); s->on = 0; }
+    }
+}
+
+static void ally_think(LadyBrain *b, float f, float px, float py, float pz) {
+    float dx = px - b->pos[0], dz = pz - b->pos[2], d = sqrtf(dx * dx + dz * dz);
+    float *t = b->target;
+    b->land = 0; b->ally_hit = 0;
+    b->timer += f;
+    b->regroup += f;
+    ally_shots(b, f);
+    switch (b->mode) {
+    case A_AIM:   /* FUN_00448350 */
+        if (b->step == 0) { play(b, LADY_M_WALK); b->step = 1; }   /* action 0x45 */
+        if (!b->has_target) { ally_mode(b, A_WAIT); break; }
+        {
+            float off = face(b, t[0], t[2], TURN, f);
+            /* Within her cone (0x61a500: +-45 degrees, reach 10000): action 0x49, her aim (its slot isn't one of the
+             * port's motions: the drawn guns, 0x30's, stand in). */
+            if (b->step == 1 && fabsf(off) < 45.0f * DEG) { play(b, LADY_M_GUN); b->step = 2; }
+        }
+        if (b->step == 2) {
+            b->shot_clock += f;
+            if (b->shot_clock >= ALLY_FIRE) {
+                b->shot_clock = 0.0f;
+                ally_mode(b, b->rocket >= ALLY_ROCKET ? A_ROCKET : A_SHOOT);
+            } else if (b->regroup > ALLY_REGROUP && d > 300.0f && d < 600.0f) ally_mode(b, A_REGROUP);
+        }
+        break;
+    case A_SHOOT:   /* FUN_00448650: action 0x85, turning to the target, till it's played */
+        if (b->step == 0) { play(b, LADY_M_POSE); b->step = 1; b->volleys = 0; }
+        if (b->has_target) face(b, t[0], t[2], TURN, f);
+        if (b->volleys < ALLY_BURST_SHOTS && b->frame >= 6.0f + 6.0f * b->volleys) {   /* [estimate] */
+            if (b->has_target) fire(b, 0, t[0], t[1], t[2], 0.0f);
+            ++b->volleys;
+        }
+        if (b->done) { b->rocket += ALLY_ROCKET_STEP; ally_mode(b, A_AIM); }
+        break;
+    case A_ROCKET:   /* FUN_00448710: action 0x56 (0x57 / 0x58 by the target's height, FUN_0044ad40) */
+        if (b->step == 0) {
+            float up = atan2f(t[1] - b->pos[1], sqrtf((t[0] - b->pos[0]) * (t[0] - b->pos[0]) + (t[2] - b->pos[2]) * (t[2] - b->pos[2])));
+            play(b, LADY_M_BIG + (up > 15.0f * DEG ? 1 : up < -15.0f * DEG ? 2 : 0));
+            b->step = 1;
+        }
+        if (b->has_target) face(b, t[0], t[2], TURN, f);
+        if (b->step == 1 && b->frame > 20.0f) {   /* the shot's frame, as her boss's [estimate] */
+            float at[3] = {b->pos[0] + sinf(b->yaw) * 80.0f, b->pos[1] + 130.0f, b->pos[2] + cosf(b->yaw) * 80.0f};
+            fx_explosion(at);
+            if (b->has_target) fire(b, 2, t[0], t[1], t[2], 0.0f);
+            b->step = 2;
+        }
+        if (b->done && b->step >= 2) { b->rocket = 0.0f; ally_mode(b, A_AIM); }
+        break;
+    case A_WAIT:   /* FUN_00448010: the guns drawn (action 0x30); a target -> 0x30; Dante 300-600 away -> 0x2f */
+        if (b->step == 0) { play(b, LADY_M_GUN); b->step = 1; }
+        if (b->has_target) ally_mode(b, A_AIM);
+        else if (d > 300.0f && d < 600.0f) ally_mode(b, A_REGROUP);
+        break;
+    case A_REGROUP:   /* FUN_004480f0: run to 100 behind Dante (his yaw), then turn her back to him */
+        if (b->step == 0) { play(b, LADY_M_RUN); b->step = 1; }
+        if (b->step == 1) {
+            float spot[3] = {px - sinf(b->dante_yaw) * 100.0f, py, pz - cosf(b->dante_yaw) * 100.0f};
+            float sx = spot[0] - b->pos[0], sz = spot[2] - b->pos[2];
+            face_point(b, spot, ALLY_RUN_TURN, f);
+            move(b, 530.0f / 30.0f * 0.5f, 0.0f, f);   /* her run, as her boss's [estimate] */
+            if (sx * sx + sz * sz < ALLY_SPOT_NEAR * ALLY_SPOT_NEAR) { play(b, LADY_M_GUN); b->step = 2; }
+        } else {
+            float away[3] = {2.0f * b->pos[0] - px, py, 2.0f * b->pos[2] - pz};
+            float want = atan2f(away[0] - b->pos[0], away[2] - b->pos[2]) - b->yaw;
+            while (want > 3.14159265f) want -= 6.2831853f;
+            while (want < -3.14159265f) want += 6.2831853f;
+            face_point(b, away, ALLY_RUN_TURN, f);
+            if (fabsf(want) < ALLY_RUN_TURN * f + 0.001f) { b->regroup = 0.0f; ally_mode(b, A_AIM); }
+        }
+        break;
+    default: ally_mode(b, A_AIM); break;
+    }
+}
+
 void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int sight) {
+    if (b->ally) { ally_think(b, f, px, py, pz); return; }
     float dx = px - b->pos[0], dz = pz - b->pos[2], d = sqrtf(dx * dx + dz * dz), off;
     b->land = 0;
     b->timer += f;
