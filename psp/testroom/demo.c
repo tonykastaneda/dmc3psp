@@ -7,6 +7,7 @@
 #include "demo_cloth.h"
 
 #include "model_blend.h"
+#include "near_clip.h"
 #include "motion.h"
 #include "nfx.h"
 #include "stage.h"
@@ -791,6 +792,7 @@ void demo_draw(void) {
     for (i = 0; i < actor_count; ++i) if (actors[i].d) pose(&actors[i], 0);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
+    near_clip_begin();   /* close shots: the near plane's crossing triangles redrawn clipped (near_clip.h) */
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
@@ -811,6 +813,7 @@ void demo_draw(void) {
         const DemoObject *obj;
         const unsigned short *idx;
         const DemoHideClip *hide;
+        int near = 0;
         if (!a->d) continue;
         obj = (const DemoObject *)(blob + a->d->object_at);
         idx = (const unsigned short *)(blob + a->d->index_at);
@@ -827,8 +830,10 @@ void demo_draw(void) {
             int cb = (int)a->d->centre_bone < a->d->bones ? (int)a->d->centre_bone : 0;
             if (!sphere_visible(&clip, a->world_pos[cb], a->d->radius, proj.x.x > proj.y.y ? proj.x.x : proj.y.y)) continue;
             lit |= demo_lights(a->world_pos[cb]);
+            near = near_clip_sphere(a->world_pos[cb], a->d->radius);   /* does the near plane reach it? */
         }
         skin(a);
+        if (near) near = near_clip_prepare(a->skinned, (int)a->d->vertices);   /* 0: wholly on one side */
         for (k = 0; k < a->d->objects; ++k) {
             unsigned int texture = obj[k].texture & 0xffffu, mode = (obj[k].texture >> 16) & 0xfu;
             if (texture < head->texture_count && (int)texture != bound) {
@@ -843,6 +848,7 @@ void demo_draw(void) {
              * (Arkham's veins), 4 subtracts the colour whole, else normal. Blending stays on in demos. */
             if (mode >= 2) model_object_blend(mode, 1);
             sceGumDrawArray(GU_TRIANGLES, DEMO_VTYPE, (int)obj[k].count, idx + obj[k].first, a->skinned);
+            if (near) near_clip_draw(a->skinned, idx + obj[k].first, (int)obj[k].count, DEMO_VTYPE & ~GU_INDEX_16BIT);
             if (mode >= 2) model_object_blend(0, 1);
         }
     }
