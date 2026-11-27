@@ -144,7 +144,7 @@ void bp_draw(void) {
     brightness=(200.0f-entry_frames)*2.0f;
     alpha=(unsigned int)fminf(255,brightness);
     snprintf(text,sizeof text,"Level %d",level);
-    menu_font_draw_scaled(x,249,18,2.6f,text,(alpha<<24)|0x00ffffffu);
+    menu_font_draw_scaled(x,240,18,2.6f,text,(alpha<<24)|0x00ffffffu);
 }
 void bp_status(char *out, int size) {
     snprintf(out,size,"palace on=%d level=%d room=%d visits=%d group=%d clear=%.0f boss=%d finished=%d pickup=%d attack_slots=%d best=%d test=%d",

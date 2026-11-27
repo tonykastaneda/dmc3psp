@@ -159,7 +159,8 @@ Start+Select debug overlay, at its top, rather than in the normal Palace HUD.
 The Level label follows CSceneGame setup at 0x23e900: x=35, y=200 in centred vertical units,
 brightness=200 and a 360-frame counter. Drawing at 0x23eab8 decrements brightness each native frame,
 and moves x left by 3 once fewer than 240 frames remain. The PSP maps the left edge to x=33 and
-the baseline near the bottom edge, using a horizontally widened substitute serif font (exact native
+the visible glyphs about 19 pixels above the bottom edge (accounting for the PS2 capture's letterbox),
+using a horizontally widened substitute serif font (exact native
 lettering remains a stand-in). It resets on room entry, disappears during play, and is omitted behind
 pause/debug overlays so it cannot overlap their text. Reference: polish_ps2_floor0.png.
 
@@ -176,3 +177,10 @@ or its ranking screens. A missing/unwritable file leaves the in-session record a
 
 `python tools/tests/run_bloody_palace_logic.py` checks routing/rewards, all floor-band attack capacities,
 slot expiry/reset, and persistence reload/monotonicity/bad-file/test-run isolation in temporary directories.
+
+Final polish checks: bp_final_polish_280.png (portal floor, 58 FPS), _315.png (debug legend and owner
+credit); bp_level_baseline_final_10.png (9999 label above the boss bar), _90.png (label gone);
+bp_saved_best_verified_menu_140.png (loaded best 1000, forced 9999 did not change the file);
+bp_attack_slots_hells_180.png (floor 5000, six slots, live Hell encounter). Mission 2 movement and
+the one-slot story reset are checked in bp_polish_story_regression_100.png. All images are local
+analysis/testroom captures; final build log is build/bloody_palace/polish_baseline_build.log.
