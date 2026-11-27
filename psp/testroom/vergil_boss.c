@@ -55,7 +55,7 @@ typedef struct {
 
 static struct {
     int active, dying, hidden, state, step, previous_state, last_wander, action, rank;
-    float pos[3], yaw, hp, gauge, timer, block_time, action_time, floor_y, vel[3], gravity;
+    float pos[3], yaw, hp, gauge, timer, block_time, action_time, floor_y, vel[3];
     float centre[3], travel[3], dante[3], dante_yaw;
     int dante_action, blocked, yamato_drawn, turned_back;
     ScriptPlayer body;
@@ -126,7 +126,6 @@ static const float gauge_bands[3][2] = {{350.0f, 20.0f}, {400.0f, 4.0f}, {500.0f
 #define DASH_NEAR 300.0f              /* DAT_0061aa3c */
 #define BLOCK_HOLD 15.0f              /* 0x5dfad0[rank 0] */
 #define LEAP_SPEED 45.0f              /* DAT_0061a8f0 */
-#define GRAVITY 1.0f                  /* [inferred] the enemies' -1 a frame (docs/ENEMY_SPECS.md, Enigma) */
 
 static float wrap_angle(float a) {
     while (a > PI) a -= 2.0f * PI;
@@ -270,12 +269,12 @@ static void script_play(ScriptPlayer *p, int bank, int script) {
     p->pc = vergil_script_starts[bank][script];
     script_run_ops(p);
 }
-/* Advances the script; returns the root's motion this tick in model space (x, z) through *dx, *dz. */
-static void script_tick(ScriptPlayer *p, float frames, float *dx, float *dz) {
+/* Advances the script; returns the root's motion this tick in model space through *dx, *dy, *dz. */
+static void script_tick(ScriptPlayer *p, float frames, float *dx, float *dy, float *dz) {
     const Motion *motion;
     float stop, before[3], after[3];
     int i;
-    *dx = *dz = 0.0f;
+    *dx = *dy = *dz = 0.0f;
     p->fade = fmaxf(0.0f, p->fade - p->fade_rate * frames);
     for (i = 0; i < CAPS; ++i) p->cap_left[i] = fmaxf(0.0f, p->cap_left[i] - frames);
     if (p->done || p->motion < 0) return;
@@ -291,6 +290,7 @@ static void script_tick(ScriptPlayer *p, float frames, float *dx, float *dz) {
             next = motion_wrap(motion, next);
             root_at(p->motion, motion->loop_start, start);
             *dx += end[0] - before[0];
+            *dy += end[1] - before[1];
             *dz += end[2] - before[2];
             memcpy(before, start, sizeof(before));
         }
@@ -300,6 +300,7 @@ static void script_tick(ScriptPlayer *p, float frames, float *dx, float *dz) {
     }
     root_at(p->motion, p->frame, after);
     *dx += after[0] - before[0];
+    *dy += after[1] - before[1];
     *dz += after[2] - before[2];
     memcpy(p->root, after, sizeof(after));
     if (!p->loop || p->stop >= 0) {
@@ -614,28 +615,26 @@ static void ai_step(float f) {
         break;
     case S_LEAP:                                    /* FUN_004dd840: 0x5f toward Dante, 0x60 on landing */
         if (vb.step == 0) {
-            float d = dante_distance(), pitch = atan2f(vb.dante[1] - vb.pos[1], d);
+            float d = dante_distance(), pitch = atan2f(fabsf(vb.dante[1] - vb.pos[1]), d);
             pitch = fmaxf(25.0f * PI / 180.0f, fminf(75.0f * PI / 180.0f, pitch));   /* DAT_0061a8f4/f8 */
             vb.step = 1;
             vb.yaw = angle_to_dante();
             set_action(0x5f);
             vb.vel[0] = sinf(vb.yaw) * cosf(pitch) * LEAP_SPEED;
-            vb.vel[1] = sinf(pitch) * LEAP_SPEED;
+            vb.vel[1] = -sinf(pitch) * LEAP_SPEED;
             vb.vel[2] = cosf(vb.yaw) * cosf(pitch) * LEAP_SPEED;
-            /* FUN_003599f0 only snaps him to the floor; what brings him down isn't decoded. The arc is solved
-             * to come down where Dante stands [approximation]. */
-            vb.gravity = fmaxf(GRAVITY, 2.0f * vb.vel[1] * cosf(pitch) * LEAP_SPEED / fmaxf(d, 50.0f));
+            /* 4dd840 rotates (0,0,45) downward; velocity stays fixed while window 1 is set. */
         } else if (vb.step == 1) {
             if (vb.body.window1 == 1) {
                 vb.pos[0] += vb.vel[0] * f;
                 vb.pos[1] += vb.vel[1] * f;
                 vb.pos[2] += vb.vel[2] * f;
-                vb.vel[1] -= vb.gravity * f;
-                if (vb.vel[1] < 0.0f && vb.pos[1] <= vb.floor_y) {
-                    vb.pos[1] = vb.floor_y;
-                    vb.step = 2;
-                    set_action(0x60);
-                }
+            }
+            /* 3599f0 runs even outside the travel window, with a ten-unit landing tolerance. */
+            if (vb.pos[1] <= vb.floor_y+10.0f) {
+                vb.pos[1] = vb.floor_y;
+                vb.step = 2;
+                set_action(0x60);
             }
         } else if (act == ACT_DONE) set_state(S_THINK);
         break;
@@ -704,7 +703,7 @@ static void build_skeleton(const VergilMesh *mesh, const MotionSample *sample, c
                 p[k] += (old_p - p[k]) * fade;
             }
         }
-        if (i == 0 && root_motion) { p[0] = 0.0f; p[2] = 0.0f; }   /* the root's x/z moved him instead */
+        if (i == 0 && root_motion) { p[0] = p[1] = p[2] = 0.0f; }   /* 4e4570 consumes the complete root delta */
         euler(&local, r[0], r[1], r[2]);
         memcpy(local.p, p, sizeof(p));
         if (mesh->parents[i] < 0) {
@@ -988,7 +987,7 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
 
 /* ---- Frame ------------------------------------------------------------------------------------------------ */
 void vergil_boss_update(float frames, float px, float py, float pz, int attacks) {
-    float dx, dz, c, s;
+    float dx, dy, dz, c, s;
     if (!vb.active) return;
     ++vb.tick;
     if(vb.variant>=1 && vb.dt && !vb.m20_temp_dt && !vb.dying){
@@ -1002,11 +1001,16 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     vb.dante[0] = px; vb.dante[1] = py; vb.dante[2] = pz;
     if (attacks && !vb.dying){ai_step(frames);if(vb.variant==2)m20_roundtrip(frames);}
     vb.action_time += frames;
-    script_tick(&vb.body, frames*(vb.variant==2 && vb.dt?1.2f:1.0f), &dx, &dz);
+    script_tick(&vb.body, frames*(vb.variant==2 && vb.dt?1.2f:1.0f), &dx, &dy, &dz);
     /* FUN_004e4570: the root's motion, turned by his facing, moves him. */
     c = cosf(vb.yaw); s = sinf(vb.yaw);
     vb.pos[0] += c * dx + s * dz;
     vb.pos[2] += -s * dx + c * dz;
+    vb.pos[1] += dy;
+    /* 4e27a0: fixed downward step, not accelerated gravity. +b9a0 suppresses it
+     * for uppercut/Helm Breaker (27/5f) and airborne M20 entry (6f); 55 is hidden travel. */
+    if (vb.action!=0x27 && vb.action!=0x5f && vb.action!=0x6f && vb.action!=0x55)
+        vb.pos[1]-=10.0f*frames;
     /* M13's room floor is bounded about (2500,2500); keep root-driven charges
      * and escape teleports on its combat deck. Conservative port boundary. */
     if(vb.variant>=1){float x=vb.pos[0]-vb.centre[0],z=vb.pos[2]-vb.centre[2],r=sqrtf(x*x+z*z);
@@ -1014,11 +1018,12 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     if (vb.body.window0 == 1) vb.yamato_drawn = 1;
     else if (vb.body.window0 == 2) vb.yamato_drawn = 0;
     vb.body.window0 = 0;
-    if (floor_fn && vb.state != S_LEAP && vb.state!=S_DIVE && vb.state!=S_STORM) {
+    if (floor_fn) {
         float y;
         if (floor_fn(vb.pos[0], vb.pos[1] + 100.0f, vb.pos[2], &y)) vb.floor_y = y;
-        vb.pos[1] = vb.floor_y;
-    } else if (vb.state != S_LEAP && vb.state!=S_DIVE && vb.state!=S_STORM) vb.pos[1] = vb.floor_y;
+    }
+    if (vb.pos[1]<vb.floor_y) vb.pos[1]=vb.floor_y;
+    if (vb.state==S_UPPER || vb.state==S_LEAP) trace("air");
     if (!vb.hidden && !vb.dying) {
         evaluate_poses();
         test_attack_caps(px, py, pz);
@@ -1110,3 +1115,5 @@ int vergil_boss_init(void) {
     return 1;
 }
 int vergil_boss_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */
+
+int vergil_boss_test_state(int state) { if (!vb.active || state<0 || state>0x40) return 0; set_state(state); return 1; }

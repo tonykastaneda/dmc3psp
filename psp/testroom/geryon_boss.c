@@ -17,6 +17,7 @@
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "model_runtime.h"
 #include "boss_geryon_runtime.h"
+#include "boss_geryon_windows.h"
 
 /* CEm029 at AI rank 0. Frames and distances keep the original 60 Hz / centimetre units; angles in the PS2's
  * 65536-to-a-turn units are converted where they're quoted. Addresses are SLUS_213.61's; see
@@ -33,7 +34,7 @@
 #define GALLOP_FAR 1800.0f            /* the gallop's ring (00385530's 0x10 / 0x11) */
 #define GALLOP_NEAR 1700.0f
 #define GALLOP_WIDE 1900.0f
-#define GALLOP_LAPS 12                /* [approximation] +0x973 starts at 40 and counts script windows down */
+#define GALLOP_WINDOWS 40             /* +0x973; 4c2d90/4c2fe0 consume and clear window(0,0) */
 #define SPHERE_RANGE 800.0f           /* 4c0c50: beyond this from the centre and facing it, the spheres */
 #define HIDE_TIME 120.0f              /* 4c1560: hidden this long after the spheres */
 #define VTYPE (GU_TEXTURE_32BITF | GU_NORMAL_32BITF | GU_VERTEX_32BITF | GU_INDEX_16BIT | GU_TRANSFORM_3D)
@@ -66,7 +67,9 @@ static struct {
     float contact_wait, shock_at;
     int landed, landed_heavy;
     float landed_x, landed_z, landed_damage;
-    int tick;
+    int tick, gallop_clip;
+    unsigned int high_history;
+    float window_time, history_time;
 } gb;
 
 static int motion_ids[2][21];
@@ -111,9 +114,9 @@ static void trace(const char *event) {
     if (!trace_on) return;
     f = fopen(trace_path, "a");
     if (!f) return;
-    fprintf(f, "t=%d f=%d %s phase=%d state=%d action=%#x frame=%.1f hp=%.0f d=%.0f pos=%.0f,%.0f,%.0f dante=%.0f,%.0f,%.0f\n",
+    fprintf(f, "t=%d f=%d %s phase=%d state=%d action=%#x frame=%.1f hp=%.0f d=%.0f pos=%.0f,%.0f,%.0f dante=%.0f,%.0f,%.0f windows=%d high=%#x\n",
             gb.tick, testroom_frame, event, gb.phase, gb.state, gb.action, gb.horse.frame, gb.hp,
-            flat_distance(gb.pos, gb.dante), gb.pos[0], gb.pos[1], gb.pos[2], gb.dante[0], gb.dante[1], gb.dante[2]);
+            flat_distance(gb.pos, gb.dante), gb.pos[0], gb.pos[1], gb.pos[2], gb.dante[0], gb.dante[1], gb.dante[2],gb.laps,gb.high_history);
     fclose(f);
 }
 void geryon_boss_trace(const char *path) {
@@ -295,7 +298,7 @@ static void think_ground(void) {
         return;
     }
     gb.side = !gb.side;   /* +0x97a: the gallops alternate */
-    gb.laps = GALLOP_LAPS;
+    gb.laps = GALLOP_WINDOWS; gb.gallop_clip=0; gb.window_time=0;
     set_action(gb.side ? A_GALLOP_R : A_GALLOP_L, 1);
     set_state(S_GALLOP);
 }
@@ -391,9 +394,18 @@ static void ai_step(float f) {
         turn_toward(wrap_angle(want), (r > GALLOP_WIDE ? 728.0f : 182.0f) * UNITS * f);
         move_forward(RUN_SPEED, f);
         contact(f);
-        if (gb.horse.loops >= gb.laps) {
-            set_action(wrap_angle(angle_to(gb.dante) - gb.yaw) > 0.0f ? A_TURN_R : A_TURN_L, 0);
-            set_state(S_TURN);
+        gb.window_time+=f;
+        while (gb.window_time>=geryon_gallop_windows[gb.side][gb.gallop_clip]) {
+            gb.window_time-=geryon_gallop_windows[gb.side][gb.gallop_clip];
+            gb.gallop_clip=1;   /* First play blends eight frames; the second play repeats without a blend. */
+            if (gb.high_history && gb.laps>5) gb.laps-=2;
+            --gb.laps;
+            trace("gallop_window");
+            if (gb.laps<=0) {
+                set_action(gb.side?A_TURN_R:A_TURN_L,0);
+                set_state(S_TURN);
+                break;
+            }
         }
         break;
     }
@@ -648,6 +660,11 @@ void geryon_boss_update(float frames, float px, float py, float pz, int attacks)
     if (!gb.dying && (attacks || gb.state == S_LEAVE || gb.state == S_SWITCH)) ai_step(frames);
     tick(&gb.horse, frames);
     tick(&gb.cart, frames);
+    if(gb.state==S_GALLOP) {
+        const Motion *m=motion_get(gb.horse.motion),*cart=motion_get(gb.cart.motion);
+        if(m)gb.horse.frame=m->loop_start+gb.window_time;
+        if(cart)gb.cart.frame=cart->loop_start+gb.window_time;
+    }
     if(gb.phase && !gb.hidden && stage_loaded()) {
         float target[3],dx,dz;
         int k,steps;
@@ -683,6 +700,14 @@ void geryon_boss_update(float frames, float px, float py, float pz, int attacks)
             /* Keep a clear previous pose if a charge/turn would crush Dante
              * against the bridge end. His normal hurt reaction still runs. */
         }
+    }
+    {   /* 384160: eight-update history of high body contact. The port's existing
+         * horse/cart footprint supplies contact instead of native cap record +35fc flag 1000. */
+        float x=px,z=pz;int high;
+        geryon_boss_push_out(&x,&z,py,DANTE_RADIUS);
+        high=py>gb.pos[1]+300 && hypotf(x-px,z-pz)>.1f;
+        gb.history_time+=frames;
+        while(gb.history_time>=1){gb.history_time-=1;gb.high_history=((gb.high_history<<1)|high)&255u;}
     }
     if (trace_on && (gb.tick % 30) == 0) trace("tick");
 }

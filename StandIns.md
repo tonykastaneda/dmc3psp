@@ -114,13 +114,13 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
 - **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
   the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
-- **Vergil**: gravity 1 [inferred]; effect 0x338 is a hit spark; his drop lands where Dante stands; his hit reaction
+- **Vergil**: effect 0x338 is a hit spark; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
-- **Geryon**: gallop laps 12 [approximation]; both bodies play motion n for action n [inferred]; the cart's missiles'
+- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
   path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
   runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
-- **Doppelganger**: the middle region within 550 [estimate]; which dark sixth he comes up in [inferred]; his coat
+- **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority); which dark sixth he comes up in [inferred]; his coat
   rigid (its cloth em031_01.clt isn't run); his sword's offset [inferred]; the crests' lighting is a glow.
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.
 - **Arkham**: one fight runs both rounds; Vergil joins the second as Dante's partner (Dante's input a frame late, as the

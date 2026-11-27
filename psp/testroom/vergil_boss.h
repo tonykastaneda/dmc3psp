@@ -30,6 +30,8 @@ void vergil_boss_push_out(float *x, float *z, float y, float r);
 /* One damage event, cleared by reading it. Damage is the original record's value. */
 int vergil_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *damage);
 int vergil_boss_attack_kind(void);   /* the last landed attack's record kind, -1 if none */
+/* Tests: exercise a native AI state in the actual encounter. */
+int vergil_boss_test_state(int state);
 void vergil_boss_trace(const char *path);
 /* Tests: a line in the same log (Mission 7's route checks). */
 void vergil_boss_note(const char *event, float a, float b, float c, float d);
