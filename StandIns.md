@@ -34,7 +34,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
-  throws, Geryon's missiles, Vergil's 0x338, Agni & Rudra's 0x311 / 0x312 (the charged blades' 0x24c / 0x24d are the game's, riding the hand), Cerberus's unported
+  throws, Geryon's missiles, Vergil's 0x338, Cerberus's unported
   particle programs, the Vanguard's P312 dissolve). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera matrix and `FUN_001b2dc0`'s half turn); fake
@@ -72,8 +72,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit
-  records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300
-  as record 12 [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
+  records); the second attack table after a guard; the hops' records; the slam hurting within 300
+  as record 12 [estimate], its effects at the hand's floor point [estimate]. `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed

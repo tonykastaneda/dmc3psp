@@ -287,8 +287,9 @@ static void start_p(int bank, int id, int i, const unsigned char *child, const F
         memcpy(&where, at, sizeof(where));
         if (seqs[i].g[0]) owner = handle_of(i);
     }
+    /* +0x98, starting again: its timeline's loop (a G's children play once, as nfx's) */
     root = root_of(&seqs[i]);
-    pfx_spawn(bank, nfx_record(bank, 'P', id), &where, owner, handle_of((int)(root - seqs)), root->loop);
+    pfx_spawn(bank, nfx_record(bank, 'P', id), &where, owner, handle_of((int)(root - seqs)), seqs[i].g ? 0 : seqs[i].loop);
 }
 int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop) {
     PfxFrame f;
