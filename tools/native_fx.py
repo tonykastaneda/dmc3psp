@@ -269,6 +269,8 @@ def main():
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
     summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, (), AGNI_RUDRA_P))
     summary.append(write_bank(lines, 5, records(pac_list(read(140))[10]), JESTER_V, ()))
+    chess = records(pac_list(read(127))[1])
+    summary.append(write_bank(lines, 25, chess, sorted(n for kind,n in chess if kind == 'V'), ()))
     # 6 em008's pack (GDATA 120, PNST chunk 24): the Hell Vanguard's P312 only (its V / E are vanguard_fx.py's).
     summary.append(write_bank(lines, 6, records(pnst_entries(read(120))[24]), (), (), (312,)))
     # 7 em028's effect pack (GDATA 133, PAC entry 9): Nevan's. Action 22's V0x199 (FUN_003b6c90) and her bats' P
@@ -335,7 +337,7 @@ def main():
                "static const unsigned short trail_m%d_indices[] = {%s};" % (m, ", ".join(map(str, idx))),
                "#define TRAIL_M%d_VERTICES %d" % (m, len(verts)), "#define TRAIL_M%d_INDICES %d" % (m, len(idx))]
     (args.output / "trail_runtime.h").write_text("\n".join(tl) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 25, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

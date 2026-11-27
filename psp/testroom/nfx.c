@@ -123,7 +123,7 @@ void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
 }
 
 static const NfxBank *bank_of(int b) {
-    return b == NFX_PALACE ? &nfx19 : b == NFX_DEMO ? &demo_bank : b == NFX_NEVAN ? &nfx7 : b == NFX_LADY ? &nfx8 : b == NFX_ARACHNE ? &nfx9 : b == NFX_FALLEN ? &nfx10 : b == NFX_MIRROR ? &nfx11 : b == NFX_CRYSTAL ? &nfx12 : b == NFX_NAUSIKA ? &nfx13 : b == NFX_GUN_EI ? &nfx14 : b == NFX_GUN_SHOTGUN ? &nfx15 : b == NFX_GUN_ARTEMIS ? &nfx16 :
+    return b == NFX_CHESS ? &nfx25 : b == NFX_PALACE ? &nfx19 : b == NFX_DEMO ? &demo_bank : b == NFX_NEVAN ? &nfx7 : b == NFX_LADY ? &nfx8 : b == NFX_ARACHNE ? &nfx9 : b == NFX_FALLEN ? &nfx10 : b == NFX_MIRROR ? &nfx11 : b == NFX_CRYSTAL ? &nfx12 : b == NFX_NAUSIKA ? &nfx13 : b == NFX_GUN_EI ? &nfx14 : b == NFX_GUN_SHOTGUN ? &nfx15 : b == NFX_GUN_ARTEMIS ? &nfx16 :
            b == NFX_GUN_SPIRAL ? &nfx17 : b == NFX_GUN_KALINA ? &nfx18 : b == NFX_DANTE ? &nfx20 : b == NFX_ARM_CERBERUS ? &nfx21 : b == NFX_ARM_AGNI ? &nfx22 : b == NFX_ARM_NEVAN ? &nfx23 : b == NFX_ARM_BEOWULF ? &nfx24 : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
          : b == NFX_CERBERUS ? &nfx1 : &nfx0;
 }

@@ -223,7 +223,7 @@ Normal 4 Lusts and 3 Greeds) -> back up -> 138 Moonlight Mile -> 142 (demo 17) -
   [approximation: CStageSetHang isn't decoded; hit counts are estimates, drawn as stand-in blocks].
 - 142's area 0 (demo 17) leads to 144. No cutscenes, and 144 has no rain.
 - Approximation: 127's door into 114 lands on the ground floor (start 0), not the 9000 balcony Dante drops from.
-- Damned Pawns (`pawn.inc`): their hops and strike as decoded; the chess master that times their turns isn't ported.
+- Damned Pawns (`pawn.inc`): their hops and strike as decoded; turns now use the shared chess master (`chess.c`, docs/CHESS.md), at the port's fixed rank0.
   Hell Greeds (`greed.inc`): the coffin's flight and summon as decoded; when they summon is an estimate.
 
 ### Mission 8: "Leviathan"
@@ -395,7 +395,7 @@ above, start to Mission Clear.
 From EventTbl14 (GDATA 252; `orchestration/evt/evt_m14.txt` locally). After demos 327 and 39 it starts in 237 at
 start 1. The script has sections only for 237, 214, 236 and 008; the route between them is the walkthrough's,
 matched by door links (doors open from Mission 14 on). No boss. Chessmen: EST 35 the Damned Pawn, 36 and 37 the
-other pieces (not identified by name; the walkthrough's "new chess-type demon" that charges).
+Knight and Bishop (`docs/CHESS.md`).
 
 | Room | Area | What runs |
 | --- | --- | --- |
@@ -410,7 +410,7 @@ other pieces (not identified by name; the walkthrough's "new chess-type demon" t
 In the port (`psp/testroom/mission14.c`): the route plays from 237 to Mission Clear in PPSSPP. Stand-ins: the
 adjudicator takes 20 melee hits of any weapon (no style rank, no Hyper Fist), drawn as a stone block, and takes
 COLLISION 201 with it (`STORY_WALLS`); 236 runs groups 2-6 one after another from the start, its panels stay as the
-stage has them; EST 36 and 37 spawn as Pawns; the wagon is Mission 11's door from 239 to 240.
+stage has them; EST36 uses the Knight; EST37 uses the native Bishop diagonal move, four orbs and heal; the wagon is Mission 11's door from 239 to 240.
 
 ### Mission 15: "The gatecrasher"
 
@@ -487,7 +487,7 @@ In the port: the route plays from 106 to Mission Clear in PPSSPP. Stand-ins and 
   and shoots, lobs grenades that beep and burst, fires Kalina Ann's rocket, and escapes backwards with her repel
   gun when Dante's close. Motions are read from their root paths; timings, damage and health are estimates; her
   guns and shots aren't models.
-- Mission Clear comes as Lady is beaten (`CLEAR_ROOMS`), not by climbing 119. The chessmen of EST 36 and 38 spawn as Pawns; The Fallen
+- Mission Clear comes as Lady is beaten (`CLEAR_ROOMS`), not by climbing 119. EST36 uses the Knight; EST38 still spawns as a Pawn; The Fallen
   are Mission 15's (`fallen.c`).
 
 ### Mission 17: "Inner-demons"
@@ -554,7 +554,7 @@ runs its boss from its existing file. Stand-ins and estimates:
 - 419's heart is spawned as Mission 8 does it (`enemy_add_kind(ENEMY_LEVIATHAN, ...)`); in 417 Geryon starts in his
   ground phase (`geryon_boss_start_on_ground`, added for this). The bosses' arenas are their missions' rooms again, so
   their code runs unchanged.
-- 401's Queen and King (EST 39, 40) and the other chessmen spawn as Pawns or Prides; 400's rocks are the stage's own
+- 401's Queen and King (EST39/40) and Rook38 still use fallbacks; Knight36 and Bishop37 use their native moves (`docs/CHESS.md`); 400's rocks are the stage's own
   floor, climbed with jumps.
 ### Mission 20: "Screaming souls"
 
