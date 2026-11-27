@@ -59,6 +59,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
 }
 
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_runtime.h")) -or
+    -not (Test-Path -LiteralPath (Join-Path $Generated "bloody_palace_runtime.h")) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\gen_rooms.py")).LastWriteTime -gt
     (Get-Item -LiteralPath (Join-Path $Generated "rooms_runtime.h")).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
@@ -288,6 +289,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $VanguardHeader) -or
 
 $CameraHeader = Join-Path $Generated 'camera_runtime.h'
 if ($Regenerate -or -not (Test-Path -LiteralPath $CameraHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root 'tools\gen_rooms.py')).LastWriteTime -gt (Get-Item -LiteralPath $CameraHeader).LastWriteTime -or
     (Get-Item -LiteralPath (Join-Path $Root 'tools\gen_cameras.py')).LastWriteTime -gt (Get-Item -LiteralPath $CameraHeader).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\gen_cameras.py'), $Iso.FullName, '--header', $CameraHeader)
@@ -313,7 +315,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music", "sfx", "credits_fight", "pfx")) {
+foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music", "sfx", "credits_fight", "pfx", "bloody_palace")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj
