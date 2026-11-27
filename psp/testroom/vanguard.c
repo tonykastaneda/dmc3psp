@@ -405,6 +405,15 @@ int vanguard_update(float frames,float px,float py,float pz,int attacks,float po
 void vanguard_spawn(float x,float y,float z) {
     int part,i;
     memset(&vg,0,sizeof(vg));vg.trace=trace_enabled;
+    /* A slot that hasn't had a Vanguard takes the skinning buffers of one whose Vanguard is gone (slot 0's from
+     * vanguard_init) before allocating its own: Mission 20's ending street has under 128 KB left when its Vanguard,
+     * the 100th enemy, comes, and a failed allocation dropped him unseen and uncounted. */
+    if(!vg_vertices[0]) {
+        int s;
+        for(s=0;s<ENEMY_MAX;++s) if(s!=actor_slot && !actors[s].active && actor_vertices[s][0]) {
+            memcpy(vg_vertices,actor_vertices[s],sizeof(actor_vertices[s]));memset(actor_vertices[s],0,sizeof(actor_vertices[s]));break;
+        }
+    }
     for(part=0;part<9;++part) if(!vg_vertices[part]) {
         const VanguardMesh *m=&vanguard_parts[part];
         vg_vertices[part]=memalign(16,sizeof(Vertex)*m->vertices);

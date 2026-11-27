@@ -10,6 +10,7 @@ void credits_fight_begin(void);          /* entering room 012 in Mission 20 (the
 void credits_fight_reset(void);           /* leaving the mission */
 int credits_fight_active(void);
 void credits_fight_kill(int kind);        /* an enemy died while the street runs */
+void credits_fight_spawned(int ok);       /* tests: the room script asked for one (ok 0: no free slot) */
 int credits_fight_kills(void);            /* enemy manager +0x8a0 */
 /* One update; frames at 60 a second. Returns 1 when the street is over (op 7e [4] and the demo after it). */
 int credits_fight_update(float frames);
