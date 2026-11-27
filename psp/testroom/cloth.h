@@ -15,8 +15,10 @@ typedef struct {
 
 typedef struct {
     float gravity, spring, max_speed, stiffness;
-    int axis_x;   /* the bones' 'X' in the .clt (the Soul Eater's wings), else 'Y' */
-    int limit;    /* LimitLength (FUN_0022f270's +0xb4): hold the rest length */
+    int axis_x;    /* 0: the bone points back along Y. 1: along X (an 'NX' bone too; the sign comes from its rest
+                    * offset). 2: along Z. */
+    int limit;     /* LimitLength (FUN_0022f270's +0xb4): hold the rest length */
+    int axis_sign; /* -1 for NY / NZ. 0 and 1 keep the positive axis. An enemy's init leaves this 0. */
 } ClothParams;
 
 /* A capsule, both ends and the radius already where the body is now. */

@@ -402,11 +402,12 @@ int vanguard_update(float frames,float px,float py,float pz,int attacks,float po
     while(frames>0.0001f && vg.active) {float f=fminf(1,frames);hit|=step(f,px,py,pz,attacks);frames-=f;}
     memcpy(pos,vg.pos,sizeof(vg.pos));*alive=vg.active;return hit;
 }
+static int load_data(void);
 void vanguard_spawn(float x,float y,float z) {
     int part,i;
     memset(&vg,0,sizeof(vg));vg.trace=trace_enabled;
-    /* A slot that hasn't had a Vanguard takes the skinning buffers of one whose Vanguard is gone (slot 0's from
-     * vanguard_init) before allocating its own: Mission 20's ending street has under 128 KB left when its Vanguard,
+    if(!load_data())return;   /* the model's indices and textures, first time */
+    /* A slot that hasn't had a Vanguard takes the skinning buffers of one whose Vanguard is gone before allocating its own: Mission 20's ending street has under 128 KB left when its Vanguard,
      * the 100th enemy, comes, and a failed allocation dropped him unseen and uncounted. */
     if(!vg_vertices[0]) {
         int s;
@@ -430,21 +431,43 @@ float vanguard_health(void) {return vg.hp;}
 float vanguard_max_health(void) {return VANGUARD_HP;}
 
 int vanguard_init(void) {
-    int i,k;
+    int i;
     for(i=0;i<80;++i) {char name[8];snprintf(name,sizeof(name),"%s-%02d",i<71?"vg":"vx",i<71?i:i-71);motion_ids[i]=motion_find(name);if(motion_ids[i]<0)return 0;}
     vg.motion=motion_ids[0];vg.frame=0;pose();memcpy(bind_body,body,sizeof(body));
+    return 1;
+}
+
+/* The model's indices and swizzled textures are made at the first spawn, not at boot (vanguard_spawn makes or borrows
+ * its slot's vertices), and freed by vanguard_data_release when a room is left without him (docs/MEMORY.md). */
+static int data_ready;
+static void free_data(void) {
+    int s,k;
+    for(s=0;s<ENEMY_MAX;++s)for(k=0;k<9;++k){free(actor_vertices[s][k]);actor_vertices[s][k]=0;}
+    for(k=0;k<9;++k){free(indices[k]);indices[k]=0;}
+    for(k=0;k<2;++k){free(textures[k]);textures[k]=0;}
+    data_ready=0;
+}
+void vanguard_data_release(void) {
+    int s;
+    for(s=0;s<ENEMY_MAX;++s)if(actors[s].active)return;
+    free_data();
+}
+static int load_data(void) {
+    int i,k;
+    if(data_ready)return 1;
     for(k=0;k<9;++k) {
         const VanguardMesh *m=&vanguard_parts[k];
-        vg_vertices[k]=memalign(16,sizeof(Vertex)*m->vertices);indices[k]=memalign(16,sizeof(unsigned short)*m->indices_count);
-        if(!vg_vertices[k] || !indices[k])return 0;
+        indices[k]=memalign(16,sizeof(unsigned short)*m->indices_count);
+        if(!indices[k]){free_data();return 0;}
         memcpy(indices[k],m->indices,sizeof(unsigned short)*m->indices_count);
-        for(i=0;i<m->vertices;++i) {vg_vertices[k][i].u=m->uvs[i].u;vg_vertices[k][i].v=m->uvs[i].v;}
     }
     for(i=0;i<2;++i) {
         const Dmc3Texture *t=&vanguard_textures[i];size_t size=(size_t)t->width*t->height;
-        textures[i]=memalign(16,size);if(!textures[i])return 0;memcpy(textures[i],t->rgba,size);
-        if(!swizzle_texture8(textures[i],t->width,t->height))return 0;
+        textures[i]=memalign(16,size);if(!textures[i]){free_data();return 0;}memcpy(textures[i],t->rgba,size);
+        if(!swizzle_texture8(textures[i],t->width,t->height)){free_data();return 0;}
     }
+    sceKernelDcacheWritebackAll();
+    data_ready=1;
     return 1;
 }
 
@@ -555,3 +578,4 @@ void vanguard_draw(void) {
     if(alpha<0.99f) {sceGuDisable(GU_BLEND);sceGuAlphaFunc(GU_GREATER,0x7f,0xff);sceGuColor(0xffffffffu);}
     sceGuDisable(GU_ALPHA_TEST);
 }
+int vanguard_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */

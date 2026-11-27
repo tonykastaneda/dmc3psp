@@ -7,6 +7,7 @@
 #include <psputils.h>
 
 #include <malloc.h>
+#include <stdio.h>
 #include <math.h>
 #include <string.h>
 
@@ -222,7 +223,8 @@ static int chunk_hidden(const Chunk *c) {
 }
 
 int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
-static int stage_double;
+static int stage_double, sky_off;
+void stage_test_sky_off(int off) { sky_off = off; }   /* tests: "nosky 1", the sky pass's cost */
 void stage_set_double(int on) { stage_double = on; }
 
 void stage_draw(void) {
@@ -261,7 +263,7 @@ void stage_draw(void) {
         ScePspFMatrix4 far = cull_proj;
         float a = cull_proj.z.z, bz = cull_proj.w.z, n = bz / (a - 1.0f), f = 500000.0f;
         int sky = 0;
-        for (i = 0; i < header->batches && (batches[i].flags & BATCH_SKY); ++i) {
+        for (i = 0; !sky_off && i < header->batches && (batches[i].flags & BATCH_SKY); ++i) {
             const Batch *b = &batches[i];
             unsigned int k;
             if (!sky) {
@@ -278,6 +280,8 @@ void stage_draw(void) {
             else sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             for (k = 0; k < b->chunk_count; ++k) {
                 const Chunk *c = &chunks[b->chunk_first + k];
+                /* chunk_hidden tests the sides and the eye, not the far plane, so it holds for the sky's chunks too. */
+                if (!chunk_visible[b->chunk_first + k]) continue;
                 sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
                                 (int)c->count, 0, vertices + (size_t)c->first * 24);
             }
@@ -490,6 +494,13 @@ int stage_collide(float *x, float *z, float y, float radius) {
         if (!cell) continue;
         for (k = 0; k < cell->count; ++k) {
             const float *t = hit_tri(indices[cell->first + k]);
+            /* Out of reach by its bounds: the closest point lies inside them, so a triangle more than the radius
+             * away across x or z, or above the top height or below the bottom one by more than it, fails the tests
+             * below at every height. Skipping it here changes nothing (the street's rubble cells cost up to 8 ms). */
+            if (*x < fminf(t[0], fminf(t[3], t[6])) - radius || *x > fmaxf(t[0], fmaxf(t[3], t[6])) + radius ||
+                *z < fminf(t[2], fminf(t[5], t[8])) - radius || *z > fmaxf(t[2], fmaxf(t[5], t[8])) + radius ||
+                y + heights[0] > fmaxf(t[1], fmaxf(t[4], t[7])) + radius || y + heights[2] < fminf(t[1], fminf(t[4], t[7])) - radius)
+                continue;
             for (h = 0; h < 3; ++h) {
                 float p[3] = {*x, y + heights[h], *z}, q[3], dx, dz, dy, dist2, reach;
                 closest_on_triangle(p, t, t + 3, t + 6, q);

@@ -2,8 +2,9 @@
  * holds the camera per demo frame (the camera track's clips, each a .cam played by CCameraClip / CCameraMotion:
  * eye = channels 6-8 + 0-2, target = 9-11 + 0-2, field of view = 12), the cast (each model slot's MOD, its motion
  * clips as raw MOT, its CnsPos parent bone) and their textures; DSTG_nnn.BIN the demo's stage built as a room.
- * The demo's demo_clock runs at 60 frames a second. Not yet: hide tracks, cloth, effects, messages, fades and sound. */
+ * The demo's demo_clock runs at 60 frames a second. Not yet: hide tracks, effects, messages, fades and sound. */
 #include "demo.h"
+#include "demo_cloth.h"
 
 #include "model_blend.h"
 #include "motion.h"
@@ -289,6 +290,7 @@ int demo_start(int demo, const char *dir) {
 
 void demo_stop(void) {
     sound_stop();
+    demo_cloth_reset();
     if (blob) { nfx_reset(); nfx_set_demo_bank(0, 0); }
     free_actors();
     if (demo_fd >= 0) { sceIoClose(demo_fd); demo_fd = -1; }
@@ -532,6 +534,59 @@ static void pose(Actor *a, int depth) {
             for (k = 0; k < 3; ++k)
                 a->world_pos[i][k] = a->world_pos[p][k] + a->world_rot[p].m[k][0] * t[0] + a->world_rot[p].m[k][1] * t[1] + a->world_rot[p].m[k][2] * t[2];
         }
+    }
+    /* Its .clt, if it has one. Joints are in world space; ClothMode 1 rides the parent model's root. */
+    if (d->pad[0] && d->pad[1]) {
+        float owner_pos[3], owner_rot[9];
+        const float *op = base_pos, *orot = &base_rot.m[0][0];
+        /* Gameplay body capsules (coat.c, FUN_00230130). The .clt names none. A coat on Dante's
+         * 23-bone body still gets the spine and leg capsules, so the chains can't hang through him.
+         * Other rigs are left alone. The flat sheet came from riding bone 0 across a cut, below. */
+        ClothCapsule caps[6];
+        int ncaps = 0;
+        if (d->parent >= 0 && d->parent < actor_count && actors[d->parent].d && actors[d->parent].posed) {
+            Actor *p = &actors[d->parent];
+            /* Bone 0 stays at the origin in these demos. The hip channel (bone 1) is the body's world
+             * pose, and a cut moves it by metres. Riding bone 0 leaves the chains where they were, and
+             * the length clamp then lays them out along that jump: the coat becomes a flat sheet. The
+             * hip's world matrix already includes bone 0, so the ride follows both. */
+            const signed char *bp = (const signed char *)(blob + p->d->parents_at);
+            int hip = (p->d->bones > 1 && bp[1] == 0) ? 1 : 0;
+            memcpy(owner_pos, p->world_pos[hip], sizeof owner_pos);
+            memcpy(owner_rot, p->world_rot[hip].m, sizeof owner_rot);
+            op = owner_pos;
+            orot = owner_rot;
+        }
+        if (d->parent >= 0 && d->parent < actor_count && actors[d->parent].d && actors[d->parent].posed) {
+            Actor *body = &actors[d->parent];
+            static const struct { int bone; float a[3], b[3], r; } src[] = {
+                {3, {0.0f, 20.0f, 10.0f}, {0.0f, -40.0f, 10.0f}, 15.0f},
+                {2, {0.0f, -5.0f, 0.0f}, {0.0f, -15.0f, 0.0f}, 18.0f},
+                {15, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+                {16, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+                {19, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+                {20, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+            };
+            int n;
+            if (body->d->bones >= 23 && body->d->bones <= 24) {
+                for (n = 0; n < 6; ++n) {
+                    const float (*r)[3];
+                    int k;
+                    if (src[n].bone >= body->d->bones) continue;
+                    r = body->world_rot[src[n].bone].m;
+                    for (k = 0; k < 3; ++k) {
+                        caps[ncaps].a[k] = body->world_pos[src[n].bone][k] + r[k][0] * src[n].a[0] + r[k][1] * src[n].a[1] + r[k][2] * src[n].a[2];
+                        caps[ncaps].b[k] = body->world_pos[src[n].bone][k] + r[k][0] * src[n].b[0] + r[k][1] * src[n].b[1] + r[k][2] * src[n].b[2];
+                    }
+                    caps[ncaps].radius = src[n].r;
+                    ncaps++;
+                }
+            }
+        }
+        demo_cloth_apply((int)(a - actors), base_pos, &base_rot.m[0][0], op, orot,
+                         &a->world_pos[0][0], &a->world_rot[0].m[0][0],
+                         parents, &local[0][0], d->bones, blob + d->pad[0], d->pad[1], demo_clock,
+                         caps, ncaps);
     }
 }
 

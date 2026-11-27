@@ -559,7 +559,8 @@ LADY_MOTIONS = ((2, 0), (2, 10), (2, 11), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8)
                 # 004460c0; action a >= 0x53 plays PAC [6] slot a - 0x53).
                 (6, 50), (6, 3), (6, 4), (6, 5), (6, 6), (6, 31), (6, 32),   # [6] 9 (0x5c) is empty
                 # 0x1d's grapple 0x5e, 0x5f, 0x61, 0x62 and mode 0x1e's ledge shot 0x8f and hop 0x0c
-                (6, 11), (6, 12), (6, 14), (6, 15), (6, 60), (2, 12))   # [2] 14 (0x0e) is empty
+                (6, 11), (6, 12), (6, 14), (6, 15), (6, 60), (2, 12),   # [2] 14 (0x0e) is empty
+                (5, 27))   # the ending ally's aim, action 0x49 (FUN_00448350 step 1)
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 

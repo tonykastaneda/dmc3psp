@@ -82,9 +82,14 @@ void cloth_rest(ClothJoint *joint, const float parent_pos[3], const ClothM3 *par
 /* FUN_0022f270 for one bone (no wind), as coat.c's step. */
 void cloth_step(ClothJoint *joint, const float parent_pos[3], const ClothM3 *parent_rot, const float rest_offset[3],
                 const ClothParams *params, const ClothCapsule *capsules, int capsule_count) {
-    /* The axis the bone points back to its parent along: Y for a hanging chain; for an 'X' one (wings spread
-     * sideways), X toward the parent's side. */
-    const float up[3] = {params->axis_x ? (rest_offset[0] < 0.0f ? 1.0f : -1.0f) : 0.0f, params->axis_x ? 0.0f : 1.0f, 0.0f};
+    /* The axis the bone points back to its parent along: Y for a hanging chain, -Y for an NY bone (a coat bone
+     * that rests above its parent), X toward the parent's side for an X / NX one, Z / -Z the same way. */
+    float up[3];
+    int sgn = params->axis_sign < 0 ? -1 : 1;
+    up[0] = up[1] = up[2] = 0.0f;
+    if (params->axis_x == 1) up[0] = rest_offset[0] < 0.0f ? 1.0f : -1.0f;
+    else if (params->axis_x == 2) up[2] = (float)sgn;
+    else up[1] = (float)sgn;
     const float stiffness = params->stiffness, keep = 1.0f - params->stiffness;
     float *p = joint->pos, *v = joint->vel;
     float rest_pos[3], rest_up[3], predicted[3], sim_up[3], blended[3], d[3], len, speed;

@@ -30,4 +30,6 @@ void geryon_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out
 /* Mission 18's 417 is 228's ground again: with this on, a spawn starts in phase 1 there (no bridge). */
 void geryon_boss_start_on_ground(int on);
 
+void geryon_boss_data_release(void);   /* frees its model's buffers unless it's active (made again at its next spawn) */
+int geryon_boss_data_load(void);   /* makes its model's buffers now (a room load, ahead of its spawn) */
 #endif

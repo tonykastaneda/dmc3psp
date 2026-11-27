@@ -496,7 +496,7 @@ static int kind_health(int kind) {
 
 
 static Enemy *last_spawned;   /* for the room script's values (enemy_set_spawn_param) */
-static void spawn_one(int kind, float x, float z) {
+static void spawn_one_body(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
     last_spawned = e;
@@ -611,7 +611,43 @@ static void spawn_one(int kind, float x, float z) {
     script_play(0);
     e->fade = 0.0f;
 }
-
+/* Tests: how long each boss's spawn takes, the first time (its model's buffers made: load_data) and the last time
+ * after, in microseconds of the PSP's clock (PPSSPP's emulated time). enemy_spawn_timing reports them. */
+static unsigned int boss_spawn_us[2][6];
+static int boss_slot(int kind) {
+    return kind == ENEMY_VERGIL ? 0 : kind == ENEMY_CERBERUS ? 1 : kind == ENEMY_GERYON ? 2 : kind == ENEMY_ARKHAM ? 3
+         : kind == ENEMY_DOPPELGANGER ? 4 : kind == ENEMY_VANGUARD ? 5 : -1;
+}
+static void spawn_one(int kind, float x, float z) {
+    int b = boss_slot(kind);
+    unsigned int t0 = sceKernelGetSystemTimeLow(), us;
+    spawn_one_body(kind, x, z);
+    if (b < 0) return;
+    us = sceKernelGetSystemTimeLow() - t0;
+    if (!boss_spawn_us[0][b]) boss_spawn_us[0][b] = us ? us : 1; else boss_spawn_us[1][b] = us ? us : 1;
+}
+/* A room's script spawns this class: a boss's model buffers are made now, during the room load, not at his spawn
+ * (21-26 ms on the PSP's clock the first time: textures copied and swizzled). */
+static unsigned int boss_preload_us[6];
+void enemy_preload_class(int spawn_class) {
+    int b = boss_slot(enemy_kind_for_class(spawn_class));
+    unsigned int t0 = sceKernelGetSystemTimeLow();
+    switch (enemy_kind_for_class(spawn_class)) {
+    case ENEMY_VERGIL: vergil_boss_data_load(); break;
+    case ENEMY_CERBERUS: cerberus_boss_data_load(); break;
+    case ENEMY_GERYON: geryon_boss_data_load(); break;
+    case ENEMY_ARKHAM: arkham_boss_data_load(); break;
+    case ENEMY_DOPPELGANGER: doppelganger_boss_data_load(); break;
+    case ENEMY_VANGUARD: vanguard_data_load(); break;
+    default: break;
+    }
+    if (b >= 0) boss_preload_us[b] += sceKernelGetSystemTimeLow() - t0;   /* tests: the room load's share */
+}void enemy_spawn_timing(char *out, int size) {
+    snprintf(out, (size_t)size, "bossspawn_us vergil=%u/%u cerberus=%u/%u geryon=%u/%u arkham=%u/%u doppel=%u/%u vanguard=%u/%u preload_us %u %u %u %u %u %u",
+             boss_spawn_us[0][0], boss_spawn_us[1][0], boss_spawn_us[0][1], boss_spawn_us[1][1], boss_spawn_us[0][2], boss_spawn_us[1][2],
+             boss_spawn_us[0][3], boss_spawn_us[1][3], boss_spawn_us[0][4], boss_spawn_us[1][4], boss_spawn_us[0][5], boss_spawn_us[1][5],
+             boss_preload_us[0], boss_preload_us[1], boss_preload_us[2], boss_preload_us[3], boss_preload_us[4], boss_preload_us[5]);
+}
 void enemy_spawn(float x, float z) {
     int i;
     for (i = 1; i < ENEMY_MAX; ++i) enemies[i].active = 0;
@@ -784,6 +820,10 @@ void enemy_set_count(int count, float x, float z) {
     int i;
     if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
     if (count == 0) { coffins_reset(); giga_clear(); }
+    if (count == 0) {   /* a room change: bosses that aren't up give their model's buffers back (made again at their spawn) */
+        vergil_boss_data_release(); cerberus_boss_data_release(); geryon_boss_data_release();
+        arkham_boss_data_release(); doppelganger_boss_data_release(); vanguard_data_release();
+    }
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
@@ -2558,7 +2598,7 @@ static void pose_parts(void) {
     while (steps-- > 0) {
         for (c = 0; c < m->cloth_count; ++c) {
             const EnemyCloth *cl = &m->cloths[c];
-            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness, cl->axis, cl->limit};
+            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness, cl->axis, cl->limit, 0};
             ClothCapsule caps[4];
             int n = cl->capsule_count < 4 ? cl->capsule_count : 4;
             for (k = 0; k < n; ++k) {
@@ -6881,11 +6921,17 @@ static void lady_update_glue(float f, float px, float py, float pz) {
             lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, sight);
             if (b->ally && b->ally_hit && target) {
                 ++ally_landed;
-                /* Her shot on its target: as a hit of Dante's of its weight (her damage on them isn't decoded). */
+                /* Her shot on its target, with its attack record's damage. Her bullet (FUN_00483ad0, vtable 0x6106a0)
+                 * takes the ally flag (+0x46d); FUN_004c89b0 then gives its hit team 1, which hits enemies, not
+                 * Dante, with the same record (0x5cbc40: 80). The rocket is record_damage's 1500. In the port's health
+                 * (ENEMY_HEALTH a Pride's 250) that's 2 of Dante's pistol hits, or 18 heavy ones, each through the
+                 * target's own hit code, until it dies. */
                 Enemy *was = e;
                 float lx = e->pos[0], lz = e->pos[2];
+                int heavy = b->ally_hit == 2, units = (int)(b->ally_hit_damage * ENEMY_HEALTH / 250.0f + 0.5f), n;
                 e = target;
-                enemy_hit(b->ally_hit == 2 ? HIT_HEAVY : HIT_PISTOL, lx, lz);
+                for (n = 0; n < units && e->active && e->plan != P_DEATH; n += heavy ? 2 : 1)
+                    enemy_hit(heavy ? HIT_HEAVY : HIT_PISTOL, lx, lz);
                 e = was;
             }
         }

@@ -24,4 +24,6 @@ int arkham_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *d
 void arkham_boss_trace(const char *path);
 void arkham_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out));
 
+void arkham_boss_data_release(void);   /* frees its model's buffers unless it's active (made again at its next spawn) */
+int arkham_boss_data_load(void);   /* makes its model's buffers now (a room load, ahead of its spawn) */
 #endif
