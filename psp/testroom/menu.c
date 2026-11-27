@@ -70,42 +70,93 @@ void *menu_draw_buffer;
 
 int menu_loaded(void) { return header != 0; }
 
+/* The full-screen pictures (29 of 512 x 272 at 16 bits, 7.9 MB) stay in MENU.BIN: they're read one at a time into
+ * `image` when the picture on screen changes (one is drawn a frame). The rest (tables, atlases, 2.6 MB) is loaded,
+ * the pictures' span cut out: an offset past it is moved down by its length (at()). */
+#define IMAGE_BYTES (MENU_IMAGE_W * MENU_ART_H * 2)
+static char menu_path[256];
+static unsigned int gap_start, gap_len;
+static unsigned char *image;
+static int image_loaded = -1;
+static unsigned int image_offset[64];
+static unsigned char *at(unsigned int offset) { return blob + (offset >= gap_start + gap_len ? offset - gap_len : offset); }
+
 int menu_load(const char *path) {
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
-    int size, got;
+    Header h;
+    unsigned int size, i, lo = 0xffffffffu, hi = 0;
+    int ok;
     if (fd < 0) return 0;
-    size = (int)sceIoLseek(fd, 0, PSP_SEEK_END);
+    size = (unsigned int)sceIoLseek(fd, 0, PSP_SEEK_END);
     sceIoLseek(fd, 0, PSP_SEEK_SET);
-    blob = memalign(16, (size_t)size);
-    if (!blob) { sceIoClose(fd); return 0; }
-    got = sceIoRead(fd, blob, (unsigned int)size);
+    ok = sceIoRead(fd, &h, sizeof h) == (int)sizeof h && memcmp(h.magic, "MNU1", 4) == 0 && h.images <= 64;
+    if (ok) {
+        sceIoLseek(fd, h.image_table, PSP_SEEK_SET);
+        ok = sceIoRead(fd, image_offset, h.images * 4) == (int)(h.images * 4);
+    }
+    for (i = 0; ok && i < h.images; ++i) {
+        if (image_offset[i] < lo) lo = image_offset[i];
+        if (image_offset[i] + IMAGE_BYTES > hi) hi = image_offset[i] + IMAGE_BYTES;
+    }
+    /* Only if the tables are all before the pictures (prepare_menu.py's layout); else the whole file. */
+    if (ok && h.images && hi <= size && h.image_table + h.images * 4 <= lo && h.atlas_table < lo && h.group_table < lo && h.quad_table < lo) {
+        gap_start = lo; gap_len = hi - lo;
+    } else {
+        gap_start = size; gap_len = 0;
+    }
+    blob = ok ? memalign(16, size - gap_len) : 0;
+    if (blob) {
+        sceIoLseek(fd, 0, PSP_SEEK_SET);
+        ok = sceIoRead(fd, blob, gap_start) == (int)gap_start;
+        if (ok && gap_len) {
+            sceIoLseek(fd, gap_start + gap_len, PSP_SEEK_SET);
+            ok = sceIoRead(fd, blob + gap_start, size - gap_start - gap_len) == (int)(size - gap_start - gap_len);
+        }
+    }
     sceIoClose(fd);
-    if (got != size || memcmp(blob, "MNU1", 4) != 0) {
+    if (!blob || !ok) {
         free(blob);
         blob = 0;
         return 0;
     }
-    sceKernelDcacheWritebackRange(blob, (unsigned int)size);
+    snprintf(menu_path, sizeof menu_path, "%s", path);
+    sceKernelDcacheWritebackRange(blob, size - gap_len);
     header = (const Header *)blob;
     return 1;
 }
 
+/* A picture into `image`, from MENU.BIN, when it isn't the one there already. */
+static const unsigned char *image_get(int index) {
+    SceUID fd;
+    if (!gap_len) return blob + image_offset[index];
+    if (index == image_loaded) return image;
+    if (!image && !(image = memalign(16, IMAGE_BYTES))) return 0;
+    image_loaded = -1;
+    if ((fd = sceIoOpen(menu_path, PSP_O_RDONLY, 0)) < 0) return 0;
+    sceIoLseek(fd, image_offset[index], PSP_SEEK_SET);
+    if (sceIoRead(fd, image, IMAGE_BYTES) == IMAGE_BYTES) image_loaded = index;
+    sceIoClose(fd);
+    if (image_loaded < 0) return 0;
+    sceKernelDcacheWritebackRange(image, IMAGE_BYTES);
+    return image;
+}
+
 static const Quad *group_quad(int group, int index) {
-    const Group *g = (const Group *)(blob + header->group_table) + group;
-    return (const Quad *)(blob + header->quad_table) + g->first + index;
+    const Group *g = (const Group *)at(header->group_table) + group;
+    return (const Quad *)at(header->quad_table) + g->first + index;
 }
 
 /* 2D drawing takes texture coordinates in pixels. */
 static float texture_w = 1.0f, texture_h = 1.0f;
 
 static void bind_atlas(unsigned int index) {
-    const Atlas *a = (const Atlas *)(blob + header->atlas_table) + index;
+    const Atlas *a = (const Atlas *)at(header->atlas_table) + index;
     texture_w = (float)a->width;
     texture_h = (float)a->height;
     sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
-    sceGuClutLoad(256 / 8, blob + a->palette);
+    sceGuClutLoad(256 / 8, at(a->palette));
     sceGuTexMode(GU_PSM_T8, 0, 0, 0);
-    sceGuTexImage(0, (int)a->width, (int)a->height, (int)a->width, blob + a->pixels);
+    sceGuTexImage(0, (int)a->width, (int)a->height, (int)a->width, at(a->pixels));
     sceGuTexFlush();
 }
 
@@ -211,9 +262,10 @@ static void draw_briefing_piece(const float *p, unsigned int color) {
 }
 
 static void draw_image(int index) {
-    const unsigned int *table = (const unsigned int *)(blob + header->image_table);
+    const unsigned char *pixels = image_get(index);
+    if (!pixels) return;
     sceGuTexMode(GU_PSM_5650, 0, 0, 0);
-    sceGuTexImage(0, 512, 512, MENU_IMAGE_W, blob + table[index]);
+    sceGuTexImage(0, 512, 512, MENU_IMAGE_W, pixels);
     sceGuTexFlush();
     texture_w = texture_h = 1.0f;
     sprite(0.0f, 0.0f, (float)MENU_ART_W, (float)MENU_ART_H,
@@ -466,7 +518,7 @@ void menu_mission_clear(MenuPad pad, MenuAfterFrame after_frame) {
 }
 
 void menu_show_loading(void) {
-    const Atlas *a = (const Atlas *)(blob + header->atlas_table) + ATLAS_NOW_LOADING;
+    const Atlas *a = (const Atlas *)at(header->atlas_table) + ATLAS_NOW_LOADING;
     sceGuStart(GU_DIRECT, list);
     sceGuClearColor(0xff000000);
     sceGuClear(GU_COLOR_BUFFER_BIT);

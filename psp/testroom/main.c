@@ -64,6 +64,7 @@ int testroom_frame;
 #include "pfx.h"
 #include "hud.h"
 #include "credits_fight.h"
+#include "heapstat.h"
 #include "orbs.h"
 #include "rebellion_runtime.h"
 #include "ebony_runtime.h"
@@ -1832,6 +1833,9 @@ static void write_memory_report(unsigned int boot_us, int motions_loaded) {
     FILE *f;
     size_t total, largest;
     heap_probe(&total, &largest);
+    path_in_game_dir(path, sizeof(path), "HEAPSTAT.TXT");
+    remove(path);
+    heapstat_dump(path, "boot");
     path_in_game_dir(path, sizeof(path), "MEMORY.TXT");
     f = fopen(path, "w");
     if (!f) return;
@@ -5035,7 +5039,8 @@ int main(int argc, char *argv[]) {
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
                     { char cl[200]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
-                    { size_t t, l; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); }
+                    { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
+                      path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);
