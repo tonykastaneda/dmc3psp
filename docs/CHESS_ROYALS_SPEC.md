@@ -141,6 +141,30 @@ Queen and King do with those commands.
   - **Frames 60–90:** it hits (`FUN_002946a0` only while 150 < time left < 180), for 2500 by the record.
   - It is deleted at 240.
 
+## Shared actions 10-13 (every piece)
+
+- **The castle, 11** (`00408dd0`). The master's command 30 (+0x488 = 0x1e, read in the alive function 0x406830) starts
+  it, with the destination at +0x310.
+  1. Sound 0x2c plays. Effect G0x390 starts at the feet.
+  2. For 30 frames the piece drifts 9 % of the way to the destination each frame, turning to face it.
+  3. It is set down on the destination. Effect G0x1fa plays there and the hold is 180 frames.
+  4. It falls and lands: shake 5, sound 0x14.
+  5. When the hold ends, the Rook (EST 38) goes straight to its attack (action 3); everyone else waits.
+  6. +0x110 gets 0x48000000 (busy, swap blocked) throughout.
+- **The light knock, 12** (`004091f0`):
+  - the piece is thrown up 20 and back 5 (along +0x486), and slows to a stop;
+  - at the top it hangs for 13 frames, then falls;
+  - landing shakes 10 and plays sound 0x14.
+- **The heavy knock, 13** (`00409450`):
+  - the piece is thrown up 20 and back 30, or up 6 and back 20 with +0x3bc bit 0x100;
+  - the back speed loses 4 a frame;
+  - landing shakes 10.
+- **10** (`00408be0`):
+  - the piece is lifted 150 at once and plays sound 0x16;
+  - it spawns `FUN_005132c0`'s object and calls its +0x130;
+  - it hangs 128 frames while +0x47c counts to 128, then falls and lands;
+  - what starts it isn't read yet.
+
 ## For the port
 
 - The models, motions and clip tables are [2]–[4] and [7]–[9] of GDATA 128. The effects are G ids from em021's [1]
