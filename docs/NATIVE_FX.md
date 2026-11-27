@@ -312,7 +312,7 @@ the rectangle the models map, added, fading over 0.14 s. Not ported: the models'
 | Artemis V0xd3 | riding its shot (CPl000Shl10, `FUN_005232b0`) | yes |
 | V0xa (V0x32 charged) | where a bullet lands (`002efaa0`) | E&I and Shotgun |
 | Kalina Ann V0x21f | its rocket's burst [inferred] | yes |
-| V6 (guard types 0-2), V0x265 / 0x264 / 0x267 | a Royalguard block (`FUN_00224db0`), near the attacker | V6 only, 50 cm toward the blow |
+| V6 (guard types 0-2), V0x265 / 0x264 / 0x267, V0x269 | a Royalguard block (`FUN_00224db0`), near the attacker (0x267 on his hips); a guard break's V0x269 on his left forearm, within 25 cm (`FUN_004416f0`). The type is the judgement's (`FUN_002e7f10` -> `FUN_004416f0`): +0x3c8c, frames since the guard press (99 while it's up), against config chunk 9's windows (within 5 frames grade 3; within +0x198 / 0x19c / 0x1a0 = 0 / 8 / 10 by style level grade 4; else 0); table 0x5c9400[the blow's guard class +0x3e][grade]: class 0 `0 4 3 5`, 1 `2 2 3 5`, 2 `2 2 3 2`, 3 `6 6 3 5`, 4 `6 6 3 6` (2 a break, 6 not blocked) | all; the blows' class taken from their kind (`combat.c`) |
 | V0x83 | Air Hike, at his feet, tinted the weapon's colour (`FUN_00222700`, `FUN_002fd1c0`) | yes |
 | V0x14d (P247, 248) | Enemy Step (`FUN_00228950`) | yes |
 | V0x8e (Dante's pack, P18), P44 (V0xf2 on floor material 0xb) | Helm Breaker's landing (`FUN_00264b90`) | yes, nfx bank 20 (GDATA 97) |

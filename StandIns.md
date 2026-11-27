@@ -52,6 +52,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Dante's yaw only (not the bone's frame); A&R's on the weapon placement's origin, not the weapon object's frames;
   Nevan's V0x2c1 / V0x38e start on any 6:14 / 6:40 / 6:9 / 6:10 / 6:33 as the window bit turns on, not only in
   action 81 / 82's phases. Nevan's V0x38e dome reads whiter and more solid than the PS2's (analysis/ref/pfx/nevan_ab.png).
+- **Royalguard's judgement** (`combat_player_hit_kind`, NATIVE_FX.md): the blow's guard class (+0x3e) is taken
+  from its hit kind (knockdown kinds class 1, others 0) [estimate]; the style level is 2; grade 5 (+0x3c82) and the
+  result-1 table (on the record's +0x18) aren't read; a guard break plays the hit, not the break state (0x15); the gauge
+  isn't ported.
 - **Blade trails** (`fx.c` trails): a strip over the weapon frame's path textured with the game's trail models'
   textures (M34, M30 / M31) by their UV rectangle, not the models bent through 11 frames; Rebellion and Nevan get type
   0 [whether Nevan's object makes it isn't checked]. NATIVE_FX.md "Blade trails".

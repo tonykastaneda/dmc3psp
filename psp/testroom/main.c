@@ -5091,21 +5091,42 @@ int main(int argc, char *argv[]) {
              * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
             combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
             if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
-            if (focus_cmp && frames == cmp_hit_frame)
-                combat_player_hit_kind(&combat, &player, player.x + sinf(player.yaw) * 100.0f, player.z + cosf(player.yaw) * 100.0f, cmp_hit_kind, (float)cmp_hit_damage);
-            if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
+            {
+            int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
+            float blow_damage = 0.0f;
+            if (landed) { blow_kind = enemy_attack_kind(heavy); blow_damage = enemy_attack_damage(); }
+            if (focus_cmp && frames == cmp_hit_frame) {   /* "hitme": a blow from 1 m ahead, through the same path */
+                landed = 1; blow_kind = cmp_hit_kind; blow_damage = (float)cmp_hit_damage;
+                from_x = player.x + sinf(player.yaw) * 100.0f; from_z = player.z + cosf(player.yaw) * 100.0f;
+            }
+            if (landed) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit_kind(&combat, &player, from_x, from_z, enemy_attack_kind(heavy), enemy_attack_damage())) {
+                if (combat_player_hit_kind(&combat, &player, from_x, from_z, blow_kind, blow_damage)) {
                     fx_hit_spark(chest);
+                    if (combat.guard_type == 2) {
+                        /* A guard break (FUN_004416f0): V0x269 on his left forearm (+0x13a0), within 25 cm at random. */
+                        float at[3], l[3];
+                        int k;
+                        for (k = 0; k < 3; ++k) l[k] = pose.world_pos[BONE_L_FOREARM][k] + ((float)(rand() % 51) - 25.0f);
+                        model_to_world(&player, l, at);
+                        nfx_spawn(NFX_STATIC, 0x269, at, player.yaw, 0);
+                    }
+                    if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
+                        sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", combat.guard_type, frames, (int)combat.guard_frames);
                     if(focus_cmp)vanguard_note("player_hurt",player.health);
                 } else {
-                    /* A Royalguard block (FUN_00224db0): V6 (guard types 0-2; 3 / 4 / 5 play V0x265 / 0x264 / 0x267,
-                     * not told apart here) near the attacker's bone, facing Dante: taken 50 cm toward the blow. */
+                    /* A Royalguard block (FUN_00224db0): V6 (guard types 0-2), V0x265 (3), V0x264 (4) near the attacker's
+                     * bone, facing Dante: taken 50 cm toward the blow; V0x267 (5) on his hips. */
                     float dx = from_x - player.x, dz = from_z - player.z, dl = sqrtf(dx * dx + dz * dz);
                     float at[3] = {chest[0] + (dl > 1.0f ? dx / dl * 50.0f : 0.0f), chest[1], chest[2] + (dl > 1.0f ? dz / dl * 50.0f : 0.0f)};
-                    if (!nfx_spawn(NFX_STATIC, 6, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
+                    int gt = combat.guard_type, v = gt == 3 ? 0x265 : gt == 4 ? 0x264 : gt == 5 ? 0x267 : 6;
+                    if (gt == 5) arm_point(0, &player, BONE_HIPS, at);
+                    if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
+                        sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", gt, frames, (int)combat.guard_frames);
+                    if (!nfx_spawn(NFX_STATIC, v, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
                     if(focus_cmp)vanguard_note("player_guard",player.health);
                 }
+            }
             }
             {
                 /* Bodies shove him after his own wall pass, so the shove has to meet the walls too: an enemy
