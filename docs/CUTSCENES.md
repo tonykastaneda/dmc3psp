@@ -166,9 +166,9 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
 - **Letterbox.** The PS2 draws demos with cinema bars, 0.712 of the height showing (measured in PCSX2 in demos 3, 5
   and 59): `demo_letterbox`, 39 lines top and bottom.
 - **Framing.** Channel 12 is the vertical angle (`FUN_001ac750`: the Y scale is 1/tan of half that angle, and the
-  screen-height halfword is in the focal length and again in the Y divisor, so the height cancels). Drawn raw across
-  the PSP's 272 lines that angle frames wider than the PS2 stills, so a cutscene uses the 326-line fit
-  (`demo_screen_fov`, `2*atan(tan(fov/2)*272/326)`) [stand-in, fitted to the PCSX2 stills]. The picture stays the
+  screen-height halfword is in the focal length and again in the Y divisor, so the height cancels). A cutscene uses that angle raw. A 326-line fit was used while
+  the PS2 stills were drifted moments of the recording; matched by picture, the PS2 frames need a zoom of 1.17-1.21 to
+  meet the fit's and 1.00-1.02 to meet the raw angle's (demos 3, 5, 59), so the game's own angle is back. The picture stays the
   full 16:9 width, so a demo shows more to either side than a 4:3 television and there are no side bars. Test line
   `rawfov 1` passes channel 12 raw. Evidence, against the PS2 halves of `demo5_sky_compare.png`, `demo3_compare.png`
   and `demo59_compare.png`: raw demo 5 frame 1260 (`sky5_1260.png`) brings the hooded figure fully in, where the

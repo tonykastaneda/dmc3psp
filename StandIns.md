@@ -23,10 +23,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   flag 2 and ValidType 3 stays idle, and the class-2 lights are not multiplied onto the bake (demos 3, 5 and 59;
   docs/CUTSCENES.md).
 - **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
-  colour scale and ambient [inferred from values]. The cutscene field of view is the 326-line fit (`demo_screen_fov`)
-  [stand-in]: channel 12's raw angle (`FUN_001ac750`, the screen height cancels) frames wider than the PS2 stills
-  (demo 5 frames 300 and 1260, demo 59 frame 700; `sky5_300.png`, `sky5_1260.png`, `sky59_700.png`) and the fit
-  matches them (`fit5_300.png`, `fit5_1260.png`, `fit59_700.png`). Test line `rawfov 1` passes the raw angle.
+  colour scale and ambient [inferred from values]. (The cutscene field of view is no longer a stand-in: channel 12's
+  raw angle, as `FUN_001ac750` builds it, matches the PS2 once its frames are matched by picture, not by drifting time.)
   Cutscene fog is the ScrEfc GFG track through sceGuFog (`demo_fog`): MinAlpha/128 at StartZ to MaxAlpha/128 at
   EndZ, colour MaxColor. The far distance is extended so the factor at EndZ equals that fraction, because hardware
   fog reaches full colour at its far [inferred]. The sky dome is left unfogged. Not ported: SGA glow (a feedback
