@@ -79,6 +79,12 @@ static void act(NevanBrain *b, int a) {
      * (FUN_0043e1c0) and lives only while she's in them (FUN_0043e250). */
     if (a == 29 || a == 38) { b->field = 0; b->field_wait = 50.0f; b->field_done = 0; }
     if (a == 25) b->orbs_pending = 1;   /* FUN_003b7460, state 0 */
+    /* 21 (her fall) starts G0x1a8 and 27 G0x97, each at a bone of hers (FUN_003b67a0 / FUN_003b7a50: +0x724), taken
+     * 100 up at her middle [estimate]. */
+    if (a == 21 || a == 27) {
+        float at[3] = {b->pos[0], b->pos[1] + 100.0f, b->pos[2]};
+        nfx_spawn(NFX_NEVAN, (a == 21 ? 0x1a8 : 0x97) | 0x8000, at, b->yaw, 0);
+    }
     b->action = a;
     b->want = scripts[a].motion;
     b->restart = 1;
@@ -292,6 +298,7 @@ static void bats_update(NevanBrain *b, float f, float px, float py, float pz, in
         dx -= t->dir[0] * d; dy -= t->dir[1] * d; dz -= t->dir[2] * d;
         t->pos[0] += t->dir[0] * s; t->pos[1] += t->dir[1] * s; t->pos[2] += t->dir[2] * s;
         if (dx * dx + dy * dy + dz * dz < (BAT_RADIUS + 60.0f) * (BAT_RADIUS + 60.0f)) {
+            nfx_spawn(NFX_NEVAN, 0x110, t->pos, 0.0f, 0);   /* a bat's strike (FUN_003c8810: V0x110 where it hits) */
             t->on = 0;
             if (attacks) { b->land = 2; b->land_damage = BAT_DAMAGE; }
             continue;

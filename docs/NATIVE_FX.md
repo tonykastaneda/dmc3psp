@@ -223,6 +223,7 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | `003ac770` / `003ac790` Agni & Rudra, states 46-49 (`003a7510` and kin) | V0x7b (P56), G0x1d5 (P44) | at motion frame 65 at him, the G riding him and looping until 77 (`003ac7e0`) | yes |
 | `003a6820` Agni & Rudra, state 39 (dead) | 15 (0xf), 44 | P44 at bone +0xcf8 from motion frame 220, P15 at bone +0xcc0 from 280 | yes (at his feet) |
 | `003c9870` Nevan's bats | 0xcb, 0xfb, 0xeb (203, 251, 235) | one at random riding each bat (+0x250), 12 bat sprites, life -20000: never runs out (`pfx.c` counts a life down only from -10000 up) | yes (`nevan_boss.c` bats_particles, nfx bank 7) |
+| `003b67a0` / `003b7a50` Nevan's 21 (fall) / 27, `003c8810` a bat's strike | G0x1a8 (P38), G0x97 (P293), V0x110 (P31) | at a bone of hers (taken 100 up at her middle); where the bat hits | yes (`nevan_boss.c` act, bats_update) |
 | `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` the Arachne's landings (states 0x23, 0x32, 0x28, 0x2b) | 44 | dust at its six legs' bones (+0x104 matrices); 0x32's events 1 / 2 one at its body | yes (any landing, legs 110 cm out round it) |
 | `00264b90` | 44 | (Dante's code range; not traced) | no |
 
