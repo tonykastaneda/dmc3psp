@@ -290,3 +290,26 @@ The run stopped at frame 18000, 2 frames into the street. The street's own cours
   its fights.
 - The periodic 13-26 ms update spike (2-3 missed frames a second) is there in every room, not just the street.
 - Nothing in the street was changed for speed.
+
+## 9. The street's look (fog, sky, brightness)
+
+Before this the port's street was nearly black with purple enemies (a matched view averaged 28/13/23 against the
+PS2's 97/58/81). Three causes, each checked in PCSX2:
+
+- **Fog.** Room 012's LIG2 header has a second colour, (95, 90, 100). The game keeps a float copy at 0xec4ed0.
+  Turning it red in PCSX2 turns the sky and the street red, more with distance, so it's the room's fog colour.
+  - The port draws the 3D pass with `sceGuFog` in that colour, and clears the screen to it (the sky's colour behind
+    the dome). The 2D pass (counter, roll) isn't fogged. `credits_fight_fog()`, called from `render_scene`.
+  - The fog's distances aren't in the room's data that was read. Near 0 / far 4100 cm is fitted to the fog factor
+    measured in PCSX2: red fog against the normal one, about 0.17 at 0-1000 cm [estimate].
+- **The sky dome.** st012's model 0 ("light scr") is a cloud dome up to y 45052, past the port's 16000 far plane.
+  Stage sets reaching above 12000 are flagged (batch flag 8) and drawn first, without depth, with the far plane at
+  80000 (50c1a9c).
+- **Brightness.** The PS2 shows st012's stage at about 3.5 times the port's usual stage brightness (1.25 times the
+  vertex colour). Measured with PCSX2 and the port at the same camera, with the fog's share taken out.
+  - `tools/prepare_stage.py` bakes slot 320 (st012) at half of 1.25 × 3.5. The runtime draws it with
+    `GU_FRAGMENT_2X` (`stage_set_double`), so colours can go past 255 the way the PS2's doubled vertex colour does.
+  - Why the PS2 draws this room brighter isn't decoded (the room's material or light records) [estimate].
+
+Matched view (eye 2906/1088/1950, `analysis/testroom/match2_vs.png`, local): the port averages 91/61/81 against the
+PS2's 97/58/81.
