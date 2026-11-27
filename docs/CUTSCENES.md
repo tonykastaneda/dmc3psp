@@ -104,7 +104,14 @@ and hue-shifted (bluish lines subtracted from warm skin leave red-brown), so the
 weaker or more neutral (its vertex colour or alpha for this object). Not settled: the Program track's No 5 / No 6
 (210 200 180 / 30 20 20 in demo 1) look like a colour scale and an ambient, but its parser is the stub `FUN_00217440`
 (returns 1), so the game ignores them [inferred from the parser table at 0x590748].
-- To read the PS2's GS state for that draw: a GS dump of the frame (`build/refemu` hotkey Shift+F8, sent as VK 0xA0 +
+- **Why the PS2 differs: its cm027 is a movie.** GS dumps of that frame (PCSX2, Mission 1 on Normal from the 100% save,
+  taken at 184.7 s by matching the picture, and the Demo Digest's Opening) hold no model draws at all: each frame is
+  one 640x512 IMAGE upload. Demo 1 is in no mission's script; Mission 1 opens with movie 319 (M1_INTRO), Capcom's
+  pre-rendered take of the same scene, and the port plays that movie there too. So the PS2 never draws demo 1 in real
+  time, and every PS2 picture of it (`arkham_face_compare.png` and the rest) is the movie. The movie's faint marks
+  are its own render, not a sign that the real-time data is wrong. A fair real-time check of his face is a demo the
+  game plays live (demo 5, Mission 3's opening).
+- To read the PS2's GS state for a draw: a GS dump of the frame (`build/refemu` hotkey Shift+F8, sent as VK 0xA0 +
   F8; uncompressed with `[EmuCore/GS] GSDumpCompression = 0` in the game's own settings file). The Demo Digest's
   "Opening" (mission select, DEMO DIGEST, scene select right once) is a pre-rendered movie of demo 1 (its dump is
   full-frame IMAGE uploads, no draws), so the dump has to come from Mission 1 itself.
