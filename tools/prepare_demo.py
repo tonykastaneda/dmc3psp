@@ -872,11 +872,9 @@ def main():
     blob += struct.pack("<I", len(programs))
     for start, no, arg in programs:
         blob += struct.pack("<fI4f", start, no, *(arg + [0.0] * (4 - len(arg))))
-<<<<<<< HEAD
     fogs = bake_fog(timeline)
     blob += fogs   # right after the Program clips; their count is the high half of +0x3c
-=======
-    # Then the stage's own hide track (its model slot's Hide clips: a cut's .hid keys the stage's SCM objects one by
+    # Then (after the fog records) the stage's own hide track (its model slot's Hide clips: a cut's .hid keys the stage's SCM objects one by
     # one; demo 3 hides the walls in front of its later cameras): u32 count, then {f32 demo frame, u16 object, u16
     # hidden}, by frame. A clip without a .hid shows them all. The stage's batches carry object + 1 (prepare_stage).
     events = stage_hide_events(timeline, files)
@@ -888,7 +886,6 @@ def main():
     blob += struct.pack("<I", len(events))
     for frame, obj, hidden in events:
         blob += struct.pack("<f2H", frame, obj, hidden)
->>>>>>> wt/cl2
     tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))

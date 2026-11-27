@@ -290,8 +290,9 @@ int demo_start(int demo, const char *dir) {
     return 1;
 }
 
-/* The stage's hide track (prepare_demo: after the Program clips, u32 count then {f32 frame, u16 object, u16 hidden};
- * object 0xffff shows all): each object's state now, onto the stage's batches (tagged object + 1). */
+/* The stage's hide track (prepare_demo: after the Program clips and the fog records, u32 count then {f32 frame, u16
+ * object, u16 hidden}; object 0xffff shows all): each object's state now, onto the stage's batches (tagged object + 1).
+ * +0x3c holds the light count in its low half and the fog count in its high half; a fog record is 24 bytes. */
 #define STAGE_HIDE_OBJECTS 511   /* 0-254 the stage's SCM objects, 255-510 the room's props (prepare_demo) */
 static void stage_hide_apply(int clear) {
     unsigned char want[STAGE_HIDE_OBJECTS];
@@ -299,8 +300,9 @@ static void stage_hide_apply(int clear) {
     memset(want, 0, sizeof want);
     if (!clear && head) {
         const unsigned int *programs = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) +
-                                                              head->light_count * sizeof(DemoLight));
-        const unsigned int *count = programs + 1 + *programs * 6;   /* each Program clip is 24 bytes */
+                                                              (head->light_count & 0xffffu) * sizeof(DemoLight));
+        const unsigned int *count = programs + 1 + *programs * 6 +   /* each Program clip is 24 bytes */
+                                    (head->light_count >> 16) * 6;   /* each fog record is 24 bytes (DemoFog) */
         const struct { float frame; unsigned short obj, hidden; } *e = (const void *)(count + 1);
         unsigned int i;
         for (i = 0; i < *count && e[i].frame <= demo_clock; ++i) {
