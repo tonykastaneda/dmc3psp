@@ -166,9 +166,9 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
 - **Letterbox.** The PS2 draws demos with cinema bars, 0.712 of the height showing (measured in PCSX2 in demos 3, 5
   and 59): `demo_letterbox`, 39 lines top and bottom.
 - **Framing.** Channel 12 is the vertical angle (`FUN_001ac750`: the Y scale is 1/tan of half that angle, and the
-  screen-height halfword is in the focal length and again in the Y divisor, so the height cancels). Drawn raw across
-  the PSP's 272 lines that angle frames wider than the PS2 stills, so a cutscene uses the 326-line fit
-  (`demo_screen_fov`, `2*atan(tan(fov/2)*272/326)`) [stand-in, fitted to the PCSX2 stills]. The picture stays the
+  screen-height halfword is in the focal length and again in the Y divisor, so the height cancels). A cutscene uses that angle raw. A 326-line fit was used while
+  the PS2 stills were drifted moments of the recording; matched by picture, the PS2 frames need a zoom of 1.17-1.21 to
+  meet the fit's and 1.00-1.02 to meet the raw angle's (demos 3, 5, 59), so the game's own angle is back. The picture stays the
   full 16:9 width, so a demo shows more to either side than a 4:3 television and there are no side bars. Test line
   `rawfov 1` passes channel 12 raw. Evidence, against the PS2 halves of `demo5_sky_compare.png`, `demo3_compare.png`
   and `demo59_compare.png`: raw demo 5 frame 1260 (`sky5_1260.png`) brings the hooded figure fully in, where the
@@ -271,6 +271,23 @@ Shots taken by the cutscene's own frame (`demoshot N`) and slot-by-slot hiding (
   per-frame spin). The photo at 2300 is in the stage (`st506` object 3, texture 15, on the board at the left) and
   in place: the port's tighter framing leaves it just outside the frame (with `rawfov 1` its corner shows at the
   left edge; the PS2 shows it whole). That is the cutscene fov fit (`demo_screen_fov`), not a missing object.
+
+- **SCM pieces are scenery: unlit at their baked colour.** `scm_rig` dropped the pieces' vertex colours, so the
+  cast's lights lit them like characters: demo 9's night sky (`ss510_04`, a cloud layer baked 92) came out bright blue
+  where the PS2's is dark. Each piece object now carries its average baked colour x1.25 (as the stage's
+  `STAGE_BRIGHTNESS`; the pieces' colours are near-grey) in its texture word (bit 20, level in bits 24-31) and is drawn
+  unlit at it (`demo.c`). Demo 59's toppled chair is now dark as on the PS2.
+- Spot-checked against new PCSX2 recordings (`analysis/ref/cast/m4_open_ps2.mp4`, `m7_open_ps2.mp4`): demo 16
+  (Mission 7, Lady) matches shot for shot (`demo16_compare.png`; the PS2 hazier: its screen effects); demo 9
+  (Mission 4, Vergil and Arkham) matches in framing and poses after the sky fix (`demo9_compare.png`). Still off in
+  demo 9: its banners (`ss510_00/01.efm`, cloth on `ss510_05`) are bright tan in the port and a dim red-brown on the
+  PS2 (their per-vertex words average 211, so it isn't baked colour: how effect models are lit isn't traced); the
+  PS2's stars over the sky aren't drawn.
+- Demo 11 (Mission 5's opening; it plays after Mission Start, `analysis/ref/cast/m5_open_ps2.mp4`,
+  `demo11_compare.png`): the shots and framing match. Open: the blood in the basin (`em114_01` objects 3 and 4, flat
+  discs on texture 1's red swirl, normals up) is bright red on the PS2 and nearly black in the port: at frame 1000 the
+  only character light (ValidType 2 at 1600 / 200 / 1800) is low and to the side and the ambient (No 6, 30 20 20) is
+  dim, so the PS2 must light or blend these objects otherwise (both carry byte 8 = 1, the other objects 0) [not traced].
 
 Weapon placement checked against PCSX2 (`analysis/testroom/demo3_weapons_compare.png`, `demo59_weapons_compare.png`):
 Rebellion in demo 3 (overhead, thrown, pointed at the end) matches; demo 59's sword was missing from the desk (now
