@@ -2896,8 +2896,8 @@ static void breakable_hit(const Player *player, float reach, int kind) {
     if (mission_choice.mission == 6) m6_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 7) m7_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));
     if (mission_choice.mission == 15) m15_hit(player->x, player->y, player->z, player->yaw, reach);   /* mission15.c: the portals */
-    if (mission_choice.mission == 17) doppelganger_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* 139's crests */
-    if (mission_choice.mission == 19) arkham_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* his Legions */
+    if (mission_choice.mission == 17 || bp_active()) doppelganger_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* 139/439's crests */
+    if (mission_choice.mission == 19 || bp_active()) arkham_boss_strike(player->x, player->y, player->z, player->yaw, reach);   /* his Legions */
     if (mission_choice.mission == 19) m19_mirror_hit(player->x, player->y, player->z, player->yaw, reach, !(kind == HIT_LIGHT || kind == HIT_AIR));   /* 405's mirrors */
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
         const RoomBreakable *b = &room_breakables[i];
@@ -3168,6 +3168,11 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     msg_room_fought = 0;
     mission_room = room;
     bp_enter(room_number(room));
+    if (bp_active()) {
+        int number=room_number(room);
+        vergil_boss_set_variant(number==444?2:number==443?1:0);
+        geryon_boss_start_on_ground(number==438);
+    }
     if(mission_choice.mission==8) {
         int number=atoi(rooms[room].file+5);
         mission8_enter(number);nausika_enter(number);
@@ -3331,6 +3336,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             if (room_named(want) >= 0) { enter_room(room_named(want), start, player, camera); return 0; }
         }
     }
+    if (bp_active()) doppelganger_boss_dante(player->yaw);
     if (mission_choice.mission == 15) {
         static int m15_tick;
         m15_update(dt);
