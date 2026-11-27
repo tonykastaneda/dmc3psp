@@ -44,7 +44,8 @@ AGNI_RUDRA_V = (588, 589, 785, 786)
 AGNI_RUDRA_P = (15, 44)
 # The Jester's (em037 [10]): the cross (0054d610: V0x3f9 once, V0x3f8 looping; 0054dc70: V0x3fa at its end) and the
 # bomb (0054e710: V0x417 in flight; 0054edc0: V0x41c as it goes off).
-JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c)
+JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c,
+            0x3cb, 0x3cc, 0x3f3)   # his second set's (enemy.c jester_fx): 0x3cb / 0x3cc trails, 0x3f3 rising
 # Effect models whose second chunk is a 16-byte reference rather than their own textures. The reference's
 # meaning isn't decoded. A model takes a twin's textures when one has the same vertices, else the ice texture
 # of the icicle model M54 (the ice pieces and frozen floor are the same material).

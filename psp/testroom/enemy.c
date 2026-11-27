@@ -3597,6 +3597,12 @@ static void jester_puff(void) {
     }
 }
 
+/* His second set's own effects (em037 [10], NFX_JESTER; their P particles pfx.c's), on his frame: V0x3cb as he lands
+ * from 0x7b's fall (00539c80) and at each of 0x80's hops (0053b520), and every so often in 0x7f's wind-up (0053a670);
+ * V0x3cc through 0x7f's charge (0053a9d0); V0x3f3 as 0x79 starts, at the arena's middle 500 up (00539540). The
+ * wind-up's and charge's intervals (+0x4c74 / +0x4c7c) aren't read: 10 frames [estimate]. */
+static void jester_fx(int v) { float at[3] = {e->pos[0], e->pos[1], e->pos[2]}; nfx_spawn(NFX_JESTER, v, at, e->yaw, 0); }
+
 static void jester_spawn(void) {
     e->plan = P_WATCH;
     e->motion = -1;
@@ -3741,7 +3747,7 @@ static void jester_update(float f, float px, float py, float pz) {
                 e->pos[0] = 3500.0f; e->pos[1] = -220.0f; e->pos[2] = 3500.0f;
                 e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
                 e->frame = 0.0f; e->done = 0;
-                jester_puff();
+                { float at[3] = {3500.0f, 500.0f, 3500.0f}; nfx_spawn(NFX_JESTER, 0x3f3, at, e->yaw, 0); }
             } else e->frame = 0.0f;
         } else {
             e->pos[1] += 6.0f * f;
@@ -3766,7 +3772,7 @@ static void jester_update(float f, float px, float py, float pz) {
             e->vel[1] -= 1.1111f * f;
             e->pos[0] += e->vel[0] * f; e->pos[2] += e->vel[2] * f;
             jester_sphere(px, py, pz, 1000.0f);
-            if (e->pos[1] < JESTER_FLOOR) { e->pos[1] = JESTER_FLOOR; jester_puff(); jester_state(J_IDLE); }
+            if (e->pos[1] < JESTER_FLOOR) { e->pos[1] = JESTER_FLOOR; jester_fx(0x3cb); jester_state(J_IDLE); }
         }
         break;
     case J_CHARGE:
@@ -3774,6 +3780,7 @@ static void jester_update(float f, float px, float py, float pz) {
          * (0x5e302c) charging along his facing at 45 a frame (0x5e3024), turned back toward the middle within 35
          * degrees at random (0x5e3028) at the arena's edge (+0x4d1d) [the edge as the port's arena clamp]; his
          * sphere (kind 1: 160 cm, record 6, 1000) is live, resting 30 frames after a hit. Then 60 frames (js03). */
+        if ((int)(e->timer / 10.0f) != (int)((e->timer - f) / 10.0f)) jester_fx(e->step == 0 ? 0x3cb : 0x3cc);
         if (e->step == 0) {
             goyle_turn_to(px, pz, 5.0f * PI / 180.0f, f);
             if (e->timer >= 120.0f) { e->step = 1; e->timer = 0.0f; e->vel[0] = sinf(e->yaw) * 45.0f; e->vel[2] = cosf(e->yaw) * 45.0f; e->vel[1] = 0.0f; }
@@ -3798,7 +3805,7 @@ static void jester_update(float f, float px, float py, float pz) {
          * (0x5e3074); falling, his sphere (kind 2, record 7, 1000) is live. Then 60 frames. */
         e->yaw += 10.0f * PI / 180.0f * f;
         if (e->step == 0) {
-            if (e->timer >= 120.0f) { e->step = 1; e->j_hops = 5; jester_hop(px, pz); }
+            if (e->timer >= 120.0f) { e->step = 1; e->j_hops = 5; jester_hop(px, pz); jester_fx(0x3cb); }
         } else {
             e->pos[1] += e->vel[1] * f + e->j_g * 0.5f * f * f;
             e->vel[1] += e->j_g * f;
@@ -3806,8 +3813,7 @@ static void jester_update(float f, float px, float py, float pz) {
             if (e->vel[1] < 0.0f) jester_sphere(px, py, pz, 1000.0f);
             if (e->pos[1] < JESTER_FLOOR) {
                 e->pos[1] = JESTER_FLOOR;
-                jester_puff();
-                if (--e->j_hops > 0) jester_hop(px, pz); else jester_state(J_RECOVER);
+                if (--e->j_hops > 0) { jester_hop(px, pz); jester_fx(0x3cb); } else jester_state(J_RECOVER);
             }
         }
         break;
