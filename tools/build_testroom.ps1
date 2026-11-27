@@ -198,6 +198,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $DoppelHeader) -or
 
 $GeryonHeader = Join-Path $Generated "boss_geryon_runtime.h"
 if ($Regenerate -or -not (Test-Path -LiteralPath $GeryonHeader) -or
+    -not (Test-Path -LiteralPath (Join-Path $Generated "boss_geryon_windows.h")) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_geryon.py")).LastWriteTime -gt (Get-Item -LiteralPath $GeryonHeader).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_geryon.py"), $Iso.FullName, "--output", $Generated)

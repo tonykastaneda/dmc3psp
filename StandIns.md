@@ -105,7 +105,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Vergil**: effect 0x338 is a hit spark; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
-- **Geryon**: gallop laps 12 [approximation]; both bodies play motion n for action n [inferred]; the cart's missiles'
+- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
   path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
   runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
 - **Doppelganger**: the middle region within 550 [estimate]; which dark sixth he comes up in [inferred]; his coat

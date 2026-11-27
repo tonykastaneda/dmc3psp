@@ -74,8 +74,9 @@ has 3-5 rotation, 6-8 translation].
 ## 6. In the port (`psp/testroom/geryon_boss.c`, `tools/prepare_geryon.py`)
 
 Sections 3-5 at rank 0. Approximations:
-- **Motions:** action *n* plays `gh`*n* and `gc`*n*; the scripts ([12], [16]) aren't run, so no windows: the gallop
-  runs **12 motion loops** before turning, not 40 windows.
+- **Motions:** most actions still play `gh`*n* and `gc`*n* by index. Horse gallops 10/11 now use decoded
+  script window timing (below), not the earlier twelve-motion-loop substitute. The full remaining horse/cart
+  scripts are not yet executed.
 - **Phase 0:** think → the charge (every third) or the cast (0x12 → 8: the spheres) → the charge. The charge runs
   the whole bridge line (400 to 5600) or to 1000 past Dante, then 7 turns him round. The shockwave comes when Dante
   has stayed within 500 for 90 frames [inferred trigger].
@@ -98,3 +99,33 @@ Sections 3-5 at rank 0. Approximations:
 Dante stays close; 20 heavy test hits take him under 80%, he leaves, Dante lands at start 2 and phase 1 gallops,
 turns and charges; 80 more and Mission Clear shows. Dante's own sword hits register (`swing`). Not compared with
 the PS2 yet.
+
+## Gallop window follow-up
+
+Handlers **4c2d90 / 4c2fe0** query `255af0(horse+2b20,0,0)` and immediately clear it with `255b20`.
+On value 1 they decrement signed byte **+973**; at zero they clear flag 400 and select **5 / 6**, respectively.
+The counter initializes to **40** (`4c0b70`, and the charge entry). It does not count completed arena laps.
+
+Horse chunk [12] is a mode-0 grouped script: bank table at +610, motion groups at +6. Actions **10 / 11**
+select motions **16 / 17**. Each starts the clip at its MOT loop start, blends eight frames, waits for motion
+frame **29**, and raises **window 0 byte 0 = 1**. Then it restarts the same clip without blending, waits
+for 29 and raises that window again; its branch repeats this second play. Both loop starts are 0. Thus normal
+counter expiry takes **40 events / 1160 native frames**, not twelve motion loops. The exporter validates this
+program and writes the initial/repeating intervals to local `boss_geryon_windows.h`; the runtime consumes
+those intervals and aligns the displayed loop frame with the script clock.
+
+There is also a decoded acceleration condition: **383b70 at 384160** shifts an eight-update contact history
+at **+970**, setting bit 0 if collision record **+35fc** has flag **1000** and Dante is more than **300** above
+the horse. Each window subtracts an extra **2** while that history is nonzero and the counter is **>5**.
+Continuous high contact therefore expires in 16 events (464 frames). The port retains the exact history
+and decrement rules, using its existing horse/cart push footprint for the contact input; that footprint
+remains an approximation of the native cap record, rather than a newly invented detection radius.
+
+`python tools/tests/run_geryon_windows.py` checks both directions, the first event boundary, all forty events,
+the conditional decrement and both native turn actions. Existing movement, shockwave and missile stand-ins
+remain separate from this change.
+
+PPSSPP Mission 12 room 228: boss_geryon_windows_live (nodemo, twenty heavy hits at frame 30)
+checks the bridge-to-ground fight and consumes exactly forty logged events, first at frame126 and
+last at691, then native turn6. Captures analysis/testroom/boss_geryon_windows_live_450.png, _700.png
+and _1000.png show galloping, the turn and subsequent attacks. Local trace: build/boss_decode/geryon_live_log.txt.
