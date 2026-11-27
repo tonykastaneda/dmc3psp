@@ -56,9 +56,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   from its hit kind (knockdown kinds class 1, others 0) [estimate]; the style level is 2; grade 5 (+0x3c82) and the
   result-1 table (on the record's +0x18) aren't read; a guard break plays the hit, not the break state (0x15); the gauge
   isn't ported.
-- **Blade trails** (`fx.c` trails): a strip over the weapon frame's path textured with the game's trail models'
-  textures (M34, M30 / M31) by their UV rectangle, not the models bent through 11 frames; Rebellion and Nevan get type
-  0 [whether Nevan's object makes it isn't checked]. NATIVE_FX.md "Blade trails".
+- **Blade trails** (`fx.c` mtrails): the game's trail models bent through the last 11 weapon frames, drawn added
+  (kind 3's own blend +0x70 / +0x98 isn't read); the rotations blended linearly and renormalised [FUN_00133ab0 not
+  read]; Rebellion and Nevan get type 0 [whether Nevan's object makes it isn't checked]. NATIVE_FX.md "Blade trails".
 - **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
   PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and

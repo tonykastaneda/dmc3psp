@@ -42,6 +42,9 @@ void fx_guard_flash(const float at[3]);       /* Royalguard */
 void fx_trail_add(const float base[3], const float tip[3], unsigned int color);
 /* A sweep in slot 0 / 1, textured with nfx bank's texture tex (-1: plain) over the rectangle u0..u1 (along it, newest
  * first) by v0..v1 (hilt to tip). */
+/* The game's model trail in slot 0 / 1 (model 34, 30 or 31): the weapon's frame this frame (m's columns its axes, p
+ * its origin, in the world); feed while the attack window is open. */
+void fx_trail_sample(int slot, int model, const float m[3][3], const float p[3], int feed);
 void fx_trail_add_slot(int slot, const float base[3], const float tip[3], unsigned int color, int bank, int tex,
                        float u0, float u1, float v0, float v1);
 

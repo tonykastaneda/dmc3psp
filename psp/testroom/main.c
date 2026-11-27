@@ -2165,41 +2165,39 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
     last_vy = p->vy;
     (void)was_on_ground; (void)last_vy;
 
-    /* The blade's sweep (docs/NATIVE_FX.md "Blade trails"): the game's weapon trail (FUN_00309030), fed while the attack
-     * window is open (FUN_0030bce0). The shared weapon object (FUN_002953c0 / 002954b0) has type 0: model M34 (Dante's
-     * pack), 127 cm out from the weapon's frame, while +0x24ed is set; Agni & Rudra's (FUN_00296ae0) types 1 / 2: M30 on
-     * Agni while bit 0x80, M31 on Rudra while bit 0x40 (A&R's pack). Drawn as a textured strip over the frames' path
-     * [the PS2 bends the model through its last 11 frames]. */
+    /* The blade's sweep (docs/NATIVE_FX.md "Blade trails"): the game's weapon trail (FUN_00309030), sampling the weapon's
+     * frame every frame and fed while the attack window is open (FUN_0030bce0). The shared weapon object (FUN_002953c0 /
+     * 002954b0) has type 0, model M34 (Dante's pack), fed while +0x24ed is set; Agni & Rudra's (FUN_00296ae0) types 1 /
+     * 2: M30 on Agni while bit 0x80, M31 on Rudra while bit 0x40 (A&R's pack). */
     {
         int slot;
         for (slot = 0; slot < 2; ++slot) {
             int ar = p->melee_weapon == 2, on;
             const WeaponPlace *place;
-            if (combat_move_is_gun(c->move) || p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
-            on = ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40));
-            if (!on) continue;
+            if (p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
+            on = !combat_move_is_gun(c->move) && (ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40)));
             place = combat_weapon_place(c, p, p->melee_weapon, slot);
             if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
-                /* The blade runs along the model's +Z: the third column of place_rotation. */
+                /* The weapon's frame: his yaw, the bone's rotation, the placement's (Rz Ry Rx), at the placement. */
                 const float *e = place->rot;
                 float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
-                float axis[3] = {cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx};
-                float base[3], tip[3], wb[3], wt[3], len = 127.0f;
+                float r[3][3] = {{cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx},
+                                 {sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx},
+                                 {-sy, cy * sx, cy * cx}};
+                float sw = sinf(p->yaw), cw = cosf(p->yaw), br[3][3], wr[3][3], o[3], wo[3];
                 const float *bp = pose.world_pos[place->bone];
-                const Mat3 *br = &pose.world_rot[place->bone];
-                int k;
-                for (k = 0; k < 3; ++k) {
-                    float t[3];
-                    int j;
-                    for (j = 0; j < 3; ++j) t[j] = place->pos[j] + axis[j] * len;
-                    base[k] = bp[k] + br->m[k][0] * place->pos[0] + br->m[k][1] * place->pos[1] + br->m[k][2] * place->pos[2];
-                    tip[k] = bp[k] + br->m[k][0] * t[0] + br->m[k][1] * t[1] + br->m[k][2] * t[2];
+                const Mat3 *bm = &pose.world_rot[place->bone];
+                int a, b, k;
+                for (a = 0; a < 3; ++a) for (b = 0; b < 3; ++b)
+                    br[a][b] = bm->m[a][0] * r[0][b] + bm->m[a][1] * r[1][b] + bm->m[a][2] * r[2][b];
+                for (b = 0; b < 3; ++b) {
+                    wr[0][b] = cw * br[0][b] + sw * br[2][b];
+                    wr[1][b] = br[1][b];
+                    wr[2][b] = -sw * br[0][b] + cw * br[2][b];
                 }
-                model_to_world(p, base, wb);
-                model_to_world(p, tip, wt);
-                /* The models' texture rectangles: M34 u 0.009-0.459, v 0.012-0.507; M30 / M31 the left half. */
-                if (ar) fx_trail_add_slot(slot, wb, wt, 0xffffffffu, NFX_ARM_AGNI, slot ? 10031 : 10030, 0.0f, 0.5f, 0.0f, 1.0f);
-                else fx_trail_add_slot(0, wb, wt, 0xffffffffu, NFX_DANTE, 10034, 0.009f, 0.459f, 0.012f, 0.507f);
+                for (k = 0; k < 3; ++k) o[k] = bp[k] + bm->m[k][0] * place->pos[0] + bm->m[k][1] * place->pos[1] + bm->m[k][2] * place->pos[2];
+                model_to_world(p, o, wo);
+                fx_trail_sample(slot, ar ? (slot ? 31 : 30) : 34, wr, wo, on);
             }
         }
     }

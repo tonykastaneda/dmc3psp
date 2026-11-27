@@ -299,10 +299,16 @@ The game's weapon trails are their own class (vtable 0x605e20, 0x6c0 bytes; `FUN
 Dante's: the shared weapon object (`FUN_002953c0`, fed by `FUN_002954b0` while player +0x24ed is set) makes type 0, kind 3,
 model **M34** of his pack (a 34-segment strip 127 cm long whose texture's left part is a soft white streak); Agni &
 Rudra's object (`FUN_00296ae0`) types 1 / 2, kind 2, **M30** (fire, on Agni, while +0x24ed & 0x80) and **M31** (wind, on
-Rudra, while & 0x40) of A&R's pack. The port (`fx.c` trails, `main.c`) draws a strip over the frame's path, 127 cm out
-from the weapon's grip, textured with those models' textures (`native_fx.py` exports them as 10034 / 10030 / 10031) over
-the rectangle the models map, added, fading over 0.14 s. Not ported: the models' own bending through the 11 matrices
-(their bone weights), and which other weapon classes make type 0 (the port draws it for Rebellion and Nevan, as before).
+Rudra, while & 0x40) of A&R's pack. The models are 33 bones in a row 2 cm apart, one bone a vertex. The
+build (`FUN_0030aa50`) makes 33 frames from the last 11 samples (one a frame, `FUN_0030a380`): 4 a segment, the
+rotation blended 1 / 0.75 / 0.5 / 0.25 between samples i and i + 1 (0x5abd60), the place a quadratic B-spline (0x5abd30:
+1 0 0, 0.5625 0.375 0.0625, 0.25 0.5 0.25, 0.0625 0.375 0.5625 over the midpoint i / i + 1, sample i + 1, the midpoint
+i + 1 / i + 2), the first the newest sample itself; scaled by +0x8c..0x94 (1). Alpha (`FUN_00309d30`): up by +9 a frame
+to +8 while fed, down by +9 to +10 from +0xc frames after the last feed (type 0: 128 / 16 / 0 / 3; 1 / 2: 128 / 24 / 8 /
+5). The port (`fx.c` mtrails, `main.c`) does the same: `native_fx.py` writes the models as `trail_runtime.h` (each
+vertex's offset from its bone's rest place) and their textures as 10034 / 10030 / 10031; drawn added. Not read: the
+blend +0x70 / +0x71 and +0x98 / +0x9c of kind 3, and which other weapon classes make type 0 (the port: Rebellion and
+Nevan).
 
 ## Dante's effects
 
