@@ -4829,6 +4829,13 @@ int main(int argc, char *argv[]) {
                     player.health -= drained;
                     if (player.health < 1.0f) player.health = combat_dante_can_die ? 0.0f : 1.0f;
                 }
+                if(combat_held(&combat)) {
+                    float held[3],yaw;
+                    if(arkham_boss_held_position(held,&yaw)) {
+                        player.x=held[0];player.y=held[1];player.z=held[2];player.yaw=yaw;
+                        player.on_ground=0;player.vy=0;
+                    }
+                }
                 if (combat_hold_broken(&combat, &player)) enemy_hold_broken();
                 end = enemy_hold_end(&hx, &hz);
                 if (end && combat_held(&combat)) {
