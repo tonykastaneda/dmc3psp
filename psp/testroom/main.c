@@ -5171,7 +5171,7 @@ int main(int argc, char *argv[]) {
                     float dx = from_x - player.x, dz = from_z - player.z, dl = sqrtf(dx * dx + dz * dz);
                     float at[3] = {chest[0] + (dl > 1.0f ? dx / dl * 50.0f : 0.0f), chest[1], chest[2] + (dl > 1.0f ? dz / dl * 50.0f : 0.0f)};
                     int gt = combat.guard_type, v = gt == 3 ? 0x265 : gt == 4 ? 0x264 : gt == 5 ? 0x267 : 6;
-                    if (gt < 0) v = -1;   /* inside a just block's 10 frames: the blow passes, nothing shows */
+                    if (gt < 0 || gt >= 10) v = -1;   /* a just block's 10 frames, or Release's counter: nothing shows */
                     if (gt == 5) arm_point(0, &player, BONE_HIPS, at);
                     if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
                         sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", gt, frames, (int)combat.guard_frames);

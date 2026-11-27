@@ -445,7 +445,7 @@ static void start_move(Combat *c, MoveId move, int action) {
     if (action) c->action = action;
     c->motion = motion_of[move];
     c->script = script_of[move];
-    if (action >= 190 && action <= 197) release_script(c, action);
+    if (action >= 190 && action <= 197) { release_script(c, action); c->release_frames = -1.0f; }   /* counts from the next update (phase 0 doesn't) */
     c->script_bank = c->script >= 0 ? atoi(script_data[c->script].key) : -1;
     c->place_state = 1;
     /* The PS2's blend into this script (FUN_002500d0 -> FUN_00255420, tools/gen_combat_data.py start_blends): most
@@ -1383,6 +1383,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     int action, hits;
     c->guard_frames += dt * MOTION_FPS;
     if (c->rg_invuln > 0.0f) c->rg_invuln -= dt * MOTION_FPS;
+    c->release_frames = c->release_frames < 0.0f ? 0.0f : c->release_frames + dt * MOTION_FPS;
 
     c->held_tri = input->melee_held;
     c->held_sq = input->gun_held;
@@ -1859,6 +1860,20 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
      * after a type-5 one) isn't reached; the gauge isn't ported. */
     c->guard_type = 6;
     if (c->rg_invuln > 0.0f) { c->guard_type = -1; return 0; }   /* +0x2af0: blows pass him by */
+    /* Release's counter (FUN_00441270, state 0x11 in action 190 / 194): a blow within config chunk 9's windows from
+     * its start (+0x3c90; level 2: +0x1ac 3, +0x1b8 7, +0x1c4 10 frames) is taken in: result 0 unharmed, 1 / 2
+     * through a lighter defence profile (FUN_004421f0 4 / 0; the profiles, gp-0x757c, aren't read: the blow's own
+     * damage) [estimate]; the attacker's recoil (its +0x20 call, codes 0-3) isn't ported. guard_type 10 + result. */
+    if ((c->action == 190 || c->action == 194) && c->release_frames <= 10.0f) {
+        int result = c->release_frames <= 3.0f ? 0 : c->release_frames <= 7.0f ? 1 : 2;
+        c->guard_type = 10 + result;
+        if (result) {
+            if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
+            player->health -= damage;
+            if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
+        }
+        return 0;
+    }
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) {
         static const unsigned char table[5][4] = {{0, 4, 3, 5}, {2, 2, 3, 5}, {2, 2, 3, 2}, {6, 6, 3, 5}, {6, 6, 3, 6}};
         int grade = c->guard_frames <= 5.0f ? 2 : c->guard_frames <= 10.0f ? 1 : 0;   /* columns: 0, 4, 3, 5 */
