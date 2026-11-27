@@ -221,7 +221,7 @@ def effect_records(names: bytes, body: bytes):
 
 def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
     """The Effect tracks' V and E clips and the bank they need (nfx's NFX_DEMO, psp/testroom/nfx.c). Returns
-    (bank offset, clips offset, clip count). V, E and G (emitter) clips; P (particle programs): not yet."""
+    (bank offset, clips offset, clip count). V, E, G (emitter) and P (particle program, pfx.c) clips."""
     import native_fx
     from prepare_skinned_model import decode_textures, indexed_texture
     names, body = work / "fx_names.bin", work / "fx_body.bin"
@@ -234,10 +234,10 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
             continue
         for c in track["clips"]:
             kind, number = str(c.get("Id", "")), c.get("No")
-            if kind not in ("V", "E", "G") or not isinstance(number, int) or (kind, number) not in recs:
+            if kind not in ("V", "E", "G", "P") or not isinstance(number, int) or (kind, number) not in recs:
                 continue
             # A G clip plays as a V one with its id flagged (native_fx.G_FLAG: G records share the V table).
-            clips.append((float(c.get("SetFrame", 0.0)), 1 if kind == "E" else 0,
+            clips.append((float(c.get("SetFrame", 0.0)), 1 if kind == "E" else 2 if kind == "P" else 0,
                           number | native_fx.G_FLAG if kind == "G" else number,
                           c.get("Pos") or [0.0, 0.0, 0.0], c.get("Rot") or [0.0, 0.0, 0.0],
                           (c.get("Sca") or [1.0, 1.0, 1.0])[0] if isinstance(c.get("Sca"), list) else 1.0,
@@ -256,7 +256,17 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
         vs, es = set(i for i in v_ids), set(e_ids)
     vs = sorted(v for v in vs if native_fx.has(recs, v))
     es = sorted(e for e in es if ("E", e) in recs)
+    # The P records the V / G reach and the P clips, with their sprites' sheets and atlases.
+    try:
+        ps, p_textures, atlases = native_fx.particles(recs, vs, sorted({n for _, k, n, *_ in clips if k == 2}))
+    except (KeyError, struct.error):
+        ps, p_textures, atlases = [], [], []
     textures, models = {}, {}
+    for t in p_textures:
+        try:
+            textures.setdefault(t, native_fx.picture(recs["T", t]))
+        except Exception:
+            pass
     for e in es:
         rec = recs["E", e]
         kind, tex = rec[1], struct.unpack_from("<H", rec, 4)[0]
@@ -278,11 +288,12 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
                 model_tex[m] = 10000 + m
             except Exception:
                 pass
-    # The bank: u32 v count, e count, texture count, model count, then their tables' offsets.
+    # The bank: u32 v count, e count, texture count, model count, then their tables' offsets; then 'PFX1', the p and
+    # a counts and their tables' offsets (nfx_set_demo_bank).
     bank_at = align(blob)
-    blob += bytes(32)
+    blob += bytes(64)
     rec_tables = []
-    for ids, kind in ((vs, "V"), (es, "E")):
+    for ids, kind in ((vs, "V"), (es, "E"), (ps, "P"), (atlases, "A")):
         table = align(blob)
         blob += bytes(8 * len(ids))
         for k, i in enumerate(ids):
@@ -315,13 +326,14 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
         struct.pack_into("<3I2Ii", blob, model_table + 24 * k, m, len(verts), len(idx), vat, iat, tex_index)
     struct.pack_into("<8I", blob, bank_at, len(vs), len(es), len(tex_ids), len(model_ids),
                      rec_tables[0], rec_tables[1], tex_table, model_table)
-    # Clips: {f32 start, u32 kind (0 V, 1 E), id, f32 pos[3], rot[3], scale, i32 actor, bone; 48 bytes}, by start.
+    struct.pack_into("<4s4I", blob, bank_at + 32, b"PFX1", len(ps), len(atlases), rec_tables[2], rec_tables[3])
+    # Clips: {f32 start, u32 kind (0 V, 1 E, 2 P), id, f32 pos[3], rot[3], scale, i32 actor, bone; 48 bytes}, by start.
     clips.sort(key=lambda c: c[0])
     clip_at = align(blob)
     for start, kind, number, pos, rot, scale, actor, bone in clips:
         blob += struct.pack("<f2I7f2i", start, kind, number, *[float(x) for x in pos[:3]],
                             *[float(x) for x in rot[:3]], float(scale), actor, bone)
-    print(f"  effects: {len(clips)} clips, {len(vs)} V, {len(es)} E, {len(tex_ids)} textures, {len(model_ids)} models")
+    print(f"  effects: {len(clips)} clips, {len(vs)} V, {len(es)} E, {len(ps)} P, {len(tex_ids)} textures, {len(model_ids)} models")
     return bank_at, clip_at, len(clips)
 
 
@@ -686,7 +698,8 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "testroom")
     parser.add_argument("--audio-only", action="store_true", help="only its sound (DAUD_nnn.BIN)")
     args = parser.parse_args()
-    work = ROOT / "build" / "demo" / str(args.demo)
+    # DMC3_DEMO_WORK: unpack into another folder (build/demo can be a shared cache)
+    work = Path(os.environ.get("DMC3_DEMO_WORK") or ROOT / "build" / "demo") / str(args.demo)
     demo_unpack.unpack(args.iso, args.demo, work)
     timeline = json.loads((work / "timeline.json").read_text(encoding="utf-8"))
     if args.audio_only:

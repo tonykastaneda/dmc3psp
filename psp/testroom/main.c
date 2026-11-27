@@ -61,6 +61,7 @@ int testroom_frame;
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
+#include "pfx.h"
 #include "hud.h"
 #include "credits_fight.h"
 #include "orbs.h"
@@ -2006,6 +2007,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
+static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1) or looping P (2) 2 m before Dante */
 static int cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
@@ -2091,6 +2093,11 @@ static void cmp_load(void) {
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
         else if (strncmp(line, "smlayout ", 9) == 0) sm_test_layout(atoi(line + 9));   /* tests: Secret Mission 10's crystals */
         else if (strncmp(line, "breakall ", 9) == 0) cmp_breakall_at = atoi(line + 9);   /* tests: every prop in the room breaks */
+        else if (strncmp(line, "nopfx ", 6) == 0) pfx_enable(!atoi(line + 6));   /* tests: no P effects, for comparisons */
+        else if (strncmp(line, "fxtest ", 7) == 0) {
+            if (cmp_fxtest_count < 16 && sscanf(line + 7, "%d %d %d %d", &cmp_fxtest[cmp_fxtest_count][0], &cmp_fxtest[cmp_fxtest_count][1],
+                                              &cmp_fxtest[cmp_fxtest_count][2], &cmp_fxtest[cmp_fxtest_count][3]) == 4) ++cmp_fxtest_count;
+        }
         else if (strncmp(line, "bosshits ", 9) == 0) {
             if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
         }
@@ -4313,6 +4320,14 @@ int main(int argc, char *argv[]) {
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
+            {
+                int k;
+                for (k = 0; k < cmp_fxtest_count; ++k) if (frames == cmp_fxtest[k][0]) {
+                    float at[3] = {player.x + sinf(player.yaw) * 200.0f, player.y, player.z + cosf(player.yaw) * 200.0f};
+                    if (cmp_fxtest[k][2]) nfx_spawn_p(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, cmp_fxtest[k][2] == 2);
+                    else nfx_spawn(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, 0);
+                }
+            }
                 if (cmp_breakall_at && frames == cmp_breakall_at) {
                     int k;
                     for (k = 0; k < ROOM_BREAKABLE_COUNT; ++k)
@@ -4980,7 +4995,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
                 if (report) {
-                    fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log());
+                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d\n%s", cmp_frames, enemy_poses_done(), pfx_started(), enemy_giga_log());
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
                     { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }

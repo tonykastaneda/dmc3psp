@@ -651,5 +651,5 @@ When a head's HP goes below 0:
   the heads no push shape, and lowered heads swallowed him.
 - **Walls.** Every body push is followed by Dante's swept wall pass, so a push can't put him inside the scenery.
 - **Effects.** The shells and moves play em025's own effects. See [NATIVE_FX.md](NATIVE_FX.md) for the ids,
-  call sites and the two stand-ins for unported particle programs.
+  call sites, the punch's P58 / P59 (pfx.c) and the breath mist's stand-in.
 

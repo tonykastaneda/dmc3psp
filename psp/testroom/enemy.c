@@ -4221,14 +4221,20 @@ static void ar_update(float f, float px, float py, float pz) {
         float hx = e->hand_pos[0], hz = e->hand_pos[2], sn = sinf(e->yaw), cs = cosf(e->yaw);
         float hand[3] = {e->pos[0] + hx * cs + hz * sn, e->pos[1] + e->hand_pos[1], e->pos[2] + hz * cs - hx * sn};
         if (e->action >= 52 && e->action <= 54 && e->step == 3 && e->frame >= 165.0f && e->vel[1] == 0.0f) {
-            /* The slam's burst where the blade meets the floor (FUN_003a8200 phase 0x1f): the game plays V785 (Agni's
-             * sword) / V786 (Rudra's) from em026 [18], whose E part (E0) shows nothing on its own in the port's effect
-             * runtime and the rest is P particles (not ported). A stand-in burst, hurting within 300 cm as attack record
-             * 12 [estimate]. */
+            /* The slam's burst where the blade meets the floor (FUN_003a8200 phase 0x1f, frame 165): V785 for Agni's
+             * sword, V786 for Rudra's, both with the pair's set 2, each on the floor under its sword (FUN_00201c70),
+             * unturned. Its sparks and dust are P24 / P44 (pfx.c). The swords are taken at his hand (the other mirrored
+             * for set 2) [estimate]; it hurts within 300 cm as attack record 12 [estimate]. */
             float at[3] = {e->pos[0] + sn * 150.0f, e->floor_y + 40.0f, e->pos[2] + cs * 150.0f};
             float ddx = px - at[0], ddz = pz - at[2];
+            float floor_hand[3] = {hand[0], e->floor_y, hand[2]};
+            float floor_other[3] = {e->pos[0] - hx * cs + hz * sn, e->floor_y, e->pos[2] + hz * cs + hx * sn};
             e->vel[1] = 1.0f;
-            fx_explosion(at); fx_dust(at);
+            if (b->set == 2) {
+                nfx_spawn(NFX_AGNI_RUDRA, 785, floor_hand, 0.0f, 0);
+                nfx_spawn(NFX_AGNI_RUDRA, 786, floor_other, 0.0f, 0);
+            } else nfx_spawn(NFX_AGNI_RUDRA, b->set ? 786 : 785, floor_hand, 0.0f, 0);
+            giga_note("ar_slam", b->set, floor_hand[1]);
             if (attacks_on && ddx * ddx + ddz * ddz < 300.0f * 300.0f && fabsf(py - e->floor_y) < 200.0f) {
                 land_attack(1);
                 landed_damage = ar_attacks[12].damage;
@@ -6351,8 +6357,8 @@ static void lady_hit_glue(HitKind kind) {
  * are the game's models (tools/prepare_jester_props.py): the bomb tumbles as it flies [estimate];
  * the hand plays [28]:0 on its own 18-bone rig at the native floor transform. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
  * and V0x3f8 looping on its frame (0054d610: at him, facing Dante turned 45 degrees, turning with it), V0x3fa as it
- * ends (0054dc70); the bomb V0x417 in flight (0054e710) and V0x41c as it goes off (0054edc0). Stand-ins for the parts
- * that are P particles (not ported): the bomb's burst is a mote, and so is the trap's warning ring. */
+ * ends (0054dc70); the bomb V0x417 in flight (0054e710: P486-P489 with it) and V0x41c as it goes off (0054edc0: P531
+ * and E1616); the P particles are pfx.c's. Stand-in: the trap's warning ring is motes. */
 #include "jester_props_runtime.h"
 static Motion jester_hand_motion;
 int jester_projectiles_init(void) {
@@ -6473,8 +6479,7 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         const JesterShot *p = &w->shots[i];
         if (!p->active) continue;
         if (p->kind == 0) {
-            if (p->phase == 2) fx_mote(p->pos, still, 420.0f, 520.0f, 0.06f, 0xff2080ffu);
-            else jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f, 0.0f);
+            if (p->phase != 2) jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f, 0.0f);
         } else {
             /* 0054d080/0054d0e0/0054d120: fade to 128 by 12/tick, hold
              * 51 ticks, fade out. Geometry remains animated at its native floor. */

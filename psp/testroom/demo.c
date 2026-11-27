@@ -347,7 +347,7 @@ static void effect_place(const DemoEffect *e, float out[3]) {
     }
 }
 
-/* The Effect tracks' V and E effects (nfx's NFX_DEMO bank), started as the clock passes their frame. */
+/* The Effect tracks' V, E, G and P effects (nfx's NFX_DEMO bank), started as the clock passes their frame. */
 static void demo_effects(float dt) {
     const DemoEffect *fx;
     unsigned int i;
@@ -359,7 +359,8 @@ static void demo_effects(float dt) {
         int h;
         if (!(fx[i].start > fx_clock && fx[i].start <= demo_clock)) continue;
         effect_place(&fx[i], at);
-        h = fx[i].kind ? nfx_spawn_e(NFX_DEMO, (int)fx[i].id, at, fx[i].rot[1], 0)
+        h = fx[i].kind == 2 ? nfx_spawn_p(NFX_DEMO, (int)fx[i].id, at, fx[i].rot[1], 0)   /* P: pfx.c */
+          : fx[i].kind ? nfx_spawn_e(NFX_DEMO, (int)fx[i].id, at, fx[i].rot[1], 0)
                        : nfx_spawn(NFX_DEMO, (int)fx[i].id, at, fx[i].rot[1], 0);
         if (!h) continue;
         if (fx[i].scale > 0.0f && fx[i].scale != 1.0f) nfx_scale(h, fx[i].scale);

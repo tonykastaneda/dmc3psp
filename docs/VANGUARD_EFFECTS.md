@@ -33,8 +33,7 @@ and atlas rectangles (`001ec360`). T25 is the original 256×256 sheet with A117 
 the original 128×128 light-burst sheet. Visual randomness uses the existing FX random stream and does
 not perturb AI decisions. Effects remain drawn independently of the hidden boss model.
 
-This is a **subset of the original effect runtime**, not complete visual parity. P312's VU particle
-emitter (`ee008-50p0`) and the E797 model children are preserved as raw assets but are not rendered yet.
+This is a **subset of the original effect runtime**, not complete visual parity. The E797 model children are preserved as raw assets but are not rendered yet (P312 plays, see below).
 The sprite renderer currently uses the first native corner color uniformly; complete native vertex
 gradients, particle programs and model effects remain unfinished. Those children are omitted rather
 than replaced with invented effects. Cloth simulation and sound remain separate unfinished work.
@@ -51,19 +50,16 @@ Two defects made the teleports "blink":
 - **Evicted sprites.** All effects shared one 56-sprite round-robin pool. Each E&I shot spawns three flash
   sprites and each hit spark four, so gunfire overwrote the teleport's 40-frame native sprites mid-effect.
   The pool is now 128, and a live native sprite is never the one recycled.
-- **No body presentation.** P312 (`ee008-50p0`) is a VU particle program. The 50 points come from em008's own
-  mesh, and the record gives a 40-frame life and colour 80 a0 c0. With nothing in its place the model simply
-  popped off at the hide call and on at the reveal.
+- **No body presentation.** With nothing for P312, the model simply popped off at the hide call and on at
+  the reveal.
 
-The port now does the following. It is presentation only and does not change visibility, hit immunity or timing:
+P312 (`ee008-50p0`) turned out to be an ordinary particle program, a CPtclSprt00 (docs/NATIVE_FX.md, "P effects"):
+12 camera-facing sprites of T25 cut by A117, 50 frames, colour keys from 80 a0 c0, the GS's 0x41 blend. It plays
+through pfx.c from nfx's bank 6 (`NFX_VANGUARD`, P312 only): V702 at its frame 1 and V499 at 15, scaled 0.7 (the V's
+0.7, 0.6, 0.7 taken uniform), V516 at 45, 60 cm up, scaled 0.9 (`vanguard.c` teleport_fx).
 
-- **Departure.** The model fades out over V702's 30 visible frames. Points on his posed skeleton drift off the
-  body, starting from V702's P312 delay (frame 1).
-- **Arrival.** Points gather into the body from V499's P312 delay (frame 15), or V516's (frame 45). The model
-  fades in over 12 frames from the native reveal.
-
-Visual randomness uses `fx_random_u32`, not the AI's stream. This is a stand-in for P312 from its recorded
-numbers, not a port of the VU program.
+Stand-in, presentation only (visibility, hit immunity and timing are unchanged): the model fades out over V702's
+30 visible frames and in over 12 from the native reveal; the game only hides and shows it.
 
 ## Solo encounter
 

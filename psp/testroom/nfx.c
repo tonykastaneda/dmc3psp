@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "native_fx_runtime.h"
+#include "pfx.h"
 
 /* Record layouts, as em008's subset in vanguard_fx.inc reads them (00206f90, 001f12e0, 001f8ce0):
  *   V: u16 child count; children at 4 + 44 j: type (0 P, 1 E, 2 G, 3 V), u16 id at +2, i16 delay at +4,
@@ -63,14 +64,14 @@ static unsigned int seed = 0x2545f491u;
 /* A cutscene's own effects (tools/prepare_demo.py bake_effects): its records, textures and models point into the
  * demo's data, which outlives them (nfx_set_demo_bank(0, 0) before it goes). */
 static NfxBank demo_bank;
-static NfxRecord *demo_v, *demo_e;
+static NfxRecord *demo_v, *demo_e, *demo_p, *demo_a;
 static NfxTexture *demo_textures;
 static NfxModel *demo_models;
 void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
     const unsigned int *h;
     unsigned int i;
-    free(demo_v); free(demo_e); free(demo_textures); free(demo_models);
-    demo_v = demo_e = 0; demo_textures = 0; demo_models = 0;
+    free(demo_v); free(demo_e); free(demo_textures); free(demo_models); free(demo_p); free(demo_a);
+    demo_v = demo_e = demo_p = demo_a = 0; demo_textures = 0; demo_models = 0;
     memset(&demo_bank, 0, sizeof demo_bank);
     if (!blob || !at) return;
     h = (const unsigned int *)(blob + at);   /* v, e, texture, model counts; their tables */
@@ -103,10 +104,26 @@ void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
     demo_bank.e = demo_e; demo_bank.e_count = (int)h[1];
     demo_bank.textures = demo_textures; demo_bank.texture_count = (int)h[2];
     demo_bank.models = demo_models; demo_bank.model_count = (int)h[3];
+    /* Then, after 'PFX1': the P and A records' counts and tables (pfx.c), as V / E */
+    if (h[8] == 0x31584650u) {
+        demo_p = calloc(h[9] + 1, sizeof *demo_p);
+        demo_a = calloc(h[10] + 1, sizeof *demo_a);
+        if (!demo_p || !demo_a) return;
+        for (i = 0; i < h[9]; ++i) {
+            const unsigned int *r = (const unsigned int *)(blob + h[11]) + 2 * i;
+            demo_p[i].id = (unsigned short)r[0]; demo_p[i].data = blob + r[1];
+        }
+        for (i = 0; i < h[10]; ++i) {
+            const unsigned int *r = (const unsigned int *)(blob + h[12]) + 2 * i;
+            demo_a[i].id = (unsigned short)r[0]; demo_a[i].data = blob + r[1];
+        }
+        demo_bank.p = demo_p; demo_bank.p_count = (int)h[9];
+        demo_bank.a = demo_a; demo_bank.a_count = (int)h[10];
+    }
 }
 
 static const NfxBank *bank_of(int b) {
-    return b == NFX_DEMO ? &demo_bank : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
+    return b == NFX_DEMO ? &demo_bank : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
          : b == NFX_CERBERUS ? &nfx1 : &nfx0;
 }
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
@@ -122,7 +139,7 @@ static const unsigned char *find(const NfxRecord *r, int n, int id) {
     return 0;
 }
 
-void nfx_reset(void) { memset(seqs, 0, sizeof(seqs)); memset(els, 0, sizeof(els)); }
+void nfx_reset(void) { memset(seqs, 0, sizeof(seqs)); memset(els, 0, sizeof(els)); pfx_reset(); }
 
 static int new_seq(int bank, const unsigned char *v, int parent) {
     int i;
@@ -198,19 +215,21 @@ static int new_node(int bank, int id, int parent) {
     }
     return i;
 }
-/* A one-child timeline of our own: the V record format with a single E child at delay 0. */
+/* A one-child timeline of our own: the V record format with a single E (kind 1) or P (kind 0) child at delay 0. */
 static unsigned char single[MAX_SEQ][48];
-static int new_single(int bank, int e_id, int parent) {
+const unsigned char *nfx_record(int bank, int kind, int id);
+static int new_single_kind(int bank, int kind, int e_id, int parent) {
     const NfxBank *b = bank_of(bank);
     int i;
-    if (!find(b->e, b->e_count, e_id)) return -1;
+    if (kind ? !find(b->e, b->e_count, e_id) : !nfx_record(bank, 'P', e_id)) return -1;
     for (i = 0; i < MAX_SEQ && seqs[i].active; ++i) {}
     if (i >= MAX_SEQ) return -1;
     memset(single[i], 0, sizeof(single[i]));
-    single[i][0] = 1; single[i][4] = 1; single[i][6] = (unsigned char)e_id; single[i][7] = (unsigned char)(e_id >> 8);
+    single[i][0] = 1; single[i][4] = (unsigned char)kind; single[i][6] = (unsigned char)e_id; single[i][7] = (unsigned char)(e_id >> 8);
     { float one = 1.0f; int k; for (k = 0; k < 3; ++k) memcpy(single[i] + 4 + 32 + k * 4, &one, 4); }
     return new_seq(bank, single[i], parent);
 }
+static int new_single(int bank, int e_id, int parent) { return new_single_kind(bank, 1, e_id, parent); }
 static int root_at(int i, const float pos[3], float yaw, int loop) {
     if (i < 0) return 0;
     memcpy(seqs[i].pos, pos, sizeof(seqs[i].pos));
@@ -232,12 +251,76 @@ void nfx_tint(int h, unsigned int r, unsigned int g, unsigned int b) {
     Seq *s = from_handle(h);
     if (s) { s->tinted = 1; s->tint[0] = (unsigned char)r; s->tint[1] = (unsigned char)g; s->tint[2] = (unsigned char)b; }
 }
-void nfx_kill(int h) { Seq *s = from_handle(h); if (s) s->killed = 1; }
+void nfx_kill(int h) { Seq *s = from_handle(h); if (s) { s->killed = 1; pfx_kill_root(h); } }
 int nfx_alive(int h) { return from_handle(h) != 0; }
 int nfx_live_elements(void) { int i, n = 0; for (i = 0; i < MAX_EL; ++i) n += els[i].active; return n; }
 
 static void g_tick(int i, float frames);
 static int owner_emitting(int seq);
+static void frame_local(Frame *f, const float tr[3], const float rot[3], const float sc[3]);
+static void frame_mul(Frame *out, const Frame *a, const Frame *b);
+static void release(int seq);
+static void seq_frame(const Seq *s, Frame *out);
+
+/* ---- P children (pfx.c) ---------------------------------------------------- */
+const unsigned char *nfx_record(int bank, int kind, int id) {
+    const NfxBank *b = bank_of(bank);
+    if (kind == 'P') return b->p ? find(b->p, b->p_count, id) : 0;
+    if (kind == 'A') return b->a ? find(b->a, b->a_count, id) : 0;
+    return 0;
+}
+static const NfxTexture *texture(const NfxBank *b, int id);
+static void bind(const NfxTexture *t);
+int nfx_texture_size(int bank, int id, int *width, int *height) {
+    const NfxTexture *t = texture(bank_of(bank), id);
+    if (!t) return 0;
+    *width = t->width; *height = t->height;
+    return 1;
+}
+int nfx_bind_texture(int bank, int id) {
+    const NfxTexture *t = texture(bank_of(bank), id);
+    if (t) bind(t);
+    return t != 0;
+}
+int nfx_frame(int handle, float m[3][3], float p[3]) {
+    Seq *s = from_handle(handle);
+    Frame f;
+    if (!s || root_of(s)->killed) return 0;
+    seq_frame(s, &f);
+    memcpy(m, f.m, sizeof(f.m)); memcpy(p, f.p, sizeof(f.p));
+    return 1;
+}
+/* A P child of seq i: placed by its V child line (or, from a G, by `at`, about the G when on it, else the world). */
+static void start_p(int bank, int id, int i, const unsigned char *child, const Frame *at) {
+    PfxFrame where;
+    const Seq *root;
+    int owner = 0;
+    if (child) {
+        float tr[3], rot[3], sc[3];
+        Frame f;
+        place(tr, rot, sc, child);
+        frame_local(&f, tr, rot, sc);
+        memcpy(&where, &f, sizeof(where));
+        owner = handle_of(i);
+    } else {
+        memcpy(&where, at, sizeof(where));
+        if (seqs[i].g[0]) owner = handle_of(i);
+    }
+    /* +0x98, starting again: its timeline's loop (a G's children play once, as nfx's) */
+    root = root_of(&seqs[i]);
+    if (pfx_spawn(bank, nfx_record(bank, 'P', id), &where, owner, handle_of((int)(root - seqs)), seqs[i].g ? 0 : seqs[i].loop)
+        && owner)
+        ++seqs[i].refs;   /* the timeline lasts, and the particles follow it, while they play (the game's +0x90) */
+}
+void nfx_unref(int handle) {
+    int i = (handle & 0xff) - 1;
+    if (handle <= 0 || i < 0 || i >= MAX_SEQ || !seqs[i].active || seqs[i].gen != (unsigned short)(handle >> 8)) return;
+    release(i);
+}
+static int root_at(int i, const float pos[3], float yaw, int loop);
+int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop) {
+    return root_at(new_single_kind(bank, 0, p_id, -1), pos, yaw, loop);
+}
 
 static void release(int seq) {
     Seq *s = &seqs[seq];
@@ -246,6 +329,7 @@ static void release(int seq) {
 
 void nfx_update(float frames) {
     int i, j;
+    pfx_update(frames);
     for (i = 0; i < MAX_SEQ; ++i) {
         Seq *s = &seqs[i];
         int count;
@@ -264,6 +348,8 @@ void nfx_update(float frames) {
             } else if (child[0] == 3 || child[0] == 2) {
                 int n = new_node(s->bank, (int)rd16(child + 2) | (child[0] == 2 ? G_FLAG : 0), i);
                 if (n >= 0) place(seqs[n].tr, seqs[n].rot, seqs[n].sc, child);
+            } else if (child[0] == 0) {
+                start_p(s->bank, (int)rd16(child + 2), i, child, 0);
             }
         }
     }
@@ -361,7 +447,6 @@ static void g_emit(int i, float scale) {
     float yaw = rdf(g + 0x28), rot[3], jit[3];
     static const float zero[3] = {0.0f, 0.0f, 0.0f}, one[3] = {1.0f, 1.0f, 1.0f};
     Frame loc;
-    if (kind == 0) return;   /* P: particle programs aren't ported */
     if (spread) {
         yaw += (float)(irand() % (unsigned int)spread) - (float)(spread >> 1);
         if (yaw > 180.0f) yaw -= 360.0f;
@@ -379,6 +464,17 @@ static void g_emit(int i, float scale) {
         loc.p[k] = loc.m[k][0] * s->g_path[0] + loc.m[k][1] * s->g_path[1] + loc.m[k][2] * s->g_path[2];
         loc.m[k][0] *= scale; loc.m[k][1] *= scale; loc.m[k][2] *= scale;
         loc.p[k] += loc.m[k][0] * jit[0] + loc.m[k][1] * jit[1] + loc.m[k][2] * jit[2];
+    }
+    if (kind == 0) {
+        /* P (pfx.c): on the emitter (1 / 2), or in the world where the emitter is now (0) */
+        if (g[0]) start_p(s->bank, id, i, 0, &loc);
+        else {
+            Frame here, w;
+            seq_frame(s, &here);
+            frame_mul(&w, &here, &loc);
+            start_p(s->bank, id, i, 0, &w);
+        }
+        return;
     }
     n = kind == 1 ? new_single(s->bank, id, g[0] ? i : -1)
                   : new_node(s->bank, id | (kind == 2 ? G_FLAG : 0), g[0] ? i : -1);
@@ -624,6 +720,7 @@ void nfx_draw(const float eye[3]) {
             }
         }
     }
+    pfx_draw(eye);   /* the P particles, after the elements */
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGuColor(0xffffffffu);
