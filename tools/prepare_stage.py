@@ -17,7 +17,7 @@ primitives that leave the GE guard band):
 Blob layout (little-endian, every section 16-byte aligned):
   header  'STG1', version, counts, spawn, bounds, section offsets
   textures: per texture {w, h, levels, alpha flag, level offsets[8]} + RGBA8888 levels (GE swizzled)
-  batches: {texture, first vertex, vertex count, flags (1 = alpha test, 2 = decal, 4 = alpha blend),
+  batches: {texture, first vertex, vertex count, flags (1 = alpha test, 2 = decal, 4 = alpha blend, 8 = sky),
             first chunk, chunk count, 2 pad}
   chunks (header 'reserved' = offset): {first vertex, vertex count, float min[3], max[3]}; a
             batch's triangles grouped by CHUNK x CHUNK XZ cell for culling
@@ -88,6 +88,8 @@ def decode_textures(texture_data: bytes):
     return textures
 
 
+# A STAY set reaching above this is a sky dome (flag 8: drawn first, past the stage's 16000 far plane).
+SKY_HEIGHT = 12000.0
 # PS2 doubles vertex colour; the real street then comes out darker than this (material, lights).
 STAGE_BRIGHTNESS = 1.25
 
@@ -626,7 +628,10 @@ def main() -> None:
         for texture, subdivided in by_texture.items():
             texture = min(texture, len(textures) - 1)
             kind_flag = 2 if texture in blend_textures else (1 if texture in alpha_textures else 0)
-            batches.append([texture, kind_flag, subdivided, 0, gimmicks.LIFT_TAG if kind == "LIFT" else numbers.get(s["index"], 0)])
+            # A STAY set reaching far overhead is the room's sky (st012's model 0, "light scr", up to y 45052):
+            # flagged so the runtime draws it first, past the stage's far plane.
+            sky = s["kind"] == "STAY" and max(v[1] for t in subdivided for v in t) > SKY_HEIGHT
+            batches.append([texture, kind_flag, subdivided, 0, gimmicks.LIFT_TAG if kind == "LIFT" else numbers.get(s["index"], 0), sky])
             prop_batches += 1
 
     # Room 216, the Temperance Wagon's ride: its TRUCK set (CStageSetTruck, FUN_004865e0 / 004867b0) turns its parts
@@ -666,7 +671,7 @@ def main() -> None:
         struct.pack_into("<4I8I", blob, tex_table + 48 * i, w, h, n, alpha, *(offsets + [0] * (7 - len(offsets))), palette_at)
     # Opaque, then alpha-tested, then decals (biased), then translucent (blended,
     # no depth writes) -- sub-mesh order kept inside each group.
-    order = sorted(range(len(batches)), key=lambda i: (batches[i][1] == 2, batches[i][3], batches[i][1], i))
+    order = sorted(range(len(batches)), key=lambda i: (not (len(batches[i]) > 5 and batches[i][5]), batches[i][1] == 2, batches[i][3], batches[i][1], i))
     batch_table = align(blob)
     blob += bytes(32 * len(batches))
     vertex_offset = align(blob)
@@ -695,7 +700,7 @@ def main() -> None:
                            max(v[0] for v in pts), max(v[1] for v in pts), max(v[2] for v in pts)))
             first += len(g) * 3
         struct.pack_into("<7I", blob, batch_table + 32 * slot, texture, batch_first, first - batch_first,
-                         (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0),
+                         (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0) | (8 if len(batches[bi]) > 5 and batches[bi][5] else 0),
                          chunk_first, len(chunks) - chunk_first, group)
     chunk_table = align(blob)
     for c in chunks:
