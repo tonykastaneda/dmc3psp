@@ -273,6 +273,7 @@ const unsigned char *nfx_record(int bank, int kind, int id) {
 }
 static const NfxTexture *texture(const NfxBank *b, int id);
 static void bind(const NfxTexture *t);
+static const NfxTexture *bound;
 int nfx_texture_size(int bank, int id, int *width, int *height) {
     const NfxTexture *t = texture(bank_of(bank), id);
     if (!t) return 0;
@@ -281,7 +282,7 @@ int nfx_texture_size(int bank, int id, int *width, int *height) {
 }
 int nfx_bind_texture(int bank, int id) {
     const NfxTexture *t = texture(bank_of(bank), id);
-    if (t) bind(t);
+    if (t) { bound = 0; bind(t); }   /* its caller (pfx.c, fx.c's trails) may have bound others since */
     return t != 0;
 }
 int nfx_frame(int handle, float m[3][3], float p[3]) {
@@ -583,7 +584,6 @@ static const NfxTexture *texture(const NfxBank *b, int id) {
     for (i = 0; i < b->texture_count; ++i) if (b->textures[i].id == id) return &b->textures[i];
     return 0;
 }
-static const NfxTexture *bound;
 static void bind(const NfxTexture *t) {
     if (t == bound) return;
     bound = t;

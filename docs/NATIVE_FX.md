@@ -286,6 +286,24 @@ missile shots, the muzzle flash, the missiles' smoke trails and bursts and the b
 colour. The one difference found, the demons' fire (G79 → E275) going out after a second where the PS2's burns on, was
 the no-end generator rule above, now fixed.
 
+## Blade trails
+
+The game's weapon trails are their own class (vtable 0x605e20, 0x6c0 bytes; `FUN_00309030(type, frame)` makes one,
+`FUN_0030bce0` feeds it a frame while the attack window is open, `FUN_00309d30` updates it, `FUN_0030a530` /
+`FUN_0030ad70` draw). Its type indexes a table of 0xb0-byte entries at 0x5ad4b0 (0x5ace80 under a flag at 0x1d0cd1f):
+- +0 kind: 0 / 1 a strip of points (two a sample: entry +0x30 and +0x40 in the frame, a 0x4340-byte buffer), 2 / 3 a
+  model (entry +0x74, from the effect model bank) bent through the frame's last 11 matrices (a 0x2c0 ring); 3 also takes
+  the blend +0x70 / +0x71 and +0x98 / +0x9c.
+- +4 the sampling interval, +8 / +9 / +10 alpha up to, step and floor, +0xc frames without a sample before it fades,
+  +0x10 colour.
+Dante's: the shared weapon object (`FUN_002953c0`, fed by `FUN_002954b0` while player +0x24ed is set) makes type 0, kind 3,
+model **M34** of his pack (a 34-segment strip 127 cm long whose texture's left part is a soft white streak); Agni &
+Rudra's object (`FUN_00296ae0`) types 1 / 2, kind 2, **M30** (fire, on Agni, while +0x24ed & 0x80) and **M31** (wind, on
+Rudra, while & 0x40) of A&R's pack. The port (`fx.c` trails, `main.c`) draws a strip over the frame's path, 127 cm out
+from the weapon's grip, textured with those models' textures (`native_fx.py` exports them as 10034 / 10030 / 10031) over
+the rectangle the models map, added, fading over 0.14 s. Not ported: the models' own bending through the 11 matrices
+(their bone weights), and which other weapon classes make type 0 (the port draws it for Rebellion and Nevan, as before).
+
 ## Dante's effects
 
 | Effect | Where | Port |

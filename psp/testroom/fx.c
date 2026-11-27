@@ -6,6 +6,7 @@
 #include <math.h>
 #include <string.h>
 
+#include "nfx.h"
 #include "fx_runtime.h"
 #include "vanguard_fx_runtime.h"
 
@@ -33,10 +34,14 @@ static Sprite sprites[MAX_SPRITES];
 static int next_sprite;
 static unsigned int seed = 12345u;
 
-static struct { float base[3], tip[3], age; } trail[TRAIL_POINTS];
-static int trail_count;
-static unsigned int trail_color;
-static int trail_fresh;
+/* Two sweeps (A&R's two blades). Textured as the game's weapon trails (docs/NATIVE_FX.md "Blade trails"): an nfx
+ * texture and the rectangle of it its trail model maps, u along the sweep (newest first), v hilt to tip. */
+static struct {
+    struct { float base[3], tip[3], age; } p[TRAIL_POINTS];
+    int count, fresh, bank, tex;
+    unsigned int color;
+    float u0, u1, v0, v1;
+} trails[2];
 static void vg_fx_reset(void);
 
 static float fx_rand(void) {   /* 0..1 */
@@ -52,7 +57,7 @@ unsigned int fx_random_u32(void) {
 
 void fx_reset(void) {
     memset(sprites, 0, sizeof(sprites));
-    trail_count = 0;
+    trails[0].count = trails[1].count = 0;
     vg_fx_reset();
 }
 
@@ -94,9 +99,11 @@ void fx_update(float dt) {
         for (k = 0; k < 3; ++k) s->pos[k] += s->vel[k] * dt;
         s->angle += s->spin * dt;
     }
-    for (i = 0; i < trail_count; ++i) trail[i].age += dt;
-    while (trail_count > 0 && trail[trail_count - 1].age > TRAIL_SECONDS) --trail_count;
-    trail_fresh = 0;
+    for (k = 0; k < 2; ++k) {
+        for (i = 0; i < trails[k].count; ++i) trails[k].p[i].age += dt;
+        while (trails[k].count > 0 && trails[k].p[trails[k].count - 1].age > TRAIL_SECONDS) --trails[k].count;
+        trails[k].fresh = 0;
+    }
 }
 
 /* Matched to the real game frame by frame: a big white and orange spiked flash for two
@@ -245,16 +252,23 @@ void fx_guard_flash(const float at[3]) {
     spawn(FX_SHEET_FLARE, 2, 1, at, 70.0f, 40.0f, 0.16f, 0xffffffffu);
 }
 
-void fx_trail_add(const float base[3], const float tip[3], unsigned int color) {
+void fx_trail_add_slot(int slot, const float base[3], const float tip[3], unsigned int color, int bank, int tex,
+                       float u0, float u1, float v0, float v1) {
     int i;
-    if (trail_fresh) return;
-    trail_fresh = 1;
-    trail_color = color;
-    if (trail_count < TRAIL_POINTS) ++trail_count;
-    for (i = trail_count - 1; i > 0; --i) trail[i] = trail[i - 1];
-    memcpy(trail[0].base, base, sizeof(trail[0].base));
-    memcpy(trail[0].tip, tip, sizeof(trail[0].tip));
-    trail[0].age = 0.0f;
+    if (slot < 0 || slot > 1 || trails[slot].fresh) return;
+    trails[slot].fresh = 1;
+    trails[slot].color = color;
+    trails[slot].bank = bank; trails[slot].tex = tex;
+    trails[slot].u0 = u0; trails[slot].u1 = u1; trails[slot].v0 = v0; trails[slot].v1 = v1;
+    if (trails[slot].count < TRAIL_POINTS) ++trails[slot].count;
+    for (i = trails[slot].count - 1; i > 0; --i) trails[slot].p[i] = trails[slot].p[i - 1];
+    memcpy(trails[slot].p[0].base, base, sizeof(trails[slot].p[0].base));
+    memcpy(trails[slot].p[0].tip, tip, sizeof(trails[slot].p[0].tip));
+    trails[slot].p[0].age = 0.0f;
+}
+
+void fx_trail_add(const float base[3], const float tip[3], unsigned int color) {
+    fx_trail_add_slot(0, base, tip, color, -1, -1, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 static unsigned int scale_alpha(unsigned int color, float k) {
@@ -366,7 +380,7 @@ static void sprite_corners(const Sprite *s, const float eye[3], float c[4][3]) {
 }
 
 void fx_draw(const float eye[3]) {
-    int sheet, i;
+    int sheet, i, k;
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGuDepthMask(GU_TRUE);    /* test against the world, don't write */
@@ -416,19 +430,36 @@ void fx_draw(const float eye[3]) {
         }
     }
 
-    /* The blade's sweep: a pale fan, solid at the tip, gone at the hilt and with age. */
-    if (trail_count >= 2) {
-        FxPlainVertex *v = sceGuGetMemory(sizeof(FxPlainVertex) * 2 * trail_count);
-        int n = 0;
-        for (i = 0; i < trail_count; ++i) {
-            float k = 1.0f - trail[i].age / TRAIL_SECONDS;
-            if (k < 0.0f) k = 0.0f;
-            v[n++] = (FxPlainVertex){scale_alpha(trail_color, k * 0.15f), trail[i].base[0], trail[i].base[1], trail[i].base[2]};
-            v[n++] = (FxPlainVertex){scale_alpha(trail_color, k), trail[i].tip[0], trail[i].tip[1], trail[i].tip[2]};
+    /* The blade's sweep. Textured (the game's trail model's texture, added): u runs along it from the newest sample,
+     * fading with age. Else a pale fan, solid at the tip, gone at the hilt and with age. */
+    for (k = 0; k < 2; ++k) {
+        int count = trails[k].count;
+        if (count < 2) continue;
+        if (trails[k].tex >= 0 && nfx_bind_texture(trails[k].bank, trails[k].tex)) {
+            FxVertex *v = sceGuGetMemory(sizeof(FxVertex) * 2 * count);
+            int n = 0;
+            sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff);
+            for (i = 0; i < count; ++i) {
+                float a = 1.0f - trails[k].p[i].age / TRAIL_SECONDS, t = (float)i / (float)(TRAIL_POINTS - 1);
+                float u = trails[k].u0 + (trails[k].u1 - trails[k].u0) * t;
+                unsigned int c = scale_alpha(trails[k].color, a < 0.0f ? 0.0f : a);
+                v[n++] = (FxVertex){u, trails[k].v0, c, trails[k].p[i].base[0], trails[k].p[i].base[1], trails[k].p[i].base[2]};
+                v[n++] = (FxVertex){u, trails[k].v1, c, trails[k].p[i].tip[0], trails[k].p[i].tip[1], trails[k].p[i].tip[2]};
+            }
+            sceGumDrawArray(GU_TRIANGLE_STRIP, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
+        } else {
+            FxPlainVertex *v = sceGuGetMemory(sizeof(FxPlainVertex) * 2 * count);
+            int n = 0;
+            for (i = 0; i < count; ++i) {
+                float a = 1.0f - trails[k].p[i].age / TRAIL_SECONDS;
+                if (a < 0.0f) a = 0.0f;
+                v[n++] = (FxPlainVertex){scale_alpha(trails[k].color, a * 0.15f), trails[k].p[i].base[0], trails[k].p[i].base[1], trails[k].p[i].base[2]};
+                v[n++] = (FxPlainVertex){scale_alpha(trails[k].color, a), trails[k].p[i].tip[0], trails[k].p[i].tip[1], trails[k].p[i].tip[2]};
+            }
+            sceGuDisable(GU_TEXTURE_2D);
+            sceGumDrawArray(GU_TRIANGLE_STRIP, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
+            sceGuEnable(GU_TEXTURE_2D);
         }
-        sceGuDisable(GU_TEXTURE_2D);
-        sceGumDrawArray(GU_TRIANGLE_STRIP, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
-        sceGuEnable(GU_TEXTURE_2D);
     }
 
     sceGuDisable(GU_BLEND);

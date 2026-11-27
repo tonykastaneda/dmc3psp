@@ -48,6 +48,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Dante's yaw only (not the bone's frame); A&R's on the weapon placement's origin, not the weapon object's frames;
   Nevan's V0x2c1 / V0x38e start on any 6:14 / 6:40 / 6:9 / 6:10 / 6:33 as the window bit turns on, not only in
   action 81 / 82's phases. Nevan's V0x38e dome reads whiter and more solid than the PS2's (analysis/ref/pfx/nevan_ab.png).
+- **Blade trails** (`fx.c` trails): a strip over the weapon frame's path textured with the game's trail models'
+  textures (M34, M30 / M31) by their UV rectangle, not the models bent through 11 frames; Rebellion and Nevan get type
+  0 [whether Nevan's object makes it isn't checked]. NATIVE_FX.md "Blade trails".
 - **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
   PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and

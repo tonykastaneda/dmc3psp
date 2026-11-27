@@ -2143,32 +2143,42 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
         memcpy(last_chest, chest, sizeof(chest));
     }
 
-    /* The blade's streak while the script says the attack is live. */
-    if (c->active && !combat_move_is_gun(c->move) && p->melee_weapon <= 3 && p->melee_weapon != 1) {
-        static const float length[4] = {137.0f, 0.0f, 92.0f, 169.0f};
-        const WeaponPlace *place = combat_weapon_place(c, p, p->melee_weapon, 0);
-        if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
-            /* The blade runs along the model's +Z: the third column of place_rotation. */
-            const float *e = place->rot;
-            float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
-            float axis[3] = {cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx};
-            float base[3], tip[3], wb[3], wt[3], len = length[p->melee_weapon];
-            const float *bp = pose.world_pos[place->bone];
-            const Mat3 *br = &pose.world_rot[place->bone];
-            int k;
-            for (k = 0; k < 3; ++k) {
-                float l[3], t[3];
-                int j;
-                for (j = 0; j < 3; ++j) {
-                    l[j] = place->pos[j] + axis[j] * len * 0.3f;
-                    t[j] = place->pos[j] + axis[j] * len;
+    /* The blade's sweep (docs/NATIVE_FX.md "Blade trails"): the game's weapon trail (FUN_00309030), fed while the attack
+     * window is open (FUN_0030bce0). The shared weapon object (FUN_002953c0 / 002954b0) has type 0: model M34 (Dante's
+     * pack), 127 cm out from the weapon's frame, while +0x24ed is set; Agni & Rudra's (FUN_00296ae0) types 1 / 2: M30 on
+     * Agni while bit 0x80, M31 on Rudra while bit 0x40 (A&R's pack). Drawn as a textured strip over the frames' path
+     * [the PS2 bends the model through its last 11 frames]. */
+    {
+        int slot;
+        for (slot = 0; slot < 2; ++slot) {
+            int ar = p->melee_weapon == 2, on;
+            const WeaponPlace *place;
+            if (combat_move_is_gun(c->move) || p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
+            on = ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40));
+            if (!on) continue;
+            place = combat_weapon_place(c, p, p->melee_weapon, slot);
+            if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
+                /* The blade runs along the model's +Z: the third column of place_rotation. */
+                const float *e = place->rot;
+                float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
+                float axis[3] = {cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx};
+                float base[3], tip[3], wb[3], wt[3], len = 127.0f;
+                const float *bp = pose.world_pos[place->bone];
+                const Mat3 *br = &pose.world_rot[place->bone];
+                int k;
+                for (k = 0; k < 3; ++k) {
+                    float t[3];
+                    int j;
+                    for (j = 0; j < 3; ++j) t[j] = place->pos[j] + axis[j] * len;
+                    base[k] = bp[k] + br->m[k][0] * place->pos[0] + br->m[k][1] * place->pos[1] + br->m[k][2] * place->pos[2];
+                    tip[k] = bp[k] + br->m[k][0] * t[0] + br->m[k][1] * t[1] + br->m[k][2] * t[2];
                 }
-                base[k] = bp[k] + br->m[k][0] * l[0] + br->m[k][1] * l[1] + br->m[k][2] * l[2];
-                tip[k] = bp[k] + br->m[k][0] * t[0] + br->m[k][1] * t[1] + br->m[k][2] * t[2];
+                model_to_world(p, base, wb);
+                model_to_world(p, tip, wt);
+                /* The models' texture rectangles: M34 u 0.009-0.459, v 0.012-0.507; M30 / M31 the left half. */
+                if (ar) fx_trail_add_slot(slot, wb, wt, 0xffffffffu, NFX_ARM_AGNI, slot ? 10031 : 10030, 0.0f, 0.5f, 0.0f, 1.0f);
+                else fx_trail_add_slot(0, wb, wt, 0xffffffffu, NFX_DANTE, 10034, 0.009f, 0.459f, 0.012f, 0.507f);
             }
-            model_to_world(p, base, wb);
-            model_to_world(p, tip, wt);
-            fx_trail_add(wb, wt, 0x38f0f0ffu);
         }
     }
 }
