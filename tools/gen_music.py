@@ -37,7 +37,7 @@ def room_settings(iso, elf):
     """[(mission, room, sdata0, cmd0, sdata1, cmd1)]: each ROOM section's first bgm op."""
     afs = AfsArchive(iso, "GDATA.AFS")
     rows = []
-    for mission in range(1, 21):
+    for mission in range(1, 22):  # EventTbl21 supplies Bloody Palace's arena and boss music.
         e = afs.entries[238 + mission]
         _, ops, _ = event_dump.disassemble(iso.read_file("GDATA.AFS", e["offset"], e["size"]))
         room, seen = None, set()

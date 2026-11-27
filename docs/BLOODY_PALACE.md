@@ -74,3 +74,26 @@ survival limit without evidence.
 Local reference captures: `build/bloody_palace/ps2_select.png` (unlocked row), `ps2_bp_start.png` (briefing),
 `ps2_floor.png` (Level 0), `ps2_floor_wait.png` (first combat, three Pride), `ps2_clear.png` (combat HUD).
 These are local reference images, not committed. PCSX2 was closed and its shared lock released after capture.
+
+## Port implementation and checks
+
+`bloody_palace.c/.h` owns floor/group selection, portal readiness and routing. Mission 21 reuses the mission
+wave runner, collision, stage loading and enemy classes; generated `bloody_palace_runtime.h` contains EST
+groups from the owner's disc and stays local. It uses Normal EST columns; rank-based scaling remains a stand-in.
+The Mission Select row launches directly. Portal positions and boss exits come from each room's authored doors.
+Readiness follows the three 60-frame ordinary portal reveals; boss exit readiness is 180 frames after clear
+[approximation of the original event camera sequence]. The final clear waits 180 frames.
+
+`camera.c` starts ordinary Palace arena sweeps at Dante's head because the default (2500,200,2500) lies below
+the arena floor at approximately y=514. This is an explicit fallback, not a recovered PS2 camera initialization.
+The level label and portal legend use the menu font; portal glows and missing arrival pickups are in StandIns.md.
+
+Tests: `python tools/tests/run_bloody_palace_logic.py` uses the actual generated encounter table and checks portal
+delays, repeated-room encounter reset, the thousand boundary, all seventeen boss routes/returns, and the 9999 cap.
+PPSSPP test controls: `bpstart floor visits boss group` (-1 chooses boss/group randomly); `bpwarp frame portal`
+places Dante at the authored portal and presses O, without bypassing fight/readiness checks. Combine with
+`killevery 30` and `fastwaves 1`. These controls are used only in scripted test mode.
+
+Floor-flow scene: `bp_flow_camera`, screenshots `analysis/testroom/bp_flow_camera_30.png`, `_250.png`,
+`_430.png`, `_740.png`; +1, +10, +100 takes Level 0 to 111 with the room encounter restarting each time.
+The initial `bp_boundary` check confirmed 990 +10 routes from room 423 to 424; repeat after camera correction.

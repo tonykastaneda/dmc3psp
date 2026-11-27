@@ -629,6 +629,28 @@ def compile_script(groups, wanted, difficulty, group_delays=None):
     return out
 
 
+# Append after the story and secret mission room lists; preserve their indices.
+SLOTS.update({str(n): 736 + 4 * (n - 400) for n in range(423, 447)})
+MISSIONS[21] = ("423", None, {})  # Palace's dynamic EST groups are selected by bloody_palace.c.
+
+
+def write_palace(rooms, out):
+    """Local-only encounter bytecode, never copied into committed C sources."""
+    lines = ['/* Generated from the owner\'s disc by gen_rooms.py. */',
+             'typedef struct { short room, group, count; const PalaceOp *ops; } PalaceScript;']
+    scripts = []
+    for number in [*range(422, 447), 448, 449]:
+        for group in range(len(rooms[str(number)]['groups'])):
+            ops = compile_script(rooms[str(number)]['groups'], [group], 1)
+            name = f'bp_{number}_{group}'
+            lines.append(f'static const PalaceOp {name}[] = {{' +
+                         ','.join('{%d,%d,%d,%d,%d}' % op for op in ops or [(0,0,0,0,0)]) + '};')
+            scripts.append(f'{{{number},{group},{len(ops)},{name}}}')
+    lines += [f'#define BP_SCRIPT_COUNT {len(scripts)}',
+              'static const PalaceScript palace_scripts[] = {' + ','.join(scripts) + '};']
+    out.write_text('\n'.join(lines) + '\n')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("iso", type=Path)
@@ -683,6 +705,7 @@ def main():
             subprocess.run([sys.executable, str(Path(__file__).with_name("prepare_stage.py")), str(args.iso), "--output", str(out), "--slot", str(slot)], check=True)
 
     names = list(SLOTS)
+    write_palace(rooms, args.header.parent / "bloody_palace_runtime.h")
     index = {n: i for i, n in enumerate(names)}
     lines = ["/* Generated from the disc by tools/gen_rooms.py */", "#pragma once",
              "typedef struct { float box[6]; short next, number, start; unsigned char press, low, high; } RoomDoor;",

@@ -50,7 +50,7 @@ enum { LABEL_NORMAL = 1, LABEL_EASY = 12 };
 enum { TAG_TURBO = 0 };
 enum { ROWS_SHOWN = 2 };
 /* What the cursor visits on Mission Select: Easy, Normal and the Debug Room. The game's other rows are shown greyed out. */
-enum { ROW_EASY, ROW_NORMAL, ROW_DEBUG, SELECT_ROWS };
+enum { ROW_EASY, ROW_NORMAL, ROW_DEBUG, ROW_PALACE, SELECT_ROWS };
 enum { LABEL_GALLERY = 6 };
 /* The briefing strip holds the bar and both labels on one texture and one quad; the labels' places
  * are read off the HD Collection. */
@@ -306,6 +306,11 @@ static void draw_missions(const MenuChoice *c, int row) {
     for (i = 0; i < (int)sizeof(bars); ++i) {
         int working = i < ROWS_SHOWN;
         unsigned int color = !working ? LOCKED : i == row ? BRIGHT : DIM;
+        if (i == 6) {
+            draw_quad(GROUP_MISSION_ROWS, bars[i], BRIGHT);
+            draw_quad_left(GROUP_MISSION_LABELS, labels[i], row == ROW_PALACE ? BRIGHT : DIM);
+            continue;
+        }
         if (labels[i] == LABEL_GALLERY) {
             /* The Debug Room, in Gallery's place (its label is drawn from the font: tools/prepare_menu.py). */
             draw_quad(GROUP_MISSION_ROWS, bars[i], BRIGHT);
@@ -381,9 +386,10 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 }
                 break;
             case SCREEN_MISSIONS:
-                if (pressed & PSP_CTRL_UP) row = (row + SELECT_ROWS - 1) % SELECT_ROWS;
-                if (pressed & PSP_CTRL_DOWN) row = (row + 1) % SELECT_ROWS;
+                if (pressed & PSP_CTRL_UP) row = row==ROW_EASY?ROW_DEBUG:row==ROW_DEBUG?ROW_PALACE:row==ROW_PALACE?ROW_NORMAL:ROW_EASY;
+                if (pressed & PSP_CTRL_DOWN) row = row==ROW_EASY?ROW_NORMAL:row==ROW_NORMAL?ROW_PALACE:row==ROW_PALACE?ROW_DEBUG:ROW_EASY;
                 if ((pressed & PSP_CTRL_CROSS) && row == ROW_DEBUG) { c->mission = MENU_DEBUG_ROOM; next = SCREEN_DONE; leaving = 1; break; }
+                if ((pressed & PSP_CTRL_CROSS) && row == ROW_PALACE) { c->mission = MENU_BLOODY_PALACE; c->difficulty = 1; next = SCREEN_DONE; leaving = 1; break; }
                 if (row < 2 && (pressed & PSP_CTRL_LEFT)) row_mission[row] = next_mission(row_mission[row],-1);
                 if (row < 2 && (pressed & PSP_CTRL_RIGHT)) row_mission[row] = next_mission(row_mission[row],1);
                 if (pressed & PSP_CTRL_SQUARE) c->turbo = !c->turbo;

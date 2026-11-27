@@ -169,6 +169,15 @@ static void follow_place(const Player *player, float bearing) {
             if (dist3(room->init[i], f_eye) < dist3(room->init[best], f_eye)) best = i;
         copy3(from, room->init[best]);
     }
+    else if (room && strncmp(room->file,"ROOM_42",7)==0 &&
+             room->file[7]>='3' && room->file[7]<='9') {
+        /* Palace's raised arena has no authored cam_init. The ordinary default
+         * (2500,200,2500) is below its floor, trapping the sweep underneath.
+         * Start the sweep at Dante's head [stand-in; BLOODY_PALACE.md]. */
+        copy3(from,f_target);
+    }
+    else if (room && strncmp(room->file,"ROOM_43",7)==0 &&
+             room->file[7]>='0' && room->file[7]<='2') copy3(from,f_target);
     sweep(from, f_eye);
     f_bearing = bearing;
     f_turning = 0;
