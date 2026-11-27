@@ -30,6 +30,7 @@ int m19_door_route(int room, int door, int has_samsara, int *next_room, int *sta
 #include "hourglass_runtime.h"
 #include "enemy.h"
 #include "fx.h"
+#include "nfx.h"
 
 #define SAND_FRAMES 5400.0f
 static int hg_on, hg_running, hg_turns;
@@ -132,14 +133,15 @@ static void mr_update(float f) {
         float at[3] = {mirror_at[mr_lit][0], 325.0f, mirror_at[mr_lit][2]};
         mr_broken[mr_lit] = 1;
         stage_hide_group(445 + mr_lit);
-        fx_explosion(at);
+        nfx_spawn(NFX_MIRROR, 0x1ea, at, mirror_at[mr_lit][3] * 0.0174533f, 0);   /* the shatter (FUN_00462f90), P113 */
         if (++mr_breaks > 1) { mr_state = 2; enemy_mirror_kill(); return; }
         for (i = 0; i < 8; ++i) if (!mr_broken[i]) mr_health[i] = 1000.0f;
         mr_pick();
     }
     if ((mr_clock -= f) < 0.0f) mr_pick();
     {
-        /* The lit mirror's glow (its effect, 0x2e0, isn't converted). */
+        /* The lit mirror's glow: its effect is E0x2e0 (FUN_004621f0), a model (M155) whose texture is a 1-byte
+         * reference the port doesn't decode, so a green glow stands in. */
         float at[3] = {mirror_at[mr_lit][0], 325.0f, mirror_at[mr_lit][2]}, v[3] = {0.0f, 0.0f, 0.0f};
         fx_mote(at, v, 260.0f, 240.0f, 0.05f, 0xa0dfffafu);
     }

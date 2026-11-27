@@ -13,7 +13,7 @@ enum { LADY_M_IDLE, LADY_M_STRAFE_R, LADY_M_STRAFE_L, LADY_M_GUN, LADY_M_TURN, L
 extern const char *const lady_motion_names[LADY_M_COUNT];   /* tools/prepare_skinned_model.py LADY_MOTIONS */
 
 #define LADY_SHOTS 16
-typedef struct { int on, kind; float pos[3], vel[3], life; } LadyShot;   /* 0 a bullet, 1 a grenade, 2 a rocket */
+typedef struct { int on, kind; float pos[3], vel[3], life; int fx; } LadyShot;   /* 0 a bullet, 1 a grenade, 2 a rocket */
 typedef struct {
     float pos[3], yaw, floor_y;  /* in and out */
     float home[3];

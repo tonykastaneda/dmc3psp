@@ -5,6 +5,7 @@
 #include "enemy.h"
 #include "stage.h"
 #include "fx.h"
+#include "nfx.h"
 #include "swizzle.h"
 #include <pspgu.h>
 #include <pspgum.h>
@@ -85,7 +86,7 @@ void mission13_hit(float x,float y,float z,float yaw,float reach,int kind){
   if((broken&(1u<<i)) || m13_nodes[i].kind<2)continue;
   node_pos(i,p);dx=p[0]-x;dz=p[2]-z;d=sqrtf(dx*dx+dz*dz);
   if(d>reach+80 || fabsf(y-p[1])>230 || (d>1 && (dx*sinf(yaw)+dz*cosf(yaw))/d<.2f))continue;
-  broken|=1u<<i;fx_hit_spark(p);
+  broken|=1u<<i;nfx_crystal_break(p,m13_nodes[i].kind);   /* its own effects (FUN_00420450) */
  }
  if(trace_beam()){solved=1;stage_hide_group(129);}
 }
