@@ -65,8 +65,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
-  shown, his idle's turn rate [inferred], the bomb and the hand trap are his own models but rigid (the hand's motions aren't played: it rises and sinks by an estimate), the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes, a bullet's stun value 8
-  [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
+  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes; ordinary E&I stun uses the native raw10 x1.75, the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference); they wait as statues (ar71 / ar72) where the game starts them in state 1 at y 100 (the cutscene's) and
   wake within 900, when struck or after 600 frames [estimate]. The pedestal climb, the guard and the hops are the game's; stand-ins: a blow's "Dante's +5 is 0-2" (a
@@ -83,9 +82,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Beowulf**: which of Dante's blows are his kind-4 records (the port's heavy, slam, launch [inferred]); a feather heads
   out from his centre 200 up [inferred] and its burst isn't drawn; the run stops at once, not at its next stride's event; his charge (4) from the
   run isn't taken. `enemy.c` Beowulf, PortJobs.
-- **Lady**: her grapple (0x1d) and ledge mode (0x1e) are ported, but the wire isn't drawn and she rises straight up
-  (its direction, 0044b780, isn't read); the ledges aren't in the port's collision, so she perches at y 501 by hand
-  until her hop; FUN_00449120 taken as the ledge nearest Dante; the hop's landing 0x0e plays 0x61's (its slot is
+- **Lady**: her grapple (0x1d), native hook/skinned cable and its direction (0044b780), and ledge mode (0x1e) are ported;
+  her ledges now use the room's authored box collision; FUN_00449120 taken as the ledge nearest Dante; the hop's landing 0x0e plays 0x61's (its slot is
   empty); 0x8f fires one pistol shot [inferred];  what 0x1b / 0x1c fire (a rocket, a
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses

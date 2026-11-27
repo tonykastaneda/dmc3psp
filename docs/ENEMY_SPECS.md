@@ -803,7 +803,11 @@ flinch js05, stun js14, launched js04, death js16.
   meter): the rows at `0x5e3a60` (0x54 bytes) are picked by the hit (blade or shot) and his state (+0x1e2: 3 stunned,
   4 another); their +0x20 scales the damage, **1 as he is, 100 stunned, 35 in state 4** (hundredths). The stun meter
   +0x4cc8 takes **50** a blade hit (`0x5e2f14`, rank 0) and **1.75 ×** the shot's own value a bullet (`0x5e2f10`;
-  that value, +0x4d54, isn't read). Past **249** (`0x5e2f30`) his next reaction is the stun (0x6b, `FUN_00535e60`:
+  raw packet +4 is copied to +0x4d54 by `0053d0d0`). Ordinary E&I records 0/1 at `0x5a5a30` both
+  contain **10** at +4 (`gp=0x620170`, table pointer `0x618bf0`, constructor `002efaa0`), giving
+  **17.5 stun per ordinary shot** at rank 0: hit 15 crosses the threshold. Difficulty damage scaling in
+  `002f17a0` does not rewrite this packet value. Upgraded/charged E&I variants carry different packet values;
+  the port's `HIT_PISTOL` represents the ordinary unupgraded shot. Past **249** (`0x5e2f30`) his next reaction is the stun (0x6b, `FUN_00535e60`:
   motion js10, the meter emptied, **500** frames from `0x5e2ed0`). Otherwise a shot makes him flinch where he is
   (0x67-0x6a, `FUN_00535470`, js06, row 0) and a blade sends him off (0x6d, `FUN_00536110`, js12, row 1) unless his
   attack is due (idle time ≥ 500). Hits during his attacks (actions 0x15-0x2c, 0x3e-0x43) don't stop him. With
@@ -828,18 +832,31 @@ flinch js05, stun js14, launched js04, death js16.
   its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;
   what lands (the ball 1200 heavy, a trap 650, the cross 800) hurts Dante with that damage. The bomb (em037 [25], textures [24]: the
   ball attack's projectile, `0054de00` entry 0x19 + 2 x variant) and the trap's hand ([27], textures [26], motions [28]:
-  `0054caa0`'s +0x70 / +0x74 / +0x78) are drawn as his own models, rigid at rest (`tools/prepare_jester_props.py`,
-  `jester_projectiles_draw`): the bomb tumbles in flight and the hand rises out of the floor by its arming frame [estimates:
-  the hand's motions aren't played]. The cross and the bomb play the game's effects from em037 [10] (NFX_JESTER): the cross V0x3f9 once and V0x3f8
+  `0054caa0`'s +0x70 / +0x74 / +0x78) are drawn as his own models (`tools/prepare_jester_props.py`,
+  `jester_projectiles_draw`): the bomb tumbles in flight [estimate]; the hand plays PAC [28]:0,
+  a nonlooping 120-frame motion on its 18-bone rig with its original three-weight skin. Its transform stays at
+  floor y=500, pitched -90 degrees and randomly yawed (`0054caa0`); it does not rise/sink by a guessed offset.
+  Its opacity follows `0054d080` / `0054d0e0` / `0054d120`: +12 per native tick to 128, hold for >50 ticks,
+  then -12 to zero; its animation continues independently until the 180-frame actor lifetime expires.
+  The throw hold includes its first 30 body frames before the emitter starts, so the trap actually reaches
+  its native >180-frame spawn wait instead of being cancelled early. The cross and the bomb play the game's effects from em037 [10] (NFX_JESTER): the cross V0x3f9 once and V0x3f8
   looping on its frame (`0054d610`: at him, facing Dante turned 45 degrees), V0x3fa as it ends (`0054dc70`); the bomb
   V0x417 in flight (`0054e710`) and V0x41c as it goes off (`0054edc0`). Their P particles aren't ported: the bomb's burst
-  and the trap's warning ring are motes; the trap's G0x1c8 (`0054c1e0`) isn't in his pack. Between attacks he idles as the game: 0x64
+  and the trap's warning ring are motes. **G0x1c8 is not this trap's effect**: `0054c1e0` initializes a
+  separate 0x470-byte actor (`0054bf90`, vtable `0x616bb0`), whose sole caller in the exported call graph is
+  player weapon routine `0052c4c0`. The Jester's hand is the 0xd40-byte actor `0054c660`
+  (vtable `0x616cf0`), initialized by `0054caa0` and updated by `0054ce50`, spawned by emitter `0055c200`.
+  Neither hand initializer nor update spawns G0x1c8; em037 [10] contains G IDs 0x253, 0x25a, 0x277, 0x276,
+  0x25d, 0x267, 0x25b and 0x25c, with no 0x1c8. No unrelated generator is attached to the hand. Between attacks he idles as the game: 0x64
   (`00534d10`) goes at once to 0x66 (`00535140`), one of `0x5e2e10`'s five motions (js21, js24, js23, js27, js28 by
   `0x5e2db0`) at random but never the last again (the next instead); for its first 60 frames he turns to Dante
   (`0053ed60(10)`, the port's rate [inferred]), js27 and js28 walk him by their root (`00535310`), and at its end 0x64
-  again (0x7b in his second set off the floor). His defence, stun meter, flinch and vanish are the game's (above; a bullet's value is
-  the port's 8, an estimate); the arena clamp stays the stand-in's. The old cane swings and taunt are no longer
+  again (0x7b in his second set off the floor). His defence, stun meter, flinch and vanish are the game's (above; an ordinary E&I shot
+  contributes 10 x 1.75 stun); the arena clamp stays the stand-in's. The old cane swings and taunt are no longer
   chosen: the game's first encounter has no such attacks in its picker.
+  Verified in PPSSPP Mission 5 room 422: `run3_jester_hand_live` frames 1815/1830/1840 show the
+  native hand motion and its 650-damage hit; `run3_jester_stun_native` frame 240 shows js10 stunned,
+  with the meter log advancing 17.5 each ordinary hit, 245 at hit 14 and 262.5 at hit 15.
 
 **Projectile follow-up (pM).** The emitters' tables use **AI rank `+481c`**, not encounter `+481e`:
 ball wait/speed `5e2fd0` = (140,70), (80,70), (40,70), (20,70); trap interval `5e3000` =
@@ -1276,14 +1293,33 @@ dispatch `00444c90` (+0x47c0: modes 0-0x17 her walk `00445210`, 0x18 `004455d0`,
   then 0x0c, the hop down, facing the middle (`00359c80(middle, her)`, the way she turns to a target) if he's further
   from it than she is, else away; falling 28 a frame (+0x4824 = -28) to the floor, 0x0e, then her walk (0x17).
 - **Line of sight** (`00449450`): a ray from her to him (`FUN_00201da0`).
+- **Ledge collision**: st115's GAME STAY sets 47/51/55/59/63 are the five bookcase crosspieces, not HITS
+  floors. Their authored boxes are at local (0,10,10), half sizes (250,34,70), placed at y468 and yaw
+  36/108/180/-108/-36 degrees. The transformed centres have y478, hence top y512. `gen_rooms.py` enables
+  these exact five boxes, using a negative tag for permanent structural surfaces; `stage_floor` queries their
+  oriented tops as well as HITS, and `stage_collide` uses their sides. Other room boxes keep their prior
+  behaviour. Lady drops onto the queried collision height and then takes 0x1e by the native y491 test;
+  the old hand-placed y501 perch is gone. Dante can land on the same crosspieces.
+  PPSSPP checks: `lady_ledge_fight_codex` shows the rise, collision landing at y512, ledge shots and hop
+  down to y1; `lady_ledge_floors_codex` places Dante over each of the five tops (grounded y512 on all five)
+  and outside the last footprint (grounded y102). `lady_ledge_dante_codex` records the separate departure:
+  y512 on the top, y386 airborne beyond its footprint, then grounded at y1.
+
+- **Grapple wire** (`0049e4f0`, set up by `0049e7e0`): em034 [26] hook with [19] textures, [30] five-bone cable
+  with [29] textures. The held Kalina Ann ([20]) is attached to body bone 9 with `0x5c9520`'s offset
+  (-8.4, -1, -1.3), rotated pi about Z. `0044b780` transforms its local +X direction; `00446330` fires the hook
+  50 units/frame (`0x61a520`) from `0x5c9610` (87.8, 0, 4.28) in that frame. The cable follows Kalina Ann's
+  bone 2 (65.2, 0, 4.3); `0049f020` positions five cable bones at quarters of the span, scaling their X axes by
+  segment length / 70, preserving the original skin weights. The hook stops at a collision; Lady rises along
+  the captured direction, not world up. Her preparation is 0x5d (ld610), followed by 0x5e/0x5f. On the y1200
+  relocation `0049f500` collapses the cable to the relocated hook, and landing 0x61 retires the actor.
+
 
 **In the port** (`psp/testroom/lady_boss.c`): the modes above at rank 0, each action's own motion, her turn rate,
 magazine and burst count, and her records' damage; her waypoints, walk, 0x28, 0x1a, the special picker, 0x1b and
 0x1c, her line of sight (a stage ray), her grapple (0x1d) and her ledge mode (0x1e), as decoded above. Stand-ins:
-the grapple's wire is a thin line from her up to y 1400 [estimate] while she climbs (the game's wire actor, `0049e4f0`, isn't read) and she rises straight up (its direction, `0044b780`, isn't read); the ledges aren't in
-the port's collision (it has only the floor there), so she perches at their y 501 until her hop; `00449120` taken as
-the ledge nearest Dante; 0x0e's slot ([2] 14) is empty, 0x61's landing plays; what 0x8f fires (one pistol shot
-[inferred]); the special gate (every 600 frames [estimate]), what 0x1b and 0x1c fire (a
+`00449120` taken as the ledge nearest Dante; 0x0e's slot ([2] 14) is empty, 0x61's landing plays; what 0x8f fires (one pistol shot
+[inferred]); what 0x1b and 0x1c fire (a
 rocket on 0x56, a grenade each 0x72 [inferred]), 0x5c's motion (its slot, [6] 9, is empty: the gun's draw), her run's
 speed [estimate], shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun 500,
 grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.

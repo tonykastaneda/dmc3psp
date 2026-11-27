@@ -4,7 +4,8 @@ PINE reads and writes the PS2's memory; keys go in as window messages, so the us
 own PCSX2 setup is never touched. Used as a module or from the command line:
 
     python tools/pcsx2_ref.py setup              # write the private copy's settings
-    python tools/pcsx2_ref.py start              # boot the game
+    python tools/pcsx2_ref.py start              # boot the game (cheats off)
+    python tools/pcsx2_ref.py start --cheats all # ... with health, dt, damage (or a comma list of them)
     python tools/pcsx2_ref.py shot name.png      # capture the window
     python tools/pcsx2_ref.py press cross 0.1    # press a pad button
     python tools/pcsx2_ref.py state slot         # load a save state slot
@@ -77,7 +78,31 @@ def setup():
     path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
-def start():
+# Reference-capture cheats (docs/PCSX2_CHEATS.md). The codes live in the local, gitignored
+# build/refemu/cheats/SLUS-21361_25FC361B.pnach; each is a labelled group turned on by name in the game's
+# own settings file, so the global ini (and everyone else's runs) keeps cheats off.
+CHEATS = {"health": "Infinite Health", "dt": "Infinite Devil Trigger", "damage": "One-Hit Kills"}
+GAME_INI = EMU / "gamesettings" / "SLUS-21361_25FC361B.ini"
+
+
+def set_cheats(names=()):
+    """names: keys of CHEATS ('health', 'dt', 'damage'), or () for none. Rewrites the game's settings file."""
+    if isinstance(names, str):
+        names = [n for n in names.split(",") if n]
+    names = list(CHEATS) if names == ["all"] else names
+    unknown = [n for n in names if n not in CHEATS]
+    if unknown:
+        raise ValueError(f"unknown cheats {unknown}; choose from {list(CHEATS)} or all")
+    lines = ["[EmuCore]", f"EnableCheats = {'true' if names else 'false'}", "", "[Cheats]"]
+    lines += [f"Enable = {CHEATS[n]}" for n in names]
+    GAME_INI.parent.mkdir(exist_ok=True)
+    GAME_INI.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def start(cheats=()):
+    """cheats: a list or 'health,dt,damage' / 'all' for this run. Off unless asked for, so older scripts
+    that call start() never inherit someone else's cheats."""
+    set_cheats(cheats)
     return subprocess.Popen([str(EXE), "-fastboot", "--", str(ISO)], cwd=str(EMU))
 
 
@@ -226,7 +251,12 @@ if __name__ == "__main__":
     if cmd == "setup":
         setup()
     elif cmd == "start":
-        start()
+        # start [--cheats health,dt,damage | --cheats all]: without the flag, cheats are turned off for the run.
+        flag = sys.argv[3] if len(sys.argv) > 3 and sys.argv[2] == "--cheats" else ""
+        start(flag)
+    elif cmd == "cheats":
+        # cheats on [health,dt,damage] (default all) | cheats off: for a PCSX2 started by hand (start() resets them).
+        set_cheats((sys.argv[3] if len(sys.argv) > 3 else "all") if sys.argv[2] == "on" else "")
     elif cmd == "shot":
         shot(sys.argv[2])
     elif cmd == "press":
