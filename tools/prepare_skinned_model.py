@@ -89,8 +89,12 @@ def build_mesh(model_data: bytes, bone_count: int):
         for face in strip_faces(adc):
             mesh["indices"].extend(base + v for v in face)
         mesh["old_triangles"] += len(item["faces"])
+        # The object record's byte 8: its blend, as the game's GS ALPHA table at 0x566ec0 has them (0 / 1 normal
+        # 0x44, 2 additive 0x48, 3 subtractive 0x42; read as that table's index [inferred]: 3 is only on Arkham's
+        # vein overlays, 2 on eye highlights).
+        mode = model_data[0x30 + item["index"] * 48 + 8] if 0x30 + item["index"] * 48 + 8 < len(model_data) else 0
         mesh["objects"].append({"texture": item["header_count"], "index_start": start,
-                                "index_count": len(mesh["indices"]) - start})
+                                "index_count": len(mesh["indices"]) - start, "mode": mode if mode <= 3 else 0})
     if len(mesh["positions"]) > 65535:
         raise ValueError("Too many vertices for 16-bit indices")
     return mesh

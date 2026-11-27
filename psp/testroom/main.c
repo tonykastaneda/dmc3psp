@@ -1283,7 +1283,16 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     {
         /* The game's vertical FOV for this camera (camera.c; 55 degrees on the follow camera by default). */
         float fov = camera->fov > 0.05f ? camera->fov * 57.29578f : 60.0f;
-        if (demo_active()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 50.0f, 60000.0f);   /* a demo's stage is city-sized */
+        if (demo_active()) {
+            /* A demo's stage is city-sized, but its close-ups put the eye 20-40 cm from a face (demo 1's cm027:
+             * 41 cm, fov 15): a fixed 50 cm near plane cut the face away and showed the inside of the head. The
+             * near plane follows the eye's distance to its target, a third of it, 4-50 cm. */
+            float dx = camera->tx - camera->x, dy = camera->ty - camera->y, dz = camera->tz - camera->z;
+            float near = sqrtf(dx * dx + dy * dy + dz * dz) * 0.33f;
+            if (near < 4.0f) near = 4.0f;
+            if (near > 50.0f) near = 50.0f;
+            sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
+        }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
         else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
     }

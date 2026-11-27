@@ -40,6 +40,31 @@ Their shared 128x64, 16-colour page (page 1 for Dante/Vergil/Lady, page 3 for Ar
 86.65% of pixels, including alpha on 7,098 pixels; it also now reconstructs exactly. These measurements
 compare the old quantiser to decoded local source data, independent of model geometry and lighting.
 
+## Arkham's face, compared with the PS2
+
+Checked against PCSX2 (Mission 1 on Normal from the 100% save; `analysis/ref/m1_open_ps2b.mp4`, local), demo 1's
+cut cm027 (demo frames 4085-4191, the PS2 at about 207 s): `analysis/testroom/arkham_face_compare.png`. The palette
+fix above wasn't the cause. Two things were:
+
+- **The near plane.** Demos drew with a fixed 50 cm near plane, and the close-ups put the eye nearer: cm027's eye is
+  41 cm from its target at fov 15, and cm026 (Dante's bowed head, 3840-4085) about 20 cm from his head. The face was
+  clipped away and the inside of the back of the head showed (Arkham's "shelf" is his neck's rim from inside; Dante's
+  face looked blank, seen from under his chin). The near plane now follows the eye's distance to its target, a third
+  of it, 4-50 cm (`main.c` render_scene).
+- **Each object's blend.** A MOD object record's byte 8 is its blend. The game's GS ALPHA table at `0x566ec0` (read by
+  `FUN_00138b30`'s packets with a 4-bit index) holds 0x44 normal for 0 and 1, 0x48 additive (Cs·As + Cd) for 2 and
+  0x42 subtractive (Cd − Cs·As) for 3; byte 8 is read as that index [inferred: the byte isn't traced to the packet].
+  Mode 3 is only on Arkham's vein overlays (`pl103_00` object 2 on the crown, `pl103_02` object 2 on his face's left
+  side, `pl103_32`: a black page with a blue vein decal, opaque); drawn opaque they were a black and blue patch
+  over half his face and a dark cap on his head. Mode 2 is on the eye highlights (`pl100_02`, `pl101_02` object
+  4 and the like). `prepare_skinned_model.build_mesh` keeps the byte (`mode`), `prepare_demo` packs it in an object's
+  texture word (bits 16-19) and `demo.c` blends by it, without writing depth.
+
+Still different from the PS2 there (not textures): the PS2 frames cm027 tighter (brow to lip; the port shows crown
+to lip), so the cameras' fov is likely not vertical as the port takes it; the PS2 lights the face darker and warmer;
+the subtracted veins read stronger in the port (the PS2's are a faint darkening under its darker lighting). The
+gameplay models (`enemy_mesh` merges objects by texture; the player) don't carry the blend yet.
+
 The game's story scenes are **demos**. Event op `02 D` plays demo D and section `09 D` of the mission's event table
 decides what follows (docs/EVENT_SCRIPTS.md). Some demos are pre-rendered movies (`.sfd` in MDATA1.AFS / MDATA2.AFS);
 most are **real-time**: the engine plays models, motions and cameras from a timeline. None play in the port yet.

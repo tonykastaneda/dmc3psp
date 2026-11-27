@@ -15,7 +15,7 @@ DEMO_nnn.BIN (little endian; offsets from its start):
   texture: {u32 width, height, pixels (8-bit, swizzled), palette (256 ABGR)}
   actor (128 bytes): i32 slot, parent actor (CnsPos, -1), parent bone, bones, vertices, indices, objects, motions;
     u32 parents (i8), local (f32x3), rest (f32x3), vertices ({u, v, normal, position} f32), skin ({bones, weights}
-    u8x3 each, 8 bytes), indices (u16), objects ({texture, first index, count}), motions ({f32 set, end, scale, skip;
+    u8x3 each, 8 bytes), indices (u16), objects ({texture (bits 16-19: its blend), first index, count}), motions ({f32 set, end, scale, skip;
     u32 MOT offset, size; 32 bytes}), the bone its bounding sphere is about, its radius (f32); f32 pos[3], rot[3] (the clip's adjustments), shown from / to; u32 hide switches, their offset ({f32 frame,
     u32 on})
 """
@@ -453,7 +453,8 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
         blob += struct.pack(f"<{len(mesh['indices'])}H", *mesh["indices"])
         object_at = align(blob)
         for o in mesh["objects"]:
-            t = a["tex_ids"].get(o["texture"], 0)
+            # Bits 16-19: the object's blend (its MOD record's byte 8, prepare_skinned_model.build_mesh).
+            t = a["tex_ids"].get(o["texture"], 0) | (o.get("mode", 0) & 0xF) << 16
             blob += struct.pack("<3I", t, o["index_start"], o["index_count"])
         motion_at = align(blob)
         blob += bytes(32 * len(a["motions"]))
