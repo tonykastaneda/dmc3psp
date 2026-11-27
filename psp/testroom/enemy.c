@@ -2476,6 +2476,11 @@ void enemy_finish_collisions(float px, float py, float pz) {
     }
 }
 
+static unsigned int big_moves[64];   /* tests: a body asked to move over 3 m in a frame, not placed: its brain undoing the walls */
+void enemy_big_moves(char *out, int size) {
+    int k, n = snprintf(out, (size_t)size, "bigmoves");
+    for (k = 0; k < 64 && n < size - 12; ++k) if (big_moves[k]) n += snprintf(out + n, (size_t)(size - n), " k%d=%u", k, big_moves[k]);
+}
 void enemy_update(float dt, float px, float py, float pz) {
     Enemy *selected = e;
     int i;
@@ -2498,6 +2503,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         if (e->active && e->kind < ENEMY_KIND_COUNT && stage_loaded()) {
             float x = e->pos[0], y = e->pos[1], z = e->pos[2];
             /* A warp is placement, not travel through the intervening walls. */
+            if (!e->placed && hypotf(x-was_x,z-was_z) > 300 && e->kind < 64) ++big_moves[e->kind];   /* tests: enemy_big_moves */
             if (hypotf(x-was_x,z-was_z) > 600 || e->placed) { was_x = x; was_y = y; was_z = z; e->placed = 0; }
             e->pos[0] = was_x; e->pos[1] = was_y; e->pos[2] = was_z;
             body_move(e, x, y, z);
