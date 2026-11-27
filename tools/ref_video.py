@@ -64,7 +64,7 @@ def record_port(name, seconds):
     done = GAME_DIR / "FOCUS_DONE.TXT"
     done.unlink(missing_ok=True)
     subprocess.run(["powershell", "-NoProfile", "-Command", f"Copy-Item '{ROOT / 'build/testroom/EBOOT.PBP'}' '{GAME_DIR / 'EBOOT.PBP'}' -Force"], check=True)
-    proc = subprocess.Popen([PPSSPP, "--windowed", "--escape-exit", str(GAME_DIR / "EBOOT.PBP")], cwd=str(Path(PPSSPP).parent))
+    proc = subprocess.Popen([PPSSPP, "--windowed", "--escape-exit", f"--appendconfig={Path(__file__).with_name('ppsspp_filter_auto.ini')}", str(GAME_DIR / "EBOOT.PBP")], cwd=str(Path(PPSSPP).parent))
     user32 = ctypes.windll.user32
     hwnd = 0
     for _ in range(100):

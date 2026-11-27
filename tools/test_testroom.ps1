@@ -35,7 +35,7 @@ foreach ($name in $Outputs) {
 }
 
 $log = Join-Path $Evidence "ppsspp.log"
-$arguments = '--log="{0}" --loglevel=3 --escape-exit "{1}"' -f $log, (Join-Path $GameDir "EBOOT.PBP")
+$arguments = '--log="{0}" --loglevel=3 --escape-exit --appendconfig="{2}" "{1}"' -f $log, (Join-Path $GameDir "EBOOT.PBP"), (Join-Path $PSScriptRoot "ppsspp_filter_auto.ini")
 Write-Log "Launching PPSSPP test-room autotest."
 $process = Start-Process -FilePath $Emulator -ArgumentList $arguments -WorkingDirectory $EmuDir -PassThru
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)

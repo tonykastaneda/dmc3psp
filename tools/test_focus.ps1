@@ -34,7 +34,7 @@ public static class FocusWin {
 [FocusWin]::SetProcessDPIAware() | Out-Null
 $ShotFile = Join-Path $GameDir "FOCUS_SHOT.TXT"
 Remove-Item -LiteralPath $ShotFile -Force -ErrorAction SilentlyContinue
-$process = Start-Process -FilePath $Emulator -ArgumentList ('--windowed --escape-exit "{0}"' -f (Join-Path $GameDir "EBOOT.PBP")) -WorkingDirectory $EmuDir -PassThru
+$process = Start-Process -FilePath $Emulator -ArgumentList ('--windowed --escape-exit --appendconfig="{1}" "{0}"' -f (Join-Path $GameDir "EBOOT.PBP"), (Join-Path $PSScriptRoot "ppsspp_filter_auto.ini")) -WorkingDirectory $EmuDir -PassThru
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
 try {
     while ([DateTime]::UtcNow -lt $deadline -and -not $process.HasExited -and -not (Test-Path -LiteralPath $Report)) {

@@ -138,5 +138,9 @@ def parse_scm(data: bytes, root_xz: bool = True, transform: bool = False):
             seen += vc
         if seen != total:
             raise ValueError(f"Object {index}: sub-mesh vertices {seen} != record total {total}")
-        objects.append({"index": index, "flags": flags, "node": object_node.get(index), "submeshes": submeshes})
+        # Its blend, byte 8 as a MOD object's (the GS ALPHA table's index, low 4 bits; prepare_skinned_model.build_mesh):
+        # 2 additive (st501_3's sun glow), 3 subtractive, 4 Cd - Cs; else 0.
+        blend = data[record + 8] & 0x0f
+        objects.append({"index": index, "flags": flags, "node": object_node.get(index), "submeshes": submeshes,
+                        "blend": blend if blend in (2, 3, 4) else 0})
     return {"objects": objects, "texture_count": texture_count, "node_world": world}

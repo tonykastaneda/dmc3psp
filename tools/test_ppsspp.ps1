@@ -60,7 +60,7 @@ if (Test-Path -LiteralPath $Marker) { Remove-Item -LiteralPath $Marker -Force }
 if (Test-Path -LiteralPath $EmulatorLog) { Remove-Item -LiteralPath $EmulatorLog -Force }
 
 Write-Log "Deploying PSP EBOOT to $GameDir and launching PPSSPP for an automated boot test."
-$arguments = '--log="{0}" --loglevel=3 --escape-exit "{1}"' -f $EmulatorLog, (Join-Path $GameDir "EBOOT.PBP")
+$arguments = '--log="{0}" --loglevel=3 --escape-exit --appendconfig="{2}" "{1}"' -f $EmulatorLog, (Join-Path $GameDir "EBOOT.PBP"), (Join-Path $PSScriptRoot "ppsspp_filter_auto.ini")
 $process = Start-Process -FilePath $Emulator -ArgumentList $arguments -WorkingDirectory $EmuDir -PassThru
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
 $passed = $false
