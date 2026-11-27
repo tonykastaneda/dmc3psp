@@ -299,6 +299,11 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $MessagesHeader) -or
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\gen_messages.py'), $Iso.FullName, '--header', $MessagesHeader)
 }
+# Mission 20's staff roll (tools/prepare_staffroll.py): STAFF_00-35.BIN beside the EBOOT, from the player's disc.
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build 'STAFF_35.BIN'))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\prepare_staffroll.py'), $Iso.FullName, '--output', $Build)
+}
 # Cached stage files can predate the collision-grid extent fix. Regenerate only
 # those whose grids omit native collision vertices; fresh files pass read-only.
 Invoke-Native $Python @((Join-Path $Root "tools\audit_stage_grids.py"), "--repair")

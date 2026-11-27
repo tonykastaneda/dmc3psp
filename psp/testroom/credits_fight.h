@@ -3,7 +3,8 @@
 /* Mission 20's ending street (room 012): the kill counter, the staff roll and the timed ending, after EventTbl20's
  * room 12 script and CStaffRoll (docs/CREDITS_FIGHT.md). main.c only calls these. */
 
-void credits_fight_begin(void);           /* entering room 012 in Mission 20 (the room's on-enter block) */
+void credits_fight_init(const char *game_dir);   /* where STAFF_nn.BIN are (tools/prepare_staffroll.py) */
+void credits_fight_begin(void);          /* entering room 012 in Mission 20 (the room's on-enter block) */
 void credits_fight_reset(void);           /* leaving the mission */
 int credits_fight_active(void);
 void credits_fight_kill(int kind);        /* an enemy died while the street runs */
@@ -13,6 +14,7 @@ int credits_fight_update(float frames);
 int credits_fight_frozen(void);           /* op 7e [3]: Dante and the enemies stop */
 float credits_fight_clock(void);          /* frames since the room's on-enter block */
 int credits_fight_extended(void);         /* op 7e [2] found 100 or more kills */
+void credits_fight_skip(float frames);           /* tests: on to this frame of the street's clock */
 void credits_fight_status(char *out, int size);   /* tests: a line for FOCUS_DONE.TXT */
 void credits_fight_draw(void);           /* 2D, over the scene: the roll's pages, the fade, the counter */
 

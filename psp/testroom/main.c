@@ -2006,7 +2006,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
-static int cmp_fastwaves, cmp_clear_minions, cmp_events_play;
+static int cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
@@ -2101,6 +2101,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
+        else if (strncmp(line, "creditsat ", 10) == 0) cmp_credits_at = atoi(line + 10);   /* tests: M20's street from this frame */
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
@@ -3240,7 +3241,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20's room 12 script: credits_fight.c. */
-        if(!credits_fight_active())credits_fight_begin();
+        if(!credits_fight_active()){credits_fight_begin();if(focus_cmp && cmp_credits_at)credits_fight_skip((float)cmp_credits_at);}
         m20_ending_frames+=dt*60;
         if(credits_fight_update(dt*60) && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
     }
@@ -3909,6 +3910,7 @@ int main(int argc, char *argv[]) {
     rest_error = rest_pose_error_um();
     music_init(game_dir);
     sfx_init(game_dir);
+    credits_fight_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
