@@ -1215,6 +1215,7 @@ static void draw_debug_menu(int viewer) {
     sceGuColor(0xffffffffu);
 }
 
+static int cmp_camat_on; static float cmp_camat[6];   /* tests: a fixed view ("camat") */
 static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
@@ -1285,6 +1286,10 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         ScePspFVector3 eye = {camera->x, camera->y, camera->z};
         ScePspFVector3 target = {camera->tx, camera->ty, camera->tz};
         ScePspFVector3 up = {0.0f, 1.0f, 0.0f};
+        if (cmp_camat_on) {   /* tests: "camat x y z tx ty tz", a fixed view */
+            eye.x = cmp_camat[0]; eye.y = cmp_camat[1]; eye.z = cmp_camat[2];
+            target.x = cmp_camat[3]; target.y = cmp_camat[4]; target.z = cmp_camat[5];
+        }
         /* The game's camera roll (rail points, pan cameras: FUN_00131990 turns the view about its axis). */
         if (camera->roll != 0.0f) sceGumRotateZ(camera->roll);
         sceGumLookAt(&eye, &target, &up);
@@ -2086,6 +2091,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "forceclear ", 11) == 0) cmp_force_clear = atoi(line + 11);   /* "demo n": play demo n from the start (demo.c) */
         else if (strncmp(line, "nodemo", 6) == 0) cmp_no_demo = 1;
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
+        else if (strncmp(line, "camat ", 6) == 0) cmp_camat_on = sscanf(line + 6, "%f %f %f %f %f %f", &cmp_camat[0], &cmp_camat[1], &cmp_camat[2], &cmp_camat[3], &cmp_camat[4], &cmp_camat[5]) == 6;
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */

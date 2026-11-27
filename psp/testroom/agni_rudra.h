@@ -27,8 +27,19 @@ typedef struct {
     int charge_sword;    /* the sword charged: 0 Agni's (state 50), 1 Rudra's (51) */
     float charged;       /* +0x2eec: frames left on the charged sword (+0x2ee4) */
     unsigned short flags; /* +0x2ede, from the pair's formation (0x5cf6a0): role in bits 0-3, 0x10 / 0x20 which way
-                            to flank, 0x100 / 0x200 no attack permission, 0x1000 stand */
+                            to flank, 0x100 / 0x200 no attack permission, 0x1000 stand, 0x8000 climb his pedestal */
+    int paired;          /* +0x2ee7: the pair's brain (FUN_003acfb0), until he takes up both swords (FUN_003aa180) */
 } ArBrain;
+
+/* A hop (FUN_003b09c0, records 0x5b76d0 + 0x40 n): its four scripts (take-off, rise, fall, landing), its turn to the
+ * target a frame, and the local speeds (x right, y up, z ahead) it rises then falls with: a start, accelerations
+ * and caps, as FUN_003b0090 / FUN_003b02b0 run them. */
+typedef struct {
+    unsigned short turn;
+    signed char scripts[4];
+    float up, rise_ay, rise_ax, rise_az, rise_cap_x, rise_cap_z;
+    float fall_ay, fall_cap_y, fall_ax, fall_az, fall_cap_x, fall_cap_z;
+} ArHop;
 
 /* What the brain sees. */
 typedef struct {
@@ -53,5 +64,10 @@ void ar_brain_counter(ArBrain *b);
 void ar_pair_formation(ArBrain *first, ArBrain *second, int formation);
 /* A dash record: speeds by phase (0x5b7600; start, top, held frames, slowing a frame). */
 void ar_dash(int dash, float *start, float *top, float *hold, float *slow, int *sideways);
+/* Hop n (0-5): states 16-20 are hops 0-4, the pedestal climb (63) hop 5. */
+const ArHop *ar_hop(int n);
+/* The pair's controller when the second brother falls (FUN_004810f0: one left of two, formation 9): flags 0x8000,
+ * so the survivor's brain (FUN_003acfb0) sends him up his pedestal (state 63). */
+void ar_pair_survivor(ArBrain *b);
 
 #endif
