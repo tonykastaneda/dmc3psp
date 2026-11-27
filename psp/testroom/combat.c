@@ -190,6 +190,10 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_RG_END] = {S("24:31"), "ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1},
     /* physics: the jump's arc carries on under it (PS2: 30 frames in the air in all, as a plain jump). */
     [MOVE_RG_AIR_BLOCK] = {S("24:5"), "AIR ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 1, 0, 1},
+    /* State 0x15 (FUN_00225a00): facing the attacker, 24:4 to its end, then idle; in the air 24:9 falling (gravity
+     * -1.5, no drift) to the floor. (24:14 after a type-5 block, not reached.) */
+    [MOVE_RG_BREAK] = {S("24:4"), "GUARD BREAK", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_RG_BREAK_AIR] = {H("s44-09"), "GUARD BREAK", MOVE_NONE, NEXT_LAND, 0, 0, 0, -1, 1},
     [MOVE_TAUNT] = {S("2:0"), "TAUNT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DEVIL_ON] = {H("2-50"), "DEVIL TRIGGER", MOVE_NONE, 0, 0, 0, 0, -1},
     /* Ground motions seen on the HD Collection (state 44). Their roots say which way each throws
@@ -383,6 +387,31 @@ static void seek_events(Combat *c) {
 
 /* Starts a move. A new action resets the gates (each script opens its own);
  * a continuation keeps the action. */
+/* Royalguard's gauge (FUN_004420a0, config chunk 9): its level, +0x3c86, 0 empty, 1 up to +0x220 (3000), 2 up to
+ * +0x224 (6000), 3 above (to +0x228, 9000, at style level 2). */
+static int rg_level(float g) { return g <= 0.0f ? 0 : g <= 3000.0f ? 1 : g <= 6000.0f ? 2 : 3; }
+/* Release (FUN_0027d9f0 / 0027e130) plays its motion by the gauge's level and empties it: actions 191 / 192 / 193 /
+ * 195 / 196 / 197 by level 0-3 (action 190 / 194 one motion). Its damage (+0x2a1c: e.g. 191 0.9 x (300 + 0.25 x the
+ * gauge)) isn't carried: the port's blows are in units of health. */
+static void release_script(Combat *c, int action) {
+    static const unsigned char lv[8][4] = {{0, 0, 0, 0}, {17, 37, 38, 39}, {40, 41, 42, 43}, {16, 45, 46, 47},
+                                           {0, 0, 0, 0}, {20, 49, 50, 51}, {52, 53, 54, 55}, {19, 57, 58, 59}};
+    int level = rg_level(c->rg_gauge), s;
+    c->rg_release_level = level;
+    c->rg_gauge = 0.0f;
+    if (!lv[action - 190][0]) return;
+    {
+        char key[8];
+        snprintf(key, sizeof(key), "24:%d", lv[action - 190][level]);
+        for (s = 0; s < SCRIPT_DATA_COUNT; ++s)
+            if (!strcmp(script_data[s].key, key)) {
+                int mo = motion_find(script_data[s].motion);
+                if (mo >= 0) { c->script = s; c->motion = mo; }
+                break;
+            }
+    }
+}
+
 static void start_move(Combat *c, MoveId move, int action) {
     const Motion *m;
     if ((move == MOVE_RG_BLOCK || move == MOVE_RG_AIR_BLOCK) && c->move != MOVE_RG_BLOCK && c->move != MOVE_RG_HOLD &&
@@ -416,6 +445,7 @@ static void start_move(Combat *c, MoveId move, int action) {
     if (action) c->action = action;
     c->motion = motion_of[move];
     c->script = script_of[move];
+    if (action >= 190 && action <= 197) { release_script(c, action); c->release_frames = -1.0f; }   /* counts from the next update (phase 0 doesn't) */
     c->script_bank = c->script >= 0 ? atoi(script_data[c->script].key) : -1;
     c->place_state = 1;
     /* The PS2's blend into this script (FUN_002500d0 -> FUN_00255420, tools/gen_combat_data.py start_blends): most
@@ -1352,6 +1382,8 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     unsigned int inputs = read_inputs(c, player, input, dt);
     int action, hits;
     c->guard_frames += dt * MOTION_FPS;
+    if (c->rg_invuln > 0.0f) c->rg_invuln -= dt * MOTION_FPS;
+    c->release_frames = c->release_frames < 0.0f ? 0.0f : c->release_frames + dt * MOTION_FPS;
 
     c->held_tri = input->melee_held;
     c->held_sq = input->gun_held;
@@ -1827,12 +1859,51 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
      * taken as class 1, the rest class 0 [estimate]. Level 2 (the full moveset); grade 5 (+0x3c82, a block straight
      * after a type-5 one) isn't reached; the gauge isn't ported. */
     c->guard_type = 6;
+    if (c->rg_invuln > 0.0f) { c->guard_type = -1; return 0; }   /* +0x2af0: blows pass him by */
+    /* Release's counter (FUN_00441270, state 0x11 in action 190 / 194): a blow within config chunk 9's windows from
+     * its start (+0x3c90; level 2: +0x1ac 3, +0x1b8 7, +0x1c4 10 frames) is taken in: result 0 unharmed, 1 / 2
+     * through a lighter defence profile (FUN_004421f0 4 / 0; the profiles, gp-0x757c, aren't read: the blow's own
+     * damage) [estimate]; the attacker's recoil (its +0x20 call, codes 0-3) isn't ported. guard_type 10 + result. */
+    if ((c->action == 190 || c->action == 194) && c->release_frames <= 10.0f) {
+        int result = c->release_frames <= 3.0f ? 0 : c->release_frames <= 7.0f ? 1 : 2;
+        c->guard_type = 10 + result;
+        if (result) {
+            if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
+            player->health -= damage;
+            if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
+        }
+        return 0;
+    }
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) {
         static const unsigned char table[5][4] = {{0, 4, 3, 5}, {2, 2, 3, 5}, {2, 2, 3, 2}, {6, 6, 3, 5}, {6, 6, 3, 6}};
         int grade = c->guard_frames <= 5.0f ? 2 : c->guard_frames <= 10.0f ? 1 : 0;   /* columns: 0, 4, 3, 5 */
         int cls = kind >= 2 && kind <= 7 ? 1 : 0;
         c->guard_type = table[cls][grade];
-        if (c->guard_type != 2 && c->guard_type != 6) return 0;
+        if (c->guard_type != 2 && c->guard_type != 6) {
+            /* A block fills the gauge (FUN_00441df0): the blow's damage (its record's +4) times 1 (type 0), +0x188 1
+             * (1), +0x180 2 (3, the just block, also +0x1f4 = 10 frames of blows ignored), +0x184 1.25 (4); to 9000. */
+            static const float factor[6] = {1.0f, 1.0f, 0.0f, 2.0f, 1.25f, 0.0f};
+            float d = damage < 0.0f ? (kind >= 1 ? 800.0f : 700.0f) : damage;
+            c->rg_gauge += d * factor[c->guard_type];
+            if (c->rg_gauge > 9000.0f) c->rg_gauge = 9000.0f;
+            if (c->guard_type == 3) c->rg_invuln = 10.0f;
+            return 0;
+        }
+        if (c->guard_type == 2) {
+            /* A break (FUN_002e7f10 case 2 -> FUN_004421f0 -> state 0x15): the blow's damage, then the stagger facing
+             * the attacker. [The damage under profile 0x11 (FUN_002e8af0) isn't read: the blow's own.] */
+            if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
+            player->health -= damage;
+            if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
+            if (player->health > 0.0f) {
+                player->yaw = atan2f(from_x - player->x, from_z - player->z);
+                c->action = 0;
+                start_move(c, player->on_ground ? MOVE_RG_BREAK : MOVE_RG_BREAK_AIR, 0);
+                if (!player->on_ground) { player->vy = 0.0f; c->air = 0; }
+                return 1;
+            }
+            damage = 0.0f;   /* taken already: the fatal blow's reaction below */
+        }
     }
     if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
     player->health -= damage;

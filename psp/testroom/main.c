@@ -2133,6 +2133,13 @@ static void update_arm_fx(const Combat *c, const Player *p) {
                 if (!nfx_alive(follow[k].handle)) { follow[k].handle = h; follow[k].at = a->at; break; }
         }
     }
+    /* Release with gauge in it (+0x3c86 != 0) also starts CEfcPub 0x3d: V0x2a6 (FUN_0027d9f0 / 0027e130). */
+    if (c->action >= 190 && c->action <= 197 && c->action != last_action && c->rg_release_level > 0) {
+        float at[3];
+        arm_point(c, p, BONE_HIPS, at);
+        nfx_spawn(NFX_STATIC, 0x2a6, at, p->yaw, 0);
+        if (strlen(arm_fx_log) < sizeof(arm_fx_log) - 24) sprintf(arm_fx_log + strlen(arm_fx_log), "release%d:2a6 ", c->rg_release_level);
+    }
     for (i = 0; i < ARM_FOLLOW; ++i)
         if (follow[i].handle && nfx_alive(follow[i].handle)) {
             float at[3];
@@ -2185,7 +2192,10 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
         for (slot = 0; slot < 2; ++slot) {
             int ar = p->melee_weapon == 2, on;
             const WeaponPlace *place;
-            if (p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
+            /* Only Rebellion's class (CPlWpSword, vtable 0x60346c: type 0 in its first update 0x295380) and A&R's
+             * (CPlWp2Sword) make trails: Nevan's CPlWpGuitar, Cerberus's CPlWpNunchaku and Beowulf's CPlWpFight
+             * make none (no FUN_00309030 call). */
+            if ((p->melee_weapon != 0 && !ar) || (slot && !ar)) continue;
             on = !combat_move_is_gun(c->move) && (ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40)));
             place = combat_weapon_place(c, p, p->melee_weapon, slot);
             if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
@@ -2280,6 +2290,7 @@ static int focus_hud;   /* "hud": the cockpit, then locked on to a dummy, in the
 static int focus_cmp;
 static int cmp_death;
 static int cmp_hit_frame = -1, cmp_hit_kind, cmp_hit_damage = 500;   /* "hitme f kind damage": hit Dante from 1 m ahead */
+static int cmp_hitme[8][3], cmp_hitme_count;   /* up to 8 "hitme" lines */
 #define CMP_MAX_EVENTS 64
 #define CMP_MAX_FRAMES 18000
 static struct { char button[12]; int first, last, every; } cmp_events[CMP_MAX_EVENTS];   /* every: pressed again each n frames (mashing) */
@@ -2393,7 +2404,10 @@ static void cmp_load(void) {
                 shop_state.bought[5]=(unsigned char)(purple<0?0:purple>7?7:purple);
             }
         }
-        else if (strncmp(line, "hitme ", 6) == 0) sscanf(line + 6, "%d %d %d", &cmp_hit_frame, &cmp_hit_kind, &cmp_hit_damage);
+        else if (strncmp(line, "hitme ", 6) == 0 && cmp_hitme_count < 8) {
+            cmp_hitme[cmp_hitme_count][2] = 500;
+            if (sscanf(line + 6, "%d %d %d", &cmp_hitme[cmp_hitme_count][0], &cmp_hitme[cmp_hitme_count][1], &cmp_hitme[cmp_hitme_count][2]) >= 2) ++cmp_hitme_count;
+        }
         else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "testcam ", 8) == 0)
@@ -5141,6 +5155,7 @@ int main(int argc, char *argv[]) {
             int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
             float blow_damage = 0.0f;
             if (landed) { blow_kind = enemy_attack_kind(heavy); blow_damage = enemy_attack_damage(); }
+            { int h; for (h = 0; h < cmp_hitme_count; ++h) if (cmp_hitme[h][0] == frames) { cmp_hit_frame = frames; cmp_hit_kind = cmp_hitme[h][1]; cmp_hit_damage = cmp_hitme[h][2]; } }
             if (focus_cmp && frames == cmp_hit_frame) {   /* "hitme": a blow from 1 m ahead, through the same path */
                 landed = 1; blow_kind = cmp_hit_kind; blow_damage = (float)cmp_hit_damage;
                 from_x = player.x + sinf(player.yaw) * 100.0f; from_z = player.z + cosf(player.yaw) * 100.0f;
@@ -5166,10 +5181,11 @@ int main(int argc, char *argv[]) {
                     float dx = from_x - player.x, dz = from_z - player.z, dl = sqrtf(dx * dx + dz * dz);
                     float at[3] = {chest[0] + (dl > 1.0f ? dx / dl * 50.0f : 0.0f), chest[1], chest[2] + (dl > 1.0f ? dz / dl * 50.0f : 0.0f)};
                     int gt = combat.guard_type, v = gt == 3 ? 0x265 : gt == 4 ? 0x264 : gt == 5 ? 0x267 : 6;
+                    if (gt < 0 || gt >= 10) v = -1;   /* a just block's 10 frames, or Release's counter: nothing shows */
                     if (gt == 5) arm_point(0, &player, BONE_HIPS, at);
                     if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
                         sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", gt, frames, (int)combat.guard_frames);
-                    if (!nfx_spawn(NFX_STATIC, v, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
+                    if (v >= 0 && !nfx_spawn(NFX_STATIC, v, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
                     if(focus_cmp)vanguard_note("player_guard",player.health);
                 }
             }

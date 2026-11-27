@@ -306,9 +306,11 @@ rotation blended 1 / 0.75 / 0.5 / 0.25 between samples i and i + 1 (0x5abd60), t
 i + 1 / i + 2), the first the newest sample itself; scaled by +0x8c..0x94 (1). Alpha (`FUN_00309d30`): up by +9 a frame
 to +8 while fed, down by +9 to +10 from +0xc frames after the last feed (type 0: 128 / 16 / 0 / 3; 1 / 2: 128 / 24 / 8 /
 5). The port (`fx.c` mtrails, `main.c`) does the same: `native_fx.py` writes the models as `trail_runtime.h` (each
-vertex's offset from its bone's rest place) and their textures as 10034 / 10030 / 10031; drawn added. Not read: the
-blend +0x70 / +0x71 and +0x98 / +0x9c of kind 3, and which other weapon classes make type 0 (the port: Rebellion and
-Nevan).
+vertex's offset from its bone's rest place) and their textures as 10034 / 10030 / 10031; kind 3 (type 0) sets its model's glow
+blend (vtable +100 with +0x70 | +0x71 << 1, +0x68 with +0x98 / +0x9c: the calls `FUN_001f1760` makes for an effect
+model with +0x56, which nfx.c adds), so it's drawn added; kind 2 (types 1 / 2) the plain one (+0x70), alpha-blended. Only Rebellion's class (CPlWpSword, vtable 0x60346c, its update 0x295380) and A&R's
+(CPlWp2Sword) make trails; Nevan's CPlWpGuitar, Cerberus's CPlWpNunchaku and Beowulf's CPlWpFight call no
+`FUN_00309030`.
 
 ## Dante's effects
 
@@ -320,6 +322,7 @@ Nevan).
 | V0xa (V0x32 charged) | where a bullet lands (`002efaa0`) | E&I and Shotgun |
 | Kalina Ann V0x21f | its rocket's burst [inferred] | yes |
 | V6 (guard types 0-2), V0x265 / 0x264 / 0x267, V0x269 | a Royalguard block (`FUN_00224db0`), near the attacker (0x267 on his hips); a guard break's V0x269 on his left forearm, within 25 cm (`FUN_004416f0`). The type is the judgement's (`FUN_002e7f10` -> `FUN_004416f0`): +0x3c8c, frames since the guard press (99 while it's up), against config chunk 9's windows (within 5 frames grade 3; within +0x198 / 0x19c / 0x1a0 = 0 / 8 / 10 by style level grade 4; else 0); table 0x5c9400[the blow's guard class +0x3e][grade]: class 0 `0 4 3 5`, 1 `2 2 3 5`, 2 `2 2 3 2`, 3 `6 6 3 5`, 4 `6 6 3 6` (2 a break, 6 not blocked) | all; the blows' class taken from their kind (`combat.c`) |
+| Royalguard's gauge (+0x3c88) and Release | a block adds the blow's record damage times 1 (type 0 / 1) / 2 (just, +0x180; also +0x1f4 = 10 frames of blows ignored) / 1.25 (+0x184) (`FUN_00441df0`), to +0x220..0x228 (9000 at level 2); its level +0x3c86 (`FUN_004420a0`): 1 to 3000, 2 to 6000, 3 above. Release (`FUN_0027d9f0` / `0027e130`) plays its motion by the level (191: 24:17 / 37 / 38 / 39, 192: 40-43, 193: 16 / 45 / 46 / 47, 195: 20 / 49-51, 196: 52-55, 197: 19 / 57-59), empties the gauge and, with a level, starts V0x2a6. Result 5 is unreachable: +0x3c82 is set only after a type-5 block. Release's counter (`FUN_00441270`): in actions 190 / 194 a blow within +0x1a4.. / +0x1b0.. / +0x1bc.. by level (level 2: 3 / 7 / 10 frames from its start, +0x3c90, counted from the frame after) is taken in, result 0 unharmed, 1 / 2 through lighter defence profiles, and the attacker recoils (its +0x20 call) | `combat.c` rg_gauge / release_script |
 | V0x83 | Air Hike, at his feet, tinted the weapon's colour (`FUN_00222700`, `FUN_002fd1c0`) | yes |
 | V0x14d (P247, 248) | Enemy Step (`FUN_00228950`) | yes |
 | V0x8e (Dante's pack, P18), P44 (V0xf2 on floor material 0xb) | Helm Breaker's landing (`FUN_00264b90`) | yes, nfx bank 20 (GDATA 97) |

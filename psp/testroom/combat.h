@@ -57,6 +57,7 @@ typedef enum {
     MOVE_TR_WALL_RUN_R, MOVE_TR_WALL_KICK_R,      /* 23:9 -> 23:10 (+0x3c6d 1) */
     /* Not decoded yet: hand-made. */
     MOVE_RG_BLOCK, MOVE_RG_HOLD, MOVE_RG_END, MOVE_RG_AIR_BLOCK,
+    MOVE_RG_BREAK, MOVE_RG_BREAK_AIR,             /* a guard break (state 0x15, FUN_00225a00): 24:4, in the air 24:9 */
     MOVE_TAUNT,                                   /* SELECT: script 2:0 */
     MOVE_QUICKSILVER, MOVE_DOPPELGANGER,          /* R1 + CIR in those styles: 25:0, 26:0 */
     MOVE_DEVIL_ON,                                /* turning Devil Trigger on: 0:50 */
@@ -83,6 +84,10 @@ typedef struct {
     unsigned char gates[COMBAT_GATES]; /* 0 closed, 1 buffer, 2 open */
     int pending;           /* action buffered while its gate was 1 */
     int active;            /* attack-active window (window 0 byte 1 bit 0x80) */
+    float rg_gauge;        /* Royalguard's gauge (player+0x3c88): blocked damage, up to 9000 (level 2) */
+    float rg_invuln;       /* frames left that blows are ignored after a just block (+0x2af0) */
+    int rg_release_level;
+    float release_frames;  /* frames since Release (190 / 194) began (player+0x3c90) */  /* the gauge's level (+0x3c86, 0-3) the last Release started with */
     float guard_frames;    /* frames since the guard began (player+0x3c8c) */
     int guard_type;        /* the last blow's guard result (player+0x3c80, FUN_004416f0): 0/1 block, 2 break, 3/4 the
                             * timed blocks, 5 (not reached), 6 not blocked */

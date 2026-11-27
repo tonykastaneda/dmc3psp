@@ -26,6 +26,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from moveset_phases import ACTIONS, WEAPON_NAMES
 
 SCRIPTS = ["18:4", "18:5", "18:6", "18:7",
+           # Release by the gauge's level (FUN_0027d9f0 / 0027e130, combat.c release_script)
+           "24:37", "24:38", "24:39", "24:41", "24:42", "24:43", "24:45", "24:47",
+           "24:49", "24:50", "24:51", "24:53", "24:54", "24:55", "24:57", "24:59",
            # Dante hit: flinches 1:0 / 1:15 / 1:1, heavy 1:2 / 1:3, getting up 1:7 / 1:9, recovery 1:6, landing 1:14
            "1:0", "1:15", "1:1", "1:2", "1:3", "1:7", "1:9", "1:6", "1:14",   # Twosome Time's other set (+0x3c6d = 1, table 0x595564)
            "3:3", "3:4", "3:5", "3:6", "3:7", "3:8", "3:9", "3:10", "3:11",

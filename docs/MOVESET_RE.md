@@ -531,3 +531,13 @@ ground, 24:18-20 air). The block itself is a player state: handlers
   Prop / Dance Macabre; rb-29 is action 12. Swordmaster Rebellion moves
   live in GDATA 33 (s33-): Prop 13:19 -> Shredder 13:12/13, Aerial Rave
   13:7-10. Real Trickster / Royalguard motions are GDATA 43 / 44.
+
+## The gp register and the defence profiles
+
+The executable's `.reginfo` section (the last of its 8 sections) gives **gp = 0x620170**, so Ghidra's `iGpffffXXXX`
+globals are at 0x620170 + (0xXXXX - 0x10000): gp-0x7580 (`iGpffff8a80`) holds 0x5a5a30, the shell (bullet) records;
+gp-0x757c (`iGpffff8a84`) 0x5a6bb0, the player's defence profiles (0x54 bytes each, copied to +0x2a7c by
+`FUN_002e8af0`): eight percentages (100), then two values (+0x20 / +0x24) that change by profile: 33 the normal one
+(1), 25 / 20 / 16 a block at style levels 0-2 (6-8), 16 / 13 / 11 the lighter one (9-11, Release's counter), 3 / 2
+Devil Trigger's (12-16), 33 the guard break's (17); then max health 6000 and 60 / 60. The damage component that reads
+them (player+0x2a20, its +0xc) isn't found yet, so how they scale a blow isn't known.
