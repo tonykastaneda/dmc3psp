@@ -18,6 +18,13 @@ int near_clip_prepare(const void *vertices, int count);
  * GU_INDEX_16BIT. Returns the triangles added. */
 int near_clip_draw(const void *vertices, const unsigned short *indices, int count, int vtype);
 
+/* The PS2's way with a stage near the eye (demo 3's frame 1240: a wall 25-50 cm from the camera, which the PS2 doesn't
+ * show): a triangle reaching behind the near plane is dropped whole, not clipped. near_cull_box: does a chunk's box
+ * straddle the plane (call near_clip_begin first)? near_cull_draw: draws a non-indexed {u, v, colour, x, y, z}
+ * triangle list without those triangles; returns how many it dropped. */
+int near_cull_box(const float mn[3], const float mx[3]);
+int near_cull_draw(const void *vertices, int count, int vtype);
+
 /* For the cost tests: models tested, models that needed clipping and triangles added since the last call. */
 void near_clip_stats(int *tested, int *clipped, int *added);
 

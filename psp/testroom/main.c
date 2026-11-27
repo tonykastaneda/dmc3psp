@@ -1293,8 +1293,10 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
          * for the 3D pass (credits_fight.c) and the stage's colours doubled (stage_set_double). */
         unsigned int clear = mission_mode ? 0xff000000u : CLEAR_COLOR;
         int fog = credits_fight_fog(&clear);
-        if (fog) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
+        int haze = !fog && demo_fog();   /* a cutscene's GFG; the credits fog keeps its own colour and clear */
+        if (fog || haze) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
         stage_set_double(fog);
+        stage_set_sky_unfog(haze);
         sceGuClearColor(clear);
     }
     sceGuClearDepth(0);
@@ -1348,7 +1350,9 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         sceGuDisable(GU_TEXTURE_2D);
         sceGuDisable(GU_LIGHTING);
         sceGuDisable(GU_ALPHA_TEST);
+        { extern int near_cull_on; stage_set_near_cull(near_cull_on); }   /* the PS2 drops stage triangles reaching behind the near plane (near_clip.h) */
         if (stage_loaded()) stage_draw();
+        stage_set_near_cull(0);
         demo_draw();
         {
             float eye[3] = {camera->x, camera->y, camera->z};
@@ -1524,6 +1528,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
 scene_done:
     if (!demo_active()) draw_hud(hud);
     else {
+        sceGuDisable(GU_FOG);   /* bars, fade and subtitles are 2D; the demo path skips the disable above */
         /* The cutscene's subtitle: its height from the PS2's 448 lines, centred (the PS2's x was set for its own font). */
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
@@ -2341,6 +2346,7 @@ static void bench_add(unsigned int gap, unsigned int update, unsigned int skin) 
     b->gpu += perf_gpu_us;
 }
 static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
+static int cmp_demo_shots[32], cmp_demo_shot_count;   /* "demoshot N": a still at the cutscene's own frame N */
 /* "mkey button frame" and "mshot frame" drive and picture the menus, for tests. */
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
@@ -2513,8 +2519,12 @@ static void cmp_load(void) {
         else if (strncmp(line, "m6got ", 6) == 0) cmp_m6_got = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }
+        else if (strncmp(line, "demoshot ", 9) == 0) { if (cmp_demo_shot_count < 32) cmp_demo_shots[cmp_demo_shot_count++] = atoi(line + 9); }
+        else if (strncmp(line, "demohide ", 9) == 0) { extern int demo_hide_slot; demo_hide_slot = atoi(line + 9); }
+        else if (strncmp(line, "nearcull ", 9) == 0) { extern int near_cull_on; near_cull_on = atoi(line + 9); }
         else if (strncmp(line, "nearclip ", 9) == 0) { extern int near_clip_off; near_clip_off = !atoi(line + 9); }
         else if (strncmp(line, "rawfov ", 7) == 0) demo_raw_fov = atoi(line + 7);   /* tests: 1 passes channel 12 raw */
+        else if (strncmp(line, "nofog ", 6) == 0) demo_no_fog = atoi(line + 6);     /* tests: 1 leaves GFG off */
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
@@ -5414,6 +5424,13 @@ int main(int argc, char *argv[]) {
                     snprintf(cmp_name, sizeof(cmp_name), "SHOT_%d.BMP", frames);
                     capture_frame(draw_buffer, cmp_name);
                 }
+                for (shot = 0; shot < cmp_demo_shot_count; ++shot)
+                    if (cmp_demo_shots[shot] >= 0 && demo_active() && demo_frame() >= (float)cmp_demo_shots[shot]) {
+                        /* "demoshot N": at the cutscene's own frame N (its timeline's numbers), not the game's */
+                        snprintf(cmp_name, sizeof(cmp_name), "DSHOT_%d.BMP", cmp_demo_shots[shot]);
+                        capture_frame(draw_buffer, cmp_name);
+                        cmp_demo_shots[shot] = -1;
+                    }
                 for (shot = 0; shot < cmp_shot_count; ++shot)
                     if (frames == cmp_game_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "SHOT_%d.BMP", frames); capture_frame(draw_buffer, cmp_name); }
                     else if (shot < 32 && frames == cmp_shots[shot]) { snprintf(cmp_name, sizeof(cmp_name), "FOCUS_C%d.BMP", frames); focus_pending = cmp_name; }

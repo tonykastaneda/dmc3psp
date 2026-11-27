@@ -74,14 +74,43 @@ every face came out bright and neutral. What the game does:
   Src to Dst over it) and `FUN_0027fc80` files it: ValidType bit 8 into the scene's one slot (+0x40), the rest into
   its light list (+0x14).
 - `FUN_0027f230` lights a model (called from the model draws `FUN_001aa110` / `001aa360` / `001aa540`) with flags: a
-  light whose ValidType, less bit 4, is 1 reaches models with flag 1 or 2, 2 those with flag 2 (the characters), 3
-  those with flag 1 (the stage); bit 4 lights only models asking for it (flag 0x10); the slot's light comes first.
+  light whose ValidType, less bit 4, is 1 reaches models with flag 1 or 2, 2 those with flag 2, 3 those with flag 1.
+  Flag 2 is the default, and the stage keeps it (below). Flag 1 is a model whose clip sets Light 2. Bit 4 of a light
+  reaches only a model asking for it (flag 0x10). The slot's light comes first.
   `FUN_0027f610` makes each one: the vector to it, w 1 / Force²; its colour (negated if IsMinus), w 1 / Range²; and
   its rank, 1 − d² / Range² clamped at 0 (a 0 range: 1). `FUN_0027f7e0` keeps the three best ranked.
 - The VU1 microcode that shades with them isn't read: the port takes a light's strength as 1 − d² / Force² (a 0
   force: whole) and its colour / 128 [inferred], at each actor's centre, as a PSP directional light toward it.
 
-`prepare_demo.bake_lights` bakes the clips (80 bytes each, after the fades; their count at the header's +0x3c) and
+**The stage keeps flag 2, and its picture is the baked vertex colour.** A CDraw is constructed with light flag 2
+(`FUN_00281010` stores 2 at +1476). The model clip's Light key (`FUN_00219dc0`, the string at 0x618488, a short at
+clip +1762) is the only writer, applied in the model update at 0x2366cc: 0 leaves the flag, 1 sets 2, 2 sets 1.
+`FUN_001aa110` ORs 0xC into that flag before `FUN_0027f230`, so both light lists are walked and the class-3 bit is
+still not set. Class 3 reaches only a model whose clip sets Light 2. No Model00 clip in the unpacked demos sets
+Light. Demos 3, 5 and 59 set no Light key on any slot, so the stage takes the same class-1 and class-2 lights as the
+cast, and their ValidType 3 clips hit nothing. Other demos set Light 2 on later slots only (15, 41, 42, 49, 55, 60);
+those models would drop class 2 and take class 3. ColChange (clip +91, `FUN_0021c280`) is unused in 3, 5 and 59.
+
+The port's stage mesh is that SCM colour (0x80 = 1) times the stage gain, with lighting off. The class-1 and class-2
+lights already fall on the cast. Multiplying the same colours onto the bake is the formula the stills reject: demo 5
+frame 300's two full-strength class-2 lights are (120, 100, 70) and (64, 64, 32), and the stage region already
+matches without them. Against the PS2 halves of cl2's compare sheets (current shots, letterbox interior):
+
+- Demo 5. Frame 300, (10, 50, 160, 200): PS2 [43.8, 26.0, 14.1], PSP [47.7, 28.9, 16.2] (`fog5_300.png`). Frame
+  1380, (280, 45, 460, 150): [64.3, 38.6, 21.0] against [63.2, 37.9, 23.2]. Frame 180's horizon is the unfogged sky.
+- Demo 59 frame 700, ground (5, 60, 140, 210) and (340, 60, 470, 210): PS2 [24.2, 28.6, 38.7] and [29.4, 35.1, 49.6],
+  PSP [27.1, 30.8, 44.0] and [32.1, 36.8, 53.3] (`fog59_700.png`). Same hue, a few levels brighter. st506's vertex
+  colours are grey, so the blue is the texture. A blue ValidType 6 on that frame would push it the wrong way. Frame
+  3700 is a hair close-up; the PS2 is brighter there, which is the skipped glow, not a stage class.
+- Demo 3's sheet is frames 360, 540 and 1980 (cl2's `fin3_360.png`, `fin3_540.png` and `fin3_1980.png` match the
+  sheet's right halves). Frame 360's open region (40, 70, 160, 150): PS2 [25.3, 18.0, 13.1], PSP [24.4, 18.5, 14.1]
+  (`stlight3b_360.png`). The right of that frame is the room-prop cover, not a darker light. Frame 540's two halves
+  are different pictures, so it is not a colour reading. Frame 1980 is brighter on the PSP and its two regions do not
+  move by one scale.
+
+The stage stays the bake. The VU program that shades a stage with the flag-2 lights is still unread.
+
+`prepare_demo.bake_lights` bakes the clips (80 bytes each, after the fades; their count is the low 16 bits of the header's +0x3c, and the high 16 bits are the GFG fog clips) and
 `demo.c` demo_lights sets them per actor, with an ambient of 0x30 [stand-in, by eye]. Checked against PCSX2:
 `analysis/testroom/arkham_face_lit_compare.png` (demo 1's cm027) and `ending_dante_lit_compare.png` (demo 59, from
 the Mission 20 credits state, `analysis/ref/cast/credits_to_ending.mp4`).
@@ -152,9 +181,30 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   25) and No 6 (their ambient: 30 20 20 in demos 1-5) [inferred from their values] scale the demo's lights and set
   the ambient (`demo_program_colour`), replacing the by-eye 0x30 ambient where a demo sets them. Arkham's face in demo
   5 is now warm like the PS2's. The world's ValidType 3 lights stay off characters: tried, they darkened him.
-- Not ported: the ScrEfc screen effects (FCS / DOF depth-of-field blur, GFG fog, SGA glow, BGA / BGO, ATF): a
-  full-screen blur pass is too costly for the PSP in a demo, so the PS2's soft backgrounds and haze aren't there;
-  demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
+- **ScrEfc fog (GFG).** A clip is a depth ramp: MinAlpha/128 at StartZ, MaxAlpha/128 at EndZ (128 = 1, as a fade's
+  alpha), colour the clip's MaxColor (ABGR). Demo 5 frames 0-1501 (so 180, 300 and 1260) are Type 1, StartZ 7000,
+  EndZ 9000, MinAlpha 0, MaxAlpha 20, MaxColor R87 G47 B22; frames 1501-5395 are 9000-11000, MaxAlpha 20, R130 G80
+  B40. Demo 59 has no GFG. `demo_fog` calls sceGuFog. Hardware fog is full colour at its far, so that far is where
+  the same line would hit 1 (the first clip: near 7000, far 19800) [inferred: the draw that would clamp past EndZ
+  was not the function read, so past EndZ the haze keeps thickening until that far]. The sky pass turns fog off;
+  the dome sits far beyond it and would become a flat colour. The credits fight's fog is unchanged and wins if
+  both would apply. A bin from before this has fog count 0 (the high half of +0x3c) until `prepare_demo` is run
+  again; that does not rebake `DSTG`. Checked on demo 5 (`fog5_180.png`, `fog5_300.png`, `fog5_1260.png`,
+  `fog5_1380.png`) and demo 59 (`fog59_700.png`, `fog59_3700.png`) against cl2's PS2 stills. The display-list build
+  matched a `nofog 1` run of demo 5 within 2 us (about 4.6 ms on the close shot, 6.4-7.2 ms on the wider ones).
+  Frame 300's distant left moved toward that brown; frame 1260 sits inside StartZ, so it stays sharp where the PS2
+  still is the FCS blur. Demo 59 frame 700 has no fog clip and stays on the previous picture.
+- **Not ported: ScrEfc blur and glow.** FCS is a focus band (Distance, OutStartZ/OutEndZ, InStartZ/InEndZ, Color,
+  Power, Range). Demo 5 frame 180 is the opening clip, Power 0. Frame 300 is Power 1, Distance 800, out of focus
+  from 500 to 1000. Frame 1260 is Power 2, Distance 260, out of focus from 300 to 800. DOF is StartZ, EndZ, Color,
+  Power: demo 59 only at 2915 (0-300, Power 2) and 3309 (800-1100, Power 3), so frame 700 has none, and its FCS
+  ends at frame 300. SGA is a feedback bloom (Color, Alpha, Scale, DirNum, DirOffset, Feedback, Attenuate, and an
+  8x16 kernel), not a tint. Demo 5 has it only on frames 0-271 (frame 180: grey, Alpha 48, Scale 16, DirNum 4,
+  Feedback 4, Attenuate 0.85); frames 300 and 1260 have none. Demo 59 has it the whole cut (frame 700: R140 G132
+  B128, Alpha 64, Scale 8, DirNum 4, DirOffset 23, Feedback 5, Attenuate 0.9) plus a BGA of the same family
+  (Alpha 38, Feedback 4). Nothing in the renderer samples the frame at a reduced size, and a blur of the 480x272
+  frame is the pass that does not fit under about 1.5 ms, so neither glow nor blur is drawn. ATF is not part of this.
+- Demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
 
 **Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm
 in front of Dante's chest while it looks at enemies metres away. With the near plane at a third of the eye-to-target
@@ -172,12 +222,45 @@ the 25 cm cap draws a dark surface across the right of the frame (`n3_360_360.pn
   cost about 2 ms a frame with the camera against Dante (7.1 against 5.2 ms of draw time). It is off by default
   (test line `nearclip 1`) until real hardware shows whether its GE drops such triangles.
 
+**The "Rebellion slab" in demo 3 was the room's props and the GE's near clipping, not a weapon.** Rebellion
+(`wp100`, slot 9) sits where its motion puts it: hiding it, and every other actor slot, left the slab in place.
+Shots taken by the cutscene's own frame (`demoshot N`) and slot-by-slot hiding (`demohide N`) found three causes:
+- **Room props on the pieces' hide tracks.** A cutscene staged in a game room (`st001` is room 001) copies the room's
+  `ROOM_nnn.BIN`, which holds the room's placed STAY props. The cutscene's own pieces textured from the room
+  (`ss001_00/01`) are left out of the cast, and those props stand in for them, but always shown: `ss001_01` (the
+  arch's building, around the camera of frames 2466-2964) is hidden until 2964 on the PS2. Stage batches now carry
+  their SCM object (index + 1) or prop (256 + its index) in the batch's 8th word; `prepare_demo.piece_prop_events`
+  matches each left-out piece to the props inside its bounds and gives them its H / D clips (demo 3: prop 2), so the
+  PS2's view of Dante by the bus (frame 2700) and the arch behind him at 3300 both come out.
+- **Near-plane clipping.** With `GU_CLIP_PLANES` on, PPSSPP's GE clips the room's walls at the near plane into a slab
+  in front of the lens; the PS2 drops such triangles. The cutscene stage pass now runs with clip planes off, so the
+  GE drops them itself, at no cost (`nearcull N`: 2 default, 1 a CPU walk at about 1.4 ms, 0 the old clipping).
+- **Hide clips without files.** A Hide clip's `HideKind` H hides the slot and D shows it with no `.hid` named; they
+  were skipped, so pieces meant to stay hidden (`ss001_01` until 2964, the coats in slots 32 / 33) showed.
+  `prepare_demo` keeps them, and the stage's own hide track (its slot's `.hid` files: demo 3 hides `st001` objects
+  3 and 23-26 from 2282) is applied by object (`stage_hide_events`, `demo.c` stage_hide_apply).
+- `gen_rooms.py` built a room's stage only when its bin was missing, so rooms built on 2026-11-04 had missed the
+  exact palettes and these tags; it now rebuilds a room when `prepare_stage.py` / `scm_ps2.py` are newer (about 8
+  minutes once).
+
+- **Motion clips held at their end.** A slot whose clip has ended and whose next hasn't begun dropped to its rest pose
+  at the world origin. The game keeps the last frame: demo 59's sword (`wp122`, one 154-frame clip) stays leaning on
+  the desk. `demo.c` demo_clip_now holds the last clip begun (and keeps its motion loaded).
+- Test lines: `demoshot N` (a still at the cutscene's own frame N, `name_dN.png`), `demohide N` (slot N not drawn;
+  -2 no effects, -3 no actors).
+
+Weapon placement checked against PCSX2 (`analysis/testroom/demo3_weapons_compare.png`, `demo59_weapons_compare.png`):
+Rebellion in demo 3 (overhead, thrown, pointed at the end) matches; demo 59's sword was missing from the desk (now
+held there). Still open in demo 59: the book (in `ss506_00`, slot 8) is missing from the desk at frame 3040 and open in
+Dante's hand at 3580 where the PS2's is closed: how long a per-object `.hid` clip's keys last after its Life isn't
+known (the port keeps the last clip begun).
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
 Arkham's blob (demo 53) were looked at in the port only (no save state reaches those demos): their textures and
-faces read right. Still different, not textures: the stages' light (the PS2's ending street
-is bluer).
+faces read right. The ending street's colour is that bake: demo 59 frame 700 is the same hue as the PS2, a few
+levels brighter, not a missing blue light.
 
 **The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
 FIX 0x80, Cd − Cs; 5-15 are on no character); bits 4 and 5 (0x10 / 0x20, values 16-19 and 48, nearly all on EFM

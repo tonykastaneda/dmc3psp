@@ -55,7 +55,7 @@ def main():
     sync()
     if args.eboot:
         shutil.copy2(args.eboot, GAME / "EBOOT.PBP")
-    for f in list(GAME.glob("SHOT_*.BMP")) + list(GAME.glob("MENU_*.BMP")) + [GAME / "FOCUS_DONE.TXT"]:
+    for f in list(GAME.glob("SHOT_*.BMP")) + list(GAME.glob("MENU_*.BMP")) + list(GAME.glob("DSHOT_*.BMP")) + [GAME / "FOCUS_DONE.TXT"]:
         f.unlink(missing_ok=True)
     lines = [f"frames {args.frames}", "fps 30"] + ([] if args.street else ["menu 1"])
     if args.room >= 0:
@@ -123,6 +123,12 @@ def main():
         if args.video and args.video[0] <= n <= args.video[1]:
             img.save(frames_dir / f"{k:05d}.png")
             k += 1
+        f.unlink()
+    # Cutscene stills by the demo's own frame ("demoshot N"): name_dN.png.
+    for f in GAME.glob("DSHOT_*.BMP"):
+        out = OUT / f"{args.name}_d{f.stem.split('_')[1]}.png"
+        Image.open(f).convert("RGB").save(out)
+        print(out)
         f.unlink()
     # Menu captures are named separately by menu_test_shot ("mshot frame").
     for f in GAME.glob("MENU_*.BMP"):

@@ -3,6 +3,7 @@
 #include <pspgu.h>
 #include <pspgum.h>
 #include "model_blend.h"
+#include "near_clip.h"
 #include <pspiofilemgr.h>
 #include <psputils.h>
 
@@ -49,6 +50,8 @@ static const Header *header;
 static const HitsHeader *hits;
 static unsigned char group_hidden[256];   /* by breakable number */
 void stage_hide_group(int number) { if (number > 0 && number < 256) group_hidden[number] = 1; }
+static unsigned char object_hidden[512];   /* by a batch's pad[1] (SCM object + 1; 256 + a prop's index): a cutscene's hide tracks */
+void stage_set_object_hidden(int number, int hidden) { if (number > 0 && number < 512) object_hidden[number] = (unsigned char)(hidden != 0); }
 #define LIFT_TAG 254   /* tools/gimmicks.py: a lift's batches */
 static float lift_raise;
 static struct {float x,z,yaw,raise;int active;float pivot[3],move[3],turn[3],pivot2[3],scale[3];} group_pose[256];
@@ -142,6 +145,7 @@ static unsigned int blob_capacity, chunk_capacity, stage_loaded_size;
 
 int stage_load(const char *path) {
     memset(group_hidden, 0, sizeof(group_hidden));
+    memset(object_hidden, 0, sizeof(object_hidden));
     memset(group_pose,0,sizeof(group_pose));
     lift_raise = 0.0f;
     stage_clear_boxes();   /* main.c adds the new room's */
@@ -279,9 +283,12 @@ static int chunk_hidden(const Chunk *c) {
 }
 
 int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
-static int stage_double, sky_off;
+static int stage_double, sky_off, sky_unfog;
 void stage_test_sky_off(int off) { sky_off = off; }   /* tests: "nosky 1", the sky pass's cost */
 void stage_set_double(int on) { stage_double = on; }
+void stage_set_sky_unfog(int on) { sky_unfog = on; }
+static int stage_near_cull;
+void stage_set_near_cull(int on) { stage_near_cull = on; }
 
 void stage_draw(void) {
     const TexEntry *textures;
@@ -304,7 +311,7 @@ void stage_draw(void) {
 
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
-    sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_LIGHTING);   /* baked vertex colour; a cutscene does not multiply the demo lights on */
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_DEPTH_TEST);
     sceGuDepthMask(GU_FALSE);
@@ -328,6 +335,7 @@ void stage_draw(void) {
                 sceGuDisable(GU_DEPTH_TEST);
                 sceGuEnable(GU_BLEND);
                 sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+                if (sky_unfog) sceGuDisable(GU_FOG);   /* the dome is past the fog far; leave the texture */
                 sky = 1;
             }
             bind_texture(&textures[b->texture]);
@@ -348,13 +356,17 @@ void stage_draw(void) {
             sceGuDepthMask(GU_FALSE);   /* a glow batch turned depth writes off */
             sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             sceGuDisable(GU_BLEND);
+            if (sky_unfog) sceGuEnable(GU_FOG);
         }
     }
+    if (stage_near_cull == 1) near_clip_begin();   /* the stage's model matrix is the identity here */
+    if (stage_near_cull == 2) sceGuDisable(GU_CLIP_PLANES);   /* the GE drops near-crossing triangles itself */
     for (i = 0; i < header->batches; ++i) {
         const Batch *b = &batches[i];
         unsigned int k, visible = 0;
         if (b->flags & BATCH_SKY) continue;   /* drawn above */
         if (b->pad[0] && b->pad[0] < 256 && group_hidden[b->pad[0]]) continue;   /* a broken prop */
+        if (b->pad[1] && b->pad[1] < 512 && object_hidden[b->pad[1]]) continue;   /* hidden by the cutscene */
         int posed=b->pad[0]<256 && group_pose[b->pad[0]].active;
         int lift = b->pad[0] == LIFT_TAG || posed;
         for (k = 0; k < b->chunk_count; ++k) visible += chunk_visible[b->chunk_first + k];
@@ -415,6 +427,13 @@ void stage_draw(void) {
             unsigned int done = 0;
             if (!chunk_visible[b->chunk_first + k] && !lift) continue;
             ++stage_chunks_drawn;
+            if (stage_near_cull == 1 && !lift && c->count <= 12000 && near_cull_box(c->min, c->max)) {
+                /* A cutscene's stage at the eye: the triangles reaching behind the near plane dropped, as the PS2
+                 * does (near_clip.h), not clipped into a wall in front of the camera. */
+                near_cull_draw(vertices + (size_t)c->first * 24, (int)c->count,
+                               GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D);
+                continue;
+            }
             /* The GE takes at most 65535 vertices per draw. */
             while (done < c->count) {
                 unsigned int n = c->count - done;
@@ -427,6 +446,7 @@ void stage_draw(void) {
         if (lift) { sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity(); }
     }
     sceGuDepthOffset(0);
+    if (stage_near_cull == 2) sceGuEnable(GU_CLIP_PLANES);
     sceGuDisable(GU_FRAGMENT_2X);
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuDisable(GU_BLEND);
