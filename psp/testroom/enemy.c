@@ -213,6 +213,7 @@ static int landed;
 static float landed_x, landed_z;
 static int landed_heavy;
 static float landed_damage = -1.0f;
+static int landed_by = -1;   /* the enemy whose blow last landed (enemy_guarded) */
 static int landed_kind = -1;   /* the attack record's kind (+0x18), -1 unknown */
 static AttackSlots attack_slots = {1,{0}};
 void enemy_set_attack_slot_limit(int limit) { attack_slots_reset(&attack_slots,limit); }
@@ -928,6 +929,31 @@ int enemy_attack_landed(float *from_x, float *from_z, int *heavy) {
     return 1;
 }
 float enemy_attack_damage(void) { return landed_damage; }
+static void bw_go(int action);
+/* Dante guarded the last blow (FUN_002e7f10 / FUN_00441270 call the attacker's hit sub-object +0x20, FUN_00259dd0 ->
+ * its +0x114 object's +0x28 with the code: 0 / 1 a block on the ground / in the air, 2 / 3 a just block or Release's
+ * clean counter, 4 type 5). Most classes leave +0x114 empty (the Seven Hells, Enigma; Lady's gate does nothing).
+ * Beowulf (CEm030, FUN_002e0710 -> FUN_002df7b0): codes 2 / 3 while his action is 2-4 take the blow as a hit,
+ * action 8, his stagger (FUN_002df6d0). Nevan (CEm028, FUN_003bb540) calls her +0x13c object's +0x10 [not read]. */
+static int is_lying(void);
+static void plan_set(int plan);
+static void giga_note(const char *what, int a, float b);
+void enemy_guarded(int code) {
+    Enemy *was = e;
+    if (landed_by < 0 || landed_by >= ENEMY_MAX) return;
+    e = &enemies[landed_by];
+    landed_by = -1;
+    if (e->active && e->plan != P_DEATH && e->kind == ENEMY_BEOWULF && (code == 2 || code == 3) &&
+        e->action >= 2 && e->action <= 4) { bw_go(8); giga_note("guarded_stagger", code, (float)e->action); }   /* BW_STAGGER */
+    /* The Hells (their shared AI at +0x2bc0, CComEm000 0x607b20, +0x28 FUN_003681a0): codes 2 / 3, unless dying, take
+     * their own blocked record as a hit (+0x3c FUN_00368bd0 -> +0x68, the hit reaction): their records 0 / 1 are light,
+     * so a flinch (no damage: that's the damage component's, not called). [The owner's +0x10 check isn't read.] */
+    else if (e->active && e->plan != P_DEATH && (code == 2 || code == 3) &&
+             (e->kind == ENEMY_PRIDE || e->kind == ENEMY_GLUTTONY || e->kind == ENEMY_LUST || e->kind == ENEMY_SLOTH ||
+              e->kind == ENEMY_WRATH || e->kind == ENEMY_GREED || e->kind == ENEMY_ENVY) && !is_lying())
+        { plan_set(e->air ? P_AIR_HIT : P_FLINCH_FRONT); giga_note("guarded_flinch", code, (float)e->kind); }
+    e = was;
+}
 void enemy_clamp_player(float *z) {
     int i;
     for (i = 0; i < ENEMY_MAX; ++i) if (enemies[i].active && enemies[i].kind == ENEMY_CERBERUS) {
@@ -2019,6 +2045,7 @@ void enemy_audit_finish(void) {
 static void land_attack(int heavy) {
     trace_row(heavy ? 2 : 1);
     landed = 1;
+    landed_by = (int)(e - enemies);
     landed_x = e->pos[0];
     landed_z = e->pos[2];
     landed_heavy = heavy;

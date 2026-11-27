@@ -115,6 +115,8 @@ void enemy_test_note(const char *what, int a, float b);   /* tests: a line in th
 int enemy_attack_landed(float *from_x, float *from_z, int *heavy);
 /* Original attack-record damage, or -1 for the generic 700/800 fallback. */
 float enemy_attack_damage(void);
+/* Dante guarded the last landed blow; code as the game's (0 / 1 block, 2 / 3 just block or clean counter, 4 type 5). */
+void enemy_guarded(int code);
 /* The landed attack's record kind (+0x18) where the enemy knows it, else 1 if heavy, 0 if not. */
 int enemy_attack_kind(int heavy);
 /* Boss arena constraints, if one is active. */

@@ -1401,6 +1401,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     unsigned int inputs = read_inputs(c, player, input, dt);
     int action, hits;
     c->guard_frames += dt * MOTION_FPS;
+    /* +0x3c8c restarts on every press of the guard (0x243de8), 99 while it's up (0x243e2c). */
+    if (player->style == STYLE_ROYALGUARD) {
+        if (input->style_action) c->guard_frames = 0.0f;
+        else if (!input->style_held) c->guard_frames = 99.0f;
+    }
     if (c->rg_invuln > 0.0f) c->rg_invuln -= dt * MOTION_FPS;
     c->release_frames = c->release_frames < 0.0f ? 0.0f : c->release_frames + dt * MOTION_FPS;
 

@@ -549,3 +549,14 @@ picks the profile for a block (6-8 by style level), the lighter one (9-11), Devi
 12-16), a break 0x11 (0x12 in Devil Trigger). The port takes records whole, so its blocks scale by profile / 33
 (`combat.c` chip_share). **The port's ordinary hits take records whole too: 3x the PS2's at difficulty 1 (not changed
 here).**
+
+## The guarded attacker
+
+When a guard or Release's counter holds, `FUN_002e7f10` / `FUN_00441270` call the attacker's hit sub-object (+0x40)
++0x20 with a code: 0 / 1 a block (on the ground / in the air), 2 / 3 a just block or the counter's clean result, 4 type
+5. `FUN_00259dd0` passes it to the object at +0x114's +0x28. The Hells set +0x114 to their shared AI at +0x2bc0
+(CComEm000, vtable 0x607b20): `FUN_003681a0` on codes 2 / 3 takes their own blocked record as a hit (`FUN_00368bd0` ->
++0x68), a flinch. Beowulf (CEm030) sets it to his +0x130: `FUN_002df7b0` on codes 2 / 3 while his action is 2-4 takes the
+hit, action 8 (`FUN_002df6d0`). Nevan (CEm028, `FUN_003bb540`) calls her +0x13c object's +0x10 [not read]; Lady, the
+Enigma and Cerberus's (`0x32a3a0`) do nothing. Other classes' handlers (Agni & Rudra's, the Gigapede's, ...) aren't
+read. Also: the guard timer +0x3c8c restarts on every press of the guard (0x243de8) and is 99 while it's up.
