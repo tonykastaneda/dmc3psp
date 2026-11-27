@@ -17,7 +17,10 @@ DEMO_nnn.BIN (little endian; offsets from its start):
     u32 parents (i8), local (f32x3), rest (f32x3), vertices ({u, v, normal, position} f32), skin ({bones, weights}
     u8x3 each, 8 bytes), indices (u16), objects ({texture (bits 16-19: its blend), first index, count}), motions ({f32 set, end, scale, skip;
     u32 MOT offset, size; 32 bytes}), the bone its bounding sphere is about, its radius (f32); f32 pos[3], rot[3] (the clip's adjustments), shown from / to; u32 hide switches, their offset ({f32 frame,
-    u32 on})
+    u32 on}); the last 8 bytes are the cloth block's offset and size (0: no .clt). The block is u32 script count,
+    clip count, then each script (u32 chain count; each chain f32 gravity, spring, max speed, stiffness, i32 limit,
+    u32 bone count, u8 bones, i8 axes — 0 Y, 1 X, 2 NY, 3 NX, 4 Z, 5 NZ — padded to 4) and each clip (f32 set, end,
+    i32 script or -1, mode or -1, reset 0/1/2, level).
 """
 import argparse
 import json
@@ -340,6 +343,110 @@ def align(blob: bytearray, n: int = 16) -> int:
     return len(blob)
 
 
+AXIS_CODE = {"Y": 0, "X": 1, "NY": 2, "NX": 3, "Z": 4, "NZ": 5}
+
+
+def pack_cloth_block(model_clips, motion_clips, work: Path, bone_count: int, label: str) -> bytes:
+    """The slot's chains (docs/CUTSCENES.md). A model clip's .clt is the chain until a motion clip names another.
+    ResetClt / ClothMode are events on the demo clock. A bad Bone line is skipped, not fatal."""
+    import prepare_skinned_model as psm
+    if work is None:
+        return b""
+    scripts, index = [], {}
+
+    def add_script(folder, name):
+        key = (folder, name)
+        if key in index:
+            return index[key]
+        path = work / folder / name
+        if not path.exists():
+            print(f"    {label} cloth {folder}/{name}: missing")
+            index[key] = -1
+            return -1
+        text = path.read_text(encoding="latin1")
+        # A line can carry two Bone records ("Bone 6 Bone 8 X", demo 53's motion pl101_01.clt). The first
+        # one's axis token is the next record's keyword, so it takes the next bone's axis.
+        fixed = []
+        for line in text.splitlines():
+            parts = line.split()
+            if not parts or parts[0] != "Bone" or parts.count("Bone") < 2:
+                fixed.append(line)
+                continue
+            idxs = [i for i, token in enumerate(parts) if token == "Bone"]
+            chunks = [parts[i: idxs[n + 1] if n + 1 < len(idxs) else None] for n, i in enumerate(idxs)]
+            known = [c[2] if len(c) >= 3 and c[2] in AXIS_CODE else None for c in chunks]
+            for n, chunk in enumerate(chunks):
+                if len(chunk) < 2:
+                    continue
+                axis = known[n] or next((a for a in known[n + 1:] if a), None) or next((a for a in known if a), "Y")
+                if known[n] is None:
+                    print(f"    {label} {name}: Bone {chunk[1]} takes axis {axis}")
+                fixed.append(f"Bone {chunk[1]} {axis}")
+        text = "\n".join(fixed)
+        try:
+            cloths = psm.parse_cloths(text)
+        except (OSError, ValueError, IndexError) as error:
+            print(f"    {label} cloth {name}: {error}")
+            index[key] = -1
+            return -1
+        chains = []
+        for cloth in cloths:
+            bones, axes = [], []
+            for bone, axis in zip(cloth.get("bones", []), cloth.get("axes", [])):
+                code = AXIS_CODE.get(axis)
+                if code is None or not isinstance(bone, int) or bone < 0 or bone >= bone_count:
+                    print(f"    {label} {name}: bone {bone} axis {axis} skipped")
+                    continue
+                bones.append(bone)
+                axes.append(code)
+            if not bones:
+                continue
+            grav = cloth.get("Gravity", [0.0, -0.2, 0.0]) or [0.0, -0.2, 0.0]
+            gy = float(grav[1] if len(grav) > 1 else grav[0])
+            spring = float((cloth.get("SpringForce") or [0.05])[0])
+            speed = float((cloth.get("MaxSpeed") or [50.0])[0])
+            stiff = float((cloth.get("Stiffness") or [0.3])[0])
+            limit = int(float((cloth.get("LimitLength") or [1])[0]))
+            tail = bytes(bones) + bytes(axes)
+            tail += bytes((-len(tail)) % 4)
+            chains.append(struct.pack("<4fiI", gy, spring, speed, stiff, limit, len(bones)) + tail)
+        if not chains:
+            index[key] = -1
+            return -1
+        index[key] = len(scripts)
+        scripts.append(struct.pack("<I", len(chains)) + b"".join(chains))
+        return index[key]
+
+    events = []
+
+    def add_events(clips, folder, order0):
+        for n, clip in enumerate(clips):
+            name = clip.get("Cloth")
+            script = -1
+            if isinstance(name, str) and name.lower().endswith(".clt"):
+                script = add_script(folder, name)
+            mode = clip.get("ClothMode")
+            mode = int(mode) if isinstance(mode, (int, float)) and not isinstance(mode, bool) else -1
+            reset = 2 if "ResetClt2" in clip else 1 if "ResetClt" in clip else 0
+            level = clip.get("ResetCltLevel")
+            level = int(level) if isinstance(level, (int, float)) and not isinstance(level, bool) else 0
+            if script < 0 and mode < 0 and not reset:
+                continue
+            start, end = clip_span(clip)
+            events.append((start, order0 + n, end, script, mode, reset, level))
+
+    add_events(model_clips, "model", 0)
+    add_events(motion_clips, "motion", 1000)
+    if not scripts:
+        return b""
+    events.sort(key=lambda e: (e[0], e[1]))
+    out = struct.pack("<2I", len(scripts), len(events)) + b"".join(scripts)
+    for start, _order, end, script, mode, reset, level in events:
+        out += struct.pack("<2f4i", float(start), float(end), script, mode, reset, level)
+    print(f"    {label} cloth: {len(scripts)} scripts, {len(events)} clips")
+    return out
+
+
 def bake_cast(timeline, files, blob: bytearray, work: Path = None):
     """Each model slot with a .mod: its skeleton, slimmed mesh, objects on the shared textures, its CnsPos and its
     motion clips (raw MOT). Returns (texture table offset, count, actor table offset, count)."""
@@ -419,11 +526,13 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
                     switches.append((start, scale, 1, 0.0, []))
         switches.sort(key=lambda s: s[0])
         cns = clip.get("CnsPos")
+        cloth = pack_cloth_block(model["clips"], (tracks.get(("Motion", slot)) or {"clips": []})["clips"],
+                                 work, skel["count"], name)
         actors.append({"slot": slot, "name": name, "skel": skel, "mesh": mesh, "tex": tex, "motions": motions,
                        "parent": cns[0] if isinstance(cns, list) else -1, "bone": cns[1] if isinstance(cns, list) else 0,
                        "pos": clip.get("Pos") or [0.0, 0.0, 0.0], "rot": clip.get("Rot") or [0.0, 0.0, 0.0],
                        "span": clip_span(clip), "switches": switches, "order": order, "rest_rot": rest_rot,
-                       "tex_name": tex_name})
+                       "tex_name": tex_name, "cloth": cloth})
 
     for a in actors:   # the textures its objects use, in the table before it's written
         a["tex_ids"] = {o["texture"]: texture_id(a["tex_name"], o["texture"]) for o in a["mesh"]["objects"]} if a["tex_name"] else {}
@@ -507,6 +616,10 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
                          parents_at, local_at, rest_at, vert_at, skin_at, index_at, object_at, motion_at,
                          centre_bone, struct.unpack("<I", struct.pack("<f", radius))[0],
                          *a["pos"][:3], *a["rot"][:3], *a["span"])
+        if a.get("cloth"):
+            cloth_at = align(blob)
+            blob += a["cloth"]
+            struct.pack_into("<2I", blob, actor_table + 128 * i + 120, cloth_at, len(a["cloth"]))
         on = "" if parent < 0 else f" on slot {a['parent']} bone {a['bone']}"
         print(f"  slot {a['slot']:2d} {a['name']:14s} {n:2d} bones {v:5d} vertices {len(a['motions']):3d} motions{on}")
     fx = bake_effects(timeline, work, blob, slot_to_actor) if work else (0, 0, 0)
@@ -579,6 +692,29 @@ def bake_audio(iso_path: Path, timeline, out: Path, demo: int):
     return path
 
 
+LIGHT_RECORD = 80
+
+
+def bake_lights(timeline) -> bytes:
+    """The Light track (FUN_00218fc0 parses a clip; FUN_002569c0 starts it as a light, FUN_0027fb10 runs it): each
+    clip {f32 start, f32 frames (Life / ClipScale: its life counts down by ClipScale a frame), u8 ValidType, IsMinus,
+    Type (1 eases Src to Dst over its life), pad; Src pos[3], force, range, rgb[3]; Dst the same; pad} = 80 bytes."""
+    out = bytearray()
+    clips = sorted((c for t in timeline["tracks"] if t["kind"] == "Light" for c in t["clips"]),
+                   key=lambda c: float(c.get("SetFrame", 0.0)))
+    vec = lambda v, n: [float(x) for x in (v if isinstance(v, list) else [0.0] * n)[:n]] + [0.0] * max(0, n - len(v if isinstance(v, list) else []))
+    for c in clips:
+        scale = float(c.get("ClipScale", 1.0) or 1.0)
+        out += struct.pack("<2f4B", float(c.get("SetFrame", 0.0)), max(float(c.get("Life", 1.0)) / scale, 1.0),
+                           int(c.get("ValidType", 0)) & 0xff, 1 if int(c.get("IsMinus", 0)) else 0,
+                           1 if int(c.get("Type", 0)) == 1 else 0, 0)
+        for side in ("Src", "Dst"):
+            out += struct.pack("<3f2f3f", *vec(c.get(side + "Pos"), 3), float(c.get(side + "Force", 0.0)),
+                               float(c.get(side + "Range", 0.0)), *vec(c.get(side + "Rgb"), 3))
+        out += bytes(LIGHT_RECORD - 12 - 64)
+    return bytes(out)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
@@ -614,10 +750,13 @@ def main():
     fade_at = len(blob)
     for start, life, out, rgba in fades:
         blob += struct.pack("<2fI4B", start, max(life, 1.0), out, *[min(255, v) for v in rgba[:4]])
+    lights = bake_lights(timeline)
+    blob += lights   # right after the fades; their count at +0x3c
     tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))
     struct.pack_into("<3I", blob, 0x30, *fx)   # +0x30 effect bank, effect clips, clip count (0: none)
+    struct.pack_into("<I", blob, 0x3c, len(lights) // LIGHT_RECORD)   # +0x3c Light clips, after the fades
     print(f"  {len(subs)} subtitles" + (f": {subs[0][5][:40]!r} ..." if subs else ""))
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / f"DEMO_{args.demo:03d}.BIN"

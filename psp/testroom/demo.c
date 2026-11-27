@@ -2,9 +2,11 @@
  * holds the camera per demo frame (the camera track's clips, each a .cam played by CCameraClip / CCameraMotion:
  * eye = channels 6-8 + 0-2, target = 9-11 + 0-2, field of view = 12), the cast (each model slot's MOD, its motion
  * clips as raw MOT, its CnsPos parent bone) and their textures; DSTG_nnn.BIN the demo's stage built as a room.
- * The demo's demo_clock runs at 60 frames a second. Not yet: hide tracks, cloth, effects, messages, fades and sound. */
+ * The demo's demo_clock runs at 60 frames a second. Not yet: hide tracks, effects, messages, fades and sound. */
 #include "demo.h"
+#include "demo_cloth.h"
 
+#include "model_blend.h"
 #include "motion.h"
 #include "nfx.h"
 #include "stage.h"
@@ -20,7 +22,11 @@
 #include <string.h>
 
 typedef struct { char magic[4]; unsigned int frames, camera, textures, texture_count, actors, actor_count, reserved;
-                 unsigned int subtitles, subtitle_count, fades, fade_count, fx_bank, fx_clips, fx_count, pad; } DemoHeader;
+                 unsigned int subtitles, subtitle_count, fades, fade_count, fx_bank, fx_clips, fx_count,
+                 light_count; /* the Light clips, right after the fades */ } DemoHeader;
+/* A Light clip (tools/prepare_demo.py bake_lights): its start and frames, ValidType, IsMinus, Type 1 (eased Src to Dst). */
+typedef struct { float start, frames; unsigned char valid, minus, ease, pad;
+                 float src_pos[3], src_force, src_range, src_rgb[3], dst_pos[3], dst_force, dst_range, dst_rgb[3], pad2; } DemoLight;
 typedef struct { float start; unsigned int kind, id; float pos[3], rot[3], scale; int actor, bone; } DemoEffect;
 typedef struct { float from, length; unsigned int out; unsigned char rgba[4]; } DemoFade;
 typedef struct { float from, to; short x, y, size, pad; char text[112]; } DemoSubtitle;
@@ -284,6 +290,7 @@ int demo_start(int demo, const char *dir) {
 
 void demo_stop(void) {
     sound_stop();
+    demo_cloth_reset();
     if (blob) { nfx_reset(); nfx_set_demo_bank(0, 0); }
     free_actors();
     if (demo_fd >= 0) { sceIoClose(demo_fd); demo_fd = -1; }
@@ -528,6 +535,59 @@ static void pose(Actor *a, int depth) {
                 a->world_pos[i][k] = a->world_pos[p][k] + a->world_rot[p].m[k][0] * t[0] + a->world_rot[p].m[k][1] * t[1] + a->world_rot[p].m[k][2] * t[2];
         }
     }
+    /* Its .clt, if it has one. Joints are in world space; ClothMode 1 rides the parent model's root. */
+    if (d->pad[0] && d->pad[1]) {
+        float owner_pos[3], owner_rot[9];
+        const float *op = base_pos, *orot = &base_rot.m[0][0];
+        /* Gameplay body capsules (coat.c, FUN_00230130). The .clt names none. A coat on Dante's
+         * 23-bone body still gets the spine and leg capsules, so the chains can't hang through him.
+         * Other rigs are left alone. The flat sheet came from riding bone 0 across a cut, below. */
+        ClothCapsule caps[6];
+        int ncaps = 0;
+        if (d->parent >= 0 && d->parent < actor_count && actors[d->parent].d && actors[d->parent].posed) {
+            Actor *p = &actors[d->parent];
+            /* Bone 0 stays at the origin in these demos. The hip channel (bone 1) is the body's world
+             * pose, and a cut moves it by metres. Riding bone 0 leaves the chains where they were, and
+             * the length clamp then lays them out along that jump: the coat becomes a flat sheet. The
+             * hip's world matrix already includes bone 0, so the ride follows both. */
+            const signed char *bp = (const signed char *)(blob + p->d->parents_at);
+            int hip = (p->d->bones > 1 && bp[1] == 0) ? 1 : 0;
+            memcpy(owner_pos, p->world_pos[hip], sizeof owner_pos);
+            memcpy(owner_rot, p->world_rot[hip].m, sizeof owner_rot);
+            op = owner_pos;
+            orot = owner_rot;
+        }
+        if (d->parent >= 0 && d->parent < actor_count && actors[d->parent].d && actors[d->parent].posed) {
+            Actor *body = &actors[d->parent];
+            static const struct { int bone; float a[3], b[3], r; } src[] = {
+                {3, {0.0f, 20.0f, 10.0f}, {0.0f, -40.0f, 10.0f}, 15.0f},
+                {2, {0.0f, -5.0f, 0.0f}, {0.0f, -15.0f, 0.0f}, 18.0f},
+                {15, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+                {16, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+                {19, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+                {20, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+            };
+            int n;
+            if (body->d->bones >= 23 && body->d->bones <= 24) {
+                for (n = 0; n < 6; ++n) {
+                    const float (*r)[3];
+                    int k;
+                    if (src[n].bone >= body->d->bones) continue;
+                    r = body->world_rot[src[n].bone].m;
+                    for (k = 0; k < 3; ++k) {
+                        caps[ncaps].a[k] = body->world_pos[src[n].bone][k] + r[k][0] * src[n].a[0] + r[k][1] * src[n].a[1] + r[k][2] * src[n].a[2];
+                        caps[ncaps].b[k] = body->world_pos[src[n].bone][k] + r[k][0] * src[n].b[0] + r[k][1] * src[n].b[1] + r[k][2] * src[n].b[2];
+                    }
+                    caps[ncaps].radius = src[n].r;
+                    ncaps++;
+                }
+            }
+        }
+        demo_cloth_apply((int)(a - actors), base_pos, &base_rot.m[0][0], op, orot,
+                         &a->world_pos[0][0], &a->world_rot[0].m[0][0],
+                         parents, &local[0][0], d->bones, blob + d->pad[0], d->pad[1], demo_clock,
+                         caps, ncaps);
+    }
 }
 
 static void skin(Actor *a) {
@@ -583,8 +643,87 @@ static int object_shown(const DemoHideClip *h, unsigned int k) {
     return (int)shown;
 }
 
+/* The demo's lights on one actor, as the game picks them for a character (FUN_0027f230 with flag 2): the Light clips
+ * running now whose ValidType (less bit 4) is 1 (everything) or 2 (characters), 3 being the stage's; the three that
+ * reach it best by 1 - d^2 / Range^2 (FUN_0027f610 / FUN_0027f7e0; a 0 range reaches everywhere), a ValidType 8 one
+ * (the scene's own slot, +0x40) first. Each light's strength 1 - d^2 / Force^2 (a 0 force: whole) and its colour /
+ * 128 [inferred: the VU1 lighting isn't read; 0x80 is 1.0 as the GS's colours]. On the PSP, per actor: a directional
+ * light from its centre toward each, the strength taken at the centre. IsMinus lights (they subtract) are left out.
+ * Returns 0 (the room's lights stay) when the demo has no Light clips. */
+#define DEMO_AMBIENT 0xff303030u   /* [stand-in: the characters' ambient isn't found; matched by eye to the PS2] */
+static int demo_lights(const float c[3]) {
+    const DemoLight *l;
+    struct { float dir[3], rgb[3], rank; } pick[4];
+    int i, k, n = 0, special = -1;
+    if (!head->light_count) return 0;
+    l = (const DemoLight *)(blob + head->fades + head->fade_count * sizeof(DemoFade));
+    for (i = 0; i < (int)head->light_count; ++i) {
+        const DemoLight *x = &l[i];
+        float t, pos[3], force, range, rgb[3], d[3], d2, rank, strength, len;
+        int cls = x->valid & 0xfb;
+        if (demo_clock < x->start || demo_clock >= x->start + x->frames) continue;
+        if (!(x->valid & 8) && cls != 1 && cls != 2) continue;
+        if (x->minus) continue;
+        t = x->ease ? (demo_clock - x->start) / x->frames : 0.0f;
+        for (k = 0; k < 3; ++k) {
+            pos[k] = x->src_pos[k] + (x->dst_pos[k] - x->src_pos[k]) * t;
+            rgb[k] = x->src_rgb[k] + (x->dst_rgb[k] - x->src_rgb[k]) * t;
+            d[k] = pos[k] - c[k];
+        }
+        force = x->src_force + (x->dst_force - x->src_force) * t;
+        range = x->src_range + (x->dst_range - x->src_range) * t;
+        d2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+        rank = range > 0.0f ? 1.0f - d2 / (range * range) : 1.0f;
+        strength = force > 0.0f ? 1.0f - d2 / (force * force) : 1.0f;
+        if (rank <= 0.0f || strength <= 0.0f) continue;
+        len = sqrtf(d2); if (len < 1.0f) len = 1.0f;
+        {
+            int slot = n < 4 ? n++ : 3;
+            if (x->valid & 8) { special = slot; rank = 2.0f; }   /* the scene's slot goes first */
+            else if (slot == 3 && pick[3].rank >= rank) continue;
+            for (k = 0; k < 3; ++k) { pick[slot].dir[k] = d[k] / len; pick[slot].rgb[k] = rgb[k] / 128.0f * strength; }
+            pick[slot].rank = rank;
+            /* keep them by rank, best first */
+            for (k = slot; k > 0 && pick[k].rank > pick[k - 1].rank; --k) {
+                __typeof__(pick[0]) s = pick[k]; pick[k] = pick[k - 1]; pick[k - 1] = s;
+            }
+        }
+    }
+    (void)special;
+    sceGuAmbient(DEMO_AMBIENT);
+    for (i = 0; i < 4; ++i) {
+        if (i < 3 && i < n) {
+            ScePspFVector3 dir = {pick[i].dir[0], pick[i].dir[1], pick[i].dir[2]};
+            unsigned int r = (unsigned int)(pick[i].rgb[0] > 1.0f ? 255 : pick[i].rgb[0] * 255.0f);
+            unsigned int g = (unsigned int)(pick[i].rgb[1] > 1.0f ? 255 : pick[i].rgb[1] * 255.0f);
+            unsigned int b = (unsigned int)(pick[i].rgb[2] > 1.0f ? 255 : pick[i].rgb[2] * 255.0f);
+            sceGuLight(i, GU_DIRECTIONAL, GU_DIFFUSE, &dir);
+            sceGuLightColor(i, GU_DIFFUSE, 0xff000000u | b << 16 | g << 8 | r);
+            sceGuEnable(GU_LIGHT0 + i);
+        } else {
+            sceGuDisable(GU_LIGHT0 + i);
+        }
+    }
+    return 1;
+}
+
+/* Back to the room's lights (main.c's init: a key and a fill, ambient 0x90). */
+static void demo_lights_off(void) {
+    ScePspFVector3 key_dir = {0.45f, 0.8f, 0.4f}, fill_dir = {-0.45f, -0.3f, -0.4f};
+    sceGuLight(0, GU_DIRECTIONAL, GU_DIFFUSE, &key_dir);
+    sceGuLightColor(0, GU_DIFFUSE, 0xffa0a0a0);
+    sceGuLight(1, GU_DIRECTIONAL, GU_DIFFUSE, &fill_dir);
+    sceGuLightColor(1, GU_DIFFUSE, 0xff505050);
+    sceGuAmbient(0xff909090);
+    sceGuEnable(GU_LIGHT0);
+    sceGuEnable(GU_LIGHT1);
+    sceGuDisable(GU_LIGHT2);
+    sceGuDisable(GU_LIGHT3);
+}
+
 void demo_draw(void) {
     const DemoTexture *tex;
+    int lit = 0;
     int i, k, bound = -1;
     ScePspFMatrix4 view, proj, clip;
     if (!playing || !actor_count) return;
@@ -631,6 +770,7 @@ void demo_draw(void) {
         {
             int cb = (int)a->d->centre_bone < a->d->bones ? (int)a->d->centre_bone : 0;
             if (!sphere_visible(&clip, a->world_pos[cb], a->d->radius)) continue;
+            lit |= demo_lights(a->world_pos[cb]);
         }
         skin(a);
         for (k = 0; k < a->d->objects; ++k) {
@@ -643,15 +783,14 @@ void demo_draw(void) {
                 sceGuTexFlush();
             }
             if (hide && !object_shown(hide, (unsigned int)k)) continue;
-            /* The object's blend (its MOD record's byte 8, the GS ALPHA table 0x566ec0 [inferred]): 2 adds
-             * (Cs*As + Cd, eye highlights), 3 subtracts (Cd - Cs*As, Arkham's veins), else normal. */
-            if (mode == 2) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffffu);
-            else if (mode == 3) sceGuBlendFunc(GU_REVERSE_SUBTRACT, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffffu);
-            if (mode >= 2) sceGuDepthMask(GU_TRUE);   /* an overlay: it doesn't hide what's drawn after it */
+            /* The object's blend (its MOD record's byte 8, model_blend.h): 2 adds (eye highlights), 3 subtracts
+             * (Arkham's veins), 4 subtracts the colour whole, else normal. Blending stays on in demos. */
+            if (mode >= 2) model_object_blend(mode, 1);
             sceGumDrawArray(GU_TRIANGLES, DEMO_VTYPE, (int)obj[k].count, idx + obj[k].first, a->skinned);
-            if (mode >= 2) { sceGuDepthMask(GU_FALSE); sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0); }
+            if (mode >= 2) model_object_blend(0, 1);
         }
     }
     sceGuDisable(GU_BLEND);
     sceGuDisable(GU_ALPHA_TEST);
+    if (lit) demo_lights_off();
 }

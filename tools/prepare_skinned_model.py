@@ -89,12 +89,15 @@ def build_mesh(model_data: bytes, bone_count: int):
         for face in strip_faces(adc):
             mesh["indices"].extend(base + v for v in face)
         mesh["old_triangles"] += len(item["faces"])
-        # The object record's byte 8: its blend, as the game's GS ALPHA table at 0x566ec0 has them (0 / 1 normal
-        # 0x44, 2 additive 0x48, 3 subtractive 0x42; read as that table's index [inferred]: 3 is only on Arkham's
-        # vein overlays, 2 on eye highlights).
-        mode = model_data[0x30 + item["index"] * 48 + 8] if 0x30 + item["index"] * 48 + 8 < len(model_data) else 0
+        # The object record's byte 8: its blend, its low 4 bits an index into the game's GS ALPHA table at 0x566ec0
+        # (16 entries: 0 / 1 normal 0x44, 2 additive 0x48 Cs*As + Cd, 3 subtractive 0x42 Cd - Cs*As, 4 0xa1 with
+        # FIX 0x80 Cd - Cs) [inferred: the byte isn't traced to the packet]. 3 is on Arkham's vein overlays and the
+        # Abyss's object 1, 2 on eye highlights, glows and Cerberus's ice; bits 4 and 5 (0x10, 0x20, mostly on
+        # EFM effect models) are flags not known yet. The other indices (5-15) aren't on any character.
+        raw = model_data[0x30 + item["index"] * 48 + 8] if 0x30 + item["index"] * 48 + 8 < len(model_data) else 0
+        mode = raw & 0x0f if raw & 0x0f in (2, 3, 4) else 0
         mesh["objects"].append({"texture": item["header_count"], "index_start": start,
-                                "index_count": len(mesh["indices"]) - start, "mode": mode if mode <= 3 else 0})
+                                "index_count": len(mesh["indices"]) - start, "mode": mode})
     if len(mesh["positions"]) > 65535:
         raise ValueError("Too many vertices for 16-bit indices")
     return mesh
@@ -556,7 +559,8 @@ LADY_MOTIONS = ((2, 0), (2, 10), (2, 11), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8)
                 # 004460c0; action a >= 0x53 plays PAC [6] slot a - 0x53).
                 (6, 50), (6, 3), (6, 4), (6, 5), (6, 6), (6, 31), (6, 32),   # [6] 9 (0x5c) is empty
                 # 0x1d's grapple 0x5e, 0x5f, 0x61, 0x62 and mode 0x1e's ledge shot 0x8f and hop 0x0c
-                (6, 11), (6, 12), (6, 14), (6, 15), (6, 60), (2, 12))   # [2] 14 (0x0e) is empty
+                (6, 11), (6, 12), (6, 14), (6, 15), (6, 60), (2, 12),   # [2] 14 (0x0e) is empty
+                (5, 27))   # the ending ally's aim, action 0x49 (FUN_00448350 step 1)
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 
@@ -597,11 +601,12 @@ def enemy_mesh(body: bytes, ratio=None):
         mesh = layered_mesh(body, skel, ratio)
     else:
         mesh = slim_mesh(build_mesh(body, skel["count"]), 0.7)   # disposable and many on screen
-    # One draw per texture: on the PSP each dummy was 22 draws of 2 textures.
-    order, merged = sorted(mesh["objects"], key=lambda o: o["texture"]), []
+    # One draw per texture: on the PSP each dummy was 22 draws of 2 textures. Objects that blend (their MOD byte 8:
+    # a Hell's eye glow, the Abyss's subtracted overlay) are their own draws, after the opaque ones (normal 0 first).
+    order, merged = sorted(mesh["objects"], key=lambda o: (o.get("mode", 0), o["texture"])), []
     indices = []
     for o in order:
-        if not merged or merged[-1]["texture"] != o["texture"]:
+        if not merged or (merged[-1]["texture"], merged[-1].get("mode", 0)) != (o["texture"], o.get("mode", 0)):
             merged.append({**o, "index_start": len(indices), "index_count": 0})
         indices += mesh["indices"][o["index_start"]:o["index_start"] + o["index_count"]]
         merged[-1]["index_count"] += o["index_count"]
@@ -761,7 +766,7 @@ def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
             f"static const unsigned char {n}_weights[][3] = {{", array_lines(mesh["weights"], tuple3, 8), "};",
             f"static const unsigned short {n}_indices[] = {{", array_lines(mesh["indices"], str, 12), "};",
             f"static const Dmc3ModelObject {n}_objects[] = {{",
-            array_lines(mesh["objects"], lambda v: f"{{{v['index_start']},{v['index_count']},{v['texture']}}}", 4), "};",
+            array_lines(mesh["objects"], lambda v: f"{{{v['index_start']},{v['index_count']},{v['texture']},{v.get('mode', 0)}}}", 4), "};",
             f"static const Dmc3Vec3 {n}_weapon_positions[] = {{", array_lines(wmesh["positions"], vec, 4), "};",
             f"static const Dmc3Vec3 {n}_weapon_normals[] = {{", array_lines(wmesh["normals"], vec, 4), "};",
             f"static const Dmc3Uv {n}_weapon_uvs[] = {{", array_lines(wmesh["uvs"], vec, 6), "};",
@@ -891,7 +896,8 @@ def main() -> None:
         "#define DMC3_MODEL_SKINNED 1",
         "typedef struct { float x, y, z; } Dmc3Vec3;",
         "typedef struct { float u, v; } Dmc3Uv;",
-        "typedef struct { unsigned int index_start, index_count, texture; } Dmc3ModelObject;",
+        "/* blend: the MOD object's (2 additive, 3 subtractive, 4 Cd - Cs, else 0 normal); 0 where a generator omits it. */",
+        "typedef struct { unsigned int index_start, index_count, texture, blend; } Dmc3ModelObject;",
         "typedef struct { unsigned short width, height; const unsigned char *rgba; } Dmc3Texture;",
         f"#define DMC3_MODEL_VERTEX_COUNT {len(positions)}",
         f"#define DMC3_MODEL_INDEX_COUNT {len(indices)}",

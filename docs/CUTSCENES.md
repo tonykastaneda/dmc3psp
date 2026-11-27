@@ -61,9 +61,84 @@ fix above wasn't the cause. Two things were:
   texture word (bits 16-19) and `demo.c` blends by it, without writing depth.
 
 Still different from the PS2 there (not textures): the PS2 frames cm027 tighter (brow to lip; the port shows crown
-to lip), so the cameras' fov is likely not vertical as the port takes it; the PS2 lights the face darker and warmer;
-the subtracted veins read stronger in the port (the PS2's are a faint darkening under its darker lighting). The
-gameplay models (`enemy_mesh` merges objects by texture; the player) don't carry the blend yet.
+to lip), so the cameras' fov is likely not vertical as the port takes it. The darker, warmer light and the faint veins
+came with the Light track (below).
+
+**The Light track** was the shared cause of the lighting differences (Arkham's face lit darker and warmer on the PS2,
+the ending's Dante under blue moonlight). The port lit demos with the room's fixed key / fill (ambient 0x90), so
+every face came out bright and neutral. What the game does:
+
+- `FUN_00218fc0` parses a clip: ValidType (+0x121), IsMinus (+0x122), Type (+0x123), Life (+0x124), Src / Dst Pos,
+  Force, Range and Rgb (u16 x3), MoveType. `FUN_002569c0` starts it: Force and Range kept as 1 / x² (`FUN_00133bd0`),
+  a light record at clip +0x30; `FUN_0027fb10` runs it each frame (its life counts down by ClipScale; Type 1 eases
+  Src to Dst over it) and `FUN_0027fc80` files it: ValidType bit 8 into the scene's one slot (+0x40), the rest into
+  its light list (+0x14).
+- `FUN_0027f230` lights a model (called from the model draws `FUN_001aa110` / `001aa360` / `001aa540`) with flags: a
+  light whose ValidType, less bit 4, is 1 reaches models with flag 1 or 2, 2 those with flag 2 (the characters), 3
+  those with flag 1 (the stage); bit 4 lights only models asking for it (flag 0x10); the slot's light comes first.
+  `FUN_0027f610` makes each one: the vector to it, w 1 / Force²; its colour (negated if IsMinus), w 1 / Range²; and
+  its rank, 1 − d² / Range² clamped at 0 (a 0 range: 1). `FUN_0027f7e0` keeps the three best ranked.
+- The VU1 microcode that shades with them isn't read: the port takes a light's strength as 1 − d² / Force² (a 0
+  force: whole) and its colour / 128 [inferred], at each actor's centre, as a PSP directional light toward it.
+
+`prepare_demo.bake_lights` bakes the clips (80 bytes each, after the fades; their count at the header's +0x3c) and
+`demo.c` demo_lights sets them per actor, with an ambient of 0x30 [stand-in, by eye]. Checked against PCSX2:
+`analysis/testroom/arkham_face_lit_compare.png` (demo 1's cm027) and `ending_dante_lit_compare.png` (demo 59, from
+the Mission 20 credits state, `analysis/ref/cast/credits_to_ending.mp4`).
+
+**Blocky faces in captures are PPSSPP's setting, not the port.** `demo.c` (and every model draw) asks for bilinear
+(`sceGuTexFilter(GU_LINEAR, GU_LINEAR)`) on full-size pages (no mips, no downscale: `pl103_02`'s face page is 256x128
+as on the disc). The shared `ppsspp.ini` forces Nearest (`TextureFiltering = 2`), which overrides it in every
+`ppsspp_scene.py` capture. `--filter auto` runs one scene with the game's own filtering (`--appendconfig`, the
+shared ini untouched): `analysis/testroom/filt_d1_4130.png` beside `lit_d1_4130.png` (same frame, Nearest). A PSP
+filters as asked, so it shows the smooth one.
+
+**Arkham's cheek marks (cm027) are the right page, too strong.** The reddish streaks on his left cheek (the viewer's
+right) are `pl103_02` object 2: a shell over the left half of his face (0.03-0.2 cm outside the skin), texture 1 (a
+4-bit page of blue-grey veins on black, one CLUT, alpha 0x80), blend 3 (subtractive). There is one variant: the
+package has one `pl103_02.ptx`, its pages one CLUT each, and no hide clip touches slot 12 during cm027; `TexMode` /
+`ClutMode` (Model clip +0x620 / +0x621, `FUN_00219dc0`) are load settings passed to the model object (`FUN_002342b0`,
+vtable +0x24 / +0x28), not a variant pick. The PS2 draws it too: its frame at 208 s shows faint, neutral dark streaks
+under that eye in the same place (`analysis/ref/cast/` and `arkham_face_filter_compare.png`). The port's are stronger
+and hue-shifted (bluish lines subtracted from warm skin leave red-brown), so the subtracted source on the PS2 is
+weaker or more neutral (its vertex colour or alpha for this object). Not settled: the Program track's No 5 / No 6
+(210 200 180 / 30 20 20 in demo 1) look like a colour scale and an ambient, but its parser is the stub `FUN_00217440`
+(returns 1), so the game ignores them [inferred from the parser table at 0x590748].
+- **Why the PS2 differs: its cm027 is a movie.** GS dumps of that frame (PCSX2, Mission 1 on Normal from the 100% save,
+  taken at 184.7 s by matching the picture, and the Demo Digest's Opening) hold no model draws at all: each frame is
+  one 640x512 IMAGE upload. Demo 1 is in no mission's script; Mission 1 opens with movie 319 (M1_INTRO), Capcom's
+  pre-rendered take of the same scene, and the port plays that movie there too. So the PS2 never draws demo 1 in real
+  time, and every PS2 picture of it (`arkham_face_compare.png` and the rest) is the movie. The movie's faint marks
+  are its own render, not a sign that the real-time data is wrong. A fair real-time check of his face is a demo the
+  game plays live (demo 5, Mission 3's opening).
+- **Live, the PS2 draws the marks.** Demo 5 (Mission 3's opening, Normal, recorded from PCSX2 at
+  `analysis/ref/cast/m3_open_ps2.mp4`) shows Arkham's red marks on his neck and left cheek, so the live engine draws
+  his overlays (`analysis/testroom/arkham_demo5_compare.png`, the PS2 left, the port right, frames 1260 / 1380). Still
+  different there, not the face's pages: demo 5's sky is orange on the PS2 and dark blue in the port (its stage and
+  ScrEfc), and the port lights his face greyer.
+- To read the PS2's GS state for a draw: a GS dump of the frame (`build/refemu` hotkey Shift+F8, sent as VK 0xA0 +
+  F8; uncompressed with `[EmuCore/GS] GSDumpCompression = 0` in the game's own settings file). The Demo Digest's
+  "Opening" (mission select, DEMO DIGEST, scene select right once) is a pre-rendered movie of demo 1 (its dump is
+  full-frame IMAGE uploads, no draws), so the dump has to come from Mission 1 itself.
+
+**The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
+credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
+demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
+Arkham's blob (demo 53) were looked at in the port only (no save state reaches those demos): their textures and
+faces read right. Still different, not textures: the cameras' framing (fov), the stages' light (the PS2's ending street
+is bluer), and a black slab across demo 53's frame 2300 (its stage).
+
+**The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
+FIX 0x80, Cd − Cs; 5-15 are on no character); bits 4 and 5 (0x10 / 0x20, values 16-19 and 48, nearly all on EFM
+effect models) are flags not known yet, so 0x12 now adds and 0x13 subtracts where both were drawn normal before.
+`Dmc3ModelObject` carries it (`blend`, 0 where a generator leaves it out) and `model_blend.h` sets it for the
+enemies (`enemy_mesh` merges objects by texture and blend, the blended groups drawn last: one more draw for a kind
+that has any), Arkham, Cerberus and the demos. Gameplay Dante (pl000) has none. Where it shows
+(`analysis/testroom/blend_enemies_grid.png`, `blend_cerberus_pair.png`, `blend_arkham_pair.png`; left `noblend 1`,
+right as now): Cerberus's ice (all of `[12]`-`[15]`, additive, now drawn after the heads), Arkham's blob (13
+additive objects), the Abyss's vein layer (object 1, subtractive), the Blood-goyle's red layers, the Arachne's
+abdomen, the Hells' eyes (object 16), the Fallen's spear tip, the Soul Eater (all additive). Not yet compared with
+the PS2 for these (no save state reaches them); the Abyss's body is near white in the port with or without it.
 
 The game's story scenes are **demos**. Event op `02 D` plays demo D and section `09 D` of the mission's event table
 decides what follows (docs/EVENT_SCRIPTS.md). Some demos are pre-rendered movies (`.sfd` in MDATA1.AFS / MDATA2.AFS);
@@ -132,6 +207,50 @@ file is a list of clips, `# Clip` ... `# End`, every clip with `SetFrame` (its s
   its objects one by one (keys stepped, on the .hid's own clock from its first frame, +0x0c); the demo meshes keep the
   MOD's objects apart (not merged by texture) for it.
 
+## Cloth
+
+A demo's cloth is the gameplay chain (`CCnsChain`, one bone stepped by `FUN_0022f270`). The `.clt` names the free
+bones and the spring values; the physics runs every frame. The motion does not bake the swing. Wind in these scripts
+is 0, and the files carry no capsule list (gameplay coats keep theirs in code).
+
+**Which script.** `FUN_00219dc0` (`0x219dc0`) reads `Cloth` on a model clip. The usual path keeps the model PAC's
+`.clt` (`[3]` / `[4]`) at the clip +`0x34`; a disk path is the other branch at `0x21ab2c`. `FUN_002342b0`
+(`0x2342b0`) loads it onto the model once: `FUN_00230060` reads `ClothNum`, then `FUN_0022fbd0` once per `ClothNo`
+(stride 192, chains at model +11312). `FUN_0021aec0` (`0x21aec0`) reads a motion clip's `Cloth` onto that clip
++`0x24`, and `FUN_00213720` (`0x213720`) loads it only when the pointer is set, so a clip with no `Cloth` key keeps
+the chains already loaded. A clip that names a file replaces them until a later clip names another. The same name in
+the model PAC and the motion PAC can be a different script: demo 5's `wp105.clt` starts at bone 4 with gravity
+-0.05 in the model copy, and at bone 3 with gravity -0.02 in the motion copy.
+
+**ClothMode.** The key is stored at the motion clip +`0x100` and the value at +`0x102`. `FUN_00213720` writes a
+byte at model +16308: a nonzero value becomes 1, and a clip with no key leaves the byte. The model update at
+`0x236140` steps the chains (vtable +200) whenever they are loaded. The byte gates `FUN_00230150` (`0x230150`)
+only, which multiplies the change in the owner's matrix onto each chain node that names this model (node +`0xfc`),
+so the chains ride the root and the body's own motion and gravity are what swing them. Demo 5's `pl101_01` is bound
+from the model clip, never sets ClothMode, and still steps. ClothMode 0 (demo 2 slot 13, demo 5 slot 13, parts of
+demos 23 and 48) skips that ride.
+
+**Reset.** `ResetClt` stores kind 1 at the motion clip +`0xe8`, `ResetClt2` kind 2, and `ResetCltLevel` the
+halfword at +`0xea`. `FUN_00213720` copies the kind to model +16272 and the level to +16276. Kind 1 also sets a
+one-shot at +16280 that clears the velocity words at each chain node +464 before the shared path. When the kind is
+above 0, the frame update calls `FUN_002302d0`: the node's velocity is zeroed and its matrix copied back from the
+rest at +`0x104`, then the chain updates `level` more times when `level` > 0. Level 20 (the usual cut) is a snap
+to rest and twenty settle steps. Level -1 is the snap with no extra settle. The update just before the snap is
+overwritten by it. A reset clip often names no file: the chains already loaded are snapped at the cut.
+
+**Who it hangs on.** Coat pieces are their own MODs, on a CnsPos bone, and the `.clt` lists that piece's free
+bones. The `_01` piece sits on bone 5 and the `_05` piece on bone 3: `pl101` in demo 5 (the Mission 3 opening;
+`pl101` is that demo's Dante), `pl100` in the later missions (demo 44, the Lady entrance, and demo 53). `pl102_01`
+is the other coat on bone 5 in demos 8, 16 and 44. The same keys drive weapons and scenery: `wp105` (a tassel, axis
+NX) and `em108` curtains (bones 4-21, usually from the model clip). `pl101_01` is one chain, bone 2 on NY then
+bones 4, 6 and 8 on Y (gravity -0.02, spring 0.02, stiffness 0.3). Across the unpacked scripts the bone axes are
+Y 4143, NY 139, NX 129, Z 75, NZ 44, X 33, and 27 chains mix axes, so a chain is not one axis. One motion
+`pl101_01.clt` (demo 53) has a Bone line whose axis token is not an axis.
+
+**The other simulator.** `ClothSim1D` (model clip +`0x38`, `FUN_002ec400`, applied from `FUN_002342b0` when that
+pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone pairs on the model work
+(+`0x664`). It is in demos 6, 7, 39 and 41 only. Coats use the chain above.
+
 ## In the port
 
 `tools/prepare_demo.py <iso> <id>` bakes DEMO_nnn.BIN (the camera per demo frame: each camera clip's `.cam` evaluated
@@ -179,7 +298,20 @@ summoning glow is one). 112 P clips (particle programs) aren't played, and timel
 
 **Sound**: a demo's Sound clip names an ADX stream that is the demo's own id, and its file is SDATA.AFS's `<package>.adx` (m03_s00.adx for demo 5): voices and music mixed. prepare_demo decodes it (ffmpeg) to the movies' IMA ADPCM, DAUD_nnn.BIN (`DAU1`, rate, sample pairs, start frame, a byte per stereo pair), and demo.c streams it from the memory stick on its own thread from the clip's frame; both it and the demo clock run on real time. Checked offline: decoded against ffmpeg's own, -42 dB error. 51 tracks, 232 MB.
 
-Not yet: cloth, P effects.
+**Cloth**: a slot's `.clt` chains step with `cloth.c` (`psp/testroom/demo_cloth.c`) in world space. The step is
+`FUN_0022f270` (gravity on world Y) and the joints keep last frame's place, so a bone that moves leaves them behind.
+ClothMode 1, and only 1, rides the parent model's root first (`FUN_00230150`: the new root matrix times the inverse
+of the last), which takes that root's travel and turn back out. In these demos bone 0 stays at the origin and the
+hip channel (bone 1) carries the world pose, so the ride follows the hips; riding bone 0 lets a cut lay the chains
+out along the jump and the coat leaves as a flat sheet. Demo 5's coat never sets the key, so it trails the whole pose. The model clip's script holds until a motion clip names another. `ResetClt` and `ResetClt2` snap to rest
+and, when `ResetCltLevel` is above 0, step that many times at the pose held for the cut (level -1 snaps only; a level
+above 32 is capped; the game's update just before the snap is overwritten by it). Each bone keeps its own axis, NY
+included. These scripts' wind is 0 and they name no capsules. A coat on Dante's 23-bone body still gets the
+gameplay capsules (spine and both legs), so the chains can't hang through him. `ClothSim1D` is not run. A Bone line whose axis token
+is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`);
+bone 8 is X and bone 6 takes that axis.
+
+Not yet: P effects.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when

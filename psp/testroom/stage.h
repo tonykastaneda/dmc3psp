@@ -21,6 +21,7 @@ const StageInfo *stage_collision_info(void);
 void stage_draw(void);
 /* The GE's colour doubling on the stage's draw (sceGuTexFunc's bit 16): room 012's baked colours are halved for it. */
 void stage_set_double(int on);
+void stage_test_sky_off(int off);
 int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
  * leaves *out untouched if there is no floor below. */

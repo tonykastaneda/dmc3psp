@@ -255,8 +255,9 @@ def main():
     summary = []
     # P44 (dust): the Arachne's landings start it from the shared pack (FUN_003fb580 and its kin).
     # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0). V6: a Royalguard block (FUN_00224db0).
-    # V0x83: Air Hike (FUN_00222700); V0x14d: Enemy Step (FUN_00228950).
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d), ORB_E, (44,)))
+    # V0x83: Air Hike (FUN_00222700); V0x14d: Enemy Step (FUN_00228950); V0x90: Cerberus's and Beowulf's charges start
+    # (FUN_00272210, FUN_0027abf0) and kicks off a wall or an enemy.
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90), ORB_E, (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
@@ -289,12 +290,21 @@ def main():
         pack = pnst_entries(read(slot))
         effects = next(p for p in pack if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
         summary.append(write_bank(lines, bank, records(effects), vs, ()))
-    # 19 Dante's own effect pack (GDATA 97): Helm Breaker's landing V0x8e (FUN_00264b90).
+    # st423's effect bank (GDATA 830), shared by the ten Palace arena variants.
+    # STAY 100/101/102 explicitly name V965/V967/V964 (water/lightning/fire).
+    summary.append(write_bank(lines, 19, records(read(830)), (965,967,964), ()))
+    # 20 Dante's own effect pack (GDATA 97): Helm Breaker's landing V0x8e (FUN_00264b90).
     effects = next(p for p in pnst_entries(read(97)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
-    summary.append(write_bank(lines, 19, records(effects), (0x8e,), ()))
+    summary.append(write_bank(lines, 20, records(effects), (0x8e,), ()))
+    # 21-24 the Devil Arms' packs (GDATA 98 Cerberus, 99 Agni & Rudra, 100 Nevan, 101 Beowulf): their action handlers'
+    # effects (FUN_00272210, 00272c70, 00273150, 00296ae0, 00274c70, 00276ac0, 00277350, 0027abf0).
+    for bank, slot, vs in ((21, 98, (0x252,)), (22, 99, (0x288, 0x285, 0x37e, 0x37d, 0x302, 0x1cc | G_FLAG)),
+                           (23, 100, (0x38e, 0x2c1)), (24, 101, (0x382,))):
+        effects = next(p for p in pnst_entries(read(slot)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
+        summary.append(write_bank(lines, bank, records(effects), vs, ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

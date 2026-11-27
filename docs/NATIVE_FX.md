@@ -295,6 +295,12 @@ the no-end generator rule above, now fixed.
 | V6 (guard types 0-2), V0x265 / 0x264 / 0x267 | a Royalguard block (`FUN_00224db0`), near the attacker | V6 only, 50 cm toward the blow |
 | V0x83 | Air Hike, at his feet, tinted the weapon's colour (`FUN_00222700`, `FUN_002fd1c0`) | yes |
 | V0x14d (P247, 248) | Enemy Step (`FUN_00228950`) | yes |
-| V0x8e (Dante's pack, P18), P44 (V0xf2 on floor material 0xb) | Helm Breaker's landing (`FUN_00264b90`) | yes, nfx bank 19 (GDATA 97) |
-| V0x90 | kicks off a wall / an enemy (E235 is in the port already) | E235 alone |
+| V0x8e (Dante's pack, P18), P44 (V0xf2 on floor material 0xb) | Helm Breaker's landing (`FUN_00264b90`) | yes, nfx bank 20 (GDATA 97) |
+| V0x90 | kicks off a wall / an enemy (E235 is in the port already); the start of Cerberus's 14:3 (action 45, `FUN_00272210`) and Beowulf's 7:10 charge (action 115, `FUN_0027abf0`), on the weapon | the two charges; the kick: E235 alone |
+| Cerberus V0x252 | 40 frames into 14:4 (action 45), on the weapon | nfx bank 21 (GDATA 98) |
+| Agni & Rudra V0x288, V0x285 | the start of 5:25 (action 57, `FUN_00272c70`) and of 5:23 (actions 58-60, `FUN_00273150`), on Rudra | nfx bank 22 (GDATA 99) |
+| Agni & Rudra V0x37e / V0x37d; G0x1cc / V0x302 | as each blade's attack window opens (+0x24ed 0x80 Agni, 0x40 Rudra; the weapon, `FUN_00296ae0`): in action 56 (5:9); in actions 64 (5:30 / 5:26 / 5:11) and 71 (15:8-10) | yes |
+| Nevan V0x38e, V0x2c1 | as window 0 byte 0 bit 0 turns on (+0x24d1): action 81/82's finishers 6:33 / 6:9 / 6:10 (V0x38e) and its 6:14 / 6:40 swing (V0x2c1) (`FUN_00274c70`), action 88's 6:34 (`FUN_00276ac0`); action 92's 16:4 on its flag 1 (`FUN_00277350`) | nfx bank 23 (GDATA 100) |
+| Beowulf V0x382 | 17 frames into 7:11 (action 115), where the weapon is then (not following it) | nfx bank 24 (GDATA 101) |
+| (the Devil Arms') | the PS2 hangs them on the weapon object's frame (+0x104 of the player's +0x1380 / +0x1384 / +0x1388 slot); the port takes the weapon placement's origin on its bone, the right hand for Beowulf, and turns them by Dante's yaw only | `update_arm_fx` in `main.c` |
 | Devil Trigger | state 0x24 plays motion 0:50 / 0:58; its look isn't an effect call found yet | `fx_devil_burst` / `fx_devil_aura` stand in |

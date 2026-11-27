@@ -402,9 +402,19 @@ int vanguard_update(float frames,float px,float py,float pz,int attacks,float po
     while(frames>0.0001f && vg.active) {float f=fminf(1,frames);hit|=step(f,px,py,pz,attacks);frames-=f;}
     memcpy(pos,vg.pos,sizeof(vg.pos));*alive=vg.active;return hit;
 }
+static int load_data(void);
 void vanguard_spawn(float x,float y,float z) {
     int part,i;
     memset(&vg,0,sizeof(vg));vg.trace=trace_enabled;
+    if(!load_data())return;   /* the model's indices and textures, first time */
+    /* A slot that hasn't had a Vanguard takes the skinning buffers of one whose Vanguard is gone before allocating its own: Mission 20's ending street has under 128 KB left when its Vanguard,
+     * the 100th enemy, comes, and a failed allocation dropped him unseen and uncounted. */
+    if(!vg_vertices[0]) {
+        int s;
+        for(s=0;s<ENEMY_MAX;++s) if(s!=actor_slot && !actors[s].active && actor_vertices[s][0]) {
+            memcpy(vg_vertices,actor_vertices[s],sizeof(actor_vertices[s]));memset(actor_vertices[s],0,sizeof(actor_vertices[s]));break;
+        }
+    }
     for(part=0;part<9;++part) if(!vg_vertices[part]) {
         const VanguardMesh *m=&vanguard_parts[part];
         vg_vertices[part]=memalign(16,sizeof(Vertex)*m->vertices);
@@ -421,21 +431,43 @@ float vanguard_health(void) {return vg.hp;}
 float vanguard_max_health(void) {return VANGUARD_HP;}
 
 int vanguard_init(void) {
-    int i,k;
+    int i;
     for(i=0;i<80;++i) {char name[8];snprintf(name,sizeof(name),"%s-%02d",i<71?"vg":"vx",i<71?i:i-71);motion_ids[i]=motion_find(name);if(motion_ids[i]<0)return 0;}
     vg.motion=motion_ids[0];vg.frame=0;pose();memcpy(bind_body,body,sizeof(body));
+    return 1;
+}
+
+/* The model's indices and swizzled textures are made at the first spawn, not at boot (vanguard_spawn makes or borrows
+ * its slot's vertices), and freed by vanguard_data_release when a room is left without him (docs/MEMORY.md). */
+static int data_ready;
+static void free_data(void) {
+    int s,k;
+    for(s=0;s<ENEMY_MAX;++s)for(k=0;k<9;++k){free(actor_vertices[s][k]);actor_vertices[s][k]=0;}
+    for(k=0;k<9;++k){free(indices[k]);indices[k]=0;}
+    for(k=0;k<2;++k){free(textures[k]);textures[k]=0;}
+    data_ready=0;
+}
+void vanguard_data_release(void) {
+    int s;
+    for(s=0;s<ENEMY_MAX;++s)if(actors[s].active)return;
+    free_data();
+}
+static int load_data(void) {
+    int i,k;
+    if(data_ready)return 1;
     for(k=0;k<9;++k) {
         const VanguardMesh *m=&vanguard_parts[k];
-        vg_vertices[k]=memalign(16,sizeof(Vertex)*m->vertices);indices[k]=memalign(16,sizeof(unsigned short)*m->indices_count);
-        if(!vg_vertices[k] || !indices[k])return 0;
+        indices[k]=memalign(16,sizeof(unsigned short)*m->indices_count);
+        if(!indices[k]){free_data();return 0;}
         memcpy(indices[k],m->indices,sizeof(unsigned short)*m->indices_count);
-        for(i=0;i<m->vertices;++i) {vg_vertices[k][i].u=m->uvs[i].u;vg_vertices[k][i].v=m->uvs[i].v;}
     }
     for(i=0;i<2;++i) {
         const Dmc3Texture *t=&vanguard_textures[i];size_t size=(size_t)t->width*t->height;
-        textures[i]=memalign(16,size);if(!textures[i])return 0;memcpy(textures[i],t->rgba,size);
-        if(!swizzle_texture8(textures[i],t->width,t->height))return 0;
+        textures[i]=memalign(16,size);if(!textures[i]){free_data();return 0;}memcpy(textures[i],t->rgba,size);
+        if(!swizzle_texture8(textures[i],t->width,t->height)){free_data();return 0;}
     }
+    sceKernelDcacheWritebackAll();
+    data_ready=1;
     return 1;
 }
 
@@ -471,31 +503,45 @@ static void skin_part(int part) {
             multiply(&weapon_bones[i],m->parents[i]<0?&attachment:&weapon_bones[m->parents[i]],&local);
         }
     }
-    for(i=0;i<m->vertices;++i) {
-        Vertex *v=&vg_vertices[part][i];float p[3]={0},n[3]={0};
-        for(j=0;j<3;++j) {
-            int b=m->bones[i][j],w=m->weights[i][j];const Transform *t;
-            float src[3]={m->positions[i].x-m->rest[b].x,m->positions[i].y-m->rest[b].y,m->positions[i].z-m->rest[b].z};
-            float ns[3]={m->normals[i].x,m->normals[i].y,m->normals[i].z};
-            if(!w)continue;
-            if(!part)t=&body[b];
-            else if(part==8)t=&weapon_bones[b];
+    /* Each bone's transform once per part, with its rest offset folded into the translation (t.p - M rest), so a
+     * vertex's influence is M pos + p. Before this the robes rebuilt and multiplied their bone's matrix for every
+     * vertex and influence: the Vanguard alone took about 7.5 ms of the PSP frame (Mission 20's street fell to 30). */
+    {
+        enum {MAX_SKIN_BONES=32};
+        Transform xf[MAX_SKIN_BONES];
+        int nb=m->bone_count<MAX_SKIN_BONES?m->bone_count:MAX_SKIN_BONES;
+        const float scale=1.0f/31.0f;
+        for(j=0;j<nb;++j) {
+            Transform *t=&xf[j];
+            if(!part)*t=body[j];
+            else if(part==8)*t=weapon_bones[j];
             else {
                 /* Rest cloth rigs follow their native attachment. Sleeves are authored in body space. */
-                identity(&local);local.p[0]=m->rest[b].x;local.p[1]=m->rest[b].y;local.p[2]=m->rest[b].z;
+                identity(&local);local.p[0]=m->rest[j].x;local.p[1]=m->rest[j].y;local.p[2]=m->rest[j].z;
                 if(part==4 || part==5) {
                     local.p[0]-=vanguard_parts[0].rest[anchor[part]].x;
                     local.p[1]-=vanguard_parts[0].rest[anchor[part]].y;
                     local.p[2]-=vanguard_parts[0].rest[anchor[part]].z;
                 }
-                multiply(&local,&attachment,&local);t=&local;
+                multiply(t,&attachment,&local);
             }
-            for(k=0;k<3;++k) {
-                p[k]+=(t->p[k]+t->m[k][0]*src[0]+t->m[k][1]*src[1]+t->m[k][2]*src[2])*(w/31.0f);
-                n[k]+=(t->m[k][0]*ns[0]+t->m[k][1]*ns[1]+t->m[k][2]*ns[2])*(w/31.0f);
-            }
+            for(k=0;k<3;++k)t->p[k]-=t->m[k][0]*m->rest[j].x+t->m[k][1]*m->rest[j].y+t->m[k][2]*m->rest[j].z;
         }
-        v->x=p[0];v->y=p[1];v->z=p[2];v->nx=n[0];v->ny=n[1];v->nz=n[2];
+        for(i=0;i<m->vertices;++i) {
+            Vertex *v=&vg_vertices[part][i];float p[3]={0},n[3]={0};
+            const float px=m->positions[i].x,py=m->positions[i].y,pz=m->positions[i].z;
+            const float nx=m->normals[i].x,ny=m->normals[i].y,nz=m->normals[i].z;
+            for(j=0;j<3;++j) {
+                int b=m->bones[i][j],w=m->weights[i][j];const Transform *t;float fw;
+                if(!w || b>=nb)continue;
+                t=&xf[b];fw=(float)w*scale;
+                for(k=0;k<3;++k) {
+                    p[k]+=(t->p[k]+t->m[k][0]*px+t->m[k][1]*py+t->m[k][2]*pz)*fw;
+                    n[k]+=(t->m[k][0]*nx+t->m[k][1]*ny+t->m[k][2]*nz)*fw;
+                }
+            }
+            v->x=p[0];v->y=p[1];v->z=p[2];v->nx=n[0];v->ny=n[1];v->nz=n[2];
+        }
     }
     sceKernelDcacheWritebackRange(vg_vertices[part],sizeof(Vertex)*m->vertices);
 }
@@ -532,3 +578,4 @@ void vanguard_draw(void) {
     if(alpha<0.99f) {sceGuDisable(GU_BLEND);sceGuAlphaFunc(GU_GREATER,0x7f,0xff);sceGuColor(0xffffffffu);}
     sceGuDisable(GU_ALPHA_TEST);
 }
+int vanguard_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */

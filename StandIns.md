@@ -15,9 +15,14 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
   `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth isn't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
+  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
   [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
-  next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
+  next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
+  (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
+  read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
+  matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
+- **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
+  and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
   track held until a fight and the stage channel dipping under it [inferred]; tracks loop at their ADX loop points) and
   the system bank's effects (menus, orbs; that it's the game's type 0 is inferred). Dante's own bank and his ten weapons' play from his moves'
@@ -39,6 +44,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera's own up); fake
   sprite layers face the camera; the sheet's top taken as a sprite's top; Line02 isn't ported.
+- **The Devil Arms' effects** (`update_arm_fx`, NATIVE_FX.md "Dante's effects"): placed at the weapon placement's
+  origin on its bone (the right hand for Beowulf), not the weapon object's own frame, and turned by Dante's yaw only;
+  Nevan's V0x2c1 / V0x38e start on any 6:14 / 6:40 / 6:9 / 6:10 / 6:33 as the window bit turns on, not only in
+  action 81 / 82's phases.
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
   flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
@@ -135,11 +144,21 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect (E0x2e0's model texture isn't decoded) and tint, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
-- **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded); Dante keeps his usual model (the PS2's open-coat ending model isn't loaded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them, as a hit of Dante's of its weight (her damage on enemies isn't decoded); her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); what fills her rocket counter (+0x4838) isn't decoded (a tenth a burst [estimate]); 0x85's three shots and the rocket's frame are estimates; action 0x49's aim pose isn't one of the port's motions (the drawn guns stand in); enemies don't attack her and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound).
+- **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them (the game's bullet hits any enemy on team 1), their damage from her attack records (80 a bullet, 0x5cbc40; 1500 the rocket) given as that many of Dante's hits; her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); what fills her rocket counter (+0x4838) isn't decoded (a tenth a burst [estimate]); 0x85's three shots and the rocket's frame are estimates; enemies don't attack her (the Seven Hells' AI targets the player, game+0xc, and nothing in it refers to her) and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound). The look: the fog's colour is LIG2's (checked in PCSX2), but its near 0 / far 4100 is fitted to PCSX2's measured fog [estimate]; the stage is drawn 3.5x the port's usual brightness, measured against PCSX2 at the same camera (why the PS2 draws it brighter isn't decoded) [estimate].
 - **Secret Missions**: 600's goal [inferred]; 605's 60 s limit [estimate]; 608's wagons (CStageSetTruck's timetable,
   the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall); 610's spikes (Mission 6's stand-in);
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.
-- **Bloody Palace**: rooms 422-449, its floor flow, boss floors, the Mission Select row and a floor counter. PortJobs.
+- **Bloody Palace** (`bloody_palace.c`, docs/BLOODY_PALACE.md): ordinary EST encounters use the Normal column;
+  Palace's rank = floor/1000+1 is not yet applied to enemy stats. Portals use the original V965/V967/V964
+  water/lightning/fire effects through the existing partial native-effect runtime, with a text legend; the water
+  is brighter/more opaque than the PCSX2 reference (GS blend/particle rendering remains approximate). Arrival
+  green/white orbs use their decoded positions and recovery values, but mote visuals, simplified falling and
+  collection within 120 cm; Lady's extra defeat pickups are omitted. Floor display stays visible, unlike the PS2's transient Level label. Arena camera
+  initialization starts its collision sweep at Dante's head: the default safe point lies beneath the raised arena.
+  Boss entrance/defeat camera sequences are skipped; boss behaviors retain their documented story-mode stand-ins.
+  Boss exits use an item glow in place of their room-specific warp effects; unmapped EST enemy classes retain
+  the shared enemy mapper's fallback (including some rare ordinary-floor sets and the unported chess pieces).
+  The task's requested kill-time countdown is omitted: EventTbl21 and PCSX2 show no survival timer in this PS2 mode.
 - **Rooms data**: 137's floor heights from doors and starts [inferred]; gimmicks not converted simply appear in the
   script's order [inferred]; a box over 102's platform for the ride up. `gen_rooms.py`.
 

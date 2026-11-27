@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$Regenerate
+    [switch]$Regenerate,
+    [switch]$HeapStat   # tests: heapstat.c counts the heap by call site (HEAPSTAT.TXT); not for release
 )
 
 # Builds build\testroom\EBOOT.PBP: the sceGu test room (Dante + grey floor +
@@ -59,6 +60,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
 }
 
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_runtime.h")) -or
+    -not (Test-Path -LiteralPath (Join-Path $Generated "bloody_palace_runtime.h")) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\gen_rooms.py")).LastWriteTime -gt
     (Get-Item -LiteralPath (Join-Path $Generated "rooms_runtime.h")).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
@@ -288,6 +290,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $VanguardHeader) -or
 
 $CameraHeader = Join-Path $Generated 'camera_runtime.h'
 if ($Regenerate -or -not (Test-Path -LiteralPath $CameraHeader) -or
+    (Get-Item -LiteralPath (Join-Path $Root 'tools\gen_rooms.py')).LastWriteTime -gt (Get-Item -LiteralPath $CameraHeader).LastWriteTime -or
     (Get-Item -LiteralPath (Join-Path $Root 'tools\gen_cameras.py')).LastWriteTime -gt (Get-Item -LiteralPath $CameraHeader).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\gen_cameras.py'), $Iso.FullName, '--header', $CameraHeader)
@@ -312,15 +315,17 @@ $CFlags = @(
     "-O2", "-G0", "-Wall", "-Wextra", "-fno-strict-aliasing", "-D_PSP_FW_VERSION=600",
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
+$WrapFlags = @()
+if ($HeapStat) { $CFlags += "-DHEAPSTAT"; $WrapFlags = @("-Wl,--wrap=malloc,--wrap=free,--wrap=memalign,--wrap=calloc,--wrap=realloc") }
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music", "sfx", "credits_fight", "pfx")) {
+foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music", "sfx", "credits_fight", "demo_cloth", "pfx", "bloody_palace", "heapstat")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj
 }
 
 $Elf = Join-Path $Build "testroom.elf"
-Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-Wl,-zmax-page-size=128") + $ObjectFiles + @(
+Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-Wl,-zmax-page-size=128") + $WrapFlags + $ObjectFiles + @(
     "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lpspjpeg", "-lpspaudio", "-lpsputility", "-lm",
     "-o", $Elf
 ))
@@ -328,7 +333,7 @@ Invoke-Native "psp-fixup-imports.exe" @($Elf)
 
 # The same objects as a PRX, for PSPLINK: pspsh runs it straight from this folder over USB.
 $PrxElf = Join-Path $Build "testroom_prx.elf"
-Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-specs=$(Join-Path $SDK 'lib\prxspecs')", "-Wl,-q,-T$(Join-Path $SDK 'lib\linkfile.prx')", "-Wl,-zmax-page-size=128") + $ObjectFiles + @((Join-Path $SDK 'lib\prxexports.o'),
+Invoke-Native "psp-gcc.exe" (@("-L$(Join-Path $SDK 'lib')", "-specs=$(Join-Path $SDK 'lib\prxspecs')", "-Wl,-q,-T$(Join-Path $SDK 'lib\linkfile.prx')", "-Wl,-zmax-page-size=128") + $WrapFlags + $ObjectFiles + @((Join-Path $SDK 'lib\prxexports.o'),
     "-lpspgum", "-lpspgu", "-lpspge", "-lpspdebug", "-lpspdisplay", "-lpspctrl", "-lpsppower", "-lpspjpeg", "-lpspaudio", "-lpsputility", "-lm",
     "-o", $PrxElf
 ))
