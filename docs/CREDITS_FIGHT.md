@@ -298,7 +298,20 @@ kills, the last the Hell Vanguard, the card, then demo 59.
 - Without video the street holds 56-59, at or above the port's usual rate. Mission 2's street dips to about 40 in
   its fights.
 - The periodic 13-26 ms update spike (2-3 missed frames a second) is there in every room, not just the street.
-- Nothing in the street was changed for speed.
+- Nothing in the street was changed for speed until the Vanguard (below).
+
+**The Vanguard's cost** (Nov 26, after the 100th enemy was fixed and actually came):
+- With him up, the street fell to 30 FPS. Draw went from about 10 ms to 16-17 ms, with the stage chunks unchanged.
+- On his own in the test street he cost about 7.5 ms more draw than a Pride (12.8 ms against 5.2).
+- Most of that was his CPU skinning (`vanguard.c` `skin_part`). For every vertex and influence the robes rebuilt and
+  multiplied their bone's matrix, and every part subtracted the bone's rest position.
+- Now each bone's transform is made once per part, with the rest offset folded into its translation.
+- The shots before and after match within float rounding (largest difference 4 of 255).
+
+| Run | Frames a second | Draw |
+|---|---|---|
+| `vgskin_before` / `vgskin_after` (test street, the Vanguard alone) | 53-56 / 53-56 | 12.8 / 9.0 ms |
+| `vg_perf` / `vg_perf2` (the street, fastwaves, the Vanguard up) | 29-30 / 52-54 | 16.0-16.7 / 11.8 ms |
 
 ## 9. The street's look (fog, sky, brightness)
 

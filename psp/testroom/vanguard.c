@@ -480,31 +480,45 @@ static void skin_part(int part) {
             multiply(&weapon_bones[i],m->parents[i]<0?&attachment:&weapon_bones[m->parents[i]],&local);
         }
     }
-    for(i=0;i<m->vertices;++i) {
-        Vertex *v=&vg_vertices[part][i];float p[3]={0},n[3]={0};
-        for(j=0;j<3;++j) {
-            int b=m->bones[i][j],w=m->weights[i][j];const Transform *t;
-            float src[3]={m->positions[i].x-m->rest[b].x,m->positions[i].y-m->rest[b].y,m->positions[i].z-m->rest[b].z};
-            float ns[3]={m->normals[i].x,m->normals[i].y,m->normals[i].z};
-            if(!w)continue;
-            if(!part)t=&body[b];
-            else if(part==8)t=&weapon_bones[b];
+    /* Each bone's transform once per part, with its rest offset folded into the translation (t.p - M rest), so a
+     * vertex's influence is M pos + p. Before this the robes rebuilt and multiplied their bone's matrix for every
+     * vertex and influence: the Vanguard alone took about 7.5 ms of the PSP frame (Mission 20's street fell to 30). */
+    {
+        enum {MAX_SKIN_BONES=32};
+        Transform xf[MAX_SKIN_BONES];
+        int nb=m->bone_count<MAX_SKIN_BONES?m->bone_count:MAX_SKIN_BONES;
+        const float scale=1.0f/31.0f;
+        for(j=0;j<nb;++j) {
+            Transform *t=&xf[j];
+            if(!part)*t=body[j];
+            else if(part==8)*t=weapon_bones[j];
             else {
                 /* Rest cloth rigs follow their native attachment. Sleeves are authored in body space. */
-                identity(&local);local.p[0]=m->rest[b].x;local.p[1]=m->rest[b].y;local.p[2]=m->rest[b].z;
+                identity(&local);local.p[0]=m->rest[j].x;local.p[1]=m->rest[j].y;local.p[2]=m->rest[j].z;
                 if(part==4 || part==5) {
                     local.p[0]-=vanguard_parts[0].rest[anchor[part]].x;
                     local.p[1]-=vanguard_parts[0].rest[anchor[part]].y;
                     local.p[2]-=vanguard_parts[0].rest[anchor[part]].z;
                 }
-                multiply(&local,&attachment,&local);t=&local;
+                multiply(t,&attachment,&local);
             }
-            for(k=0;k<3;++k) {
-                p[k]+=(t->p[k]+t->m[k][0]*src[0]+t->m[k][1]*src[1]+t->m[k][2]*src[2])*(w/31.0f);
-                n[k]+=(t->m[k][0]*ns[0]+t->m[k][1]*ns[1]+t->m[k][2]*ns[2])*(w/31.0f);
-            }
+            for(k=0;k<3;++k)t->p[k]-=t->m[k][0]*m->rest[j].x+t->m[k][1]*m->rest[j].y+t->m[k][2]*m->rest[j].z;
         }
-        v->x=p[0];v->y=p[1];v->z=p[2];v->nx=n[0];v->ny=n[1];v->nz=n[2];
+        for(i=0;i<m->vertices;++i) {
+            Vertex *v=&vg_vertices[part][i];float p[3]={0},n[3]={0};
+            const float px=m->positions[i].x,py=m->positions[i].y,pz=m->positions[i].z;
+            const float nx=m->normals[i].x,ny=m->normals[i].y,nz=m->normals[i].z;
+            for(j=0;j<3;++j) {
+                int b=m->bones[i][j],w=m->weights[i][j];const Transform *t;float fw;
+                if(!w || b>=nb)continue;
+                t=&xf[b];fw=(float)w*scale;
+                for(k=0;k<3;++k) {
+                    p[k]+=(t->p[k]+t->m[k][0]*px+t->m[k][1]*py+t->m[k][2]*pz)*fw;
+                    n[k]+=(t->m[k][0]*nx+t->m[k][1]*ny+t->m[k][2]*nz)*fw;
+                }
+            }
+            v->x=p[0];v->y=p[1];v->z=p[2];v->nx=n[0];v->ny=n[1];v->nz=n[2];
+        }
     }
     sceKernelDcacheWritebackRange(vg_vertices[part],sizeof(Vertex)*m->vertices);
 }
