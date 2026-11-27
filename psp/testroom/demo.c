@@ -301,7 +301,7 @@ static void stage_hide_apply(int clear) {
         /* after the fades, lights (low half of light_count), Program clips and fogs (its high half) */
         const unsigned int *programs = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) +
                                                               (head->light_count & 0xffffu) * sizeof(DemoLight));
-        const unsigned int *count = programs + 1 + *programs * 6 + (head->light_count >> 16) * 7;   /* 24-byte programs, 28-byte fogs */
+        const unsigned int *count = programs + 1 + *programs * 6 + (head->light_count >> 16) * 6;   /* 24-byte programs and fogs */
         const struct { float frame; unsigned short obj, hidden; } *e = (const void *)(count + 1);
         unsigned int i;
         for (i = 0; i < *count && e[i].frame <= demo_clock; ++i) {
