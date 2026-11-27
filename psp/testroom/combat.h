@@ -83,6 +83,7 @@ typedef struct {
     unsigned char gates[COMBAT_GATES]; /* 0 closed, 1 buffer, 2 open */
     int pending;           /* action buffered while its gate was 1 */
     int active;            /* attack-active window (window 0 byte 1 bit 0x80) */
+    int window_bits;       /* window 0 byte 0 bit 0 (1, player+0x24d1) and byte 1 bit 0x40 (0x40, the second blade) */
     float last_root[3];    /* root translation sampled last frame (for deltas) */
     float phase_time;      /* seconds in the current move */
     int plays;             /* times the current move's motion has completed */
@@ -192,6 +193,8 @@ int combat_idle_motion(void);  /* sword-drawn idle (rb-00) or -1 */
 /* Runs every generated action to its end with no input, off screen; returns how
  * many finished. *failed_action = the first that hung, *fallbacks = phases that
  * waited on a script flag the script never set. */
+/* Tests ("dact frame action"): start a command-table action's move now, whatever the input. */
+void combat_force_action(Combat *combat, int action);
 int combat_selftest(int *total, int *failed_action, int *fallbacks);
 /* Feeds each neutral command's button through combat_update with its weapon, style
  * and posture set, as the pad does; returns how many started a move of that weapon. */

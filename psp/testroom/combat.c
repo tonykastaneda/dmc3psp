@@ -11,6 +11,7 @@
 #include "leviathan_boss.h"
 #include "stage.h"
 #include "nfx.h"
+#include "nfx.h"
 
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
@@ -347,6 +348,7 @@ static void end_move(Combat *c, Player *player) {
     c->script = -1;
     c->pending = 0;
     c->active = 0;
+    c->window_bits = 0;
     memset(c->gates, 0, sizeof(c->gates));
     c->dashes = 0;        /* FUN_0021f500 (back to neutral) clears the dash count */
     c->warp_time = 0.0f;
@@ -440,6 +442,7 @@ static void start_move(Combat *c, MoveId move, int action) {
     if (moves[move].set_speed > 0.0f) { c->air_v[0] = moves[move].set_speed; c->air_v[1] = 0.0f; }
     c->pending = 0;
     c->active = 0;
+    c->window_bits = 0;
     c->phase_time = 0.0f;
     c->hover_done = 0;
     memset(c->gates, 0, sizeof(c->gates));
@@ -747,6 +750,7 @@ static int run_events(Combat *c) {
         else if (e->kind == EV_ACTIVE) {
             if (e->a && !c->active) ++hits;
             c->active = e->a;
+            c->window_bits = e->b;
         } else if (e->kind == EV_HIT && (c->active || !script_has_active(sd))) {
             /* Window 0 byte 2 0x2n re-arms the attack: a new hit inside an
              * active window, or each stab of a move without one (Million Stab). */
@@ -1593,7 +1597,14 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             player->vy = 0.0f;
             player->on_ground = 1;
             c->air = 0;
-            if (d->land_finish) return;   /* the move carries on, on the ground, to its motion's end */
+            if (d->land_finish) {
+                /* Helm Breaker's landing (FUN_00264b90): V0x8e on him (Dante's pack) and P44 dust at his feet (V0xf2
+                 * on floor material 0xb, not told apart here). */
+                float feet[3] = {player->x, player->y, player->z};
+                nfx_spawn(NFX_DANTE, 0x8e, feet, player->yaw, 0);
+                nfx_spawn_p(NFX_STATIC, 44, feet, player->yaw, 0);
+                return;   /* the move carries on, on the ground, to its motion's end */
+            }
             if (d->next == MOVE_NONE) {
                 /* State 8: the jump's landing frames, stopped. */
                 int land = motion_find("2-04");
@@ -1843,6 +1854,11 @@ int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int
 }
 const char *combat_script_key(int script) {
     return script >= 0 ? script_data[script].key : "-";
+}
+
+void combat_force_action(Combat *c, int action) {
+    MoveId m = action_move(action);
+    if (m != MOVE_NONE) start_move(c, m, action);
 }
 
 int combat_selftest(int *total, int *failed_action, int *fallbacks) {

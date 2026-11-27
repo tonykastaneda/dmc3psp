@@ -274,6 +274,9 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
             m = struct.unpack_from("<H", rec, 0x28)[0]
             if ("M", m) in recs:
                 models.setdefault(m, None)
+            m = struct.unpack_from("<H", rec, 0x212)[0]
+            if rec[0x211] and ("M", m) in recs:   # its textures are model +0x212's (FUN_001f1760, nfx.c draw_model)
+                models.setdefault(m, None)
         elif tex != 0xFFFF and ("T", tex) in recs:
             try:
                 textures.setdefault(tex, native_fx.picture(recs["T", tex]))
