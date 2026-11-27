@@ -5010,7 +5010,7 @@ float enemy_giga_max_health(void) { return GIGA_HEALTH; }
  * Root motion is x1.5 (FUN_00402ba0: +0x1fc9 isn't 1 for this, the 1400-health block [inferred]). */
 #define AN_TURN(deg_rate) (deg_rate)   /* its turn rates are radians a frame (FUN_00402a30 -> FUN_00105760) */
 #define AN_WEBS 8
-typedef struct { int on, owner, holding; float pos[3], vel[3], life, hold; } AnWeb;
+typedef struct { int on, owner, holding; float pos[3], vel[3], life, hold; int fx; } AnWeb;
 static AnWeb an_webs[AN_WEBS];
 static float an_gate[ENEMY_MAX], an_wall[ENEMY_MAX][3], an_target[ENEMY_MAX][3];
 static unsigned char an_loops[ENEMY_MAX], an_on_wall[ENEMY_MAX], an_tries[ENEMY_MAX], an_shot[ENEMY_MAX];
@@ -5085,7 +5085,7 @@ static void an_webs_launch(float px, float py, float pz) {
         AnWeb *w = &an_webs[i];
         float a = (float)k / 4.0f * 2.0f * PI, tx = px + sinf(a) * 150.0f, tz = pz + cosf(a) * 150.0f, t, dx, dz, l;
         if (w->on) continue;
-        w->on = 1; w->owner = (int)(e - enemies); w->holding = 0; w->life = 1000.0f; w->hold = 0.0f;
+        w->on = 1; w->owner = (int)(e - enemies); w->holding = 0; w->life = 1000.0f; w->hold = 0.0f; w->fx = 0;
         w->pos[0] = from[0]; w->pos[1] = from[1]; w->pos[2] = from[2];
         t = from[1] < py ? 20.0f : sqrtf((from[1] - py) * 1.6f) / 0.8f;
         if (t < 1.0f) t = 1.0f;
@@ -5103,22 +5103,40 @@ static void an_webs_update(float f, float px, float py, float pz) {
         AnWeb *w = &an_webs[i];
         float dx, dy, dz;
         if (!w->on || w->owner != me) continue;
+        /* Its effects (CEm010Shl00, em010's pack, nfx bank 9): V0x29e in flight (FUN_004f46d0); on Dante V0x2a3 and
+         * V0x309, and V0x308 held on him (FUN_004f4a60, flag 0x40; on his body, taken at his middle); V0x2a2 where it
+         * misses (0x20000); V0x304 100 over him as he breaks free (FUN_004f50d0). */
         if (w->holding) {
+            float at[3] = {px, py + 100.0f, pz};
             w->pos[0] = px; w->pos[1] = py + 40.0f; w->pos[2] = pz;
-            if (hold_freed() || (w->hold -= f) < 0.0f) { hold_let_go(1); w->on = 0; }
-            else { float v[3] = {0.0f, 0.0f, 0.0f}; fx_mote(w->pos, v, 90.0f, 90.0f, 0.05f, 0xc0f0f0f0u); }
+            if (hold_freed() || (w->hold -= f) < 0.0f) {
+                hold_let_go(1); w->on = 0;
+                if (w->fx) { nfx_kill(w->fx); w->fx = 0; }
+                nfx_spawn(NFX_ARACHNE, 0x304, at, 0.0f, 0);
+            } else if (nfx_alive(w->fx)) nfx_move(w->fx, at, 0.0f);
             continue;
         }
         w->pos[0] += w->vel[0] * f; w->pos[1] += w->vel[1] * f; w->pos[2] += w->vel[2] * f;
         w->vel[1] -= 0.8f * f;
         dx = px - w->pos[0]; dy = py + 100.0f - w->pos[1]; dz = pz - w->pos[2];
         if (attacks_on && !hold_owner && dx * dx + dy * dy + dz * dz < (100.0f + DANTE_RADIUS) * (100.0f + DANTE_RADIUS)) {
+            float at[3] = {px, py + 100.0f, pz};
             hold_take(35);
             w->holding = 1; w->hold = 300.0f;
+            if (w->fx) nfx_kill(w->fx);
+            nfx_spawn(NFX_ARACHNE, 0x2a3, w->pos, 0.0f, 0);
+            nfx_spawn(NFX_ARACHNE, 0x309, w->pos, 0.0f, 0);
+            w->fx = nfx_spawn(NFX_ARACHNE, 0x308, at, 0.0f, 1);
             continue;
         }
-        if ((w->life -= f) < 0.0f || w->pos[1] < e->floor_y - 50.0f) { w->on = 0; continue; }
-        { float v[3] = {0.0f, 0.0f, 0.0f}; fx_mote(w->pos, v, 40.0f, 40.0f, 0.05f, 0xc0f0f0f0u); }   /* its look (effects 0x29e / 0x2a3 aren't converted) */
+        if ((w->life -= f) < 0.0f || w->pos[1] < e->floor_y - 50.0f) {
+            w->on = 0;
+            if (w->fx) { nfx_kill(w->fx); w->fx = 0; }
+            nfx_spawn(NFX_ARACHNE, 0x2a2, w->pos, 0.0f, 0);
+            continue;
+        }
+        if (!nfx_alive(w->fx)) w->fx = nfx_spawn(NFX_ARACHNE, 0x29e, w->pos, atan2f(w->vel[0], w->vel[2]), 1);
+        else nfx_move(w->fx, w->pos, atan2f(w->vel[0], w->vel[2]));
     }
 }
 
@@ -5211,6 +5229,7 @@ static void an_decide(float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), rel;
     zone = d < 400.0f ? 0 : d < 700.0f ? 1 : 2;
     rel = wrap_angle(atan2f(dx, dz) - e->yaw);
+    if (ar_force >= 0) { int st = ar_force; ar_force = -1; an_go(st, px, py, pz); return; }   /* tests: "arforce frame action" */
     if (an_on_wall[me]) {
         if (an_gate[me] > 150.0f && attack_token <= 0.0f && attacks_on) {
             attack_token = ATTACK_TOKEN_SECONDS;

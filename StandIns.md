@@ -57,7 +57,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Arachne**: its class is ported (ENEMY_SPECS H); stand-ins: its hits' bones (a sphere 100 ahead), flag 4 taken as
   its scripts' first event, the wall's normal (the ray back, flattened) and its pose there (turned 90 degrees), 0x6d's
   web-line swing (a leap), 0x6f's speed (8), the web's struggle count (35 [inferred]), its fall when struck on a wall,
-  root motion x1.5 [inferred]; webs drawn as motes; spiderlings (0x76) and the charge (0x78) never chosen at rank 0.
+  root motion x1.5 [inferred]; its web's held effect sits at Dante's middle, not his bone; spiderlings (0x76) and the charge (0x78) never chosen at rank 0.
   `enemy.c` The Arachne, PortJobs.
 - **Fallen**: its damage handler isn't decoded [estimates]; facing taken from Dante, not his facing; on the ground it
   closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
