@@ -37,9 +37,17 @@ typedef struct {
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
     float land_damage;           /* out: its attack record's damage */
     LadyShot shots[LADY_SHOTS];
+    /* The ally of Mission 20's ending street (spawn variant 1 -> +0x485e, FUN_00442610; modes 0x2f-0x33,
+     * docs/CREDITS_FIGHT.md 5). in: ally, has_target, target (FUN_0044c8b0's pick), dante_yaw. */
+    int ally, has_target, mode;
+    float target[3], dante_yaw;
+    float shot_clock, rocket, regroup;   /* +0x483c, +0x4838, +0x4840 */
+    int ally_hit;                        /* out: a shot reached her target this frame (1 light, 2 heavy) */
+    float ally_hit_damage;               /* out: its record's damage */
 } LadyBrain;
 
 void lady_spawn(LadyBrain *b, int health);
+void lady_make_ally(LadyBrain *b);   /* variant 1: the ending street's ally (lady_think then runs her ally modes) */
 /* sight: Dante's in her line of sight (FUN_00449450, a ray from her to him). */
 void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int sight);
 int lady_hit(LadyBrain *b, int heavy, int mortal);   /* 1 if she's beaten */

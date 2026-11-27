@@ -61,7 +61,9 @@ int testroom_frame;
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
+#include "pfx.h"
 #include "hud.h"
+#include "credits_fight.h"
 #include "orbs.h"
 #include "rebellion_runtime.h"
 #include "ebony_runtime.h"
@@ -604,6 +606,7 @@ static void enemy_died(int kind, float x, float y, float z) {
     /* FUN_00366f10: from the body's root + 70, with the floor at the root - 100: 170 cm over his feet. */
 
     orbs_burst(x, y + 170.0f, z, orbs_for_enemy(kind_max_health(kind), mission_difficulty()));
+    credits_fight_kill(kind);   /* M20's ending street counts them (credits_fight.c) */
 }
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
@@ -1456,13 +1459,14 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (show_bones) draw_bones();
 
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
-        hud_draw(player);
-        {
+        if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
+        else hud_draw(player);
+        if (!credits_fight_active()) {
             float hp, maximum;
             if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);
             else hud_draw_boss(NULL, 0, 0);
         }
-        if (mission_mode && menu_loaded()) {
+        if (mission_mode && menu_loaded() && !credits_fight_active()) {
             /* The Red Orbs held, top right: brighter for a moment when one's collected. */
             char text[24];
             float since = orbs_since_collected(), k = since < 2.0f ? 1.0f : since < 3.0f ? 3.0f - since : 0.0f;
@@ -2017,7 +2021,8 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
-static int cmp_fastwaves, cmp_clear_minions, cmp_events_play;
+static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1) or looping P (2) 2 m before Dante */
+static int cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
@@ -2102,6 +2107,11 @@ static void cmp_load(void) {
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
         else if (strncmp(line, "smlayout ", 9) == 0) sm_test_layout(atoi(line + 9));   /* tests: Secret Mission 10's crystals */
         else if (strncmp(line, "breakall ", 9) == 0) cmp_breakall_at = atoi(line + 9);   /* tests: every prop in the room breaks */
+        else if (strncmp(line, "nopfx ", 6) == 0) pfx_enable(!atoi(line + 6));   /* tests: no P effects, for comparisons */
+        else if (strncmp(line, "fxtest ", 7) == 0) {
+            if (cmp_fxtest_count < 16 && sscanf(line + 7, "%d %d %d %d", &cmp_fxtest[cmp_fxtest_count][0], &cmp_fxtest[cmp_fxtest_count][1],
+                                              &cmp_fxtest[cmp_fxtest_count][2], &cmp_fxtest[cmp_fxtest_count][3]) == 4) ++cmp_fxtest_count;
+        }
         else if (strncmp(line, "bosshits ", 9) == 0) {
             if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
         }
@@ -2113,6 +2123,8 @@ static void cmp_load(void) {
         else if (strncmp(line, "camat ", 6) == 0) cmp_camat_on = sscanf(line + 6, "%f %f %f %f %f %f", &cmp_camat[0], &cmp_camat[1], &cmp_camat[2], &cmp_camat[3], &cmp_camat[4], &cmp_camat[5]) == 6;
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
+        else if (strncmp(line, "creditsat ", 10) == 0) cmp_credits_at = atoi(line + 10);   /* tests: M20's street from this frame */
+        else if (strncmp(line, "creditskills ", 13) == 0) cmp_credits_kills = atoi(line + 13);   /* tests: ... with these kills */
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
@@ -3064,8 +3076,7 @@ static int script_run(float dt, float floor_y) {
         }
         switch (op->op) {
         case ROOM_OP_SPAWN:
-            /* M20's EST 55 variant 1 is Lady as an ally, not a boss target. */
-            if(mission_choice.mission==20 && room_number(mission_room)==12 && op->a==55)break;
+            /* M20's EST 55 is Lady; the record's op 8 [0, 1] that follows makes her the ally (enemy_set_spawn_param). */
             if(mission_choice.mission==2 && op->a==26) {
                 /* The pre-boss waves are over. Their still-drawing death actors
                  * do not belong in Vanguard's solo encounter. */
@@ -3253,9 +3264,10 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     if (focus_cmp && cmp_enemy_audit > 1) held = 0; /* Audit rooms directly without solving their item puzzles. */
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     if(mission_choice.mission==20 && room_number(mission_room)==12){
-        /* EventTbl20 op 8c 13620 then wait 300; cinematic side effects omitted. */
+        /* EventTbl20's room 12 script: credits_fight.c. */
+        if(!credits_fight_active()){credits_fight_begin();if(focus_cmp && cmp_credits_at)credits_fight_skip((float)cmp_credits_at);if(focus_cmp && cmp_credits_kills)credits_fight_test_kills(cmp_credits_kills);}
         m20_ending_frames+=dt*60;
-        if(m20_ending_frames>=13920 && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
+        if(credits_fight_update(dt*60) && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
     }
     if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
     fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
@@ -3832,7 +3844,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     pickup_caption_time = 0.0f;
     mission10_reset();
     mission13_reset(choice->difficulty);
-    m20_ending_frames=0;m20_boss_defeated=0;
+    m20_ending_frames=0;m20_boss_defeated=0;credits_fight_reset();
     seal_open_bits = 0;
     seal_index = -1;
     breakables_reset();
@@ -3922,6 +3934,7 @@ int main(int argc, char *argv[]) {
     rest_error = rest_pose_error_um();
     music_init(game_dir);
     sfx_init(game_dir);
+    credits_fight_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
@@ -4323,6 +4336,14 @@ int main(int argc, char *argv[]) {
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
             if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
+            {
+                int k;
+                for (k = 0; k < cmp_fxtest_count; ++k) if (frames == cmp_fxtest[k][0]) {
+                    float at[3] = {player.x + sinf(player.yaw) * 200.0f, player.y, player.z + cosf(player.yaw) * 200.0f};
+                    if (cmp_fxtest[k][2]) nfx_spawn_p(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, cmp_fxtest[k][2] == 2);
+                    else nfx_spawn(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, 0);
+                }
+            }
                 if (cmp_breakall_at && frames == cmp_breakall_at) {
                     int k;
                     for (k = 0; k < ROOM_BREAKABLE_COUNT; ++k)
@@ -4508,7 +4529,7 @@ int main(int argc, char *argv[]) {
         if (combat_ready && !anim.viewer) {
             MoveId before = combat.move;
             /* Devil Trigger runs him 1.1x as fast (HD Collection traces). */
-            combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);
+            if (!credits_fight_frozen()) combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);   /* op 7e [3] stops him */
             {   /* His moves' sound events (gen_sfx.py: the motion definitions' 0x30 / 0x34) as their frames pass. */
                 static int sfx_m = -1; static float sfx_f, sfx_t;
                 int m = combat.action ? combat.motion : -1;
@@ -4575,7 +4596,7 @@ int main(int argc, char *argv[]) {
             }
             /* Reading a message, or an event on (FUN_0021fd50(player, 1)): no input reaches him. */
             if (mission_mode && (msg_busy() || msg_event_on())) { memset(&input, 0, sizeof(input)); input.style = -1; }
-            player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
+            if (!credits_fight_frozen()) player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame
              * covers more than his radius, and pushing out from the end alone lets him through a wall (Mission
              * 3's bar, its east wall at x 3000, during Trickster's dash). Steps of at most 15 cm, from where
@@ -4605,7 +4626,7 @@ int main(int argc, char *argv[]) {
                  * them isn't decoded), so they don't set on a Dante who can't move. */
                 if (!(mission_mode && msg_event_on()))
                     enemy_set_dante_yaw(player.yaw);
-            enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+            if (!credits_fight_frozen()) enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
             {
                 float drained = enemy_take_dt_drain() / 1000.0f;   /* runes [1000 a rune inferred] */
                 if (drained > 0.0f && !player.devil) { player.dt_energy -= drained; if (player.dt_energy < 0.0f) player.dt_energy = 0.0f; }
@@ -4990,7 +5011,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
                 if (report) {
-                    fprintf(report, "cmp done, frames=%d enemy_poses=%d\n%s", cmp_frames, enemy_poses_done(), enemy_giga_log());
+                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d\n%s", cmp_frames, enemy_poses_done(), pfx_started(), enemy_giga_log());
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
                     { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }
@@ -4998,6 +5019,7 @@ int main(int argc, char *argv[]) {
                     { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
+                    { char cl[160]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

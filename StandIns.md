@@ -15,7 +15,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
   `combat.c` held_update, `enemy.c` hold_take.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: their P / G effects and cloth aren't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
+  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth isn't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
   [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
@@ -34,8 +34,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
-  throws, Geryon's missiles, Vergil's 0x338, Agni & Rudra's 0x311 / 0x312 (the charged blades' 0x24c / 0x24d are the game's, riding the hand), Cerberus's unported
-  particle programs, the Vanguard's P312 dissolve). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
+  trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
+  particle programs). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
+- **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
+  camera-facing emitter's axes from the eye and world up (not the camera's own up); fake
+  sprite layers face the camera; the sheet's top taken as a sprite's top; Line02 isn't ported.
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
   flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
@@ -65,7 +68,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
-  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes; ordinary E&I stun uses the native raw10 x1.75, the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
+  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects (the bomb's with its P particles), the trap's ring is motes; ordinary E&I stun uses the native raw10 x1.75, the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference); they wait as statues (ar71 / ar72) where the game starts them in state 1 at y 100 (the cutscene's) and
   wake within 900, when struck or after 600 frames [estimate]. The pedestal climb, the guard and the hops are the game's; stand-ins: a blow's "Dante's +5 is 0-2" (a
@@ -73,8 +76,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Dante's recoil from a guarded blow (the hit's +0x34) isn't modelled; a wall's push for the leap (vtable +0x1c0) is
   read as the walls pass moving him over 1 cm since his own move [inferred]; the survivor's moves below each health
   mark (57 / 58) aren't picked (their shots aren't decoded); the pedestal's sword flash (0x3b3 / 0x3b4) isn't shown and
-  the landings' effects (0x2c, 0x2e5) are dust; the effects (0x311 / 0x312 a burst within 300 as record 12
-  [estimate]). `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
+  the landings' effects (0x2c, 0x2e5) are dust; the slam hurting within 300 as record 12 [estimate], its effects at
+  the hand's floor point [estimate]. `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
   (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
   aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
@@ -88,7 +91,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
-- **Cerberus**: two particle programs stand in. CERBERUS_SPEC.md.
+- **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
+  the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
 - **Vergil**: gravity 1 [inferred]; effect 0x338 is a hit spark; his drop lands where Dante stands; his hit reaction
   isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
@@ -102,7 +106,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   game), but plays Dante's moveset on his body (his own isn't ported), with no coat or sword, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
   rigid, their count and the summon clock's reload [estimates]; his hits' damage not from records; demo 53 / 328 not
   played. `arkham_boss.c`, ARKHAM_SPEC.md, PortJobs.
-- **Hell Vanguard**: the P312 dissolve. VANGUARD_EFFECTS.md.
+- **Hell Vanguard**: the model's fade out and in round P312 (the game hides and shows it). VANGUARD_EFFECTS.md.
 
 ## Missions and rooms
 
@@ -132,6 +136,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   shatter, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
+- **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded); Dante keeps his usual model (the PS2's open-coat ending model isn't loaded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them, as a hit of Dante's of its weight (her damage on enemies isn't decoded); her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); what fills her rocket counter (+0x4838) isn't decoded (a tenth a burst [estimate]); 0x85's three shots and the rocket's frame are estimates; action 0x49's aim pose isn't one of the port's motions (the drawn guns stand in); enemies don't attack her and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound).
 - **Secret Missions**: 600's goal [inferred]; 605's 60 s limit [estimate]; 608's wagons (CStageSetTruck's timetable,
   the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall); 610's spikes (Mission 6's stand-in);
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.

@@ -624,6 +624,8 @@ void enemy_set_mortal(int on) { mortal = on; }
 void enemy_set_spawn_param(int index, int value) {
     Enemy *a = last_spawned;
     if (a && a->active && index == 1 && a->kind == ENEMY_ABYSS) { a->mirror_bound = (unsigned char)(value != 0); return; }
+    /* Lady's op 8 [0, 1]: variant 1, Mission 20's ending ally (+0x4a8 -> +0x485e, FUN_00442610). */
+    if (a && a->active && index == 0 && a->kind == ENEMY_LADY) { if (value == 1) lady_make_ally(&lady_brain); return; }
     if (!a || !a->active || index != 0 || a->kind != ENEMY_JESTER || value < 0 || value > 2) return;
     a->encounter = (unsigned char)value;
     a->ar_health = jester_max_health(value);
@@ -687,7 +689,9 @@ void enemy_drop_below(float y) {
 
 int enemy_alive_count(void) {
     int i, n = 0;
-    for (i = 0; i < ENEMY_MAX; ++i) n += enemies[i].active && enemies[i].plan != P_DEATH;
+    /* The ending street's ally isn't one of the encounter's: its gates count the enemies [inferred]. */
+    for (i = 0; i < ENEMY_MAX; ++i)
+        n += enemies[i].active && enemies[i].plan != P_DEATH && !(enemies[i].kind == ENEMY_LADY && lady_brain.ally);
     return n;
 }
 
@@ -806,7 +810,8 @@ void enemy_select_nearest(float x, float z) {
             !(o->kind == ENEMY_VERGIL && (vergil_boss_dying() || vergil_boss_hidden())) &&
             !(o->kind == ENEMY_GERYON && (geryon_boss_dying() || geryon_boss_hidden())) &&
             !(o->kind == ENEMY_DOPPELGANGER && (doppelganger_boss_dying() || doppelganger_boss_hidden())) &&
-            !(o->kind == ENEMY_ARKHAM && arkham_boss_dying()) && d < best) { best = d; e = &enemies[i]; }
+            !(o->kind == ENEMY_ARKHAM && arkham_boss_dying()) &&
+            !(o->kind == ENEMY_LADY && lady_brain.ally) && d < best) { best = d; e = &enemies[i]; }
     }
     if (e->kind == ENEMY_CERBERUS) cerberus_boss_select_target(x, z);
     if (e->kind == ENEMY_LEVIATHAN) {
@@ -1669,7 +1674,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_SOUL) { ++hits; soul_hit_glue(kind); return; }
-    if (e->kind == ENEMY_LADY) { ++hits; lady_hit_glue(kind); return; }
+    if (e->kind == ENEMY_LADY) { if (lady_brain.ally) return; ++hits; lady_hit_glue(kind); return; }   /* the ending's ally takes none of his */
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
@@ -4649,14 +4654,20 @@ static void ar_update(float f, float px, float py, float pz) {
         float hx = e->hand_pos[0], hz = e->hand_pos[2], sn = sinf(e->yaw), cs = cosf(e->yaw);
         float hand[3] = {e->pos[0] + hx * cs + hz * sn, e->pos[1] + e->hand_pos[1], e->pos[2] + hz * cs - hx * sn};
         if (e->action >= 52 && e->action <= 54 && e->step == 3 && e->frame >= 165.0f && e->vel[1] == 0.0f) {
-            /* The slam's burst where the blade meets the floor (FUN_003a8200 phase 0x1f): the game plays V785 (Agni's
-             * sword) / V786 (Rudra's) from em026 [18], whose E part (E0) shows nothing on its own in the port's effect
-             * runtime and the rest is P particles (not ported). A stand-in burst, hurting within 300 cm as attack record
-             * 12 [estimate]. */
+            /* The slam's burst where the blade meets the floor (FUN_003a8200 phase 0x1f, frame 165): V785 for Agni's
+             * sword, V786 for Rudra's, both with the pair's set 2, each on the floor under its sword (FUN_00201c70),
+             * unturned. Its sparks and dust are P24 / P44 (pfx.c). The swords are taken at his hand (the other mirrored
+             * for set 2) [estimate]; it hurts within 300 cm as attack record 12 [estimate]. */
             float at[3] = {e->pos[0] + sn * 150.0f, e->floor_y + 40.0f, e->pos[2] + cs * 150.0f};
             float ddx = px - at[0], ddz = pz - at[2];
+            float floor_hand[3] = {hand[0], e->floor_y, hand[2]};
+            float floor_other[3] = {e->pos[0] - hx * cs + hz * sn, e->floor_y, e->pos[2] + hz * cs + hx * sn};
             e->vel[1] = 1.0f;
-            fx_explosion(at); fx_dust(at);
+            if (b->set == 2) {
+                nfx_spawn(NFX_AGNI_RUDRA, 785, floor_hand, 0.0f, 0);
+                nfx_spawn(NFX_AGNI_RUDRA, 786, floor_other, 0.0f, 0);
+            } else nfx_spawn(NFX_AGNI_RUDRA, b->set ? 786 : 785, floor_hand, 0.0f, 0);
+            giga_note("ar_slam", b->set, floor_hand[1]);
             if (attacks_on && ddx * ddx + ddz * ddz < 300.0f * 300.0f && fabsf(py - e->floor_y) < 200.0f) {
                 land_attack(1);
                 landed_damage = ar_attacks[12].damage;
@@ -6712,6 +6723,19 @@ static void lady_spawn_glue(void) {
     b->restart = 0;
     e->fade = 0.0f;
 }
+static int ally_landed;   /* tests: the ending ally's shots that reached her target */
+int enemy_ally_state(float pos[3], int *mode, int *shots) {
+    int i;
+    *shots = ally_landed;
+    if (!lady_brain.ally) return 0;
+    for (i = 0; i < ENEMY_MAX; ++i)
+        if (enemies[i].active && enemies[i].kind == ENEMY_LADY) {
+            pos[0] = enemies[i].pos[0]; pos[1] = enemies[i].pos[1]; pos[2] = enemies[i].pos[2];
+            *mode = lady_brain.mode;
+            return 1;
+        }
+    return 0;
+}
 static void lady_update_glue(float f, float px, float py, float pz) {
     LadyBrain *b = &lady_brain;
     const Motion *m;
@@ -6744,7 +6768,32 @@ static void lady_update_glue(float f, float px, float py, float pz) {
             /* FUN_00449450: a ray from her (head height) to him; a wall or floor between means he's out of sight. */
             float from[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]}, to[3] = {px, py + 100.0f, pz}, t;
             int sight = !stage_loaded() || !stage_raycast(from, to, &t);
+            Enemy *target = NULL;
+            if (b->ally) {
+                /* FUN_0044c8b0: the nearest to her of the enemies Dante could lock on (player +0x2b58); its cone test
+                 * (+0x4861) isn't ported. */
+                int k;
+                float best = 1.0e12f;
+                for (k = 0; k < ENEMY_MAX; ++k) {
+                    Enemy *o = &enemies[k];
+                    float ox = o->pos[0] - e->pos[0], oz = o->pos[2] - e->pos[2];
+                    if (!o->active || o->plan == P_DEATH || o == e || o->kind == ENEMY_LADY) continue;
+                    if (ox * ox + oz * oz < best) { best = ox * ox + oz * oz; target = o; }
+                }
+                b->has_target = target != NULL;
+                if (target) { b->target[0] = target->pos[0]; b->target[1] = target->pos[1]; b->target[2] = target->pos[2]; }
+                b->dante_yaw = se_dante_yaw;
+            }
             lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, sight);
+            if (b->ally && b->ally_hit && target) {
+                ++ally_landed;
+                /* Her shot on its target: as a hit of Dante's of its weight (her damage on them isn't decoded). */
+                Enemy *was = e;
+                float lx = e->pos[0], lz = e->pos[2];
+                e = target;
+                enemy_hit(b->ally_hit == 2 ? HIT_HEAVY : HIT_PISTOL, lx, lz);
+                e = was;
+            }
         }
         if (b->action != before) giga_note("lady", b->action, (float)b->magazine);
         else if (b->step != before_step && b->air + (b->action == 11) + (b->action == 18) > 0) { giga_note("lady_step", b->step * 1000 + b->health, b->pos[0]); giga_note("lady_z", b->step, b->pos[2]); }
@@ -6782,8 +6831,8 @@ static void lady_hit_glue(HitKind kind) {
  * are the game's models (tools/prepare_jester_props.py): the bomb tumbles as it flies [estimate];
  * the hand plays [28]:0 on its own 18-bone rig at the native floor transform. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
  * and V0x3f8 looping on its frame (0054d610: at him, facing Dante turned 45 degrees, turning with it), V0x3fa as it
- * ends (0054dc70); the bomb V0x417 in flight (0054e710) and V0x41c as it goes off (0054edc0). Stand-ins for the parts
- * that are P particles (not ported): the bomb's burst is a mote, and so is the trap's warning ring. */
+ * ends (0054dc70); the bomb V0x417 in flight (0054e710: P486-P489 with it) and V0x41c as it goes off (0054edc0: P531
+ * and E1616); the P particles are pfx.c's. Stand-in: the trap's warning ring is motes. */
 #include "jester_props_runtime.h"
 static Motion jester_hand_motion;
 int jester_projectiles_init(void) {
@@ -6904,8 +6953,7 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         const JesterShot *p = &w->shots[i];
         if (!p->active) continue;
         if (p->kind == 0) {
-            if (p->phase == 2) fx_mote(p->pos, still, 420.0f, 520.0f, 0.06f, 0xff2080ffu);
-            else jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f, 0.0f);
+            if (p->phase != 2) jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f, 0.0f);
         } else {
             /* 0054d080/0054d0e0/0054d120: fade to 128 by 12/tick, hold
              * 51 ticks, fade out. Geometry remains animated at its native floor. */

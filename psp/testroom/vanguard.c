@@ -5,6 +5,7 @@
 #include "stage.h"
 #include "swizzle.h"
 #include "fx.h"
+#include "nfx.h"
 #include <pspgu.h>
 #include <pspgum.h>
 #include <pspkernel.h>
@@ -285,41 +286,22 @@ static int attack_test(float px,float py,float pz) {
     }
     return 0;
 }
-/* P312 ("ee008-50p0") is a VU particle program: 50 points taken from em008's own mesh, a 40-frame life,
- * colour 80 a0 c0 (vg_fx_P312.bin). The VU emitter isn't ported. This stands in for it from the same
- * numbers: points on his posed skeleton, which leave his body on departure and gather into it on
- * arrival, so he dissolves and re-forms instead of popping in and out. */
+/* P312 ("ee008-50p0") is a CPtclSprt00 burst (pfx.c, NFX_VANGUARD): 12 camera-facing sprites of T25 / A117, 50
+ * frames, the GS's 0x41 blend. V702 starts it at frame 1 and V499 at 15, scaled (0.7, 0.6, 0.7); V516 at 45, 60 cm up,
+ * scaled 0.9 (taken uniform: 0.7 and 0.9). The model's fade out over V702's 30 visible frames and in over 12 from the
+ * reveal stays the port's [stand-in]: the game only hides and shows it. */
 static void teleport_fx(float f) {
-    int n,i;
     vg.dissolve=fmaxf(0,fminf(1,vg.dissolve+vg.dissolve_rate*f));
     if(vg.dissolve<=0 && vg.dissolve_rate<0)vg.dissolve_rate=0;
     if(!vg.emit_mode)return;
-    if(vg.emit_delay>0) {vg.emit_delay-=f;return;}
-    /* About 50 over the emission, two or so a frame. */
-    n=(int)(f*2.0f+(float)(fx_random_u32()&255)/256.0f);
-    for(i=0;i<n;++i) {
-        const VanguardMesh *m=&vanguard_parts[0];
-        int b=1+(int)(fx_random_u32()%(unsigned)(m->bone_count-1));
-        float lx=body[b].p[0]+((float)(fx_random_u32()&255)/128.0f-1)*18;
-        float ly=body[b].p[1]+((float)(fx_random_u32()&255)/128.0f-1)*18;
-        float lz=body[b].p[2]+((float)(fx_random_u32()&255)/128.0f-1)*18;
-        float at[3]={vg.pos[0]+cosf(vg.yaw)*lx+sinf(vg.yaw)*lz,vg.pos[1]+ly,vg.pos[2]-sinf(vg.yaw)*lx+cosf(vg.yaw)*lz};
-        float out[3]={(float)(fx_random_u32()&255)/128.0f-1,(float)(fx_random_u32()&255)/256.0f,(float)(fx_random_u32()&255)/128.0f-1};
-        float vel[3];int k;
-        if(vg.emit_mode==1) {
-            /* Leaving: drift outward and up. 40 frames = 0.67 s. */
-            for(k=0;k<3;++k)vel[k]=out[k]*90;
-            vel[1]+=50;
-            fx_mote(at,vel,11,3,0.67f,0xd0ffd8a8u);
-        } else {
-            /* Gathering: start out from the body and arrive at it by the reveal. */
-            float life=0.4f;
-            for(k=0;k<3;++k) {at[k]+=out[k]*70;vel[k]=-out[k]*70/life;}
-            fx_mote(at,vel,4,11,life,0xd0ffd8a8u);
-        }
+    if(vg.emit_delay>0) {vg.emit_delay-=f;if(vg.emit_delay>0)return;}
+    {
+        int upper=vg.emit_mode==2 && vg.emit_left<=5;   /* V516 (the uppercut's arrival) */
+        float at[3]={vg.pos[0],vg.pos[1]+(upper?60.0f:0.0f),vg.pos[2]};
+        int h=nfx_spawn_p(NFX_VANGUARD,312,at,vg.yaw,0);
+        if(h)nfx_scale(h,upper?0.9f:0.7f);
     }
-    vg.emit_left-=f;
-    if(vg.emit_left<=0)vg.emit_mode=0;
+    vg.emit_mode=0;
 }
 static int step(float f,float px,float py,float pz,int attacks) {
     float root[3],dist=hypotf(px-vg.pos[0],pz-vg.pos[2]);int hit=0,k;

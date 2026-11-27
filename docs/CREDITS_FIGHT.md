@@ -223,3 +223,55 @@ Open questions:
 - Lady's +0x4838 and her hurt box.
 - The BGM: the capture has no audio. Check it in PCSX2 with sound.
 - Who sets roll+0x56. Inferred: the next scene, or nobody.
+
+## 8. In the port (`psp/testroom/credits_fight.c`)
+
+Built from sections 1-5. Each part was compared side by side with the PCSX2 capture, and the comparisons are kept
+in `analysis/testroom/` (local).
+
+- **The street.** Mission 20 enters room 012 after Vergil, as before. On entry the module starts the room's clock.
+  The room's EST group 0 runs under the script runner as it was (100 enemies, the ≤ 3-alive gates, the Vanguard last).
+  - The ending flag swaps the cockpit, the boss gauge and the orb count for the kill counter (`hud_draw_kills`).
+  - The counter is id100.pac's ORBS mesh, parts 3-5, with the digit corners of 0x5f5b50.
+  - Every enemy death in the street counts, up to 999. Comparison: `credits_s1_vs_ps2.png`.
+- **Lady.** Her spawn record's op 8 [0, 1] calls `enemy_set_spawn_param`, which makes `lady_boss.c`'s brain the
+  ally (`lady_make_ally`), running modes 0x2f-0x33 as in section 5.
+  - enemy.c gives her the nearest enemy as her target and lands her shots on it.
+  - Dante can't lock on to her or hit her.
+  - The spawn script's alive gates leave her out.
+  - Comparison: `credits_s2_vs_ps2.png`.
+- **The roll.** `tools/prepare_staffroll.py` writes STAFF_00-35.BIN from the disc (local).
+  - The roll runs on its own clock from 5460 with the 35 records, three slots, fades of 4 a frame and the holds.
+  - Each page is drawn 4:3 in the middle of the screen. Comparisons: `credits_s3_vs_ps2.png`, `credits_s3b_vs_ps2.png`.
+- **The ending.** At clock 13620:
+  - The kill count against 100 decides the card.
+  - The freeze stops Dante's and the enemies' updates.
+  - The fade goes 2 a frame to black, then the card shows if he earned it.
+  - 300 frames later the street clears into Mission 20's clear demos 59 and 60, then Mission Clear.
+  - Comparison: `credits_s4_vs_ps2.png`.
+- **Tests.** `python tools/ppsspp_scene.py <name> --mission 20 --room 12` starts the street directly. Script lines:
+  - `creditsat N`: start at frame N of the street's clock.
+  - `creditskills N`: start with N kills.
+  - `killevery N`: kill everything every N frames.
+
+  The FOCUS log's `credits` line reports the clock, the roll, the kills, the stage, the card and Lady's ally mode.
+
+**Stand-ins** (also in StandIns.md):
+- **The counter's place:** matched to the capture.
+- **Lady's damage on enemies:** each of her shots counts as one of Dante's hits of its weight. Only her target can
+  take them.
+- **Lady's estimates and gaps:**
+  - Her rocket counter's fill, 0x85's three shots and the rocket's frame are estimates.
+  - 0x49's aim pose is replaced by the drawn guns.
+  - Enemies don't attack her.
+- **The freeze:** op 7e [3] / [4] stop and resume all of Dante's and the enemies' updates [inferred: task groups 5
+  and 6].
+- **Not used by the port:** EST ops 10 and 11, and what sets game+10. The port's ending flag is "Mission 20,
+  room 012".
+- **The music:** whatever the room's BGM table plays. The capture has no audio, so the credits' track isn't checked.
+- **Dante's model:** his usual one, not the PS2's open-coat ending model.
+- **Pages:** cut to 256 colours, and loaded from the memory stick as each slot frees.
+
+**The full flow** (`credits_full`, Mission 20 from room 411 with `tools/tests/mission20_clear.scene`): Vergil falls,
+demos 57 and 58 play, and room 012 starts the street on its own (`credits on=1 ... ally=1 mode=0x33` at the run's end).
+The run stopped at frame 18000, 2 frames into the street. The street's own course is covered by the direct runs above.

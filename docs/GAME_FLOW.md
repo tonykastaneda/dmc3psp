@@ -571,8 +571,8 @@ wait 300, op 7e [4], then demos 59 and 60 and Mission Clear. The exact 8c/7e sid
 undecoded; the numeric delay is recorded rather than assigning an unverified opcode name.
 
 In the port: room 411 runs variant 2, then automatically enters 012. Its native ending waves run
-with hostile Lady omitted (she is an ally here); the port treats 13620 + 300 as the ending delay
-before Mission Clear. No ending demos or credits. See `docs/MISSION20_SPEC.md` for verification
+with Lady as the ally, the kill counter and the staff roll; 13620 frames on the fade, the 100-kill card
+and the freeze, 300 more, then demos 59 and 60 and Mission Clear (docs/CREDITS_FIGHT.md 8). See `docs/MISSION20_SPEC.md` for verification
 and the boss/ending approximations.
 ### Mission 19: "Forces collide"
 

@@ -897,15 +897,7 @@ static void update_shells(float f, float px, float py, float pz) {
         if (s->type == SHELL_SPIKE) {
             for (k = 0; k < 3; ++k) s->pos[k] += s->vel[k] * f;
             s->life -= f;
-            if (s->puff <= 0.0f && (s->vel[0] != 0.0f || s->vel[2] != 0.0f) && s->life > 8.0f) {
-                /* The line of ice the spikes run along. Its PS2 particle programs (P58/P59, ids 0x3a/0x3b)
-                 * aren't ported; this raises em025's own ice spike, E199 (model M55), along the line. */
-                float ground[3] = {s->pos[0], cb.pos[1], s->pos[2]};
-                /* E199 grows to about 5 m for V166's eruption at the paw; along the line they stay small. */
-                nfx_scale(nfx_spawn_e(NFX_CERBERUS, 199, ground, cb.yaw + (unit_random() - 0.5f), 0),
-                          0.3f + unit_random() * 0.1f);
-                s->puff = 14.0f;
-            }
+            /* What shows of the line is P58 / P59's mist off the paw (process_body_events). */
             if (sphere_hit(s->pos, 50.0f, px, py, pz) && s->cooldown <= 0.0f) {
                 land_attack(&cerberus_attacks[12], s->pos);
                 s->cooldown = 1000000.0f;
@@ -1296,7 +1288,20 @@ static void process_body_events(float px, float py, float pz) {
     for (i = 0; i < cb.body.event_count; ++i) {
         int event = cb.body.events[i][0], sub = cb.body.events[i][1], op = cb.body.events[i][2] & 0xF;
         if (op != 3) continue;
-        if ((cb.body.script == 50 || cb.body.script == 51) && event == 3) spawn_punch_spikes();
+        if ((cb.body.script == 50 || cb.body.script == 51) && event >= 2 && event <= 5) {
+            /* FUN_002a0510 ev2-5: the ice mist off the paw, P58 (0x3a) at 2 and 4, P59 (0x3b) at 3 and 5 (pfx.c), each
+             * scaled and offset in the paw's frame (taken as the body's [estimate]); they don't ride the paw after. */
+            static const float mist[4][4] = {{1.4f, -50.0f, 10.0f, 0.0f}, {1.2f, -40.0f, 0.0f, 70.0f},
+                                             {1.2f, -40.0f, 0.0f, 70.0f}, {1.0f, -20.0f, 20.0f, 0.0f}};
+            const float *m = mist[event - 2];
+            float local[3], at[3];
+            int h, paw = cb.body.script == 50 ? 16 : 21;
+            local[0] = body_pose[paw].p[0] + m[1]; local[1] = body_pose[paw].p[1] + m[2]; local[2] = body_pose[paw].p[2] + m[3];
+            local_to_world(local, at);
+            h = nfx_spawn_p(NFX_CERBERUS, (event & 1) ? 59 : 58, at, cb.yaw, 0);
+            if (h) nfx_scale(h, m[0]);
+            if (event == 3) spawn_punch_spikes();
+        }
         else if ((cb.body.script == 50 || cb.body.script == 51) && event == 1) {
             /* FUN_002a0510 ev1: V115 (0x73), the ice bursting off the paw as it lands. */
             cfx_bone(115, cb.body.script == 50 ? 16 : 21);

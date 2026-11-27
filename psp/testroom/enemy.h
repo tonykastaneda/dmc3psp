@@ -57,6 +57,8 @@ void enemy_dante_attack(int action, int gun);   /* Dante's move changed (0: none
 void enemy_dante_yaw(float yaw);                /* where Dante faces, each frame */
 void enemy_set_hit_weapon(int melee);   /* the melee weapon of the hits that follow (0 Rebellion, 1 Cerberus...) */   /* Dante fired from here */      /* those fallen far below a riding lift: gone */          /* those not yet dead */
 void enemy_kill_all(void);            /* for tests */
+/* Mission 20's ending ally (Lady, variant 1): 1 if she's up; her feet, her ally mode (0x2f-0x33), shots she's landed. */
+int enemy_ally_state(float pos[3], int *mode, int *shots);
 void enemy_mirror_blow(float from_x, float from_z);   /* 405's lit mirror struck: every enemy thrown */
 void enemy_mirror_kill(void);         /* 405's mirrors broken: the Abyss bound to them die */
 void enemy_trim(int keep);
