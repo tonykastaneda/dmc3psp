@@ -110,7 +110,8 @@ blast.
   2. She takes the four points again and picks the **nearest** one. She turns toward its 8-way heading (+0x480) at
      the action's turn speed.
   3. Once she faces it:
-     - effect V0x31b starts on a bone of her model (+0x504's +0x104);
+     - effect V0x31b starts on her bone 0 (+0x504 is the bone records, whose +0x104 is the world matrix, as the
+       Rook's beams read theirs in 0x440d70);
      - effect V0x242 starts at her feet: a lane along her heading, its matrix scaled (1, 1, 30);
      - motion 3 plays.
   4. Sound 0x37 plays. She holds for 60 − 3 × rank frames.
@@ -186,7 +187,6 @@ blast.
   - em017's pack (GDATA 127 [1], every chessman's) has the castle's V0x390 and V0x1fa;
   - the landing's FUN_0040a2a0 starts P44, the shared dust.
 - The pieces' timing, moves and attacks above are exact. Still to check against PCSX2:
-  - which bone +0x504 +0x104 is (the Queen's effects' anchor);
   - the motions' look against the PS2.
 - The decision tables mean their turns come from the master (`chess.c`): 0x14 starts their attacks; the King also
   starts his own attack by distance and by hurt.

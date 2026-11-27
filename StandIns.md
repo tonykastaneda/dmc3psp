@@ -83,9 +83,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   global attack gate / wall bounds, the Rook's summon materialization (V1ee and a normal spawn) and fixed rank remain
   approximations. `enemy.c`, GAME_FLOW.md (Missions 14, 18).
 - **The Damned Queen and King** (EST 39 / 40, `queen.c`, `king.c`, `royal.c`, `royal.inc`; docs/CHESS_ROYALS_SPEC.md):
-  their logic is the decode's, on chess.c's master (commands 20 / 30, the King-death cascade), but: rank 0 always; walls are the room's
-  floor ending, not the collision's flags; the Queen's hit capsules and effects ride her root (+150 for the bone),
-  not bone 1 / +0x504 +0x104; V0x242's lane lies flat (its fixed -90 X) but isn't stretched (1, 1, 30); the landing / hit shakes (FUN_0040a2a0) and
+  their logic is the decode's, on chess.c's master (commands 20 / 30, the King-death cascade), but: rank 0 always; walls are the room's floor ending or a step up of more than 60 cm (the raised squares), not the
+  collision's flags; V0x242's lane lies flat (its fixed -90 X) but isn't stretched (1, 1, 30); the landing / hit shakes (FUN_0040a2a0) and
   their sounds (banks 0x15 / 0x16) aren't played; the King's +0x3c4 is taken as the HP before the hit [inferred];
   the port's launch is native kind 3 (light knock) and its heavy / slam kinds 4 / 7 (heavy knock) [inferred]; their
   death (CEm017's 0x406d50) is a 60-frame sink; damage taken is the port's 1 / 2 a hit.
