@@ -1,7 +1,7 @@
 # The ending-credits fight (Mission 20, room 012): reference
 
 After Vergil (room 411) and demos 57 and 58, Mission 20 enters **room 012, start 0**, the ruined street. Dante,
-in his ending model (open coat), fights the street's enemies with **Lady as an ally**. Meanwhile the staff credits
+in his usual model, fights the street's enemies with **Lady as an ally**. Meanwhile the staff credits
 fade in and out over the action, and a **kill counter** runs at the top right. After a fixed time the screen fades
 to black on "PRESENTED BY CAPCOM". With **100 or more kills** an extra line appears. Then demo 59, demo 60 and
 Mission Clear.
@@ -269,7 +269,7 @@ in `analysis/testroom/` (local).
 - **Not used by the port:** EST ops 10 and 11, and what sets game+10. The port's ending flag is "Mission 20,
   room 012".
 - **The music:** whatever the room's BGM table plays. The capture has no audio, so the credits' track isn't checked.
-- **Dante's model:** his usual one, not the PS2's open-coat ending model.
+- **Dante's model:** not a stand-in. The PS2 draws his usual Mission 20 model here (open coat, bare chest: `analysis/testroom/dante_ps2_vs_port.png`, the capture against the port). The ending flag (game+10) in the player constructors (002b6450, 002bdd20, 002c49b0, 0034c5a0, 003534c0, 0041c240, 0042a7c0) only skips a HUD part (FUN_0033b610); nothing there swaps his model.
 - **Pages:** cut to 256 colours, and loaded from the memory stick as each slot frees.
 
 **The full flow** (`credits_full`, Mission 20 from room 411 with `tools/tests/mission20_clear.scene`): Vergil falls,
