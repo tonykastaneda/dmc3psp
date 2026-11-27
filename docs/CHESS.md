@@ -136,3 +136,61 @@ and authored healing circle are visible. Orb scene ends9200HP (one800 hit).
 Heal trace usesbi01 at31, returns idle110; forced wounds at20 and forced deaths
 at210 exercise its health/death path. Both end with0 live actors. Screenshots
 are under analysis/testroom; host tests also pass against the final build.
+
+## Rook (EST38)
+
+Native dispatch436220; model127[17] has14 bones, motions[18] are255/190frames,
+scripts[19], caps[20], shapes[21]. HP1800 is profile5c0410+2c. The appended
+ROOK kind uses its own brain/adapter (`rook.c/.h`, `rook.inc`).
+
+Movement2 (436850) rises2/frame for20frames, then chooses either40a480 axial
+projection toward Dante with50% odds and moves10/frame along that world axis.
+Its wait is100..150nativeframes (5c04b0 state2). It stops early on an unblocked
+row/column within60 and within1500 travel, drops at gravity3.2, then attacks
+if still aligned (436710). Like Bishop, the native global bit1 actor gate is
+approximated from active chess attack states. Alternate command15 plays state4's
+190-frame authored motion; normal idle decisions choose2. Native readiness
+cooldown is1800..2300frames, alternate odds20% at rank0.
+
+State3 (436c70) creates four CEm017Shl01 beams at motion(1,3). Constructor440d70
+attaches them to bones7,9,3,5 (table61a430), with headings ownerYaw-180/-90/0/90.
+Each type4 capsule runs from(0,0,0) to(0,0,1500),radius30. Record0 at5c03d0 is
+1000damage,reaction500,kind3. Update440ff0 tracks the muzzle bone each frame.
+Its lifetime is180frames; collision is evaluated only while remaining time is
+in[60,90], hence elapsed[90,120]. The port tests the authored horizontal capsule
+against Dante's vertical body and keeps per-beam hit history. V1e3 supplies its
+charge/beam visual. Root positions use the animated bone pose, not a fitted
+beam height or a generic aiming tracer.
+
+Optional state7 (437040) summons a piece at the Rook, transferring currentHP.
+436350 permits this only with spawn flag1, total chess count below14 on boards
+401/441 or below8 elsewhere, and a10..14 granted-normal-turn counter expires.
+Choices at rank0 are Pawn40%,Knight30%,Bishop20%,Rook10% (5c0354/358/35c).
+The EST op8 spawn-flag hook now reaches the Rook; board rooms force flags3, as
+405930 does. Summoned actors use the existing enemy factory/alive gates. The
+native appearance-state4 materialization is approximated with V1ee and normal
+spawn/collision, rather than replaying every common spawn substate.
+
+Master command30 enters common castling11 (408dd0): move9% toward the supplied
+destination per update for30nativeframes, snap to it, fall to its floor, then
+wait180frames before attack3. V390/V1fa mark travel/arrival. Readiness resets
+and hits are ignored during that action. The ordinary wall/body solver still
+processes the travel, and the effect attachment is approximate; the King side
+is cl3's implementation. State11 is exposed through the shared command interface,
+not a Rook-only coordinate guess. Native death406d50 uses V1fb and Rook's V36a,
+then60-frame removal.
+
+`python tools/tests/run_rook_logic.py` checks axial movement, all four beam
+clocks/radius/one-hit history, summon capacity and turn expiry, castling and death.
+The shared controller now also supplies Pawns' native alternate readiness
+(300..600 cooldown) and lets reactive Knight close strikes avoid consuming a
+master slot while their120-frame reactive timer is live. Pawn King-death requests
+are consumed through its existing death path. Pawn health/strike/promotion and
+full received-hit profiles remain the documented approximations.
+
+Rook visual follow-up: E778..780 set their fixed initial X angle to-90 at
+E+150/+154/+158. Native initializer1f08c0 stores that in actor+70c, consumed by
+model drawing1f31a0. The existing nfx model path omitted initial angles, making
+these beams vertical. The port now honors fixed initial angles for NFX_CHESS
+models only; broader random/keyed initial rotations remain outside this change.
+The native effect's long model axis now follows its horizontal Z hit capsule.

@@ -312,6 +312,9 @@ def main():
                            (24, 101, (0x382, 0x29a, 0x18a, 0x27b, 0x2a8, 0x299, 0x27d, 0x2ba, 0x189))):
         effects = next(p for p in pnst_entries(read(slot)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
         summary.append(write_bank(lines, bank, records(effects), vs, (), (), (30, 31) if bank == 22 else ()))   # A&R's trails
+    # 26 em021's pack (GDATA 128, PAC entry 1): the Queen's charge V0x31b / V0x242 (FUN_00437ab0) and the King's blast
+    # V0x36c / V0x233 (FUN_0043ea30, 0043ebe0). docs/CHESS_ROYALS_SPEC.md.
+    summary.append(write_bank(lines, 26, records(pac_list(read(128))[1]), (0x31b, 0x242, 0x36c, 0x233), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     # The blade trails' models (docs/NATIVE_FX.md "Blade trails"): M34 (Dante's pack), M30 / M31 (A&R's), 33 bones in a

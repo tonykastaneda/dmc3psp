@@ -31,6 +31,7 @@
 #include "model_blend.h"
 int model_blend_off;
 #include "enemy_runtime.h"
+typedef char EnemyModelCountCheck[(ENEMY_KIND_TOTAL==ENEMY_KIND_COUNT)?1:-1];
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
@@ -212,6 +213,7 @@ static float torso_offset[ENEMY_MAX][3];
 static int torso_kind(int kind) { return kind <= ENEMY_GREED || kind == ENEMY_ENVY || kind == ENEMY_ABYSS; }
 static Enemy *e = &enemies[0];
 static ChessMaster chess_master;
+static int chess_room=-1;
 static ChessPiece chess_actors[ENEMY_MAX];
 static short chess_last_hp[ENEMY_MAX];
 ChessPiece *enemy_chess_actor(void) { return &chess_actors[e-enemies]; }
@@ -322,10 +324,18 @@ static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
 static JesterProjectiles jester_world;   /* his emitters and what they throw (jester.c) */
+static int rook_test_state(int state);
+static void rook_spawn_glue(void);
+static void rook_update_glue(float f,float px,float py,float pz);
+static void rook_hit_glue(HitKind kind);
+static void rook_spawn_param(Enemy *a,int index,int value);
 static int bishop_test_state(int state);
 static void bishop_spawn_glue(void);
 static void bishop_update_glue(float f,float px,float py,float pz);
 static void bishop_hit_glue(HitKind kind,float from_x,float from_z);
+static void royal_spawn_glue(void);
+static void royal_update_glue(float f, float px, float py, float pz);
+static void royal_hit_glue(HitKind kind, float from_x, float from_z);
 static void dullahan_spawn_glue(void);
 static void fallen_spawn_glue(void);
 static void fallen_update_glue(float f, float px, float py, float pz);
@@ -504,8 +514,11 @@ static int kind_health(int kind) {
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
     case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
     case ENEMY_BISHOP: return ENEMY_HEALTH * 1000 / 250; /* 5c0bd0+2c */
+    case ENEMY_ROOK: return ENEMY_HEALTH * 1800 / 250; /* 5c0410+2c */
     case ENEMY_KNIGHT: return ENEMY_HEALTH * 1000 / 250; /* 5c07f0+2c */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
+    case ENEMY_QUEEN: return ENEMY_HEALTH * 1800 / 250;   /* 0x5c0030 +0x2c (CEm021 kind 0) */
+    case ENEMY_KING: return ENEMY_HEALTH * 2300 / 250;    /* 0x5bfc90 +0x2c (kind 1) */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1300 / 250;   /* 0x5c32a0 +0x2c (class 11, copied by FUN_00342450) */
     case ENEMY_BEOWULF: return ENEMY_HEALTH * BEOWULF_MAX / 250;   /* 0x5b84e0 +0x2c (class 33, FUN_002d95a4) */
     case ENEMY_SOUL: return (ENEMY_HEALTH * 200 + 125) / 250;   /* 0x5c1440 +0x2c (class 16, FUN_0049ad90) */
@@ -621,10 +634,12 @@ static void spawn_one_body(int kind, float x, float z) {
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
     if (kind == ENEMY_JESTER) { jester_spawn(); return; }
     if (kind == ENEMY_BISHOP) {bishop_spawn_glue();return;}
+    if (kind == ENEMY_QUEEN || kind == ENEMY_KING) { royal_spawn_glue(); return; }
     if (kind == ENEMY_DULLAHAN) { dullahan_spawn_glue(); return; }
     if (kind == ENEMY_FALLEN) { fallen_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
+    if (kind == ENEMY_ROOK) { rook_spawn_glue(); return; }
     if (kind == ENEMY_KNIGHT) { knight_spawn(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_BEOWULF) { beowulf_spawn_glue(); return; }
@@ -685,6 +700,7 @@ void enemy_set_mortal(int on) { mortal = on; }
  * 5000 / 6500 / 10000, 0x5e2f60). */
 void enemy_set_spawn_param(int index, int value) {
     Enemy *a = last_spawned;
+    if(a && a->active && a->kind==ENEMY_ROOK){rook_spawn_param(a,index,value);return;}
     if (a && a->active && index == 1 && a->kind == ENEMY_ABYSS) { a->mirror_bound = (unsigned char)(value != 0); return; }
     /* Lady's op 8 [0, 1]: variant 1, Mission 20's ending ally (+0x4a8 -> +0x485e, FUN_00442610). */
     if (a && a->active && index == 0 && a->kind == ENEMY_LADY) { if (value == 1) lady_make_ally(&lady_brain); return; }
@@ -901,8 +917,10 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 32) return ENEMY_GOYLE;
     if (spawn_class == 62) return ENEMY_JESTER;
     if (spawn_class == 35) return ENEMY_PAWN;
+    if (spawn_class == 39) return ENEMY_QUEEN;
+    if (spawn_class == 40) return ENEMY_KING;
     if (spawn_class == 36) return ENEMY_KNIGHT;
-    if (spawn_class == 38) return ENEMY_PAWN;   /* the other chessmen (Missions 14, 16): the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
+    if (spawn_class == 38) return ENEMY_ROOK;
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
@@ -1761,10 +1779,12 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_GIGAPEDE) { giga_hit(kind); return; }
     if (e->kind == ENEMY_JESTER) { jester_hit(kind); return; }
     if (e->kind == ENEMY_BISHOP) {++hits;bishop_hit_glue(kind,from_x,from_z);return;}
+    if (e->kind == ENEMY_QUEEN || e->kind == ENEMY_KING) { ++hits; royal_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_DULLAHAN) { ++hits; dullahan_hit_glue(kind,from_x,from_z); return; }
     if (e->kind == ENEMY_FALLEN) { ++hits; fallen_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
+    if (e->kind == ENEMY_ROOK) { rook_hit_glue(kind); return; }
     if (e->kind == ENEMY_KNIGHT) { knight_hit(kind); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind, from_x, from_z); return; }
@@ -2265,10 +2285,12 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_GOYLE) { goyle_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_JESTER) { jester_update(f, px, py, pz); return; }
     if(e->kind==ENEMY_BISHOP){bishop_update_glue(f,px,py,pz);return;}
+    if (e->kind == ENEMY_QUEEN || e->kind == ENEMY_KING) { royal_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_DULLAHAN) { dullahan_update_glue(f,px,py,pz); return; }
     if (e->kind == ENEMY_FALLEN) { fallen_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_ROOK) { rook_update_glue(f,px,py,pz); return; }
     if (e->kind == ENEMY_KNIGHT) { knight_update(f,px,py,pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_BEOWULF) { beowulf_update_glue(f, px, py, pz); return; }
@@ -2953,6 +2975,7 @@ void enemy_draw(void) {
 static float shadow_radius(int kind) {
     switch (kind) {
     case ENEMY_ARACHNE: return 150.0f;
+    case ENEMY_QUEEN: case ENEMY_KING: return 90.0f;
     case ENEMY_BEOWULF: return 120.0f;
     case ENEMY_AGNI: case ENEMY_RUDRA: return 60.0f;
     case ENEMY_WRATH: case ENEMY_FALLEN: return 60.0f;
@@ -4129,10 +4152,10 @@ static void ar_note(int state);
  * and the climb at fixed points. Elsewhere (the debug street) the opening aims at Dante and the survivor takes up
  * both swords where he stands. */
 static int ar_room = -1;
-void enemy_set_room(int room) { ar_room = room; chess_reset(&chess_master); memset(chess_actors,0,sizeof chess_actors); }
+void enemy_set_room(int room) { ar_room = room; chess_room=room; chess_reset(&chess_master); memset(chess_actors,0,sizeof chess_actors); }
 static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
 static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
-void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state) && !bishop_test_state(state)) ar_force = state; }
+void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state) && !bishop_test_state(state) && !rook_test_state(state)) ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
 
@@ -6163,6 +6186,7 @@ static void dullahan_hit_glue(HitKind kind, float from_x, float from_z) {
 }
 
 /* Separate Bishop caster brain. */
+#include "royal.inc"
 #include "bishop.h"
 static BishopBrain bishop_brain[ENEMY_MAX];
 static int bishop_motion_id[BISHOP_M_COUNT] = {-2};
@@ -7076,7 +7100,7 @@ static void lady_hit_glue(HitKind kind) {
  * are the game's models (tools/prepare_jester_props.py): the bomb tumbles as it flies [estimate];
  * the hand plays [28]:0 on its own 18-bone rig at the native floor transform. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
  * and V0x3f8 looping on its frame (0054d610: at him, facing Dante turned 45 degrees, turning with it), V0x3fa as it
- * ends (0054dc70); the bomb V0x417 in flight (0054e710: P486-P489 with it) and V0x41c as it goes off (0054edc0: P531
+ * ends (0054dc70); the bomb as it goes off: V0x417, the blast (0054e710: P486-P489 with it), and V0x41c (0054edc0: P531
  * and E1616); the P particles are pfx.c's. Stand-in: the trap's warning ring is motes. */
 #include "jester_props_runtime.h"
 static Motion jester_hand_motion;
@@ -7168,7 +7192,7 @@ static void jester_prop_draw(int which, const float pos[3], float yaw, float pit
 }
 void jester_projectiles_draw(const JesterProjectiles *w) {
     static const float still[3] = {0.0f, 0.0f, 0.0f};
-    static int cross_fx, bomb_fx[JESTER_SHOTS], bomb_phase[JESTER_SHOTS];
+    static int cross_fx, bomb_phase[JESTER_SHOTS];
     static float cross_at[3], cross_yaw;
     int i, k;
     /* The cross: its effects while it's out, V0x3fa where it was as it ends. */
@@ -7184,14 +7208,15 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         cross_fx = 0;
         nfx_spawn(NFX_JESTER, 0x3fa, cross_at, cross_yaw, 0);
     }
-    /* The bomb: V0x417 riding it in flight, V0x41c as it goes off. */
+    /* The bomb goes off (0054e710: its timer +0xc84 out, 2500 from the arena's middle, or a hit): V0x417, the blast
+     * (its P486-P489 8-18 frames in), once, where it is; then its next state (0054edc0) V0x41c (P531). */
     for (i = 0; i < JESTER_SHOTS; ++i) {
         const JesterShot *p = &w->shots[i];
         int phase = p->active && p->kind == 0 ? p->phase : -1;
-        if (phase == 1 && !nfx_alive(bomb_fx[i])) bomb_fx[i] = nfx_spawn(NFX_JESTER, 0x417, p->pos, p->yaw, 1);
-        else if (phase == 1) nfx_move(bomb_fx[i], p->pos, p->yaw);
-        if (phase != 1 && bomb_fx[i]) { nfx_kill(bomb_fx[i]); bomb_fx[i] = 0; }
-        if (phase == 2 && bomb_phase[i] != 2) nfx_spawn(NFX_JESTER, 0x41c, p->pos, p->yaw, 0);
+        if (phase == 2 && bomb_phase[i] != 2) {
+            nfx_spawn(NFX_JESTER, 0x417, p->pos, p->yaw, 0);
+            nfx_spawn(NFX_JESTER, 0x41c, p->pos, p->yaw, 0);
+        }
         bomb_phase[i] = phase;
     }
     for (i = 0; i < JESTER_SHOTS; ++i) {
@@ -7213,3 +7238,5 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
 }
 
 #include "knight.inc"
+
+#include "rook.inc"

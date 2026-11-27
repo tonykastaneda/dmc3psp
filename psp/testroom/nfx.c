@@ -124,7 +124,7 @@ void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
 
 static const NfxBank *bank_of(int b) {
     return b == NFX_CHESS ? &nfx25 : b == NFX_PALACE ? &nfx19 : b == NFX_DEMO ? &demo_bank : b == NFX_NEVAN ? &nfx7 : b == NFX_LADY ? &nfx8 : b == NFX_ARACHNE ? &nfx9 : b == NFX_FALLEN ? &nfx10 : b == NFX_MIRROR ? &nfx11 : b == NFX_CRYSTAL ? &nfx12 : b == NFX_NAUSIKA ? &nfx13 : b == NFX_GUN_EI ? &nfx14 : b == NFX_GUN_SHOTGUN ? &nfx15 : b == NFX_GUN_ARTEMIS ? &nfx16 :
-           b == NFX_GUN_SPIRAL ? &nfx17 : b == NFX_GUN_KALINA ? &nfx18 : b == NFX_DANTE ? &nfx20 : b == NFX_ARM_CERBERUS ? &nfx21 : b == NFX_ARM_AGNI ? &nfx22 : b == NFX_ARM_NEVAN ? &nfx23 : b == NFX_ARM_BEOWULF ? &nfx24 : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
+           b == NFX_GUN_SPIRAL ? &nfx17 : b == NFX_GUN_KALINA ? &nfx18 : b == NFX_DANTE ? &nfx20 : b == NFX_ARM_CERBERUS ? &nfx21 : b == NFX_ARM_AGNI ? &nfx22 : b == NFX_ARM_NEVAN ? &nfx23 : b == NFX_ARM_BEOWULF ? &nfx24 : b == NFX_ROYAL ? &nfx26 : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
          : b == NFX_CERBERUS ? &nfx1 : &nfx0;
 }
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
@@ -689,7 +689,15 @@ static void draw_model(const El *el, const Frame *f, unsigned int color) {
         static const float zero[3] = {0.0f, 0.0f, 0.0f}, one[3] = {1.0f, 1.0f, 1.0f};
         float turn[3];
         Frame r;
-        for (i = 0; i < 3; ++i) turn[i] = rdf(e + 0x144 + i * 4) * el->age * (PI / 180.0f);
+        for (i = 0; i < 3; ++i) {
+            float initial=0;
+            /* 1f08c0 -> +70c: fixed initial angles, E+150/+154/+158 per axis.
+             * Chess E778..780 use -90X to lay the Rook beam on its Z capsule.
+             * Kept to the chess banks (em021's E409, the Queen's V0x242 lane, is -90X too). */
+            if((el->bank==NFX_CHESS || el->bank==NFX_ROYAL) && e[0x150+i*12]==1 &&
+               rdf(e+0x154+i*12)==rdf(e+0x158+i*12))initial=rdf(e+0x154+i*12);
+            turn[i]=(initial+rdf(e+0x144+i*4)*el->age)*(PI/180.0f);
+        }
         frame_local(&r, zero, turn, one);
         frame_mul(&turned, f, &r);
         f = &turned;
