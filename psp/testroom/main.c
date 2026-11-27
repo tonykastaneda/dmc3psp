@@ -2165,7 +2165,8 @@ static void cmp_load(void) {
         else if ((cmp_events[cmp_event_count].every = 0, sscanf(line, "%11s %d %d %d", cmp_events[cmp_event_count].button, &cmp_events[cmp_event_count].first, &cmp_events[cmp_event_count].last, &cmp_events[cmp_event_count].every)) >= 3) ++cmp_event_count;
     }
     fclose(f);
-    if (cmp_frames > CMP_MAX_FRAMES) cmp_frames = CMP_MAX_FRAMES;
+    /* Runs may go past the per-frame log (CMP_MAX_FRAMES): it keeps their first frames (Mission 20 whole needs ~30000). */
+    if (cmp_frames > 4 * CMP_MAX_FRAMES) cmp_frames = 4 * CMP_MAX_FRAMES;
 }
 static int cmp_seen_frame = -1;   /* the last frame cmp_pad ran */
 static void cmp_pad(int frame, PlayerInput *input) {
