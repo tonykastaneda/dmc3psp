@@ -74,8 +74,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Enemies
 
-- **Seven Hells**: the Lust, Wrath and Greed decide with the Pride's table (the Wrath doesn't explode); the attack
-  token's manager (FUN_00369180) isn't read: "no one else attacks for 3 s". ENEMY_AI.md, GAME_FLOW.md.
+- **Seven Hells**: the Lust, Wrath and Greed decide with the Pride's table (the Wrath doesn't explode). ENEMY_AI.md, GAME_FLOW.md.
 - **Abyss**: the Pride's hit-script list (its block's +0x14 pairs aren't read); its scythe is the largest of [3]-[5]
   [inferred]. `gen_enemy_ai.py`, `prepare_skinned_model.py`.
 - **Damned Chessmen**: the shared chess master is ported (docs/CHESS.md), at fixed difficulty 0. Knight 36, Bishop 37
