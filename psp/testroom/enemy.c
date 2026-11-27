@@ -5334,10 +5334,16 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
                 an_go(0x73, px, py, pz);
             }
         } else if (e->vel[1] < 0.0f && floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g) && e->pos[1] <= g) {
+            int k;
             e->pos[1] = e->floor_y = g; e->acc[1] = 0.0f; e->vel[0] = e->vel[1] = e->vel[2] = 0.0f;
+            /* Landing: P44 dust at each of its six legs' bones (states 0x23 / 0x28 / 0x2b / 0x32: FUN_003fb580,
+             * 003ffcd0, 003ffec0, 003ff050; the static pack's P44), the legs taken 110 cm out round it [estimate]. */
+            for (k = 0; k < 6; ++k) {
+                float a = e->yaw + (float)k * (PI / 3.0f) + PI / 6.0f;
+                float at[3] = {e->pos[0] + sinf(a) * 110.0f, e->floor_y, e->pos[2] + cosf(a) * 110.0f};
+                nfx_spawn_p(NFX_STATIC, 44, at, a, 0);
+            }
             if (e->action == 0x7b) {   /* 0x58: the landing (motion 0x32), its hit by the script */
-                float at[3] = {e->pos[0], e->pos[1] + 30.0f, e->pos[2]};
-                fx_dust(at);
                 e->action = 0x58; an_play(0x32);
             } else an_decide(px, py, pz);
         }

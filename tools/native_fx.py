@@ -245,7 +245,8 @@ def main():
              "typedef struct { int id, vertex_count, index_count; const NfxVertex *vertices; const unsigned short *indices; int texture; } NfxModel;",
              "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; const NfxRecord *p; int p_count; const NfxRecord *a; int a_count; } NfxBank;"]
     summary = []
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V, ORB_E))
+    # P44 (dust): the Arachne's landings start it from the shared pack (FUN_003fb580 and its kin).
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V, ORB_E, (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
