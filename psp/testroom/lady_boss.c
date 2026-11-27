@@ -336,7 +336,11 @@ static void wire_update(LadyBrain *b, float frames) {
  * 100 (0x61a570), and regroups behind Dante. Her shots fly at the target and only it can take them [stand-in]. */
 #define ALLY_FIRE 20.0f           /* 0x61a568 */
 #define ALLY_ROCKET 100.0f        /* 0x61a570 */
-#define ALLY_ROCKET_STEP 10.0f    /* what fills +0x4838 isn't decoded: a tenth a burst [estimate] */
+/* +0x4838, FUN_004497f0 (her shot's event): each bullet adds 5 (0x61a574) when her sight flag +0x4861 is set, else 1,
+ * up to 100 (0x61a570); FUN_0044cc40 takes 50 (0x61a578) as her rocket goes. The sight test (FUN_00359b40) isn't ported:
+ * she shoots only at a target in her cone, taken as in sight [inferred]. */
+#define ALLY_ROCKET_SHOT 5.0f
+#define ALLY_ROCKET_COST 50.0f
 #define ALLY_REGROUP 600.0f       /* 0x61a468; Dante between 300 and 600 (0x61a46c / 0x61a470, 0x61a45c / 0x61a460) */
 #define ALLY_SPOT_NEAR 100.0f     /* 0x61a464 */
 #define ALLY_RUN_TURN (5461.0f / 65536.0f * 6.2831853f)   /* FUN_004480f0's 5461 a frame */
@@ -399,10 +403,10 @@ static void ally_think(LadyBrain *b, float f, float px, float py, float pz) {
         if (b->step == 0) { play(b, LADY_M_POSE); b->step = 1; b->volleys = 0; }
         if (b->has_target) face(b, t[0], t[2], TURN, f);
         if (b->volleys < ALLY_BURST_SHOTS && b->frame >= 6.0f + 6.0f * b->volleys) {   /* [estimate] */
-            if (b->has_target) fire(b, 0, t[0], t[1], t[2], 0.0f);
+            if (b->has_target) { fire(b, 0, t[0], t[1], t[2], 0.0f); b->rocket = fminf(ALLY_ROCKET, b->rocket + ALLY_ROCKET_SHOT); }
             ++b->volleys;
         }
-        if (b->done) { b->rocket += ALLY_ROCKET_STEP; ally_mode(b, A_AIM); }
+        if (b->done) ally_mode(b, A_AIM);
         break;
     case A_ROCKET:   /* FUN_00448710: action 0x56 (0x57 / 0x58 by the target's height, FUN_0044ad40) */
         if (b->step == 0) {
@@ -417,7 +421,7 @@ static void ally_think(LadyBrain *b, float f, float px, float py, float pz) {
             if (b->has_target) fire(b, 2, t[0], t[1], t[2], 0.0f);
             b->step = 2;
         }
-        if (b->done && b->step >= 2) { b->rocket = 0.0f; ally_mode(b, A_AIM); }
+        if (b->done && b->step >= 2) { b->rocket = fmaxf(0.0f, b->rocket - ALLY_ROCKET_COST); ally_mode(b, A_AIM); }
         break;
     case A_WAIT:   /* FUN_00448010: the guns drawn (action 0x30); a target -> 0x30; Dante 300-600 away -> 0x2f */
         if (b->step == 0) { play(b, LADY_M_GUN); b->step = 1; }

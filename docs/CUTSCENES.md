@@ -138,16 +138,35 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   and 59): `demo_letterbox`, 39 lines top and bottom.
 - **Framing.** Channel 12 is the vertical angle (`FUN_001ac750`) and is drawn across the full 16:9 width, so a
   demo shows more to either side than a 4:3 television and there are no side bars. The fitted 326-line rescale
-  (`demo_screen_fov`) is not applied. Demos 3, 5, 6, 16, 44 and 53 were checked at wide frames; the extra width is
-  more of the same stage, so none is cropped back to 4:3.
+  (`demo_screen_fov`) is not applied. Against the PS2 halves of `demo5_sky_compare.png`, `demo3_compare.png` and
+  `demo59_compare.png` that raw angle is wider than the stills: demo 5 frame 1260 holds the hooded figure at the
+  right edge there and brings it fully in here (`analysis/testroom/sky5_1260.png`); frame 300 shows a figure at the
+  right edge the still crops (`sky5_300.png`); demo 59 frame 700's Dante is smaller (`sky59_700.png`). The 326-line
+  fit matches those stills (`fit5_1260.png`, `fit5_300.png`, `fit59_700.png`) and stays unused. Demos 3, 5, 6, 16, 44
+  and 53 were checked at wide frames; the extra width is more of the same stage, so none is cropped back to 4:3.
 - **The characters' colour.** The Program track's No 5 (a colour scale, 128 = 1.0: demo 1 210 200 180, demo 47 15 20
   25) and No 6 (their ambient: 30 20 20 in demos 1-5) [inferred from their values] scale the demo's lights and set
   the ambient (`demo_program_colour`), replacing the by-eye 0x30 ambient where a demo sets them. Arkham's face in demo
   5 is now warm like the PS2's. The world's ValidType 3 lights stay off characters: tried, they darkened him.
 - Not ported: the ScrEfc screen effects (FCS / DOF depth-of-field blur, GFG fog, SGA glow, BGA / BGO, ATF): a
   full-screen blur pass is too costly for the PSP in a demo, so the PS2's soft backgrounds and haze aren't there;
-  demo 3's over-the-shoulder shot (frame 1260) shows holes in Dante's shoulder (the PSP drops triangles crossing its
-  near plane, here 50 cm; a nearer plane put the eye inside his collar).
+  demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
+
+**Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm
+in front of Dante's chest while it looks at enemies metres away. With the near plane at a third of the eye-to-target
+distance capped at 50 cm, his whole front was cut away and the port showed the inside of his back through the
+gaps (the "holes"). The PS2 shows his chest and mouth there (`analysis/testroom/near_plane_demo3.png`). The cap is now
+25 cm (`main.c` render_scene); wide shots show no depth fighting (demo 5) and frame times are unchanged.
+Frame 360 of the same demo is the same gap seen from behind: the PS2 shows Dante's back and coat, the 50 cm shots
+(`fr3_360.png`, and cl2's `fin3_360.png` which used the 326-line fit) show the street through where he stands, and
+the 25 cm cap draws a dark surface across the right of the frame (`n3_360_360.png`).
+- At 25 cm a dark slab with a light edge (likely Rebellion, `wp100`) sits in front of the eye on the right of that
+  frame; the PS2 shows the street there. At 40 cm the slab goes but his chest is cut again, so the PS2's near plane
+  alone doesn't explain it: the weapon's place in that cut is still to check.
+- `near_clip.c` clips near-crossing triangles (per-model sphere test, each vertex's depth cached once, only the
+  crossing triangles redrawn clipped). In PPSSPP the GE already draws them clipped, so it changed nothing visibly and
+  cost about 2 ms a frame with the camera against Dante (7.1 against 5.2 ms of draw time). It is off by default
+  (test line `nearclip 1`) until real hardware shows whether its GE drops such triangles.
 
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in

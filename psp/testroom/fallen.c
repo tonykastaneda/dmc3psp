@@ -74,6 +74,7 @@ static void set_state(FallenBrain *b, int state) {
     }
 }
 int fallen_flying(const FallenBrain *b) { return b->mode != 1; }
+int fallen_appearing(const FallenBrain *b) { return b->state == S_APPEAR; }   /* 0xe: through the wall (FUN_00342c70) */
 
 void fallen_spawn(FallenBrain *b, int health) {
     b->health = health;

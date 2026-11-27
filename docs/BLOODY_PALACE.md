@@ -38,9 +38,12 @@ Rooms 423–432 each contain **20 EST groups**. Ordinary entry uses spawn_group 
 `0x2113e0` chooses random modulo 20, scanning past bits in event **+0x798**, resets that mask when exhausted,
 and stores the group at **+0x7a0** (`0x211508`). Spawn-group -1 marks the group used, resets the mask across a
 thousand boundary, and spawns the selected group (`0x20be20`, spawn branch). EST table selection uses the
-game difficulty byte at **0x1d0d73c** (`0x2fb820`). EST opcode 12 normally sets rank; in Palace it instead sets
-rank to **floor / 1000 + 1** (`0x2fb060`, `0x2fb530`). Port rank/difficulty scaling needs an explicit stand-in
-unless implemented separately from the story difficulty.
+game difficulty byte at **0x1d0d73c** (`0x2fb820`). EST opcode 12 configures the enemy manager's **attack-slot budget**; in Palace it sets
+**floor / 1000 + 1** (`0x2fb060`, `0x2fb530`). The component at enemy-manager +0x840 has vtable
+0x60d7b0: setter 0x4257f0 caps ten slots and clears ten active/cooldown records; update 0x425850
+expires their cooldowns. This corrects the earlier interpretation as an enemy-stat rank. The shared
+enemy attack scheduler now gets 1-10 timed slots on Palace room entry; story rooms use one. Existing
+attack cooldown durations and separate boss schedulers remain unchanged.
 
 | Boss index | Room | EST group | Encounter (EST class) |
 | --- | --- | --- | --- |
@@ -92,7 +95,7 @@ recover the GS blend and every particle/rendering behavior. That remaining runti
 
 `bloody_palace.c/.h` owns floor/group selection, portal readiness and routing. Mission 21 reuses the mission
 wave runner, collision, stage loading and enemy classes; generated `bloody_palace_runtime.h` contains EST
-groups from the owner's disc and stays local. It uses Normal EST columns; rank-based scaling remains a stand-in.
+groups from the owner's disc and stays local. It uses Normal EST columns and the native floor-dependent attack-slot budget described above.
 The Mission Select row launches directly. Portal positions and boss exits come from each room's authored doors.
 Readiness follows the three 60-frame ordinary portal reveals; boss exit readiness is 180 frames after clear
 [approximation of the original event camera sequence]. The final clear waits 180 frames.
@@ -136,3 +139,48 @@ A full `-Regenerate` rebuild is checked in `bp_merge_verified2_280.png` and Miss
 `bp_merge_m19_mirror_20.png` / `_35.png` (bank 11, V490/P113). Startup now reads the requested mode before
 allocating its menu or test street: holding the unused 5.4 MiB street reserve caused the 10.5 MiB menu
 allocation to fail after the larger merged effect banks. Test capture buffers are allocated afterward.
+
+## Portal polish
+
+The oversized white sheet remains with `nopfx 1` (`bp_polish_no_p_280.png`), identifying an E-layer problem.
+E1515 is the water portal's 46-frame startup smoke; E +0x84 is zero there, while the cyclic column records
+set it. A persistent STAY previously restarted every finite E. Palace now restarts only its cyclic records,
+alpha-blends E1515, and clamps linear sampling inside each sprite tile with a half-texel inset. The authored
+size is preserved (the native sprite /16 initial-size and /2048 growth units already matched).
+The shared P first-draw colour expansion is cl3's identical fix from `2e3e16d`; a host regression checks a
+transparent one-colour burst whose unused corners are bright. `bp_polish_smoke_fixed_280.png` shows the
+columns without the repeated white sheet, at 58 FPS; the P pool drops no instances. Other banks keep their
+existing E lifetime/blend policy. PS2 references: `polish_ps2_portals_later.png`, `_final.png` and the earlier
+`ps2_portals_compare3.png`, all in local `build/bloody_palace`.
+
+The PS2 portal room has no textual portal legend. The port's helper now appears only in the existing
+Start+Select debug overlay, at its top, rather than in the normal Palace HUD.
+
+The Level label follows CSceneGame setup at 0x23e900: x=35, y=200 in centred vertical units,
+brightness=200 and a 360-frame counter. Drawing at 0x23eab8 decrements brightness each native frame,
+and moves x left by 3 once fewer than 240 frames remain. The PSP maps the left edge to x=33 and
+the visible glyphs about 19 pixels above the bottom edge (accounting for the PS2 capture's letterbox),
+using a horizontally widened substitute serif font (exact native
+lettering remains a stand-in). It resets on room entry, disappears during play, and is omitted behind
+pause/debug overlays so it cannot overlap their text. Reference: polish_ps2_floor0.png.
+
+## Best floor
+
+The port keeps the highest reached floor in `BP_BEST.TXT` beside the executable (`BPB1 <0..9999>`).
+It loads once before the menu, updates on legitimate room entry, never lowers a record, and retries a
+failed write on the next room entry. Malformed or out-of-range files are ignored. Scripted focus starts
+mark the run as a test and suppress record changes, including forced floor 9999 and scripted warps.
+Mission Select shows BEST LEVEL while Palace is selected. The PS2 goes directly from that row to loading
+(`polish_best_palace_row.png` / `polish_best_entry.png`); the port preserves that flow. The small record
+file and the selected-row display are port stand-ins, not a reconstruction of the PS2 memory-card format
+or its ranking screens. A missing/unwritable file leaves the in-session record available without persistence.
+
+`python tools/tests/run_bloody_palace_logic.py` checks routing/rewards, all floor-band attack capacities,
+slot expiry/reset, and persistence reload/monotonicity/bad-file/test-run isolation in temporary directories.
+
+Final polish checks: bp_final_polish_280.png (portal floor, 58 FPS), _315.png (debug legend and owner
+credit); bp_level_baseline_final_10.png (9999 label above the boss bar), _90.png (label gone);
+bp_saved_best_verified_menu_140.png (loaded best 1000, forced 9999 did not change the file);
+bp_attack_slots_hells_180.png (floor 5000, six slots, live Hell encounter). Mission 2 movement and
+the one-slot story reset are checked in bp_polish_story_regression_100.png. All images are local
+analysis/testroom captures; final build log is build/bloody_palace/polish_baseline_build.log.

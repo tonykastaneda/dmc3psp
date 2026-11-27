@@ -20,10 +20,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
   read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
   matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
-- **Cutscene framing and colour** (`demo.c`): the cameras' fov over a 326-line frame [estimate: fitted to PCSX2 in
-  demo 59]; the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as colour scale and ambient [inferred
-  from values]. Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so backgrounds are sharper
-  and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
+- **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
+  colour scale and ambient [inferred from values]. The 326-line fov fit is not applied (channel 12 goes to the
+  projection as a vertical angle). Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so
+  backgrounds are sharper and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near
+  plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
   and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
@@ -34,7 +35,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
   `main.c` ~4296, EVENT_SCRIPTS.md.
 - **Enemy health and Dante's damage**: Dante's hits are 42 light / 84 heavy (×1.1, Easy ×2, guns 20%) for every boss
-  [inferred], a bullet 8 against the Jester and the Hells [estimate]; health is the Pride's 6 light hits by eye and
+  [inferred], a bullet its record's 10 (Ebony & Ivory's, 0x5a5a30 +4) against every enemy, kept in fractions of a unit by the Hells and the like; health is the Pride's 6 light hits by eye and
   the rest in proportion to their parameter blocks. `enemy.c`, `vergil_boss.c`, `geryon_boss.c`.
 - **Hit detection on Dante's moves**: every generated move uses one stand-in reach; Quicksilver and Doppelganger styles
   aren't compared with the game; shotgun spread and tracers are stand-in effects. MOVESET_RE.md, `combat.c`.
@@ -143,20 +144,22 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect (E0x2e0's model texture isn't decoded) and tint, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
-- **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them (the game's bullet hits any enemy on team 1), their damage from her attack records (80 a bullet, 0x5cbc40; 1500 the rocket) given as that many of Dante's hits; her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); what fills her rocket counter (+0x4838) isn't decoded (a tenth a burst [estimate]); 0x85's three shots and the rocket's frame are estimates; enemies don't attack her (the Seven Hells' AI targets the player, game+0xc, and nothing in it refers to her) and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound). The look: the fog's colour is LIG2's (checked in PCSX2), but its near 0 / far 4100 is fitted to PCSX2's measured fog [estimate]; the stage is drawn 3.5x the port's usual brightness, measured against PCSX2 at the same camera (why the PS2 draws it brighter isn't decoded) [estimate].
+- **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them (the game's bullet hits any enemy on team 1), their damage from her attack records (80 a bullet, 0x5cbc40; 1500 the rocket) given as that many of Dante's hits; her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); her rocket counter (+0x4838) fills 5 a bullet up to 100 and the rocket takes 50 (FUN_004497f0 / 0044cc40), every shot taken as in her sight (FUN_00359b40, which picks 5 or 1, isn't ported) [inferred]; 0x85's three shots and the rocket's frame are estimates; enemies don't attack her (the Seven Hells' AI targets the player, game+0xc, and nothing in it refers to her) and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound). The look: the fog's colour is LIG2's (checked in PCSX2), but its near 0 / far 4100 is fitted to PCSX2's measured fog [estimate]; the stage is drawn 3.5x the port's usual brightness, measured against PCSX2 at the same camera (why the PS2 draws it brighter isn't decoded) [estimate].
 - **Secret Missions**: 600's goal [inferred]; 605's 60 s limit [estimate]; 608's wagons (CStageSetTruck's timetable,
   the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall); 610's spikes (Mission 6's stand-in);
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.
 - **Bloody Palace** (`bloody_palace.c`, docs/BLOODY_PALACE.md): ordinary EST encounters use the Normal column;
-  Palace's rank = floor/1000+1 is not yet applied to enemy stats. Portals use the original V965/V967/V964
-  water/lightning/fire effects through the existing partial native-effect runtime, with a text legend; the water
-  is brighter/more opaque than the PCSX2 reference (GS blend/particle rendering remains approximate). Arrival
+  Palace's native attack-slot budget = floor/1000+1 is applied to the shared scheduler; separate boss AI retains its own scheduling. Portals use the original V965/V967/V964
+    water/lightning/fire effects through the existing partial native-effect runtime. The portal legend is debug-only. Startup
+  smoke now expires rather than looping and uses alpha blending; sprite tiles use inset clamped linear sampling
+  (remaining GS blend/particle rendering differences are approximate). Arrival
   green/white orbs use their decoded positions and recovery values, but mote visuals, simplified falling and
-  collection within 120 cm; Lady's extra defeat pickups are omitted. Floor display stays visible, unlike the PS2's transient Level label. Arena camera
+  collection within 120 cm; Lady's extra defeat pickups are omitted. The transient Level label uses a widened substitute serif font; native position, fade and slide timing are restored. Arena camera
   initialization starts its collision sweep at Dante's head: the default safe point lies beneath the raised arena.
   Boss entrance/defeat camera sequences are skipped; boss behaviors retain their documented story-mode stand-ins.
   Boss exits use an item glow in place of their room-specific warp effects; unmapped EST enemy classes retain
   the shared enemy mapper's fallback (including some rare ordinary-floor sets and the unported chess pieces).
+  Best floor uses the port's BP_BEST.TXT sidecar and a selected-row menu label, not the PS2 memory-card/ranking UI.
   The task's requested kill-time countdown is omitted: EventTbl21 and PCSX2 show no survival timer in this PS2 mode.
 - **Rooms data**: 137's floor heights from doors and starts [inferred]; gimmicks not converted simply appear in the
   script's order [inferred]; a box over 102's platform for the ride up. `gen_rooms.py`.

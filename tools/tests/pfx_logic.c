@@ -59,6 +59,18 @@ int main(void) {
     memset(&place, 0, sizeof(place));
     place.m[0][0] = place.m[1][1] = place.m[2][2] = 1.0f;
 
+    /* Palace P480 starts transparent, with unused bright corners. The very
+     * first render must not see those unused corners before the first tick. */
+    {
+        unsigned char *record=(unsigned char *)make_sprite(20,0.0f,0,0);
+        unsigned char *p=record+0x10+rd32(record+0x10);
+        memset(p+0x6c+4,0xff,16);
+        memset(p+0x6c+4,0,4);
+        pfx_reset();pfx_spawn(0,record,&place,0,0,0);
+        CHECK(inst[0].col[3]==0 && inst[0].col[7]==0 && inst[0].col[11]==0 && inst[0].col[15]==0,
+              "fresh one-colour burst has transparent corners before update");
+    }
+
     /* Life and the owner's reference. */
     pfx_reset();
     CHECK(pfx_spawn(0, make_sprite(20, 0.0f, 0, 0), &place, 7, 7, 0) == 1, "spawn");
