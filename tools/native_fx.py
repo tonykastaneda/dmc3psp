@@ -264,9 +264,11 @@ def main():
     summary.append(write_bank(lines, 8, records(pac_list(read(138))[28]), (0x179, 0x21f), ()))
     # 9 em010's pack (GDATA 121, PNST chunk 21): the Arachne's web (CEm010Shl00).
     summary.append(write_bank(lines, 9, records(pnst_entries(read(121))[21]), (0x29e, 0x2a3, 0x308, 0x309, 0x2a2, 0x304), ()))
+    # 10 em011's pack (GDATA 122, PNST chunk 8): the Fallen's spear (CEm011Shl00: V0x367, V0x368).
+    summary.append(write_bank(lines, 10, records(pnst_entries(read(122))[8]), (0x367, 0x368), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

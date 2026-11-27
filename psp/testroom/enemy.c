@@ -6217,6 +6217,8 @@ static void soul_hit_glue(HitKind kind) {
 #include "fallen.h"
 extern int testroom_frame;
 static FallenBrain fallen_brain[ENEMY_MAX];
+static int fallen_spear[ENEMY_MAX];             /* its spear's arrow slot + 1 (0: none) */
+static float fallen_spear_at[ENEMY_MAX][3];
 static int fallen_motion_id[FALLEN_M_COUNT] = {-2};
 static float fallen_rest;   /* FUN_003442c0: the enemy manager lets one attack, then rests 3 s */
 static void fallen_play(int m, int restart) {
@@ -6282,7 +6284,15 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
         /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
         float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
         float to[3] = {px, py + 100.0f, pz};
-        { int k = goyle_bullet(from, to); if (k >= 0) arrows[k].damage = 900.0f; }   /* record 0 (0x5c2dd0): 900 */
+        { int k = goyle_bullet(from, to); if (k >= 0) { arrows[k].damage = 900.0f; fallen_spear[e - enemies] = k + 1; } }   /* record 0 (0x5c2dd0): 900 */
+        nfx_spawn(NFX_FALLEN, 0x367, from, e->yaw, 0);
+    }
+    /* Its spear's effects (CEm011Shl00, FUN_0045a330; em011's pack, nfx bank 10): V0x367 as it's let go, V0x368 where it
+     * ends (it hits, or flies 2000 out). */
+    {
+        int k = fallen_spear[e - enemies] - 1;
+        if (k >= 0 && arrows[k].active) memcpy(fallen_spear_at[e - enemies], arrows[k].pos, sizeof(float) * 3);
+        else if (k >= 0) { nfx_spawn(NFX_FALLEN, 0x368, fallen_spear_at[e - enemies], e->yaw, 0); fallen_spear[e - enemies] = 0; }
     }
     if (b->remove) e->active = 0;
 }
