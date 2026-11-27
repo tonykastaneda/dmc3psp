@@ -99,10 +99,6 @@ void bp_draw(void) {
     if (!active || !menu_loaded()) return;
     snprintf(text,sizeof text,"Level %d",level);
     menu_font_draw(12,237,18,text,0xffffffffu);
-    if (clear_frames>=60.0f && ordinary(room_number)) {
-        snprintf(text,sizeof text,"PORTALS  +1   +10   +100");
-        menu_font_draw(120,238,15,text,0xffffffffu);
-    }
 }
 void bp_status(char *out, int size) {
     snprintf(out,size,"palace on=%d level=%d room=%d visits=%d group=%d clear=%.0f boss=%d finished=%d pickup=%d",

@@ -149,3 +149,6 @@ transparent one-colour burst whose unused corners are bright. `bp_polish_smoke_f
 columns without the repeated white sheet, at 58 FPS; the P pool drops no instances. Other banks keep their
 existing E lifetime/blend policy. PS2 references: `polish_ps2_portals_later.png`, `_final.png` and the earlier
 `ps2_portals_compare3.png`, all in local `build/bloody_palace`.
+
+The PS2 portal room has no textual portal legend. The port's helper now appears only in the existing
+Start+Select debug overlay, at its top, rather than in the normal Palace HUD.

@@ -1215,6 +1215,7 @@ static void draw_debug_menu(int viewer) {
     sceGuTexFlush();
     sceGuColor(0xffffffffu);
     draw_text(x, y, "DEBUG");
+    if (bp_active()) draw_text(8, 8, "PALACE PORTALS +1 / +10 / +100");
     for (i = 0; i < DEBUG_ITEMS; ++i) {
         sceGuColor(i == debug_cursor ? 0xff40e0ffu : 0xffffffffu);
         if (i == debug_cursor) draw_text(x - 12, y + 16 + i * 12, ">");
