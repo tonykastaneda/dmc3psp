@@ -35,3 +35,4 @@ MISSIONwalkthrough.md
 SECRETmissions.md
 analysis/ref/**/*.mp4
 analysis/ref/credits/
+analysis/ghidra/*.lock*
