@@ -639,6 +639,13 @@ def main():
         blob += struct.pack("<2fI4B", start, max(life, 1.0), out, *[min(255, v) for v in rgba[:4]])
     lights = bake_lights(timeline)
     blob += lights   # right after the fades; their count at +0x3c
+    # Then the Program track's colour clips: u32 count, then {f32 start, u32 No, f32 Arg[4]} by start. No 5 the
+    # characters' colour scale (128 = 1.0), No 6 their ambient [inferred: from the values, not the parser's code].
+    programs = sorted((float(c.get("SetFrame", 0.0)), int(c.get("No", -1)), [float(x) for x in (c.get("Arg") or [0, 0, 0, 0])[:4]])
+                      for t in timeline["tracks"] if t["kind"] == "Program" for c in t["clips"] if int(c.get("No", -1)) in (5, 6))
+    blob += struct.pack("<I", len(programs))
+    for start, no, arg in programs:
+        blob += struct.pack("<fI4f", start, no, *(arg + [0.0] * (4 - len(arg))))
     tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))

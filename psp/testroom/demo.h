@@ -12,5 +12,8 @@ int demo_update(float dt, FollowCamera *camera);   /* 1 while it plays: the came
 void demo_draw(void);                         /* the cast, after the stage */
 int demo_actor_count(void);
 unsigned int demo_fade(void);   /* the Fade track's cover now, ABGR (0: none) */
+/* A demo's frame: cinema bars (0.712 of the height shows) and the cameras' fov fitted to the PS2's framing (demo.c). */
+float demo_screen_fov(float fov_degrees);   /* the fov to give sceGumPerspective on the PSP's 272 lines */
+void demo_letterbox(void);                  /* the bars, in the 2D pass */
 const char *demo_subtitle(int *x, int *y, int *size);   /* the line shown now, or 0 (PS2 640 x 448 place) */
 #endif

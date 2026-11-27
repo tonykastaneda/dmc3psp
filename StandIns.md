@@ -21,6 +21,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
   read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
   matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
+- **Cutscene framing and colour** (`demo.c`): the cameras' fov over a 326-line frame [estimate: fitted to PCSX2 in
+  demo 59]; the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as colour scale and ambient [inferred
+  from values]. Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so backgrounds are sharper
+  and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
   and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle

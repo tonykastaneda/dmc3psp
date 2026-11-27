@@ -1303,7 +1303,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             float near = sqrtf(dx * dx + dy * dy + dz * dz) * 0.33f;
             if (near < 4.0f) near = 4.0f;
             if (near > 50.0f) near = 50.0f;
-            sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
+            sceGumPerspective(demo_screen_fov(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
         }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
         else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
@@ -1495,6 +1495,7 @@ scene_done:
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
         unsigned int fade = demo_fade();
+        demo_letterbox();                 /* the cinema bars, under the fade and the subtitles */
         if (fade) fx_screen_tint(fade);   /* the Fade track */
         if (line) {
             float h = (float)size * (float)SCR_HEIGHT / 448.0f * 1.5f, y = (float)sy * (float)SCR_HEIGHT / 448.0f - h * 0.3f;
@@ -2194,8 +2195,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "ownall ", 7) == 0) cmp_ownall = atoi(line + 7);
         else if (strncmp(line, "m6got ", 6) == 0) cmp_m6_got = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
-        else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }
-        else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
+        else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }        else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
             if (sscanf(line + 7, "%f %f %d %d", &cmp_walks[cmp_walk_count].x, &cmp_walks[cmp_walk_count].z,

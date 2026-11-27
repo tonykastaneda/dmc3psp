@@ -565,13 +565,13 @@ static void skin(Actor *a) {
 }
 
 /* Whether a sphere is in the view (clip = projection * view, read from GUM). */
-static int sphere_visible(const ScePspFMatrix4 *m, const float c[3], float r) {
+static int sphere_visible(const ScePspFMatrix4 *m, const float c[3], float r, float scale) {
     float x = m->x.x * c[0] + m->y.x * c[1] + m->z.x * c[2] + m->w.x;
     float y = m->x.y * c[0] + m->y.y * c[1] + m->z.y * c[2] + m->w.y;
     float z = m->x.z * c[0] + m->y.z * c[1] + m->z.z * c[2] + m->w.z;
     float w = m->x.w * c[0] + m->y.w * c[1] + m->z.w * c[2] + m->w.w;
-    /* r in clip units, loosely: the projection's largest scale. */
-    float s = r * 2.5f;
+    /* r in clip units: the projection's largest scale (a narrow fov's close-up scales it up), with room to spare. */
+    float s = r * (scale > 2.5f ? scale : 2.5f) * 1.25f;
     return w > -s && x > -w - s && x < w + s && y > -w - s && y < w + s && z < w + s;
 }
 
@@ -595,12 +595,40 @@ static int object_shown(const DemoHideClip *h, unsigned int k) {
  * 128 [inferred: the VU1 lighting isn't read; 0x80 is 1.0 as the GS's colours]. On the PSP, per actor: a directional
  * light from its centre toward each, the strength taken at the centre. IsMinus lights (they subtract) are left out.
  * Returns 0 (the room's lights stay) when the demo has no Light clips. */
-#define DEMO_AMBIENT 0xff303030u   /* [stand-in: the characters' ambient isn't found; matched by eye to the PS2] */
+#define DEMO_AMBIENT 0xff303030u   /* [stand-in, by eye] when the demo's Program track sets no No 6 */
+typedef struct { float start; unsigned int no; float arg[4]; } DemoProgram;
+/* The Program track's colour clips in force now (prepare_demo: No 5 the characters' colour scale, 128 = 1.0; No 6
+ * their ambient) [inferred from their values: demo 5 sets 128 128 128 and 30 20 20, demo 1 210 200 180]. */
+static void demo_program_colour(float scale[3], float ambient[3], int *has_ambient) {
+    const unsigned int *count;
+    const DemoProgram *p;
+    unsigned int i;
+    int k;
+    for (k = 0; k < 3; ++k) { scale[k] = 1.0f; ambient[k] = 0.0f; }
+    *has_ambient = 0;
+    count = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) + head->light_count * sizeof(DemoLight));
+    p = (const DemoProgram *)(count + 1);
+    for (i = 0; i < *count && p[i].start <= demo_clock; ++i) {
+        for (k = 0; k < 3; ++k) {
+            if (p[i].no == 5) scale[k] = p[i].arg[k] / 128.0f;
+            else ambient[k] = p[i].arg[k] / 128.0f;
+        }
+        if (p[i].no == 6) *has_ambient = 1;
+    }
+}
+static unsigned int colour_word(const float rgb[3]) {
+    unsigned int out = 0xff000000u;
+    int k;
+    for (k = 0; k < 3; ++k) out |= (unsigned int)(rgb[k] >= 1.0f ? 255.0f : rgb[k] <= 0.0f ? 0.0f : rgb[k] * 255.0f) << (8 * k);
+    return out;
+}
 static int demo_lights(const float c[3]) {
     const DemoLight *l;
     struct { float dir[3], rgb[3], rank; } pick[4];
-    int i, k, n = 0, special = -1;
+    float scale[3], ambient[3];
+    int i, k, n = 0, special = -1, has_ambient;
     if (!head->light_count) return 0;
+    demo_program_colour(scale, ambient, &has_ambient);
     l = (const DemoLight *)(blob + head->fades + head->fade_count * sizeof(DemoFade));
     for (i = 0; i < (int)head->light_count; ++i) {
         const DemoLight *x = &l[i];
@@ -635,21 +663,49 @@ static int demo_lights(const float c[3]) {
         }
     }
     (void)special;
-    sceGuAmbient(DEMO_AMBIENT);
+    if (has_ambient) {
+        float a[3];
+        for (k = 0; k < 3; ++k) a[k] = ambient[k] * scale[k];
+        sceGuAmbient(colour_word(a));
+    } else sceGuAmbient(DEMO_AMBIENT);
     for (i = 0; i < 4; ++i) {
         if (i < 3 && i < n) {
             ScePspFVector3 dir = {pick[i].dir[0], pick[i].dir[1], pick[i].dir[2]};
-            unsigned int r = (unsigned int)(pick[i].rgb[0] > 1.0f ? 255 : pick[i].rgb[0] * 255.0f);
-            unsigned int g = (unsigned int)(pick[i].rgb[1] > 1.0f ? 255 : pick[i].rgb[1] * 255.0f);
-            unsigned int b = (unsigned int)(pick[i].rgb[2] > 1.0f ? 255 : pick[i].rgb[2] * 255.0f);
+            float rgb[3];
+            for (k = 0; k < 3; ++k) rgb[k] = pick[i].rgb[k] * scale[k];
             sceGuLight(i, GU_DIRECTIONAL, GU_DIFFUSE, &dir);
-            sceGuLightColor(i, GU_DIFFUSE, 0xff000000u | b << 16 | g << 8 | r);
+            sceGuLightColor(i, GU_DIFFUSE, colour_word(rgb));
             sceGuEnable(GU_LIGHT0 + i);
         } else {
             sceGuDisable(GU_LIGHT0 + i);
         }
     }
     return 1;
+}
+
+/* The demo's frame (demo.h): the cameras' fov taken over a 326-line frame of which the PSP's 272 show [estimate:
+ * fitted to PCSX2 (widescreen, 16:9 as the PSP) in demo 59, where Dante's size then matches; the fov's own convention
+ * isn't read]. The bars leave 0.712 of the screen's height (measured in PCSX2, demos 3, 5, 59).  */
+#define DEMO_FRAME_H 326.0f
+#define DEMO_SHOWN 0.712f
+float demo_screen_fov(float fov) {
+    return 2.0f * atanf(tanf(fov * 0.0087266f) * 272.0f / DEMO_FRAME_H) * 57.29578f;
+}
+
+void demo_letterbox(void) {
+    struct { unsigned int color; short x, y, z, pad; } *v;
+    int bar = (int)(272.0f * (1.0f - DEMO_SHOWN) * 0.5f + 0.5f);
+    if (!playing || bar <= 0) return;
+    v = sceGuGetMemory(4 * sizeof(*v));
+    v[0].color = v[1].color = v[2].color = v[3].color = 0xff000000u;
+    v[0].x = 0; v[0].y = 0; v[1].x = 480; v[1].y = (short)bar;
+    v[2].x = 0; v[2].y = (short)(272 - bar); v[3].x = 480; v[3].y = 272;
+    v[0].z = v[1].z = v[2].z = v[3].z = 0;
+    sceGuDisable(GU_TEXTURE_2D);
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_BLEND);
+    sceGuDrawArray(GU_SPRITES, GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_2D, 4, 0, v);
+    sceGuEnable(GU_TEXTURE_2D);
 }
 
 /* Back to the room's lights (main.c's init: a key and a fill, ambient 0x90). */
@@ -714,7 +770,7 @@ void demo_draw(void) {
         }
         {
             int cb = (int)a->d->centre_bone < a->d->bones ? (int)a->d->centre_bone : 0;
-            if (!sphere_visible(&clip, a->world_pos[cb], a->d->radius)) continue;
+            if (!sphere_visible(&clip, a->world_pos[cb], a->d->radius, proj.x.x > proj.y.y ? proj.x.x : proj.y.y)) continue;
             lit |= demo_lights(a->world_pos[cb]);
         }
         skin(a);
