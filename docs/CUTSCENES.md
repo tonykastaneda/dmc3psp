@@ -266,11 +266,13 @@ summoning glow is one). 112 P clips (particle programs) aren't played, and timel
 **Cloth**: a slot's `.clt` chains step with `cloth.c` (`psp/testroom/demo_cloth.c`) in world space. The step is
 `FUN_0022f270` (gravity on world Y) and the joints keep last frame's place, so a bone that moves leaves them behind.
 ClothMode 1, and only 1, rides the parent model's root first (`FUN_00230150`: the new root matrix times the inverse
-of the last), which takes that root's travel and turn back out; demo 5's coat never sets the key, so it trails the
-whole pose. The model clip's script holds until a motion clip names another. `ResetClt` and `ResetClt2` snap to rest
+of the last), which takes that root's travel and turn back out. In these demos bone 0 stays at the origin and the
+hip channel (bone 1) carries the world pose, so the ride follows the hips; riding bone 0 lets a cut lay the chains
+out along the jump and the coat leaves as a flat sheet. Demo 5's coat never sets the key, so it trails the whole pose. The model clip's script holds until a motion clip names another. `ResetClt` and `ResetClt2` snap to rest
 and, when `ResetCltLevel` is above 0, step that many times at the pose held for the cut (level -1 snaps only; a level
 above 32 is capped; the game's update just before the snap is overwritten by it). Each bone keeps its own axis, NY
-included. These scripts' wind is 0 and they name no capsules. `ClothSim1D` is not run. A Bone line whose axis token
+included. These scripts' wind is 0 and they name no capsules. A coat on Dante's 23-bone body still gets the
+gameplay capsules (spine and both legs), so the chains can't hang through him. `ClothSim1D` is not run. A Bone line whose axis token
 is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`);
 bone 8 is X and bone 6 takes that axis.
 

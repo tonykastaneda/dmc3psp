@@ -3,8 +3,8 @@
  * world Y, so a bone that moves leaves the cloth behind. ClothMode 1 rides the parent model's root first
  * (FUN_00230150: new root matrix times the inverse of the last), and a clip that never sets it does not. ResetClt /
  * ResetClt2 snap to rest and then step the level when it is above 0 (FUN_002302d0; the update just before the snap
- * is overwritten by it). No wind and no capsules: these scripts have neither. ClothSim1D is a different system
- * and is not run. */
+ * is overwritten by it). These scripts set no wind and name no capsules. A coat on Dante still
+ * gets the gameplay body capsules the caller passes in. ClothSim1D is a different system and is not run. */
 #include "demo_cloth.h"
 
 #include "cloth.h"
@@ -144,7 +144,7 @@ static void axis_of(ClothParams *params, int code) {
 static void run_script(SlotCloth *st, const unsigned char *script, const unsigned char *end, int rest,
                        const signed char *parents, const float *local, int bones,
                        const float *base_pos, const float *base_rot, float *world_pos, float *world_rot,
-                       unsigned char *is_free) {
+                       unsigned char *is_free, const ClothCapsule *capsules, int capsule_count) {
     const unsigned char *p = script;
     unsigned int chains, c;
     if (!script || p + 4 > end) return;
@@ -192,7 +192,7 @@ static void run_script(SlotCloth *st, const unsigned char *script, const unsigne
                 params.stiffness = stiff;
                 params.limit = limit;
                 axis_of(&params, axis);
-                cloth_step(&st->joint[b], pp, &rot, rest_off, &params, 0, 0);
+                cloth_step(&st->joint[b], pp, &rot, rest_off, &params, capsules, capsule_count);
             }
         }
     }
@@ -271,7 +271,8 @@ void demo_cloth_apply(int actor, const float *base_pos, const float *base_rot,
                       const float *owner_pos, const float *owner_rot,
                       float *world_pos, float *world_rot,
                       const signed char *parents, const float *local, int bones,
-                      const void *block, unsigned int size, float clock) {
+                      const void *block, unsigned int size, float clock,
+                      const ClothCapsule *capsules, int capsule_count) {
     SlotCloth *st;
     const unsigned char *bytes, *end, *clips, *script;
     unsigned char is_free[CLOTH_BONES];
@@ -324,18 +325,18 @@ void demo_cloth_apply(int actor, const float *base_pos, const float *base_rot,
     if (!st->inited || reset_level != -999) {
         /* A snap overwrites wherever the joints were, so the ride this frame would be thrown away. Record the
          * root instead, and the next frame rides from here. */
-        run_script(st, script, end, 1, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free);
+        run_script(st, script, end, 1, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free, capsules, capsule_count);
         st->inited = 1;
         n = reset_level > 0 ? reset_level : 0;
         if (n > CLOTH_SETTLE_MAX) n = CLOTH_SETTLE_MAX;
         if (reset_level == -999) n = 1; /* the first frame it is on: one step, so it is moving */
         for (i = 0; i < n; ++i)
-            run_script(st, script, end, 0, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free);
+            run_script(st, script, end, 0, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free, capsules, capsule_count);
         steps = st->prev < 0.0f ? 1 : (int)(clock - st->prev);
         if (steps > 4) steps = 4;
         if (reset_level != -999 && steps > 1)
             for (i = 1; i < steps; ++i)
-                run_script(st, script, end, 0, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free);
+                run_script(st, script, end, 0, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free, capsules, capsule_count);
         if (st->mode == 1) remember_owner(st, owner_pos, owner_rot);
     } else if (clock > st->prev) {
         if (st->mode == 1) ride(st, bones, owner_pos, owner_rot);
@@ -343,7 +344,7 @@ void demo_cloth_apply(int actor, const float *base_pos, const float *base_rot,
         if (steps < 1) steps = 1;
         if (steps > 4) steps = 4;
         for (i = 0; i < steps; ++i)
-            run_script(st, script, end, 0, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free);
+            run_script(st, script, end, 0, parents, local, bones, base_pos, base_rot, world_pos, world_rot, is_free, capsules, capsule_count);
     }
     st->prev = clock;
     write_back(st, is_free, bones, world_pos, world_rot);

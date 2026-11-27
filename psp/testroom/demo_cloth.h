@@ -1,9 +1,12 @@
 #ifndef DMC3PSP_TESTROOM_DEMO_CLOTH_H
 #define DMC3PSP_TESTROOM_DEMO_CLOTH_H
 
+#include "cloth.h"
+
 /* A cutscene slot's cloth (docs/CUTSCENES.md). The block prepare_demo writes at the actor's last 8 bytes is the
  * .clt chains; this steps them with cloth.c after the slot is posed. Joints stay in world space. ClothMode 1
- * rides owner (the parent model's root) first, the way FUN_00230150 does. */
+ * rides owner (the parent model's root) first, the way FUN_00230150 does. The .clt names no capsules; a coat
+ * piece on Dante still gets his body capsules so the chains can't hang through him. */
 
 void demo_cloth_reset(void);
 
@@ -14,6 +17,7 @@ void demo_cloth_apply(int actor, const float *base_pos, const float *base_rot,
                       const float *owner_pos, const float *owner_rot,
                       float *world_pos, float *world_rot,
                       const signed char *parents, const float *local, int bones,
-                      const void *block, unsigned int size, float clock);
+                      const void *block, unsigned int size, float clock,
+                      const ClothCapsule *capsules, int capsule_count);
 
 #endif
