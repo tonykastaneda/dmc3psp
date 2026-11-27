@@ -28,6 +28,7 @@
 #include <pspctrl.h>
 #include "secret_missions.h"
 #include "fx.h"
+#include "nfx.h"
 #include <stdlib.h>
 #include "crystal_runtime.h"
 #include "secret_orbs_runtime.h"
@@ -371,8 +372,7 @@ void sm_hit(float x, float y, float z, float yaw, float reach) {
         if (d > reach + (r->type == 3 ? 150.0f : 60.0f) || fabsf(at[1] - y) > 300.0f) continue;
         if (d > 1.0f && (dx * sinf(yaw) + dz * cosf(yaw)) / d < 0.2f) continue;
         present[k] = 0;
-        at[1] += 100.0f;
-        fx_explosion(at);
+        nfx_crystal_break(at, r->type);   /* the crystal's own effects (FUN_00420450) */
         solved = crystal_trace();
         return;   /* one a swing */
     }

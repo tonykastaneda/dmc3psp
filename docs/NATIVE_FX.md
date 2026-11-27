@@ -39,7 +39,7 @@ their id | 0x8000, so the banks and the cutscenes' blobs keep their layout. Its 
 | +0 | Where the children go: 0 the world, fixed where made; 1 / 2 on the emitter, moving with it |
 | +1 | Its path: 0 a line (speed +4 losing +8 a frame, along (0, +0x10, +0x14) degrees, `FUN_001b2ab0`); 1 a model's points (not ported: it stays put); 2 still |
 | +0x18, +0x1c, +0x34 | i32: first delay; interval, plus a random number masked by +0x34 |
-| +0x20, +0x30 | i32 life in frames; +0x30 set: no end (the port: while a looping owner lasts) [inferred] |
+| +0x20, +0x30 | i32 life in frames; +0x30 set: no end. A cutscene's emits until the demo ends (PCSX2: demo 123's G79 burns on for seconds); elsewhere the port ends it with its life unless a looping owner lasts [inferred] |
 | +0x24, +0x26 | The child's kind (0 P, 1 E, 2 G, 3 V) and u16 id |
 | +0x28, +0x2c, +0x59 | The children's frame turned (0, +0x28, +0x2c) degrees; byte +0x59 a random spread on +0x28 |
 | +0x38, +0x3c, +0x40 | Scale +0x38 going to +0x3c over u16 +0x40 frames |
@@ -219,11 +219,34 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | Caller | P | Where, when | Port |
 | --- | --- | --- | --- |
 | `002a0510` Cerberus's punch | 58, 59 | on the paw, events 2-5 | yes |
-| `003ac750` Agni & Rudra | 44 (0x2c) | dust at the brother (+0x450), from `003a8200` as the slam lands (phase 0x1e → 0x1f), `003a2fb0`, `003a5ee0`, `003a8c60`, `003b0450`, `003b09c0` | no |
-| `003a6820` Agni & Rudra | 15 (0xf), 44 | at bone +0xcc0 from motion frame 280 (phase 2); at bone +0xcf8 from 220 (phase 1) | no |
-| `00264b90` | 44 | (player code range) | no |
-| `003c9870` | 0xeb, 0xfb, 0xcb | | no |
-| `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` | 44 | dust at six bones (+0x104 matrices) | no |
+| `003ac750` Agni & Rudra | 44 (0x2c) | dust at the brother (+0x450) as he lands: state 1 (`003a2fb0`), the dashes (`003b0450`), the hops (`003b09c0`), the slam (`003a8200`, phase 0x1e → 0x1f); also states 36 (`003a5ee0`) and 55 (`003a8c60`) | yes (not 36, 55) |
+| `003ac770` / `003ac790` Agni & Rudra, states 46-49 (`003a7510` and kin) | V0x7b (P56), G0x1d5 (P44) | at motion frame 65 at him, the G riding him and looping until 77 (`003ac7e0`) | yes |
+| `003a6820` Agni & Rudra, state 39 (dead) | 15 (0xf), 44 | P44 at bone +0xcf8 from motion frame 220, P15 at bone +0xcc0 from 280 | yes (at his feet) |
+| `003c9870` Nevan's bats | 0xcb, 0xfb, 0xeb (203, 251, 235) | one at random riding each bat (+0x250), 12 bat sprites, life -20000: never runs out (`pfx.c` counts a life down only from -10000 up) | yes (`nevan_boss.c` bats_particles, nfx bank 7) |
+| `003b67a0` / `003b7a50` Nevan's 21 (fall) / 27, `003c8810` a bat's strike | G0x1a8 (P38), G0x97 (P293), V0x110 (P31) | at a bone of hers (taken 100 up at her middle); where the bat hits | yes (`nevan_boss.c` act, bats_update) |
+| `00496540` / `00496a80` Lady's rocket (CEm034Shl02) | V0x179 (P337), V0x21f (P2, 3, 16, 18) | the first rides it in flight, the second as it bursts | yes (`lady_boss.c` rockets_fx, nfx bank 8) |
+| `004f46d0` / `004f4a60` / `004f50d0` the Arachne's web (CEm010Shl00) | V0x29e, V0x2a3 (P412), V0x308, V0x309, V0x2a2, V0x304 (P412) | in flight; on Dante (V0x308 held on him); where it misses; as he breaks free | yes (`enemy.c` an_webs_update, nfx bank 9) |
+| `0045a330` the Fallen's spear (CEm011Shl00) | V0x367 (P3, 16), V0x368 (P91) | as it's let go; where it ends | yes (`enemy.c` Fallen glue, nfx bank 10) |
+| `00462f90` Mission 19's mirrors (CStageSetMirror) | V0x1ea (P113) | each mirror as it shatters | yes (`mission19.c`, nfx bank 11, GDATA 758); the lit glow E0x2e0 is a model with an undecoded 1-byte texture reference: stand-in kept |
+| `004203a0` / `004203c0` a struck crystal (CStageSetCrystal) | V0x1c (P78), V4 (P24) for type 2, V554 (P160, 345, 346) for type 3 | at it | yes (`nfx_crystal_break`: Mission 13's 233, Secret Mission 10; V554 from GDATA 526 as bank 12) |
+| `00493590` the Nausika's blows (CStageSetNausika) | V0x22c / V0x22b (P257, 258 / P259) | where a blow lands | yes (`nausika.c`, GDATA 694 as bank 13; light / heavy by the hit record's +2 [inferred]) |
+| `00492630` the Nausika | V0x352 (P443) | looping on a bone | no (its bone and scale undecoded) |
+| `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` the Arachne's landings (states 0x23, 0x32, 0x28, 0x2b) | 44 | dust at its six legs' bones (+0x104 matrices); 0x32's events 1 / 2 one at its body | yes (any landing, legs 110 cm out round it) |
+| `00264b90` | 44 | (Dante's code range; not traced) | no |
+
+### Still not played (P-bearing effects found by a census of every `FUN_00208590` call with a constant id)
+
+| Owner | Effect (P) | Why |
+| --- | --- | --- |
+| The Gigapede's head orb / ground wave (CEm023Shl03 / Shl04, `0051a470`, `00519ac0`) | V0x39e, V0x38c (P464) | the head attack's shells aren't ported |
+| The Damned Bishop's fireball (CEm017Shl00, `00513430`) | V0x210 (P245, 309) | the Bishop's spell isn't decoded (`bishop.c` stands in) |
+| CEm022Shl00 (`0043ea30`) | V0x36c (P349) | its owner isn't identified yet |
+| The Soul Eater's state 0x11 (`00433e00`) | V0x1d8 (P306, 466) | that state isn't ported |
+| The Nausika's aura (`00492630`) | V0x352 (P443) | its bone and scale undecoded |
+| Agni & Rudra's states 36, 55 (`003a5ee0`, `003a8c60`), `003a94c0`, `003aa960` | P44, V0x30f / V0x2e5 / V0x2f6 | their landings and steps aren't located in the port's scripts |
+| Nevan's swarm bats as she's struck (`003c8ab0`) | V0x386 (P339) | the swarm's break on her hit isn't ported |
+| Dante's own moves and shells (`002d...`, `002fbf20`, CPl000Shl10 ...) | many | the moveset's owners' code |
+| CUIDStatusFile (`0042f3d0` ...) | V0x198 / 1be / 36d | the status screen isn't ported |
 
 ### Atlases (A records, `FUN_001ec360`)
 
@@ -232,7 +255,7 @@ y, width, height, then an s8 centre. UVs are x / width .. (x + width - 1) / widt
 
 ### The port
 
-- One `Inst` per main and per fake (64 at most, a start past that is dropped; 24 particles each), with the owner's frame followed while the
+- One `Inst` per main and per fake (96 at most, a start past that is dropped and counted; demo 8 and 24 peak at 89; 24 particles each), with the owner's frame followed while the
   owning V / G lives (`nfx_frame`), which it keeps alive while it plays (a reference, `nfx_unref` at its end); `nfx_kill` on the root
   ends them at once.
 - Drawn after nfx's elements: sprites as textured triangles, the rest untextured, depth tested, not written.
@@ -248,3 +271,11 @@ y, width, height, then an s8 centre. UVs are x / width .. (x + width - 1) / widt
   display-list build 7.2 ms against 6.7 ms without (seconds 1-6 of PERF.TXT); the update didn't move.
   Demo 8 (Lady's missiles, 358 instances started over 22 s): 7.8-8.7 ms against 7.3-8.1 ms with `nopfx 1` in its
   smoke-heavy seconds, no missed frames at 60.
+
+### Checked against the PS2 (PCSX2)
+
+Mission 3's opening (demos 5 and 123) recorded unskipped in PCSX2 (`analysis/ref/pfx/ps2_m3_opening.mp4`, local) and
+the port's demo 123 (`analysis/testroom/demo123b.mp4`), side by side in `analysis/ref/pfx/demo123_ab_strip2.png`: Lady's
+missile shots, the muzzle flash, the missiles' smoke trails and bursts and the burning demons match in place, size and
+colour. The one difference found, the demons' fire (G79 → E275) going out after a second where the PS2's burns on, was
+the no-end generator rule above, now fixed.
