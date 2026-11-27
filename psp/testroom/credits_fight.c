@@ -53,6 +53,21 @@ static int active, kills, extended, stage;   /* stage 0 fighting, 1 the roll's e
 static int next_record, fade, card_shown;
 static float street_clock, roll_clock, since_end, roll_acc;
 
+/* Room 012's look (docs/CREDITS_FIGHT.md 9). Its LIG2 header's second colour (95, 90, 100) is the fog colour: PCSX2,
+ * the copy the game keeps (0xec4ed0, floats) turned red turns the sky and the street red, more with distance. The
+ * sky is that colour (the clear colour). The fog's distances aren't found in the room's data: near 0 / far 4100 is
+ * fitted to the fog factor measured in PCSX2 (red fog against the normal one, about 0.17 at 0-1000 cm) [estimate]. */
+#define FOG_ABGR 0xff645a5fu   /* (95, 90, 100) */
+#define FOG_NEAR 0.0f
+#define FOG_FAR 4100.0f
+
+int credits_fight_fog(unsigned int *clear) {
+    if (!active) return 0;
+    *clear = FOG_ABGR;
+    sceGuFog(FOG_NEAR, FOG_FAR, FOG_ABGR);
+    return 1;
+}
+
 void credits_fight_init(const char *game_dir) {
     snprintf(dir, sizeof dir, "%s", game_dir);
 }

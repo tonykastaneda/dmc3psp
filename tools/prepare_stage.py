@@ -92,6 +92,10 @@ def decode_textures(texture_data: bytes):
 SKY_HEIGHT = 12000.0
 # PS2 doubles vertex colour; the real street then comes out darker than this (material, lights).
 STAGE_BRIGHTNESS = 1.25
+# Rooms whose stage is drawn brighter, baked at half (the runtime doubles them, GU_FRAGMENT_2X): st012, Mission 20's
+# ending street, which the PS2 shows at 3.5x the port's 1.25 (PCSX2 and the port at the same camera, the fog's share
+# taken out; docs/CREDITS_FIGHT.md 9) [estimate: measured, the cause isn't decoded].
+STAGE_GAIN_HALF = {320: 1.25 * 3.5 / 2.0}
 
 
 def mip_chain(w, h, rgba):
@@ -677,6 +681,7 @@ def main() -> None:
     vertex_offset = align(blob)
     first = 0
     chunks = []  # (first vertex, vertex count, min xyz, max xyz)
+    gain = STAGE_GAIN_HALF.get(args.slot, STAGE_BRIGHTNESS)
     for slot, bi in enumerate(order):
         texture, kind, tris, decal = batches[bi][:4]
         group = batches[bi][4] if len(batches[bi]) > 4 else 0
@@ -692,7 +697,7 @@ def main() -> None:
             for t in g:
                 for v in t:
                     x, y, z, u, vv, r, g_, b = v
-                    col = 0xFF000000 | (min(255, int(b * STAGE_BRIGHTNESS)) << 16) | (min(255, int(g_ * STAGE_BRIGHTNESS)) << 8) | min(255, int(r * STAGE_BRIGHTNESS))
+                    col = 0xFF000000 | (min(255, int(b * gain)) << 16) | (min(255, int(g_ * gain)) << 8) | min(255, int(r * gain))
                     blob += struct.pack("<2fI3f", u, vv, col, x, y, z)
             pts = [v for t in g for v in t]
             chunks.append((first, len(g) * 3,

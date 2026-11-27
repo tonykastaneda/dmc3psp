@@ -1273,7 +1273,15 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     /* Material alpha: without this the lit vertex alpha is 0 and the alpha
      * test discards every Dante pixel. */
     sceGuAmbientColor(0xffffffff);
-    sceGuClearColor(mission_mode ? 0xff000000u : CLEAR_COLOR);   /* past the edge of a room: dark, not grey-blue */
+    {
+        /* Past the edge of a room: dark, not grey-blue. Mission 20's ending street: its fog colour, with fog on
+         * for the 3D pass (credits_fight.c) and the stage's colours doubled (stage_set_double). */
+        unsigned int clear = mission_mode ? 0xff000000u : CLEAR_COLOR;
+        int fog = credits_fight_fog(&clear);
+        if (fog) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
+        stage_set_double(fog);
+        sceGuClearColor(clear);
+    }
     sceGuClearDepth(0);
     sceGuClear(GU_COLOR_BUFFER_BIT | GU_DEPTH_BUFFER_BIT);
 
@@ -1443,6 +1451,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);   /* HUD font and floor are linear */
     if (show_bones) draw_bones();
 
+    sceGuDisable(GU_FOG);   /* the 2D pass isn't fogged */
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
         else hud_draw(player);

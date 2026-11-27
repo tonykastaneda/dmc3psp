@@ -215,6 +215,8 @@ static int chunk_hidden(const Chunk *c) {
 }
 
 int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
+static int stage_double;
+void stage_set_double(int on) { stage_double = on; }
 
 void stage_draw(void) {
     const TexEntry *textures;
@@ -241,6 +243,7 @@ void stage_draw(void) {
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_DEPTH_TEST);
     sceGuDepthMask(GU_FALSE);
+    if (stage_double) sceGuEnable(GU_FRAGMENT_2X); else sceGuDisable(GU_FRAGMENT_2X);   /* the GE doubles the colour */
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuTexWrap(GU_REPEAT, GU_REPEAT);   /* stage UVs tile */
     sceGuColor(0xffffffff);
@@ -346,6 +349,8 @@ void stage_draw(void) {
         if (lift) { sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity(); }
     }
     sceGuDepthOffset(0);
+    sceGuDisable(GU_FRAGMENT_2X);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuDisable(GU_BLEND);
     sceGuDepthMask(GU_FALSE);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
