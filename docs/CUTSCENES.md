@@ -158,7 +158,18 @@ summoning glow is one). 112 P clips (particle programs) aren't played, and timel
 
 **Sound**: a demo's Sound clip names an ADX stream that is the demo's own id, and its file is SDATA.AFS's `<package>.adx` (m03_s00.adx for demo 5): voices and music mixed. prepare_demo decodes it (ffmpeg) to the movies' IMA ADPCM, DAUD_nnn.BIN (`DAU1`, rate, sample pairs, start frame, a byte per stereo pair), and demo.c streams it from the memory stick on its own thread from the clip's frame; both it and the demo clock run on real time. Checked offline: decoded against ffmpeg's own, -42 dB error. 51 tracks, 232 MB.
 
-Not yet: cloth, P effects.
+**Cloth**: a slot's `.clt` chains step with `cloth.c` (`psp/testroom/demo_cloth.c`) in world space. The step is
+`FUN_0022f270` (gravity on world Y) and the joints keep last frame's place, so a bone that moves leaves them behind.
+ClothMode 1, and only 1, rides the parent model's root first (`FUN_00230150`: the new root matrix times the inverse
+of the last), which takes that root's travel and turn back out; demo 5's coat never sets the key, so it trails the
+whole pose. The model clip's script holds until a motion clip names another. `ResetClt` and `ResetClt2` snap to rest
+and, when `ResetCltLevel` is above 0, step that many times at the pose held for the cut (level -1 snaps only; a level
+above 32 is capped; the game's update just before the snap is overwritten by it). Each bone keeps its own axis, NY
+included. These scripts' wind is 0 and they name no capsules. `ClothSim1D` is not run. A Bone line whose axis token
+is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`);
+bone 8 is X and bone 6 takes that axis.
+
+Not yet: P effects.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when

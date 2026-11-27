@@ -2,8 +2,9 @@
  * holds the camera per demo frame (the camera track's clips, each a .cam played by CCameraClip / CCameraMotion:
  * eye = channels 6-8 + 0-2, target = 9-11 + 0-2, field of view = 12), the cast (each model slot's MOD, its motion
  * clips as raw MOT, its CnsPos parent bone) and their textures; DSTG_nnn.BIN the demo's stage built as a room.
- * The demo's demo_clock runs at 60 frames a second. Not yet: hide tracks, cloth, effects, messages, fades and sound. */
+ * The demo's demo_clock runs at 60 frames a second. Not yet: hide tracks, effects, messages, fades and sound. */
 #include "demo.h"
+#include "demo_cloth.h"
 
 #include "motion.h"
 #include "nfx.h"
@@ -284,6 +285,7 @@ int demo_start(int demo, const char *dir) {
 
 void demo_stop(void) {
     sound_stop();
+    demo_cloth_reset();
     if (blob) { nfx_reset(); nfx_set_demo_bank(0, 0); }
     free_actors();
     if (demo_fd >= 0) { sceIoClose(demo_fd); demo_fd = -1; }
@@ -526,6 +528,21 @@ static void pose(Actor *a, int depth) {
             for (k = 0; k < 3; ++k)
                 a->world_pos[i][k] = a->world_pos[p][k] + a->world_rot[p].m[k][0] * t[0] + a->world_rot[p].m[k][1] * t[1] + a->world_rot[p].m[k][2] * t[2];
         }
+    }
+    /* Its .clt, if it has one. Joints are in world space; ClothMode 1 rides the parent model's root. */
+    if (d->pad[0] && d->pad[1]) {
+        float owner_pos[3], owner_rot[9];
+        const float *op = base_pos, *orot = &base_rot.m[0][0];
+        if (d->parent >= 0 && d->parent < actor_count && actors[d->parent].d && actors[d->parent].posed) {
+            Actor *p = &actors[d->parent];
+            memcpy(owner_pos, p->world_pos[0], sizeof owner_pos);
+            memcpy(owner_rot, p->world_rot[0].m, sizeof owner_rot);
+            op = owner_pos;
+            orot = owner_rot;
+        }
+        demo_cloth_apply((int)(a - actors), base_pos, &base_rot.m[0][0], op, orot,
+                         &a->world_pos[0][0], &a->world_rot[0].m[0][0],
+                         parents, &local[0][0], d->bones, blob + d->pad[0], d->pad[1], demo_clock);
     }
 }
 
