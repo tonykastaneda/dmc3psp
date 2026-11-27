@@ -93,6 +93,22 @@ as on the disc). The shared `ppsspp.ini` forces Nearest (`TextureFiltering = 2`)
 shared ini untouched): `analysis/testroom/filt_d1_4130.png` beside `lit_d1_4130.png` (same frame, Nearest). A PSP
 filters as asked, so it shows the smooth one.
 
+**Arkham's cheek marks (cm027) are the right page, too strong.** The reddish streaks on his left cheek (the viewer's
+right) are `pl103_02` object 2: a shell over the left half of his face (0.03-0.2 cm outside the skin), texture 1 (a
+4-bit page of blue-grey veins on black, one CLUT, alpha 0x80), blend 3 (subtractive). There is one variant: the
+package has one `pl103_02.ptx`, its pages one CLUT each, and no hide clip touches slot 12 during cm027; `TexMode` /
+`ClutMode` (Model clip +0x620 / +0x621, `FUN_00219dc0`) are load settings passed to the model object (`FUN_002342b0`,
+vtable +0x24 / +0x28), not a variant pick. The PS2 draws it too: its frame at 208 s shows faint, neutral dark streaks
+under that eye in the same place (`analysis/ref/cast/` and `arkham_face_filter_compare.png`). The port's are stronger
+and hue-shifted (bluish lines subtracted from warm skin leave red-brown), so the subtracted source on the PS2 is
+weaker or more neutral (its vertex colour or alpha for this object). Not settled: the Program track's No 5 / No 6
+(210 200 180 / 30 20 20 in demo 1) look like a colour scale and an ambient, but its parser is the stub `FUN_00217440`
+(returns 1), so the game ignores them [inferred from the parser table at 0x590748].
+- To read the PS2's GS state for that draw: a GS dump of the frame (`build/refemu` hotkey Shift+F8, sent as VK 0xA0 +
+  F8; uncompressed with `[EmuCore/GS] GSDumpCompression = 0` in the game's own settings file). The Demo Digest's
+  "Opening" (mission select, DEMO DIGEST, scene select right once) is a pre-rendered movie of demo 1 (its dump is
+  full-frame IMAGE uploads, no draws), so the dump has to come from Mission 1 itself.
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
