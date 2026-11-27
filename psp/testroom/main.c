@@ -4071,6 +4071,7 @@ int main(int argc, char *argv[]) {
     music_init(game_dir);
     sfx_init(game_dir);
     credits_fight_init(game_dir);
+    bp_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);

@@ -13,6 +13,7 @@
 
 #include "menu_runtime.h"
 #include "sfx.h"
+#include "bloody_palace.h"
 
 #define SCR_W 480
 #define SCR_H 272
@@ -387,6 +388,14 @@ static void draw_missions(const MenuChoice *c, int row) {
     layout_spread = SPREAD;
     layout_dx = 0.0f;
     draw_quad(GROUP_MISSION_HEADING, 0, BRIGHT);
+    if (row==ROW_PALACE) {
+        char best[16]; float width;
+        snprintf(best,sizeof best,"%d",bp_best_floor());
+        width=menu_font_width(18,"BEST LEVEL");
+        menu_font_draw(352-width*0.5f,190,18,"BEST LEVEL",BRIGHT);
+        width=menu_font_width(26,best);
+        menu_font_draw(352-width*0.5f,210,26,best,BRIGHT);
+    }
     /* Turbo sits in the bottom right corner, as on the HD Collection: against the screen's edge. */
     if (c->turbo) {
         const Quad *q = group_quad(GROUP_MISSION_TAGS, TAG_TURBO);

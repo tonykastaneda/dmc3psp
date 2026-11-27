@@ -159,6 +159,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   Boss entrance/defeat camera sequences are skipped; boss behaviors retain their documented story-mode stand-ins.
   Boss exits use an item glow in place of their room-specific warp effects; unmapped EST enemy classes retain
   the shared enemy mapper's fallback (including some rare ordinary-floor sets and the unported chess pieces).
+  Best floor uses the port's BP_BEST.TXT sidecar and a selected-row menu label, not the PS2 memory-card/ranking UI.
   The task's requested kill-time countdown is omitted: EventTbl21 and PCSX2 show no survival timer in this PS2 mode.
 - **Rooms data**: 137's floor heights from doors and starts [inferred]; gimmicks not converted simply appear in the
   script's order [inferred]; a box over 102's platform for the ride up. `gen_rooms.py`.

@@ -95,7 +95,7 @@ recover the GS blend and every particle/rendering behavior. That remaining runti
 
 `bloody_palace.c/.h` owns floor/group selection, portal readiness and routing. Mission 21 reuses the mission
 wave runner, collision, stage loading and enemy classes; generated `bloody_palace_runtime.h` contains EST
-groups from the owner's disc and stays local. It uses Normal EST columns; rank-based scaling remains a stand-in.
+groups from the owner's disc and stays local. It uses Normal EST columns and the native floor-dependent attack-slot budget described above.
 The Mission Select row launches directly. Portal positions and boss exits come from each room's authored doors.
 Readiness follows the three 60-frame ordinary portal reveals; boss exit readiness is 180 frames after clear
 [approximation of the original event camera sequence]. The final clear waits 180 frames.
@@ -162,3 +162,17 @@ and moves x left by 3 once fewer than 240 frames remain. The PSP maps the left e
 the baseline near the bottom edge, using a horizontally widened substitute serif font (exact native
 lettering remains a stand-in). It resets on room entry, disappears during play, and is omitted behind
 pause/debug overlays so it cannot overlap their text. Reference: polish_ps2_floor0.png.
+
+## Best floor
+
+The port keeps the highest reached floor in `BP_BEST.TXT` beside the executable (`BPB1 <0..9999>`).
+It loads once before the menu, updates on legitimate room entry, never lowers a record, and retries a
+failed write on the next room entry. Malformed or out-of-range files are ignored. Scripted focus starts
+mark the run as a test and suppress record changes, including forced floor 9999 and scripted warps.
+Mission Select shows BEST LEVEL while Palace is selected. The PS2 goes directly from that row to loading
+(`polish_best_palace_row.png` / `polish_best_entry.png`); the port preserves that flow. The small record
+file and the selected-row display are port stand-ins, not a reconstruction of the PS2 memory-card format
+or its ranking screens. A missing/unwritable file leaves the in-session record available without persistence.
+
+`python tools/tests/run_bloody_palace_logic.py` checks routing/rewards, all floor-band attack capacities,
+slot expiry/reset, and persistence reload/monotonicity/bad-file/test-run isolation in temporary directories.
