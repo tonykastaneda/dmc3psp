@@ -289,9 +289,12 @@ def main():
         pack = pnst_entries(read(slot))
         effects = next(p for p in pack if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
         summary.append(write_bank(lines, bank, records(effects), vs, ()))
+    # 19 Dante's own effect pack (GDATA 97): Helm Breaker's landing V0x8e (FUN_00264b90).
+    effects = next(p for p in pnst_entries(read(97)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
+    summary.append(write_bank(lines, 19, records(effects), (0x8e,), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

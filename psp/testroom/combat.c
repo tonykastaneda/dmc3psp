@@ -11,6 +11,7 @@
 #include "leviathan_boss.h"
 #include "stage.h"
 #include "nfx.h"
+#include "nfx.h"
 
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
@@ -1593,7 +1594,14 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             player->vy = 0.0f;
             player->on_ground = 1;
             c->air = 0;
-            if (d->land_finish) return;   /* the move carries on, on the ground, to its motion's end */
+            if (d->land_finish) {
+                /* Helm Breaker's landing (FUN_00264b90): V0x8e on him (Dante's pack) and P44 dust at his feet (V0xf2
+                 * on floor material 0xb, not told apart here). */
+                float feet[3] = {player->x, player->y, player->z};
+                nfx_spawn(NFX_DANTE, 0x8e, feet, player->yaw, 0);
+                nfx_spawn_p(NFX_STATIC, 44, feet, player->yaw, 0);
+                return;   /* the move carries on, on the ground, to its motion's end */
+            }
             if (d->next == MOVE_NONE) {
                 /* State 8: the jump's landing frames, stopped. */
                 int land = motion_find("2-04");

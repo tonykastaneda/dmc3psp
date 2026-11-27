@@ -8,7 +8,7 @@
 
 enum { NFX_STATIC = 0, NFX_CERBERUS = 1, NFX_LEVIATHAN = 2, NFX_DEMO = 3, NFX_AGNI_RUDRA = 4, NFX_JESTER = 5,
        NFX_VANGUARD = 6 /* em008's P312 only */, NFX_NEVAN = 7, NFX_LADY = 8, NFX_ARACHNE = 9, NFX_FALLEN = 10, NFX_MIRROR = 11, NFX_CRYSTAL = 12, NFX_NAUSIKA = 13,
-       NFX_GUN_EI = 14, NFX_GUN_SHOTGUN = 15, NFX_GUN_ARTEMIS = 16, NFX_GUN_SPIRAL = 17, NFX_GUN_KALINA = 18 };
+       NFX_GUN_EI = 14, NFX_GUN_SHOTGUN = 15, NFX_GUN_ARTEMIS = 16, NFX_GUN_SPIRAL = 17, NFX_GUN_KALINA = 18, NFX_DANTE = 19 };
 /* A cutscene's own effects (demo.c): its bank's description at blob + at (0, 0: none). */
 void nfx_set_demo_bank(const unsigned char *blob, unsigned int at);
 

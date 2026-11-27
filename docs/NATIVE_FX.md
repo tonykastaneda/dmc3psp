@@ -295,5 +295,6 @@ the no-end generator rule above, now fixed.
 | V6 (guard types 0-2), V0x265 / 0x264 / 0x267 | a Royalguard block (`FUN_00224db0`), near the attacker | V6 only, 50 cm toward the blow |
 | V0x83 | Air Hike, at his feet, tinted the weapon's colour (`FUN_00222700`, `FUN_002fd1c0`) | yes |
 | V0x14d (P247, 248) | Enemy Step (`FUN_00228950`) | yes |
+| V0x8e (Dante's pack, P18), P44 (V0xf2 on floor material 0xb) | Helm Breaker's landing (`FUN_00264b90`) | yes, nfx bank 19 (GDATA 97) |
 | V0x90 | kicks off a wall / an enemy (E235 is in the port already) | E235 alone |
 | Devil Trigger | state 0x24 plays motion 0:50 / 0:58; its look isn't an effect call found yet | `fx_devil_burst` / `fx_devil_aura` stand in |
