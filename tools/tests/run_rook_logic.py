@@ -1,0 +1,10 @@
+from pathlib import Path
+import shutil
+import subprocess
+ROOT=Path(__file__).resolve().parents[2]
+out=ROOT/'build/rook_logic';out.mkdir(parents=True,exist_ok=True)
+cc=shutil.which('clang') or shutil.which('gcc')
+if not cc:raise RuntimeError('A host C compiler is required')
+binary=out/'rook_logic.exe'
+subprocess.run([cc,'-O1','-I',str(ROOT/'psp/testroom'),'-I',str(ROOT/'build/testroom/generated'),str(ROOT/'tools/tests/rook_logic.c'),str(ROOT/'psp/testroom/rook.c'),str(ROOT/'psp/testroom/chess.c'),'-lm','-o',str(binary)],check=True)
+subprocess.run([str(binary)],check=True)

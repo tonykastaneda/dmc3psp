@@ -31,6 +31,7 @@
 #include "model_blend.h"
 int model_blend_off;
 #include "enemy_runtime.h"
+typedef char EnemyModelCountCheck[(ENEMY_KIND_TOTAL==ENEMY_KIND_COUNT)?1:-1];
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
@@ -212,6 +213,7 @@ static float torso_offset[ENEMY_MAX][3];
 static int torso_kind(int kind) { return kind <= ENEMY_GREED || kind == ENEMY_ENVY || kind == ENEMY_ABYSS; }
 static Enemy *e = &enemies[0];
 static ChessMaster chess_master;
+static int chess_room=-1;
 static ChessPiece chess_actors[ENEMY_MAX];
 static short chess_last_hp[ENEMY_MAX];
 ChessPiece *enemy_chess_actor(void) { return &chess_actors[e-enemies]; }
@@ -322,6 +324,11 @@ static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
 static JesterProjectiles jester_world;   /* his emitters and what they throw (jester.c) */
+static int rook_test_state(int state);
+static void rook_spawn_glue(void);
+static void rook_update_glue(float f,float px,float py,float pz);
+static void rook_hit_glue(HitKind kind);
+static void rook_spawn_param(Enemy *a,int index,int value);
 static int bishop_test_state(int state);
 static void bishop_spawn_glue(void);
 static void bishop_update_glue(float f,float px,float py,float pz);
@@ -507,6 +514,7 @@ static int kind_health(int kind) {
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
     case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
     case ENEMY_BISHOP: return ENEMY_HEALTH * 1000 / 250; /* 5c0bd0+2c */
+    case ENEMY_ROOK: return ENEMY_HEALTH * 1800 / 250; /* 5c0410+2c */
     case ENEMY_KNIGHT: return ENEMY_HEALTH * 1000 / 250; /* 5c07f0+2c */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_QUEEN: return ENEMY_HEALTH * 1800 / 250;   /* 0x5c0030 +0x2c (CEm021 kind 0) */
@@ -631,6 +639,7 @@ static void spawn_one_body(int kind, float x, float z) {
     if (kind == ENEMY_FALLEN) { fallen_spawn_glue(); return; }
     if (kind == ENEMY_ARACHNE) { arachne_spawn_glue(); return; }
     if (kind == ENEMY_NEVAN) { nevan_spawn_glue(); return; }
+    if (kind == ENEMY_ROOK) { rook_spawn_glue(); return; }
     if (kind == ENEMY_KNIGHT) { knight_spawn(); return; }
     if (kind == ENEMY_PAWN) { pawn_spawn(); return; }
     if (kind == ENEMY_BEOWULF) { beowulf_spawn_glue(); return; }
@@ -691,6 +700,7 @@ void enemy_set_mortal(int on) { mortal = on; }
  * 5000 / 6500 / 10000, 0x5e2f60). */
 void enemy_set_spawn_param(int index, int value) {
     Enemy *a = last_spawned;
+    if(a && a->active && a->kind==ENEMY_ROOK){rook_spawn_param(a,index,value);return;}
     if (a && a->active && index == 1 && a->kind == ENEMY_ABYSS) { a->mirror_bound = (unsigned char)(value != 0); return; }
     /* Lady's op 8 [0, 1]: variant 1, Mission 20's ending ally (+0x4a8 -> +0x485e, FUN_00442610). */
     if (a && a->active && index == 0 && a->kind == ENEMY_LADY) { if (value == 1) lady_make_ally(&lady_brain); return; }
@@ -910,7 +920,7 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 39) return ENEMY_QUEEN;
     if (spawn_class == 40) return ENEMY_KING;
     if (spawn_class == 36) return ENEMY_KNIGHT;
-    if (spawn_class == 38) return ENEMY_PAWN;   /* the other chessmen (Missions 14, 16): the Pawn stands in */   /* the Damned Pawn; 36-38 (the other chessmen) aren't in */
+    if (spawn_class == 38) return ENEMY_ROOK;
     if (spawn_class == 45) return ENEMY_AGNI;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
@@ -1774,6 +1784,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_FALLEN) { ++hits; fallen_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_ARACHNE) { ++hits; arachne_hit_glue(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_NEVAN) { ++hits; nevan_hit_glue(kind, from_x, from_z); return; }
+    if (e->kind == ENEMY_ROOK) { rook_hit_glue(kind); return; }
     if (e->kind == ENEMY_KNIGHT) { knight_hit(kind); return; }
     if (e->kind == ENEMY_PAWN) { pawn_hit(kind); return; }
     if (e->kind == ENEMY_BEOWULF) { ++hits; beowulf_hit_glue(kind, from_x, from_z); return; }
@@ -2279,6 +2290,7 @@ static void update_one(float dt, float px, float py, float pz) {
     if (e->kind == ENEMY_FALLEN) { fallen_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_ARACHNE) { arachne_update_glue(f, px, py, pz); return; }
     if (e->kind == ENEMY_NEVAN) { nevan_update_glue(f, px, py, pz); return; }
+    if (e->kind == ENEMY_ROOK) { rook_update_glue(f,px,py,pz); return; }
     if (e->kind == ENEMY_KNIGHT) { knight_update(f,px,py,pz); return; }
     if (e->kind == ENEMY_PAWN) { pawn_update(f, px, py, pz); return; }
     if (e->kind == ENEMY_BEOWULF) { beowulf_update_glue(f, px, py, pz); return; }
@@ -4140,10 +4152,10 @@ static void ar_note(int state);
  * and the climb at fixed points. Elsewhere (the debug street) the opening aims at Dante and the survivor takes up
  * both swords where he stands. */
 static int ar_room = -1;
-void enemy_set_room(int room) { ar_room = room; chess_reset(&chess_master); memset(chess_actors,0,sizeof chess_actors); }
+void enemy_set_room(int room) { ar_room = room; chess_room=room; chess_reset(&chess_master); memset(chess_actors,0,sizeof chess_actors); }
 static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
 static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
-void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state) && !bishop_test_state(state)) ar_force = state; }
+void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state) && !bishop_test_state(state) && !rook_test_state(state)) ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
 
@@ -7226,3 +7238,5 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
 }
 
 #include "knight.inc"
+
+#include "rook.inc"

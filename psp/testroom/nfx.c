@@ -689,7 +689,15 @@ static void draw_model(const El *el, const Frame *f, unsigned int color) {
         static const float zero[3] = {0.0f, 0.0f, 0.0f}, one[3] = {1.0f, 1.0f, 1.0f};
         float turn[3];
         Frame r;
-        for (i = 0; i < 3; ++i) turn[i] = rdf(e + 0x144 + i * 4) * el->age * (PI / 180.0f);
+        for (i = 0; i < 3; ++i) {
+            float initial=0;
+            /* 1f08c0 -> +70c: fixed initial angles, E+150/+154/+158 per axis.
+             * Chess E778..780 use -90X to lay the Rook beam on its Z capsule.
+             * Kept to the chess banks (em021's E409, the Queen's V0x242 lane, is -90X too). */
+            if((el->bank==NFX_CHESS || el->bank==NFX_ROYAL) && e[0x150+i*12]==1 &&
+               rdf(e+0x154+i*12)==rdf(e+0x158+i*12))initial=rdf(e+0x154+i*12);
+            turn[i]=(initial+rdf(e+0x144+i*4)*el->age)*(PI/180.0f);
+        }
         frame_local(&r, zero, turn, one);
         frame_mul(&turned, f, &r);
         f = &turned;

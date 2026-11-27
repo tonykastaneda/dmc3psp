@@ -622,7 +622,7 @@ static void enemy_died(int kind, float x, float y, float z) {
 static int debug_open, debug_cursor, game_turbo = 1;
 static int pause_active, mission_mode;
 static int dummy_count = 1, dummy_attacks, dummy_kind;
-static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "FALLEN", "LADY", "BISHOP", "ABYSS", "SOUL", "KNIGHT"};
+static const char *const kind_names[] = {"PRIDE", "GLUTTONY", "LUST", "SLOTH", "WRATH", "GREED", "ENIGMA", "BLOOD-GOYLE", "JESTER", "AGNI", "RUDRA", "ENVY", "ARACHNE", "NEVAN", "PAWN", "DULLAHAN", "BEOWULF", "FALLEN", "LADY", "BISHOP", "ABYSS", "SOUL", "KNIGHT", "QUEEN", "KING", "ROOK"};
 static unsigned int debug_pressed;   /* buttons pressed this frame */
 static int debug_quit;               /* the debug menu's Quit to menu was chosen */
 static unsigned int debug_held;      /* buttons down this frame */

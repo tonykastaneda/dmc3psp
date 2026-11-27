@@ -554,7 +554,8 @@ runs its boss from its existing file. Stand-ins and estimates:
 - 419's heart is spawned as Mission 8 does it (`enemy_add_kind(ENEMY_LEVIATHAN, ...)`); in 417 Geryon starts in his
   ground phase (`geryon_boss_start_on_ground`, added for this). The bosses' arenas are their missions' rooms again, so
   their code runs unchanged.
-- 401's Queen and King (EST39/40) and Rook38 still use fallbacks; Knight36 and Bishop37 use their native moves (`docs/CHESS.md`); 400's rocks are the stage's own
+- 401's chessmen all run their own logic: Knight 36, Bishop 37 and Rook 38 (`docs/CHESS.md`), the Queen and King 39 / 40
+  (`docs/CHESS_ROYALS_SPEC.md`), on the shared chess master; 400's rocks are the stage's own
   floor, climbed with jumps.
 ### Mission 20: "Screaming souls"
 

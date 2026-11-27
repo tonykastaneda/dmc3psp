@@ -84,6 +84,7 @@ static void knight_update(float f,float px,float py,float pz) {
     if(e->action==3 && e->step && e->frame>=53 && !knight_fx[e-enemies])
         knight_fx[e-enemies]=nfx_spawn(NFX_CHESS,0x241,e->pos,e->yaw,0);
     if(e->action!=3 && e->action!=8 && knight_fx[e-enemies]){nfx_kill(knight_fx[e-enemies]);knight_fx[e-enemies]=0;}
+    if(e->action==3)p->busy=e->shoot_timer[0]<=0; /* 434fc0: reactive strikes need no turn token. */
     if(attacks_on)test_attack(px,py,pz);
 }
 static void knight_hit(HitKind kind) {

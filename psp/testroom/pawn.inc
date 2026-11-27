@@ -38,6 +38,7 @@ static void pawn_spawn(void) {
     e->vel[0] = e->vel[1] = e->vel[2] = 0.0f;
     enemy_chess_actor()->est=35;
     enemy_chess_actor()->alternate_percent=chess_alternate_chance(35,0);
+    e->shoot_timer[1]=0;
     pawn_state(PW_THINK);
 }
 static int pawn_facing(float px, float pz, float reach) {
@@ -55,6 +56,8 @@ static void pawn_hop(int doubled) {
 }
 static void pawn_update(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g;
+    if(enemy_chess_actor()->kill && e->plan!=P_DEATH){int saved=mortal;enemy_chess_actor()->kill=0;e->health=0;mortal=1;pawn_hit(HIT_HEAVY);mortal=saved;}
+    e->shoot_timer[1]-=f;enemy_chess_actor()->alternate_ready=e->shoot_timer[1]<=0;
     e->timer += f;
     if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->floor_y = g;
     if (e->plan == P_DEATH) {
@@ -74,7 +77,7 @@ static void pawn_update(float f, float px, float py, float pz) {
         e->timer += f*(chess_wait_step(d,0)-1);
         if(e->timer>e->wake) {
             ChessPiece *p=enemy_chess_actor();p->waiting=1;p->waited+=f;
-            if(p->command>=10) { int doubled=p->command==15;p->command=0;p->waiting=0;pawn_hop(doubled); }
+            if(p->command>=10) { int doubled=p->command==15;if(doubled)e->shoot_timer[1]=300+300*ai_unit();p->command=0;p->waiting=0;pawn_hop(doubled); }
         }
         e->pos[1] = e->floor_y;
         break;

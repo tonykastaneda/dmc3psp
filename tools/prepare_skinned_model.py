@@ -408,6 +408,7 @@ ENEMY_KINDS = (
     # Queen [2]-[6] (body, motions, scripts, capsule list, capsules), the King [7]-[11]. docs/CHESS_ROYALS_SPEC.md.
     ("queen", 128, 2, None),
     ("king", 128, 7, None),
+    ("rook", 127, 17, None),
 
 )
 AR_SLOT = 131
@@ -1062,6 +1063,10 @@ def main() -> None:
         if raw:
             parsed=parse_mot(raw)
             motions.append({"name":f"cn{slot:02d}","data":raw[:parsed["bytes_used"]],"parsed":parsed})
+    for slot,raw in enumerate(pac_list(pawn_pack[18])):
+        if raw:
+            parsed=parse_mot(raw)
+            motions.append({"name":f"cr{slot:02d}","data":raw[:parsed["bytes_used"]],"parsed":parsed})
     # Agni & Rudra's: "arNN" by their slot in [11].
     for slot, raw in enumerate(pac_list(ar_pack[11])):
         if not raw:

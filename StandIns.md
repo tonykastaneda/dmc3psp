@@ -78,20 +78,17 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   token's manager (FUN_00369180) isn't read: "no one else attacks for 3 s". ENEMY_AI.md, GAME_FLOW.md.
 - **Abyss**: the Pride's hit-script list (its block's +0x14 pairs aren't read); its scythe is the largest of [3]-[5]
   [inferred]. `gen_enemy_ai.py`, `prepare_skinned_model.py`.
-<<<<<<< HEAD
-- **Damned Pawns**: the chess master that times their turns isn't ported; EST 36-38 (the other chessmen) spawn as
-  Pawns. `enemy.c`, GAME_FLOW.md (Missions 14, 18).
+- **Damned Chessmen**: the shared chess master is ported (docs/CHESS.md), at fixed difficulty 0. Knight 36, Bishop 37
+  and Rook 38 use native moves / attacks (docs/CHESS.md); received-hit scaling, effect attachment matrices, the Bishop's
+  global attack gate / wall bounds, the Rook's summon materialization (V1ee and a normal spawn) and fixed rank remain
+  approximations. `enemy.c`, GAME_FLOW.md (Missions 14, 18).
 - **The Damned Queen and King** (EST 39 / 40, `queen.c`, `king.c`, `royal.c`, `royal.inc`; docs/CHESS_ROYALS_SPEC.md):
   their logic is the decode's, on chess.c's master (commands 20 / 30, the King-death cascade), but: rank 0 always; walls are the room's
   floor ending, not the collision's flags; the Queen's hit capsules and effects ride her root (+150 for the bone),
-  not bone 1 / +0x504 +0x104; V0x242's lane isn't stretched (1, 1, 30); the landing / hit shakes (FUN_0040a2a0) and
+  not bone 1 / +0x504 +0x104; V0x242's lane lies flat (its fixed -90 X) but isn't stretched (1, 1, 30); the landing / hit shakes (FUN_0040a2a0) and
   their sounds (banks 0x15 / 0x16) aren't played; the King's +0x3c4 is taken as the HP before the hit [inferred];
   the port's launch is native kind 3 (light knock) and its heavy / slam kinds 4 / 7 (heavy knock) [inferred]; their
   death (CEm017's 0x406d50) is a 60-frame sink; damage taken is the port's 1 / 2 a hit.
-=======
-- **Damned Pawns**: the shared chess master is ported (docs/CHESS.md), at fixed difficulty0; EST38 and39 /40
-  (Queen, King) spawn as Pawns or Prides. Knight36 and Bishop37 now use native moves/attacks (docs/CHESS.md); received-hit scaling, effect attachment matrices, the Bishop's global attack gate/wall bounds and fixed rank remain approximations. `enemy.c`, GAME_FLOW.md (Missions 14, 18).
->>>>>>> master
 - **Hell Greeds**: when they summon is an estimate. `greed.inc`.
 - **Blood-goyle**: its bullets fly at 25 a frame for 120 frames [estimate]; the split timing [estimate]; its rest
   value 5 and stone's triple damage [inferred]; stone drawn untextured grey. ENEMY_SPECS.md D.
@@ -172,7 +169,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   aren't held back by them; Lady (above).
 - **Mission 17**: 128's God-cubes aren't moved (Dante comes in at start 2); 131's spikes are Mission 6's stand-in.
 - **Mission 18**: gates are doors; the bingo board's rule (CStageSetBingo) read as 3 × 3 in door order; the mirror is
-  a glow; 401's EST38/39/40 still use fallbacks; Pawn35, Knight36 and Bishop37 have their own logic.
+  a glow; all of 401's chessmen (EST 35-40) have their own logic.
 - **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect (E0x2e0's model texture isn't decoded) and tint, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
