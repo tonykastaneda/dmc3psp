@@ -28,7 +28,7 @@ Get-ChildItem -LiteralPath $GameDir -Filter "REC*.BMP" | Remove-Item -Force
 Remove-Item -LiteralPath $Done, (Join-Path $GameDir "AUTOEXIT.TXT") -Force -ErrorAction SilentlyContinue
 Set-Content -LiteralPath (Join-Path $GameDir "RECORD.TXT") -Value $Mode -Encoding ascii
 
-$process = Start-Process -FilePath $Emulator -ArgumentList ('--escape-exit "{0}"' -f (Join-Path $GameDir "EBOOT.PBP")) -WorkingDirectory $EmuDir -PassThru
+$process = Start-Process -FilePath $Emulator -ArgumentList ('--escape-exit --appendconfig="{1}" "{0}"' -f (Join-Path $GameDir "EBOOT.PBP"), (Join-Path $PSScriptRoot "ppsspp_filter_auto.ini")) -WorkingDirectory $EmuDir -PassThru
 $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
 try {
     while (-not (Test-Path -LiteralPath $Done) -and -not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {

@@ -50,6 +50,7 @@ int testroom_frame;
 #include "mission19.h"
 #include "wagon.h"
 #include "demo.h"
+#include "near_clip.h"
 #include "music.h"
 #include "sfx.h"
 #include "mission7.h"
@@ -1215,6 +1216,7 @@ static void draw_debug_menu(int viewer) {
     sceGuTexFlush();
     sceGuColor(0xffffffffu);
     draw_text(x, y, "DEBUG");
+    if (bp_active()) draw_text(8, 8, "PALACE PORTALS +1 / +10 / +100");
     for (i = 0; i < DEBUG_ITEMS; ++i) {
         sceGuColor(i == debug_cursor ? 0xff40e0ffu : 0xffffffffu);
         if (i == debug_cursor) draw_text(x - 12, y + 16 + i * 12, ">");
@@ -1235,6 +1237,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
     const FollowCamera *camera = &camera_copy;
+    int player_near = 0;   /* the near plane reaches Dante: near_clip_draw after each of his draws */
     if (cmp_test_camera) {
         camera_copy.x = cmp_test_eye[0]; camera_copy.y = cmp_test_eye[1]; camera_copy.z = cmp_test_eye[2];
         camera_copy.tx = cmp_test_target[0]; camera_copy.ty = cmp_test_target[1]; camera_copy.tz = cmp_test_target[2];
@@ -1307,12 +1310,14 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         if (demo_active()) {
             /* A demo's stage is city-sized, but its close-ups put the eye 20-40 cm from a face (demo 1's cm027:
              * 41 cm, fov 15): a fixed 50 cm near plane cut the face away and showed the inside of the head. The
-             * near plane follows the eye's distance to its target, a third of it, 4-50 cm. */
+             * near plane follows the eye's distance to its target, a third of it, 4-25 cm: demo 3's frame 1240 puts
+             * the eye in front of Dante's chest while it looks at enemies metres away, and a 50 cm cap cut his whole
+             * front off (the PS2 shows his chest and mouth there). What still crosses is clipped (near_clip.h). */
             float dx = camera->tx - camera->x, dy = camera->ty - camera->y, dz = camera->tz - camera->z;
             float near = sqrtf(dx * dx + dy * dy + dz * dz) * 0.33f;
             if (near < 4.0f) near = 4.0f;
-            if (near > 50.0f) near = 50.0f;
-            sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
+            if (near > 25.0f) near = 25.0f;
+            sceGumPerspective(demo_screen_fov(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
         }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
         else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
@@ -1380,6 +1385,13 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         sceGumRotateY(player->yaw + MODEL_YAW_OFFSET);
         if (player->lean != 0.0f) sceGumRotateZ(player->lean);   /* the run's lean into a turn (player+0x88) */
     }
+    {
+        /* A camera close to Dante (against a wall, a cutscene's over-the-shoulder): the near plane's crossing
+         * triangles are redrawn clipped (near_clip.h). His bounds: 1.2 m around his middle, in his own space. */
+        static const float centre[3] = {0.0f, 95.0f, 0.0f};
+        near_clip_begin();
+        player_near = near_clip_sphere(centre, 120.0f);
+    }
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_LIGHTING);
     sceGuEnable(GU_ALPHA_TEST);
@@ -1397,6 +1409,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (player->devil && player->melee_weapon < DMC3_DEVIL_COUNT && devil_ready(player->melee_weapon)) {
         const DevilModel *m = &dmc3_devils[player->melee_weapon];
         const DevilRuntime *r = devil_ready(player->melee_weapon);
+        if (player_near) player_near = near_clip_prepare(r->vertices, m->vertex_count);
         for (i = 0; i < m->object_count; ++i) {
             const Dmc3ModelObject *object = &m->objects[i];
             if ((int)object->texture != bound_texture) {
@@ -1406,8 +1419,10 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
                 sceGuTexFlush();
             }
             sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)object->index_count, r->indices + object->index_start, r->vertices);
+            if (player_near) near_clip_draw(r->vertices, r->indices + object->index_start, (int)object->index_count, MODEL_VTYPE & ~GU_INDEX_16BIT);
         }
     } else {
+    int near_model = player_near && near_clip_prepare(model_vertices, DMC3_MODEL_VERTEX_COUNT);
     for (i = 0; i < DMC3_MODEL_OBJECT_COUNT; ++i) {
         const Dmc3ModelObject *object = &dmc3_model_objects[i];
         if ((int)object->texture != bound_texture) {
@@ -1418,10 +1433,12 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         }
         sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)object->index_count,
                         model_indices + object->index_start, model_vertices);
+        if (near_model) near_clip_draw(model_vertices, model_indices + object->index_start, (int)object->index_count, MODEL_VTYPE & ~GU_INDEX_16BIT);
     }
     {
         const CoatVertex *coat = coat_skin(player);
         const unsigned short *coat_idx = coat_indices();
+        int near_coat = player_near;   /* the coat (small) isn't cached: near_clip_draw takes its depths itself */
         for (i = 0; i < coat_object_count(); ++i) {
             unsigned int start, count, texture;
             coat_object(i, &start, &count, &texture);
@@ -1432,6 +1449,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
                 sceGuTexFlush();
             }
             sceGumDrawArray(GU_TRIANGLES, MODEL_VTYPE, (int)count, coat_idx + start, coat);
+            if (near_coat) near_clip_draw(coat, coat_idx + start, (int)count, MODEL_VTYPE & ~GU_INDEX_16BIT);
         }
     }
     }
@@ -1480,7 +1498,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
         else hud_draw(player);
-        bp_draw();
+        if (!debug_open && !pause_active) bp_draw();
         if (!credits_fight_active()) {
             float hp, maximum;
             if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);
@@ -1504,6 +1522,7 @@ scene_done:
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
         unsigned int fade = demo_fade();
+        demo_letterbox();                 /* the cinema bars, under the fade and the subtitles */
         if (fade) fx_screen_tint(fade);   /* the Fade track */
         if (line) {
             float h = (float)size * (float)SCR_HEIGHT / 448.0f * 1.5f, y = (float)sy * (float)SCR_HEIGHT / 448.0f - h * 0.3f;
@@ -2431,6 +2450,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "m6got ", 6) == 0) cmp_m6_got = atoi(line + 6);
         else if (strncmp(line, "lineup ", 7) == 0) cmp_lineup = atoi(line + 7);
         else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }
+        else if (strncmp(line, "nearclip ", 9) == 0) { extern int near_clip_off; near_clip_off = !atoi(line + 9); }
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
@@ -3422,6 +3442,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     msg_room_fought = 0;
     mission_room = room;
     bp_enter(room_number(room));
+    enemy_set_attack_slot_limit(bp_attack_slot_limit());
     {   /* Bosses this room's script spawns get their model's buffers now, behind the loading screen (enemy.c). */
         const RoomScript *rs = &missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room];
         PalaceOp po;
@@ -4144,6 +4165,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
+    enemy_set_attack_slot_limit(1);   /* Includes the Debug Room path, which skips enter_room. */
     if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
     music_stop();   /* the rooms' music from here (music_room) */
     vanguard_set_difficulty(choice->difficulty);
@@ -4289,6 +4311,7 @@ int main(int argc, char *argv[]) {
     music_init(game_dir);
     sfx_init(game_dir);
     credits_fight_init(game_dir);
+    bp_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
@@ -5425,6 +5448,7 @@ int main(int argc, char *argv[]) {
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
+                    { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }
                     { int s_; fprintf(report, "upd sum/max/slow(us):"); for (s_ = 0; s_ < 20; ++s_) fprintf(report, " %u/%u/%u", prof_acc[s_], prof_max[s_], prof_slow[s_]); fprintf(report, "\n"); }
                     { char bt[200]; enemy_spawn_timing(bt, sizeof bt); fprintf(report, "%s\n", bt); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());

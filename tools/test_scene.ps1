@@ -20,7 +20,7 @@ Get-ChildItem -LiteralPath $Game -File |
 Set-Content -LiteralPath (Join-Path $Game 'FOCUS.TXT') -Value 'cmp' -Encoding ascii
 Copy-Item -LiteralPath $Script -Destination (Join-Path $Game 'CMP_SCRIPT.TXT') -Force
 $EmulatorLog = Join-Path ([IO.Path]::GetFullPath($Out)) 'ppsspp.log'
-$Process = Start-Process -FilePath $Emulator -ArgumentList ('--windowed --log="{0}" --loglevel=3 "{1}"' -f $EmulatorLog, (Join-Path $Game 'EBOOT.PBP')) -WindowStyle Hidden -PassThru
+$Process = Start-Process -FilePath $Emulator -ArgumentList ('--windowed --log="{0}" --loglevel=3 --appendconfig="{2}" "{1}"' -f $EmulatorLog, (Join-Path $Game 'EBOOT.PBP'), (Join-Path $PSScriptRoot "ppsspp_filter_auto.ini")) -WindowStyle Hidden -PassThru
 $Done = Join-Path $Game 'FOCUS_DONE.TXT'
 $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
 $ReachedClear = $false

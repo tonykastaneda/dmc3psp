@@ -89,6 +89,8 @@ void enemy_set_test(int no_texture, int no_lighting, float ring);
 int enemy_anim_rate(void);          /* poses a second each right now, 0 = every frame */
 int enemy_poses_done(void);         /* running total, to measure the saving */
 /* (px, py, pz) is Dante, whom they go for when attacking. */
+/* Timed attack capacity: one outside Palace, floor/1000+1 inside it. Resets on room entry. */
+void enemy_set_attack_slot_limit(int limit);
 void enemy_update(float dt, float px, float py, float pz);
 /* Final enemy contact solve after Dante's body/wall pass; never moves Dante. */
 void enemy_finish_collisions(float px, float py, float pz);
@@ -145,4 +147,5 @@ void enemy_push_out(float *x, float *z, float y, float r);
 
 void enemy_spawn_timing(char *out, int size);   /* tests: each boss's first and later spawn time (us) */
 void enemy_preload_class(int spawn_class);   /* a room load: a boss its script spawns gets his model's buffers now */
+void enemy_big_moves(char *out, int size);   /* tests: moves over 3 m a frame by kind */
 #endif

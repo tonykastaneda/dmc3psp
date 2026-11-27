@@ -3,10 +3,13 @@
 /* PS2 EventTbl21; sources and remaining approximations: docs/BLOODY_PALACE.md. */
 #define BLOODY_PALACE_MISSION 21
 typedef struct { short op, a, b, c, d; } PalaceOp;
+void bp_init(const char *directory);
+int bp_best_floor(void);
 void bp_reset(int enabled);
 void bp_enter(int room);
 int bp_active(void);
 int bp_floor(void);
+int bp_attack_slot_limit(void);
 int bp_op(int index, PalaceOp *out);
 void bp_update(float frames, int cleared);
 int bp_portal_ready(int portal);

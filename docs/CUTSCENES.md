@@ -121,6 +121,46 @@ weaker or more neutral (its vertex colour or alpha for this object). Not settled
   "Opening" (mission select, DEMO DIGEST, scene select right once) is a pre-rendered movie of demo 1 (its dump is
   full-frame IMAGE uploads, no draws), so the dump has to come from Mission 1 itself.
 
+**Skies, letterbox, framing and the characters' colour** (checked against PCSX2 in Mission 3's opening, demo 5;
+Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_compare.png`, `demo3_compare.png`,
+`demo59_compare.png`, recordings in `analysis/ref/cast/`):
+- **Sky.** A demo stage's sky and horizon are its objects far wider than any play area (over 400 m; st501_3's dome
+  is 370 km across and reaches y 74201, with its far ground, cloud layer and sun glow). The cutscene crops (`--view`,
+  `--crop`) dropped them, so demo 5 showed a flat blue clear colour. `prepare_stage` now keeps those objects whole
+  and flags them sky (drawn first, without depth, farthest first, one chunk each), and `stage.c` draws the sky pass with
+  its far plane at 500000 cm (it was 80000; depth is off for it, so this costs no precision).
+- **The SCM object's blend.** An SCM object record's byte 8 is its blend, as a MOD object's (`scm_ps2` reads it;
+  `prepare_stage` flags the batch 16 additive / 32 subtractive; `stage.c` blends with `model_blend.h`): st501_3's
+  sun glow (texture 8, additive) is the orange blaze on the PS2's horizon.
+- **Exact stage palettes.** Stage pages of 256 colours or fewer now keep them byte for byte (as the models' do since
+  the palette fix); FASTOCTREE had posterised the smooth sky into blotches. Every room's and demo's stage is rebaked.
+- **Letterbox.** The PS2 draws demos with cinema bars, 0.712 of the height showing (measured in PCSX2 in demos 3, 5
+  and 59): `demo_letterbox`, 39 lines top and bottom.
+- **Framing.** PCSX2 runs with widescreen patches (16:9 like the PSP). Taken as a vertical fov over the PSP's 272
+  lines, the port framed wider than the PS2; over a 326-line frame Dante's size matches in demo 59
+  (`demo_screen_fov`) [estimate: fitted; the fov's own convention isn't read].
+- **The characters' colour.** The Program track's No 5 (a colour scale, 128 = 1.0: demo 1 210 200 180, demo 47 15 20
+  25) and No 6 (their ambient: 30 20 20 in demos 1-5) [inferred from their values] scale the demo's lights and set
+  the ambient (`demo_program_colour`), replacing the by-eye 0x30 ambient where a demo sets them. Arkham's face in demo
+  5 is now warm like the PS2's. The world's ValidType 3 lights stay off characters: tried, they darkened him.
+- Not ported: the ScrEfc screen effects (FCS / DOF depth-of-field blur, GFG fog, SGA glow, BGA / BGO, ATF): a
+  full-screen blur pass is too costly for the PSP in a demo, so the PS2's soft backgrounds and haze aren't there;
+  demo 3's over-the-shoulder shot (frame 1260) shows holes in Dante's shoulder (the PSP drops triangles crossing its
+  near plane, here 50 cm; a nearer plane put the eye inside his collar).
+
+**Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm
+in front of Dante's chest while it looks at enemies metres away. With the near plane at a third of the eye-to-target
+distance capped at 50 cm, his whole front was cut away and the port showed the inside of his back through the
+gaps (the "holes"). The PS2 shows his chest and mouth there (`analysis/testroom/near_plane_demo3.png`). The cap is now
+25 cm (`main.c` render_scene); wide shots show no depth fighting (demo 5) and frame times are unchanged.
+- At 25 cm a dark slab with a light edge (likely Rebellion, `wp100`) sits in front of the eye on the right of that
+  frame; the PS2 shows the street there. At 40 cm the slab goes but his chest is cut again, so the PS2's near plane
+  alone doesn't explain it: the weapon's place in that cut is still to check.
+- `near_clip.c` clips near-crossing triangles (per-model sphere test, each vertex's depth cached once, only the
+  crossing triangles redrawn clipped). In PPSSPP the GE already draws them clipped, so it changed nothing visibly and
+  cost about 2 ms a frame with the camera against Dante (7.1 against 5.2 ms of draw time). It is off by default
+  (test line `nearclip 1`) until real hardware shows whether its GE drops such triangles.
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and

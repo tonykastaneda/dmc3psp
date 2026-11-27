@@ -49,7 +49,7 @@ def main():
     ap.add_argument("--eboot", type=Path, help="use a pinned executable for before/after comparisons")
     ap.add_argument("--street", action="store_true", help="the test street with dummies, not a mission")
     ap.add_argument("--menu", action="store_true", help="go through the menus (drive them with --line \"mkey ...\")")
-    ap.add_argument("--filter", choices=("auto", "nearest", "linear"), help="texture filtering for this run only (--appendconfig); the shared ppsspp.ini forces nearest (TextureFiltering = 2), auto lets the game pick as a PSP does")
+    ap.add_argument("--filter", choices=("auto", "nearest", "linear"), default="auto", help="texture filtering for this run (--appendconfig; default auto, the game's own, as a PSP draws it; the shared ppsspp.ini forces nearest, TextureFiltering = 2, and is left alone)")
     args = ap.parse_args()
 
     sync()

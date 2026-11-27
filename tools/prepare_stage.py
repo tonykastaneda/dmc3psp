@@ -17,7 +17,8 @@ primitives that leave the GE guard band):
 Blob layout (little-endian, every section 16-byte aligned):
   header  'STG1', version, counts, spawn, bounds, section offsets
   textures: per texture {w, h, levels, alpha flag, level offsets[8]} + RGBA8888 levels (GE swizzled)
-  batches: {texture, first vertex, vertex count, flags (1 = alpha test, 2 = decal, 4 = alpha blend, 8 = sky),
+  batches: {texture, first vertex, vertex count, flags (1 = alpha test, 2 = decal, 4 = alpha blend, 8 = sky,
+           16 / 32 = the SCM object's additive / subtractive blend, its record's byte 8),
             first chunk, chunk count, 2 pad}
   chunks (header 'reserved' = offset): {first vertex, vertex count, float min[3], max[3]}; a
             batch's triangles grouped by CHUNK x CHUNK XZ cell for culling
@@ -90,6 +91,8 @@ def decode_textures(texture_data: bytes):
 
 # A STAY set reaching above this is a sky dome (flag 8: drawn first, past the stage's 16000 far plane).
 SKY_HEIGHT = 12000.0
+# A cutscene stage's object wider than this (cm, x or z) is its sky / horizon (prepare_stage --scm).
+SKY_SPAN = 40000.0
 # PS2 doubles vertex colour; the real street then comes out darker than this (material, lights).
 STAGE_BRIGHTNESS = 1.25
 # Rooms whose stage is drawn brighter, baked at half (the runtime doubles them, GU_FRAGMENT_2X): st012, Mission 20's
@@ -123,8 +126,18 @@ def paletted(w, h, rgba):
     while w < 16 or h < 8:
         w, h = max(w, 16), max(h, 8)
         image = image.resize((w, h), Image.Resampling.NEAREST)
-    quant = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
-    palette = quant.getpalette("RGBA")
+    raw = image.tobytes()
+    colours = list(dict.fromkeys(raw[i:i + 4] for i in range(0, len(raw), 4)))
+    if len(colours) <= 256:
+        # A page that fits 256 colours (most TIM2 pages: they are 8-bit on the PS2) keeps them byte for byte, in
+        # first-pixel order, as the models' pages do (prepare_skinned_model.indexed_texture); FASTOCTREE merged
+        # them anyway, posterising smooth skies (st501_3's dome) into blotches.
+        index = {c: k for k, c in enumerate(colours)}
+        quant = Image.frombytes("P", (w, h), bytes(index[raw[i:i + 4]] for i in range(0, len(raw), 4)))
+        palette = [b for c in colours for b in c]
+    else:
+        quant = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
+        palette = quant.getpalette("RGBA")
     palette += [0] * (1024 - len(palette))
     table = np.array(palette, dtype=np.int32).reshape(256, 4)
     used = table
@@ -528,24 +541,33 @@ def main() -> None:
                 seen[(oi, si)] = keep
         total = sum(len(k) for k in seen.values())
         print(f"view crop: {sum(int(k.sum()) for k in seen.values())} of {total} triangles seen")
+    def sky_object(obj):
+        """A cutscene stage's sky and horizon: an object far wider than any play area (st501_3's dome, 370 km across
+        up to y 74201, its far ground, clouds and glow). Kept whole by the crops and drawn first (BATCH_SKY)."""
+        ps = [p for sub in obj["submeshes"] for p in sub["positions"]]
+        return bool(ps) and max(max(p[0] for p in ps) - min(p[0] for p in ps),
+                                max(p[2] for p in ps) - min(p[2] for p in ps)) > SKY_SPAN
     for oi, obj in enumerate(scm["objects"]):
+        sky = bool(args.scm) and sky_object(obj)
         for si, sub in enumerate(obj["submeshes"]):
             tris = []
             for fi, f in enumerate(sub["faces"]):
-                if seen is not None and not seen[(oi, si)][fi]:
+                if not sky and seen is not None and not seen[(oi, si)][fi]:
                     continue
                 tri = tuple(sub["positions"][i] + sub["uvs"][i] + sub["colors"][i] for i in f)
-                if args.crop and min(play_distance(v, play) for v in tri) > args.crop:
+                if not sky and args.crop and min(play_distance(v, play) for v in tri) > args.crop:
                     continue
                 tris.extend(subdivide(tri, play))
             if tris:
                 kind = 2 if sub["texture"] in blend_textures else (1 if sub["texture"] in alpha_textures else 0)
-                batches.append([sub["texture"], kind, tris, 0])
+                batches.append([sub["texture"], kind, tris, 0, 0, sky, obj.get("blend", 0)])
 
     # Coplanar overlap check between batches (z-fighting candidates).
     planes = {}
     decal_tris = 0
-    for bi, (_, _, tris, _) in enumerate(batches):
+    for bi, (_, _, tris, *rest) in enumerate(batches):
+        if len(rest) > 2 and rest[2]:
+            continue   # the sky: drawn first without depth, nothing to fight
         for t in tris:
             n = face_normal(t)
             d = sum(n[k] * t[0][k] for k in range(3))
@@ -559,7 +581,9 @@ def main() -> None:
 
     # Floor triangles + grid.
     floor = []
-    for _, _, tris, _ in batches:
+    for _, _, tris, *rest in batches:
+        if len(rest) > 2 and rest[2]:
+            continue   # the sky isn't floor
         for t in tris:
             if play_distance(t[0], play) > 0 and play_distance(t[1], play) > 0 and play_distance(t[2], play) > 0:
                 continue  # backdrop: nothing stands there
@@ -675,7 +699,18 @@ def main() -> None:
         struct.pack_into("<4I8I", blob, tex_table + 48 * i, w, h, n, alpha, *(offsets + [0] * (7 - len(offsets))), palette_at)
     # Opaque, then alpha-tested, then decals (biased), then translucent (blended,
     # no depth writes) -- sub-mesh order kept inside each group.
-    order = sorted(range(len(batches)), key=lambda i: (not (len(batches[i]) > 5 and batches[i][5]), batches[i][1] == 2, batches[i][3], batches[i][1], i))
+    is_sky = lambda i: len(batches[i]) > 5 and bool(batches[i][5])
+    centre = [(play[0][k] + play[1][k]) * 0.5 for k in range(3)] if play else [sx, sy, sz]
+    def sky_distance(i):
+        """The sky's batches are drawn without depth: farthest first (the dome, then the far ground, the clouds)."""
+        vs = [v for t in batches[i][2] for v in t]
+        return sum(math.dist(v[:3], centre) for v in vs) / len(vs)
+    blend_of = lambda i: batches[i][6] if len(batches[i]) > 6 else 0   # the SCM object's blend (2 add, 3 subtract)
+    # The sky's glows (additive) go on after the sky they light, the rest farthest first.
+    order = sorted(range(len(batches)), key=lambda i: (not is_sky(i), is_sky(i) and blend_of(i) in (2, 3),
+                                                       -sky_distance(i) if is_sky(i) and args.scm else 0.0,
+                                                       batches[i][1] == 2 or blend_of(i) in (2, 3), batches[i][3],
+                                                       batches[i][1], i))
     batch_table = align(blob)
     blob += bytes(32 * len(batches))
     vertex_offset = align(blob)
@@ -688,6 +723,9 @@ def main() -> None:
         # Group the batch's triangles by XZ chunk (centre), keeping order inside.
         groups = {}
         for t in tris:
+            if is_sky(bi) and args.scm:
+                groups.setdefault((0, 0), []).append(t)   # a cutscene's sky: one chunk, drawn whole
+                continue
             cx = sum(v[0] for v in t) / 3.0
             cz = sum(v[2] for v in t) / 3.0
             groups.setdefault((math.floor(cx / CHUNK), math.floor(cz / CHUNK)), []).append(t)
@@ -705,7 +743,8 @@ def main() -> None:
                            max(v[0] for v in pts), max(v[1] for v in pts), max(v[2] for v in pts)))
             first += len(g) * 3
         struct.pack_into("<7I", blob, batch_table + 32 * slot, texture, batch_first, first - batch_first,
-                         (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0) | (8 if len(batches[bi]) > 5 and batches[bi][5] else 0),
+                         (1 if kind == 1 else 0) | (2 if decal else 0) | (4 if kind == 2 else 0) | (8 if len(batches[bi]) > 5 and batches[bi][5] else 0)
+                         | (16 if blend_of(bi) == 2 else 32 if blend_of(bi) == 3 else 0),
                          chunk_first, len(chunks) - chunk_first, group)
     chunk_table = align(blob)
     for c in chunks:
@@ -731,9 +770,10 @@ def main() -> None:
     hfloor_grid = write_grid(blob, build_grid(hit_floors, gx0, gz0, GRID_CELL, gw, gh, margin=1.0))
     align(blob)
 
-    all_x = [v[0] for b in batches for t in b[2] for v in t]
-    all_y = [v[1] for b in batches for t in b[2] for v in t]
-    all_z = [v[2] for b in batches for t in b[2] for v in t]
+    ground = [b for b in batches if not (len(b) > 5 and b[5])] or batches   # the stage's bounds leave its sky out
+    all_x = [v[0] for b in ground for t in b[2] for v in t]
+    all_y = [v[1] for b in ground for t in b[2] for v in t]
+    all_z = [v[2] for b in ground for t in b[2] for v in t]
     struct.pack_into("<4I", blob, 0x80, hits_offset, len(hit_walls), len(hit_floors), wall_grid)
     struct.pack_into("<I", blob, 0x90, hfloor_grid)
     struct.pack_into("<4s7I4f6f6I2f2I", blob, 0, b"STG1", 3,
