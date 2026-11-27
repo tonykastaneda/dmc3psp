@@ -881,7 +881,9 @@ beyond his side line turns him (state 0, `FUN_003af2c0`), then the reaction to D
 Agni takes his guard stance (21), Rudra his (23), the survivor never. A blow that throws (`FUN_003a2ab0` /
 `FUN_003a2c00`, vtable +0xe4 / +0xe0) knocks him back, 37 struck from in front, 38 from behind (which of Dante's
 hits are those is inferred: the port's heavy, slam and launch). The pair's opening (64, below) is the game's
-(`ar_opening`; Rudra going 60 frames after Agni reads +0x2ee0 as their place in the pair, an inference).
+(`ar_opening`; Rudra going 60 frames after Agni reads +0x2ee0 as their place in the pair, an inference): in the
+arena (rooms 121, 414, 435; `enemy_set_room`) they start where `FUN_0039fa30` puts them, (2900, 2125) and (2120,
+2125), and the first leap and turn aim at `FUN_003af970`'s points, not Dante.
 **The survivor** (`ar_climb`, `ar_pedestal`, `ar_pounce`): his brother down, the controller's formation 9 sends him
 up his statue's head (63), where he takes up both swords (59 / 60, the second drawn in his other hand), and leaps
 down at Dante (56); from then on he's alone (+0x2ee7 = 0). **The guard** (`ar_hit`): the stances (21 / 23 / 25) and

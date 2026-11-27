@@ -68,7 +68,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   shown, his idle's turn rate [inferred], the bomb and the hand trap are his own models but rigid (the hand's motions aren't played: it rises and sinks by an estimate), the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes, a bullet's stun value 8
   [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
-  (inference). The pedestal climb, the guard and the hops are the game's; stand-ins: a blow's "Dante's +5 is 0-2" (a
+  (inference); they wait as statues (ar71 / ar72) where the game starts them in state 1 at y 100 (the cutscene's) and
+  wake within 900, when struck or after 600 frames [estimate]. The pedestal climb, the guard and the hops are the game's; stand-ins: a blow's "Dante's +5 is 0-2" (a
   guarded blade counts 2) is taken as always, and its "+5 is 3, +6 his id" (counts 2 in a swing) as never [inferred];
   Dante's recoil from a guarded blow (the hit's +0x34) isn't modelled; a wall's push for the leap (vtable +0x1c0) is
   read as the walls pass moving him over 1 cm since his own move [inferred]; the survivor's moves below each health

@@ -3154,6 +3154,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     spheres_enter(mission_mode && mission_choice.mission == 16 ? room_number(room) : -1);   /* 109's and 146's spheres */
     m19_enter(mission_mode && mission_choice.mission == 19 ? room_number(room) : -1, room_is_cleared(room) || item_state[57] != 0);   /* 404's hourglass */
     wagon_enter(mission_mode ? room_number(room) : -1, m10_previous == 240);   /* 216's ride (wagon.c): backward from 240 */
+    enemy_set_room(mission_mode ? room_number(room) : -1);   /* Agni & Rudra's room places (enemy.c) */
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */

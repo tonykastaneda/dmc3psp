@@ -3982,6 +3982,13 @@ static float ar_dante_yaw;
 static int ar_force = -1;   /* tests: the next state either brother takes from idle */
 static int ar_ticks;        /* tests: frames of the fight, for the log */
 static void ar_note(int state);
+/* Their arena: room 121 and its copies 414 and 435, where FUN_0039fa30 places them and FUN_003af970 aims the opening
+ * and the climb at fixed points. Elsewhere (the debug street) the opening aims at Dante and the survivor takes up
+ * both swords where he stands. */
+static int ar_room = -1;
+void enemy_set_room(int room) { ar_room = room; }
+static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
+static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
 void enemy_ar_force(int state) { ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
@@ -4498,17 +4505,19 @@ static void ar_statue(int which) {
 
 static void ar_rudra_spawn(void) { ar_statue(1); }
 
-/* The one spawn (class 27) brings both: Agni here, Rudra beside him. */
+/* The one spawn (class 27) brings both: Agni here, Rudra beside him. In the arena they stand where FUN_0039fa30
+ * puts them: Agni (+0x2dd4 = 0) at (2900, 2125), Rudra at (2120, 2125). */
 static void ar_spawn(void) {
     Enemy *agni = e;
-    int k;
-    agni->pos[0] += 180.0f;
+    int k, arena = ar_arena();
+    if (arena) { agni->pos[0] = 2900.0f; agni->pos[2] = 2125.0f; }
+    else agni->pos[0] += 180.0f;
     ar_statue(0);
     for (k = 0; k < ENEMY_MAX; ++k) {
         Enemy *o = &enemies[k];
         if (o->active) continue;
         e = o;
-        spawn_one(ENEMY_RUDRA, agni->pos[0] - 360.0f, agni->pos[2]);
+        spawn_one(ENEMY_RUDRA, arena ? 2120.0f : agni->pos[0] - 360.0f, agni->pos[2]);
         break;
     }
     e = agni;
@@ -4532,6 +4541,7 @@ static void ar_update(float f, float px, float py, float pz) {
             fx_dust(at); fx_explosion(at);
             ar_brain_reset(b, e->kind == ENEMY_AGNI ? 0 : 1);
             ar_formation_time = 0.0f;
+            ar_side = fabsf(4000.0f - pz) <= fabsf(2200.0f - pz) ? 1 : 2;
             ar_go(AR_OPENING);   /* +0x2de7: the pair's opening first (FUN_003aedd0) */
         }
         return;
@@ -4544,7 +4554,17 @@ static void ar_update(float f, float px, float py, float pz) {
         return;
     }
     if (e->action == AR_OPENING) {
-        ar_opening(f, px, pz, d, root, bro, b->set);
+        /* FUN_003af970: in the arena the opening's first leap aims at the floor before his pedestal (by +0x2de7), its
+         * turn after at the room's middle, and only from step 0x1e at Dante. */
+        float tx = px, tz = pz;
+        if (ar_arena() && e->step < 0x1e) {
+            int agni = e->kind == ENEMY_AGNI;
+            if (e->step >= 0x14) { tx = 2500.0f; tz = 3000.0f; }
+            else if (ar_side == 1) { tx = agni ? 2860.0f : 2170.0f; tz = 2200.0f; }
+            else { tx = agni ? 2862.0f : 2133.0f; tz = 4000.0f; }
+        }
+        dx = tx - e->pos[0]; dz = tz - e->pos[2];
+        ar_opening(f, tx, tz, sqrtf(dx * dx + dz * dz), root, bro, b->set);
         keep_apart(px, py, pz, f);
         return;
     }
@@ -4573,8 +4593,12 @@ static void ar_update(float f, float px, float py, float pz) {
     in = ar_state_info(e->action);
     sector = ar_sector(wrap_angle(atan2f(dx, dz) - e->yaw));
     if (in->brain) {
-        /* FUN_003acfb0 first: the formation's 0x8000 sends him up his pedestal (63), while he keeps the pair's brain. */
-        if (b->paired && (b->flags & 0x8000)) { ar_go(63); return; }
+        /* FUN_003acfb0 first: the formation's 0x8000 sends him up his pedestal (63), while he keeps the pair's brain.
+         * Away from the arena (no pedestals) he takes up both swords where he stands. */
+        if (b->paired && (b->flags & 0x8000)) {
+            if (ar_arena()) { ar_go(63); return; }
+            b->set = 2; b->paired = 0;
+        }
         /* FUN_003af2c0: Dante beyond his side line: he turns to him (state 0, ar26) before anything else. */
         if (sector & 1) { ar_go(0); return; }
         /* FUN_003aeec0: a new move of Dante's that he answers: Agni hops back (21), Rudra guards (23). */
