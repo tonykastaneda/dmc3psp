@@ -1952,7 +1952,14 @@ static const ArmFx arm_fx[] = {
     {"15:2", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x25c},
     {"15:7", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x286},
     {"6:16", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b7},     /* actions 84/85 (FUN_00276150, id 0x36) */
+    {"6:17", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b8},     /* its 6:17 (id 0x37) */
     {"6:19", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},     /* actions 86/87 (FUN_00276640, id 0x35) */
+    {"6:11", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 83 (FUN_00275410): V0x90 and id 0x55 on the root */
+    {"6:11", 0, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x234 | 0x8000},
+    {"15:8", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* A&R action 71 (FUN_002746d0): V0x90 and id 0x54 */
+    {"15:8", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x273},
+    {"7:16", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2ba},   /* Beowulf action 120 (FUN_0027b9e0, id 0x3c; 7:58 without +0x299b) */
+    {"7:58", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2ba},
     {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},   /* action 93 on its flag 2 (FUN_00277550, id 0x10) */
     {"16:9", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x260},     /* action 94 (FUN_00277730, id 0x3a) */
     {"6:26", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x187},     /* action 95 (FUN_00277d70, id 0x31) */
