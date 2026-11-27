@@ -15,7 +15,11 @@ copies the old floor and clamps to **9999** (`0x20be20`, branch at `0x20e168`). 
 Ordinary rooms 423–432 have three portals (door indices 0, 1, 2): **+1 / +10 / +100**, respectively
 (`0xc0`, `0xe4`, `0x108` in room 423). The first entry skips the increment. The arrival door/start selector
 chooses the increment on subsequent entries. The +1 and +10 choices also spawn pickups using opcode 0x8b,
-at (3500,768,3520), types 12 and 15 (`0xc8`, `0xec`); +100 gives neither. Pickup meanings need a separate check.
+at (3500,768,3520), types 12 and 15 (`0xc8`, `0xec`); +100 gives neither. Type 12 is a large green orb;
+type 15 is a large white orb. `0x2f3750` applies **10000 HP** (`0x5aa560`), or **300 red orbs** when HP is full
+(`0x5aa570`), and **5000 raw DT / five runes** (`0x5aa580`), respectively. Each boss room has its own authored
+arrival pickup position. The generator takes the first type 12/15 spawn in each ROOM block; Lady's later defeat
+pickups are separate and remain omitted.
 All three exits stay disabled until enemies are cleared, then the script enables them at 60-frame intervals
 after an initial 60-frame wait (`0x6c4`–`0x760`).
 
@@ -86,7 +90,12 @@ Readiness follows the three 60-frame ordinary portal reveals; boss exit readines
 
 `camera.c` starts ordinary Palace arena sweeps at Dante's head because the default (2500,200,2500) lies below
 the arena floor at approximately y=514. This is an explicit fallback, not a recovered PS2 camera initialization.
-The level label and portal legend use the menu font; portal glows and missing arrival pickups are in StandIns.md.
+The level label and portal legend use the menu font. Arena STAY 100/101/102 name **V965/V967/V964** at y=517:
+water/lightning/fire for +1/+10/+100. Their effect bank is **GDATA 830**, shared by st423–432. Bank 7 in `nfx.c`
+plays these through the native effect runtime; the generated closure has 23 V/G, 27 E, seven P, 17 textures,
+and ten models, with no missing G children. `bp_native_portals_280.png` is the first PPSSPP visual check.
+Arrival rewards use the event's positions and decoded recovery amounts; their mote visuals, simplified falling
+and 120 cm collection radius are stand-ins. Taking a boss exit does not grant an additional arrival reward.
 
 Tests: `python tools/tests/run_bloody_palace_logic.py` uses the actual generated encounter table and checks portal
 delays, repeated-room encounter reset, the thousand boundary, all seventeen boss routes/returns, and the 9999 cap.

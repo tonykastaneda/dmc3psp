@@ -14,5 +14,8 @@ int bp_route(int portal, int *room, int *start); /* mutates floor only when a re
 int bp_finished(void);
 void bp_draw(void);
 void bp_status(char *out, int size);
+int bp_pickup_position(float out[3]); /* returns 12 green / 15 white, or 0 */
+void bp_pickup_fall(float frames, float floor_y);
+int bp_pickup_collect(float x, float y, float z);
 void bp_test_start(int floor, int visits, int boss, int group);
 #endif

@@ -2427,6 +2427,7 @@ static int m20_boss_defeated;
 static int m8_clears_seen;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
+static int bp_portal_fx[3];
 #define ROOMS_MAX 256
 static unsigned char rooms_cleared[ROOMS_MAX / 8];   /* this mission: a room's fight doesn't come back */
 static int room_is_cleared(int r) { return r >= 0 && r < ROOMS_MAX && (rooms_cleared[r >> 3] >> (r & 7) & 1); }
@@ -3039,7 +3040,12 @@ static void mission_gimmicks_draw(void) {
         int i;
         for (i=0;i<rooms[mission_room].door_count;++i) if (bp_portal_ready(i)) {
             const RoomDoor *d=&rooms[mission_room].doors[i];
-            key_glow(d->box);
+            if (i>=3 || !bp_portal_fx[i]) key_glow(d->box);
+        }
+        {
+            float at[3],up[3]={0,12,0};
+            int kind=bp_pickup_position(at);
+            if (kind) fx_mote(at,up,18,8,0.3f,kind==12?0xff60ff60u:0xffffffffu);
         }
     }
     if(mission_choice.mission==8) {mission8_draw();nausika_draw();leviathan_boss_draw_preview();}
@@ -3168,6 +3174,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     msg_room_fought = 0;
     mission_room = room;
     bp_enter(room_number(room));
+    memset(bp_portal_fx,0,sizeof bp_portal_fx);
     if (bp_active()) {
         int number=room_number(room);
         vergil_boss_set_variant(number==444?2:number==443?1:0);
@@ -3302,6 +3309,28 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     if (focus_cmp && cmp_enemy_audit > 1) held = 0; /* Audit rooms directly without solving their item puzzles. */
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     bp_update(dt*60.0f,done && enemy_alive_count()==0);
+    if (bp_active()) {
+        float at[3],floor_y;int kind;
+        if (bp_pickup_position(at)) {
+            if (!stage_floor(at[0],at[1]+50,at[2],0,&floor_y)) floor_y=player->y;
+            bp_pickup_fall(dt*60.0f,floor_y);
+            kind=bp_pickup_collect(player->x,player->y,player->z);
+            /* 0x2f3750: type 12 -> +10000 HP (or 300 red orbs at full HP),
+             * type 15 -> +5000 raw DT = five runes. Tables 0x5aa560/570/580. */
+            if (kind==12) {
+                if (player->health>=player->health_max) shop_state.red_orbs+=300;
+                else player->health=fminf(player->health_max,player->health+10000.0f);
+            } else if (kind==15) player->dt_energy=fminf(player->dt_max,player->dt_energy+5.0f);
+        }
+    }
+    if (bp_active() && room_number(mission_room)>=423 && room_number(mission_room)<=432) {
+        static const int portal_v[3]={965,967,964};
+        for (i=0;i<3 && i<rooms[mission_room].door_count;++i) if (bp_portal_ready(i) && !bp_portal_fx[i]) {
+            const RoomDoor *d=&rooms[mission_room].doors[i];
+            float at[3]={d->box[0],d->box[1]+17.0f,d->box[2]};
+            bp_portal_fx[i]=nfx_spawn(NFX_PALACE,portal_v[i],at,0,1);
+        }
+    }
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20's room 12 script: credits_fight.c. */
         if(!credits_fight_active()){credits_fight_begin();if(focus_cmp && cmp_credits_at)credits_fight_skip((float)cmp_credits_at);if(focus_cmp && cmp_credits_kills)credits_fight_test_kills(cmp_credits_kills);}

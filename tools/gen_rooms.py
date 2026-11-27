@@ -634,7 +634,7 @@ SLOTS.update({str(n): 736 + 4 * (n - 400) for n in range(423, 447)})
 MISSIONS[21] = ("423", None, {})  # Palace's dynamic EST groups are selected by bloody_palace.c.
 
 
-def write_palace(rooms, out):
+def write_palace(rooms, out, iso_path):
     """Local-only encounter bytecode, never copied into committed C sources."""
     lines = ['/* Generated from the owner\'s disc by gen_rooms.py. */',
              'typedef struct { short room, group, count; const PalaceOp *ops; } PalaceScript;']
@@ -648,6 +648,25 @@ def write_palace(rooms, out):
             scripts.append(f'{{{number},{group},{len(ops)},{name}}}')
     lines += [f'#define BP_SCRIPT_COUNT {len(scripts)}',
               'static const PalaceScript palace_scripts[] = {' + ','.join(scripts) + '};']
+    # The first green/white op_8b in each ROOM is its portal-arrival reward.
+    # Later ops (Lady's defeat pickups) are separate and not arrival rewards.
+    import event_dump
+    pickups, seen, number = [], set(), None
+    with Iso9660(iso_path) as iso:
+        afs = AfsArchive(iso, 'GDATA.AFS')
+        entry = afs.entries[259]
+        _, ops, _ = event_dump.disassemble(iso.read_file('GDATA.AFS', entry['offset'], entry['size']))
+        for op in ops:
+            if op['op'] == 7:
+                number = op['args'][0]
+            elif op['op'] == 0x8b and len(op['args']) == 4:
+                x, y, z, kind = op['args']
+                if kind in (12, 15) and (number, kind) not in seen:
+                    seen.add((number, kind))
+                    pickups.append(f'{{{number},{kind},{{{x}.0f,{y}.0f,{z}.0f}}}}')
+    lines += ['typedef struct { short room, kind; float pos[3]; } PalacePickup;',
+              f'#define BP_PICKUP_COUNT {len(pickups)}',
+              'static const PalacePickup palace_pickups[] = {' + ','.join(pickups) + '};']
     out.write_text('\n'.join(lines) + '\n')
 
 
@@ -705,7 +724,7 @@ def main():
             subprocess.run([sys.executable, str(Path(__file__).with_name("prepare_stage.py")), str(args.iso), "--output", str(out), "--slot", str(slot)], check=True)
 
     names = list(SLOTS)
-    write_palace(rooms, args.header.parent / "bloody_palace_runtime.h")
+    write_palace(rooms, args.header.parent / "bloody_palace_runtime.h", args.iso)
     index = {n: i for i, n in enumerate(names)}
     lines = ["/* Generated from the disc by tools/gen_rooms.py */", "#pragma once",
              "typedef struct { float box[6]; short next, number, start; unsigned char press, low, high; } RoomDoor;",
