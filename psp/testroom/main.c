@@ -154,6 +154,14 @@ static int perf_count;
 static unsigned int perf_gpu_us;   /* sceGuSync wait in the last render_scene */
 static unsigned int perf_draw_us;  /* display list build in the last render_scene */
 
+/* Tests: the frame's update by section (0 mission_update, 1 combat, 2 player, 3 enemies, 4 nfx, 5 fx, 6 orbs, 7 music,
+ * 8 a room script's spawn, 9 the credits street): total, worst and frames over 4 ms, in the FOCUS log's "upd" line.
+ * In a focus run, mission_update's 12 ms every 30 frames is the test log (M6_LOG.TXT), not the game. */
+static unsigned int prof_t, prof_acc[20], prof_max[20], prof_slow[20], prof_last_end, prof_gap;   /* 10+: the gaps between them, in order */
+#define PROF_ADD(i, t0_) do { unsigned int d_ = sceKernelGetSystemTimeLow() - (t0_); prof_acc[i] += d_; if (d_ > prof_max[i]) prof_max[i] = d_; if (d_ > 4000u) ++prof_slow[i]; } while (0)
+static void prof_slot(int i, unsigned int d_) { if (i > 19) i = 19; prof_acc[i] += d_; if (d_ > prof_max[i]) prof_max[i] = d_; if (d_ > 4000u) ++prof_slow[i]; }
+#define PROF_MARK() do { prof_t = sceKernelGetSystemTimeLow(); prof_slot(10 + (int)prof_gap++, prof_t - prof_last_end); } while (0)
+#define PROF_END(i) do { prof_last_end = sceKernelGetSystemTimeLow(); prof_slot(i, prof_last_end - prof_t); } while (0)
 static void perf_add(unsigned int gap, unsigned int update, unsigned int skin) {
     PerfSecond *p;
     if (perf_count >= PERF_SECONDS) return;
@@ -2153,6 +2161,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "creditskills ", 13) == 0) cmp_credits_kills = atoi(line + 13);   /* tests: ... with these kills */
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
+        else if (strncmp(line, "nosky ", 6) == 0) stage_test_sky_off(atoi(line + 6));
         else if (strncmp(line, "notrace ", 8) == 0) cmp_no_trace = atoi(line + 8);
         else if (strncmp(line, "heapleave ", 10) == 0) cmp_heap_leave = atoi(line + 10);   /* tests: from frame 2, hold all but this many KB of the heap */
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
@@ -3145,7 +3154,7 @@ static int script_run(float dt, float floor_y) {
                     sy = lift_y + 50.0f;
                 }
                 enemy_spawn_height(sy);
-                credits_fight_spawned(enemy_add_class(op->a, sx, sz));   /* tests: the street's spawns (credits_fight.c) */
+                { unsigned int t0_ = sceKernelGetSystemTimeLow(); credits_fight_spawned(enemy_add_class(op->a, sx, sz)); PROF_ADD(8, t0_); }   /* tests: the street's spawns (credits_fight.c) */
             }
             if(mission_choice.mission==2 && op->a==26 && focus_cmp)
                 vanguard_note("encounter_enemies",(float)enemy_count());
@@ -3362,7 +3371,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         /* EventTbl20's room 12 script: credits_fight.c. */
         if(!credits_fight_active()){credits_fight_begin();if(focus_cmp && cmp_credits_at)credits_fight_skip((float)cmp_credits_at);if(focus_cmp && cmp_credits_kills)credits_fight_test_kills(cmp_credits_kills);}
         m20_ending_frames+=dt*60;
-        if(credits_fight_update(dt*60) && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
+        { unsigned int t0_ = sceKernelGetSystemTimeLow(); int end_ = credits_fight_update(dt*60); PROF_ADD(9, t0_); if(end_ && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;} }
     }
     if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
     fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
@@ -3465,7 +3474,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     {
         /* Tests: where he is, every 30 frames (and Mission 6's own state). */
         static int m_tick;
-        if (focus_cmp && (m_tick++ % 30) == 0) {
+        if (focus_cmp && !cmp_no_trace && (m_tick++ % 30) == 0) {   /* "notrace 1": off, to time a run as played */
             char path[320], line[256] = "";
             FILE *f;
             path_in_game_dir(path, sizeof(path), "M6_LOG.TXT");
@@ -4141,6 +4150,10 @@ int main(int argc, char *argv[]) {
         if ((!focus && !autotest && !recording && !tour) || cmp_menu) {
             path_in_game_dir(path,sizeof path,"MENU.BIN");
             menu_load(path);
+            /* The stage's walls and floors bound Dante, not the grid room's +-960 (player.c's default). Boot set these
+             * with STAGE.BIN before the mode-first order; without them every mission clamped him to +-960 when he
+             * moved, and the wall sweep walked him back across the room (the street's 4-10 ms frames). */
+            player_room_limit=1.0e9f;player_floor_fn=stage_floor;camera_auto_follow=1;
         } else {
             path_in_game_dir(path,sizeof path,"STAGE.BIN");
             if (stage_load(path)) {
@@ -4258,6 +4271,7 @@ int main(int argc, char *argv[]) {
     else if ((focus || autotest || recording || tour) && !cmp_menu) game_turbo = 0;
     while (running) {
         unsigned int frame_start = sceKernelGetSystemTimeLow();
+    prof_last_end = frame_start; prof_gap = 0;
         unsigned int frame_us, skin_start, skin_us, gap = frame_start - last_time;
         float dt;
         char line0[64], line1[64];
@@ -4300,7 +4314,9 @@ int main(int argc, char *argv[]) {
             read_pad(&input, &previous_buttons, &previous_l);
         }
         music_mute(demo_active() || demo_queue_at < demo_queue_len);
+        PROF_MARK();
         music_update(mission_mode && enemy_alive_count() > 0);
+        PROF_END(7);
         if (demo_active() || demo_queue_at < demo_queue_len) {
             /* A cutscene has the frame: nothing else runs. START skips it. */
             static unsigned int demo_prev_buttons;
@@ -4576,7 +4592,9 @@ int main(int argc, char *argv[]) {
             }
             if (shop_closed) { shop_closed = 0; last_time = sceKernelGetSystemTimeLow(); }
             {
+                PROF_MARK();
                 int cleared = demo_clear_due || mission_update(dt, debug_pressed, &player, &camera) || (cmp_force_clear && frames == cmp_force_clear);
+                PROF_END(0);
                 int m = mission_choice.mission;
                 demo_clear_due = 0;
                 if (cleared && !demo_clear_played && m >= 1 && m <= 20 && mission_clear_demos[m][0] >= 0) {
@@ -4669,7 +4687,9 @@ int main(int argc, char *argv[]) {
         if (combat_ready && !anim.viewer) {
             MoveId before = combat.move;
             /* Devil Trigger runs him 1.1x as fast (HD Collection traces). */
+            PROF_MARK();
             if (!credits_fight_frozen()) combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);   /* op 7e [3] stops him */
+            PROF_END(1);
             {   /* His moves' sound events (gen_sfx.py: the motion definitions' 0x30 / 0x34) as their frames pass. */
                 static int sfx_m = -1; static float sfx_f, sfx_t;
                 int m = combat.action ? combat.motion : -1;
@@ -4736,13 +4756,16 @@ int main(int argc, char *argv[]) {
             }
             /* Reading a message, or an event on (FUN_0021fd50(player, 1)): no input reaches him. */
             if (mission_mode && (msg_busy() || msg_event_on())) { memset(&input, 0, sizeof(input)); input.style = -1; }
+            PROF_MARK();
             if (!credits_fight_frozen()) player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
+            PROF_END(2);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame
              * covers more than his radius, and pushing out from the end alone lets him through a wall (Mission
              * 3's bar, its east wall at x 3000, during Trickster's dash). Steps of at most 15 cm, from where
              * he was before combat moved him. */
             player.wall_contact = 0;
             if (stage_loaded()) {
+                unsigned int wt0_ = sceKernelGetSystemTimeLow();
                 float mx = player.x - was_x, mz = player.z - was_z, cx = was_x, cz = was_z;
                 int steps = (int)(sqrtf(mx * mx + mz * mz) / 15.0f) + 1, s;
                 for (s = 1; s <= steps; ++s) {
@@ -4750,6 +4773,7 @@ int main(int argc, char *argv[]) {
                     if (!on_bridge(cx, cz, player.y) && stage_collide(&cx, &cz, player.y, PLAYER_RADIUS)) player.wall_contact = 1;
                 }
                 player.x = cx; player.z = cz;
+                PROF_ADD(19, wt0_);   /* tests: the wall sweep */
             }
         }
         if(mission_mode && mission_choice.mission==8) {
@@ -4766,7 +4790,9 @@ int main(int argc, char *argv[]) {
                  * them isn't decoded), so they don't set on a Dante who can't move. */
                 if (!(mission_mode && msg_event_on()))
                     enemy_set_dante_yaw(player.yaw);
+            PROF_MARK();
             if (!credits_fight_frozen()) enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+            PROF_END(3);
             {
                 float drained = enemy_take_dt_drain() / 1000.0f;   /* runes [1000 a rune inferred] */
                 if (drained > 0.0f && !player.devil) { player.dt_energy -= drained; if (player.dt_energy < 0.0f) player.dt_energy = 0.0f; }
@@ -4792,7 +4818,9 @@ int main(int argc, char *argv[]) {
                 orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);
                 enemy_clamp_player(&player.z);
                 enemy_giga_ride(&player.x, &player.y, &player.z, player.on_ground);
+                PROF_MARK();
                 orbs_update(dt, player.x, player.y, player.z);
+                PROF_END(6);
                 bench_ai_us = sceKernelGetSystemTimeLow() - ai_start;
             }
             if (mission_mode && needles_hazard(&from_x, &from_z)) {
@@ -4910,8 +4938,12 @@ int main(int argc, char *argv[]) {
             }
         } else partner_on = 0;
         if (focus && focus_plink) plink_measure(&pose, frames);
+        PROF_MARK();
         fx_update(dt);
+        PROF_END(5);
+        PROF_MARK();
         nfx_update(player.quicksilver ? dt * 6.0f : dt * 60.0f);
+        PROF_END(4);
         fire_pending_shots(&combat, &player, dt);
         if (player.devil && player.melee_weapon < DMC3_DEVIL_COUNT && devil_ready(player.melee_weapon)) {
             const DevilModel *dm = &dmc3_devils[player.melee_weapon];
@@ -4973,6 +5005,7 @@ int main(int argc, char *argv[]) {
         frame_us = sceKernelGetSystemTimeLow() - frame_start;
         last_frame_us = frame_us;
         if (!autotest && !recording && !tour && frames > 60) {
+            prof_slot(10 + (int)prof_gap, skin_start - prof_last_end);
             perf_add(gap, skin_start - frame_start, skin_us);
             bench_add(gap, skin_start - frame_start, skin_us);
             perf_second_us += gap;
@@ -5159,10 +5192,11 @@ int main(int argc, char *argv[]) {
                     { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
-                    { char cl[200]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
+                    { char cl[320]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
+                    { int s_; fprintf(report, "upd sum/max/slow(us):"); for (s_ = 0; s_ < 20; ++s_) fprintf(report, " %u/%u/%u", prof_acc[s_], prof_max[s_], prof_slow[s_]); fprintf(report, "\n"); }
                     { char bt[200]; enemy_spawn_timing(bt, sizeof bt); fprintf(report, "%s\n", bt); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
