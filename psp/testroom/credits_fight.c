@@ -7,6 +7,7 @@
 #include "credits_fight.h"
 #include "enemy.h"
 #include "hud.h"
+#include <stdio.h>
 
 #define END_WAIT 13620.0f    /* op 8c */
 #define AFTER_FREEZE 300.0f  /* the wait between op 7e [3] and op 7e [4] */
@@ -48,6 +49,13 @@ int credits_fight_update(float frames) {
         if (since_end >= AFTER_FREEZE) stage = 2;   /* op 7e [4]; demo 59 follows */
     }
     return stage == 2;
+}
+
+void credits_fight_status(char *out, int size) {
+    float at[3] = {0, 0, 0};
+    int mode = -1, shots = 0, ally = enemy_ally_state(at, &mode, &shots);
+    snprintf(out, (size_t)size, "credits on=%d clock=%.0f kills=%d stage=%d extended=%d ally=%d mode=0x%x shots=%d at=%.0f,%.0f,%.0f",
+             active, clock, kills, stage, extended, ally, mode, shots, at[0], at[1], at[2]);
 }
 
 void credits_fight_draw(void) {

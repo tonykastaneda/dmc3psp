@@ -3052,8 +3052,7 @@ static int script_run(float dt, float floor_y) {
         }
         switch (op->op) {
         case ROOM_OP_SPAWN:
-            /* M20's EST 55 variant 1 is Lady as an ally, not a boss target. */
-            if(mission_choice.mission==20 && room_number(mission_room)==12 && op->a==55)break;
+            /* M20's EST 55 is Lady; the record's op 8 [0, 1] that follows makes her the ally (enemy_set_spawn_param). */
             if(mission_choice.mission==2 && op->a==26) {
                 /* The pre-boss waves are over. Their still-drawing death actors
                  * do not belong in Vanguard's solo encounter. */
@@ -4986,6 +4985,7 @@ int main(int argc, char *argv[]) {
                     { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
+                    { char cl[160]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);
