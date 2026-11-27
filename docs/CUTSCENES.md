@@ -1,5 +1,45 @@
 # Real-time cutscenes ("demos")
 
+## Palette preservation
+
+The shared model exporter used FASTOCTREE quantisation even for decoded TIM2 pictures already containing
+at most 256 RGBA colours. That quantiser merges distinct colours even when an exact PSP palette fits. The
+exporter now assigns those colours deterministic CLUT entries in first-pixel order, preserving RGB and alpha
+byte for byte at the same texture memory cost. Pictures with more than 256 colours retain the existing quantiser.
+
+Decoded source versus reconstructed PSP palette, before this fix (percentage of changed pixels):
+
+| Local source | Page | Changed pixels | Maximum channel error |
+|---|---:|---:|---:|
+| Demo 0, `pl100_01.ptx` | 0 | 81.99% | 30 |
+| Demo 123, `pl102_01.ptx` | 0 | 76.73% | 30 |
+| Demo 10, `pl104_01.ptx` | 0 | 98.17% | 26 |
+| Demo 114, `em108.ptx` | 0/1 | 96.01% | 20 |
+| Demo 114, `em108.ptx` | 2/3/4 | 87.76% | 24 |
+
+All listed pages reconstruct byte-exactly after the fix. Before it, alpha changed on 8,986 pixels of
+`pl100_01` and 24,795 pixels of `pl102_01`. These are pipeline comparisons against the decoded source,
+not claims of a PS2 visual match. `python tools/tests/test_indexed_texture.py` checks an exact 256-colour
+round trip, distinct alpha values for equal RGB, determinism and the truecolour fallback. Emulator comparison
+is tracked separately below; palette preservation alone does not establish the cause of Arkham's face issue.
+
+The face atlas confirms the cast mapping: `pl100` Dante, `pl101` Vergil (blue coat), `pl102` Lady,
+`pl103` human Arkham (bald head), `pl104` Jester (white face). The face pages show the same unnecessary
+quantisation; all fit an exact 256-entry palette and now reconstruct byte-exactly:
+
+| Face source | Page | Changed pixels before fix | Maximum channel error before fix |
+|---|---:|---:|---:|
+| Dante, demo 0 `pl100_02.ptx` | 0 | 97.50% | 23 |
+| Vergil, demo 0 `pl101_02.ptx` | 0 | 96.13% | 19 |
+| Lady, demo 123 `pl102_02.ptx` | 0 | 97.14% | 21 |
+| Arkham, demo 1 `pl103_02.ptx` | 0 | 94.73% | 21 |
+| Arkham, demo 1 `pl103_02.ptx` | 2 | 97.64% | 26 |
+| Jester, demo 10 `pl104_02.ptx` | 0 | 90.20% | 22 |
+
+Their shared 128x64, 16-colour page (page 1 for Dante/Vergil/Lady, page 3 for Arkham) formerly changed
+86.65% of pixels, including alpha on 7,098 pixels; it also now reconstructs exactly. These measurements
+compare the old quantiser to decoded local source data, independent of model geometry and lighting.
+
 The game's story scenes are **demos**. Event op `02 D` plays demo D and section `09 D` of the mission's event table
 decides what follows (docs/EVENT_SCRIPTS.md). Some demos are pre-rendered movies (`.sfd` in MDATA1.AFS / MDATA2.AFS);
 most are **real-time**: the engine plays models, motions and cameras from a timeline. None play in the port yet.
