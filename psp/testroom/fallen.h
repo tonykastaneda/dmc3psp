@@ -30,5 +30,6 @@ void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (
 int fallen_hit(FallenBrain *b, int heavy, float fx, float fz, int mortal);
 int fallen_loops(int motion);
 int fallen_flying(const FallenBrain *b);
+int fallen_appearing(const FallenBrain *b);   /* its entrance through the wall (state 0xe): no wall collision */
 
 #endif

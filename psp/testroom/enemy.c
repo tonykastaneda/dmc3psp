@@ -6771,6 +6771,10 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     const Motion *m;
     float g;
     int token = fallen_rest <= 0.0f, had = token;
+    /* The brain keeps its own position: take back where the walls left it (body_move), or each frame it puts the
+     * body back where they stopped it and the sweep runs the whole way again (6 m, 25 ms a frame, Mission 15's 222).
+     * Not while it comes in through the wall (0xe), which isn't walled (below). */
+    if (!fallen_appearing(b)) { b->pos[0] = e->pos[0]; b->pos[2] = e->pos[2]; }
     {
         int k;   /* the clock runs once a frame: on the first Fallen's turn */
         for (k = 0; k < ENEMY_MAX && !(enemies[k].active && enemies[k].kind == ENEMY_FALLEN); ++k) {}
@@ -6802,6 +6806,7 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     e->pos[0] = b->pos[0]; e->pos[1] = b->pos[1]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     e->floor_y = b->floor_y;
     e->air = fallen_flying(b);
+    if (fallen_appearing(b)) e->placed = 1;   /* through the wall: a placement, not a walled move */
     if (b->restart || fallen_motion_id[b->want] != e->motion) { fallen_play(b->want, b->restart); b->restart = 0; }
     if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* its attack record's damage */
     if (b->spear) {
