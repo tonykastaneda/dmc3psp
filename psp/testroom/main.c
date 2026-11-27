@@ -1972,6 +1972,9 @@ static const ArmFx arm_fx[] = {
     /* Beowulf actions 124 / 125 (FUN_0027cb00 / 0027cf70, id 0x12): V0x189 on the right hand 35 / 6 frames in [the
      * handlers repeat it every 7 / 6 frames after; not ported]. */
     {"17:1", 35, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
+    /* Artemis action 154 (FUN_0026ebf0, id 0x53): V0x2f4 2 frames into 20:2, on the gun (FUN_002e1d90: weapon 7's
+     * frame; the port's guns are in the left hand). */
+    {"20:2", 2, NFX_GUN_ARTEMIS, BONE_L_HAND, 1, 0x2f4},
     {"17:2", 6, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xa1},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xf3},

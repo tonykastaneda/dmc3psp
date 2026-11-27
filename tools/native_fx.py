@@ -289,7 +289,7 @@ def main():
     summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c, 0x352), ()))
     # 14-18 Dante's guns' effect packs (GDATA 97 + w: 102 E&I, 103 Shotgun, 104 Artemis, 105 Spiral, 106 Kalina Ann):
     # their muzzle flashes (FUN_002fbf20), Artemis's shot (CPl000Shl10, FUN_005232b0) and Kalina Ann's burst.
-    for bank, slot, vs in ((14, 102, (0x22, 0xa, 0x32)), (15, 103, (0x23, 0xa, 0x32, 0xb2 | G_FLAG)), (16, 104, (0xd3,)), (17, 105, (0x228,)), (18, 106, (0x21b, 0x21f))):
+    for bank, slot, vs in ((14, 102, (0x22, 0xa, 0x32)), (15, 103, (0x23, 0xa, 0x32, 0xb2 | G_FLAG)), (16, 104, (0xd3, 0x2f4)), (17, 105, (0x228,)), (18, 106, (0x21b, 0x21f))):
         pack = pnst_entries(read(slot))
         effects = next(p for p in pack if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
         summary.append(write_bank(lines, bank, records(effects), vs, ()))
