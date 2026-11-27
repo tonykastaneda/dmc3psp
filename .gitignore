@@ -33,3 +33,5 @@ reference/dmc3-decomp/config/
 reference/dmc3-decomp/include/
 MISSIONwalkthrough.md
 SECRETmissions.md
+analysis/ref/**/*.mp4
+analysis/ref/credits/
