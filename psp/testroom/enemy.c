@@ -154,6 +154,17 @@ typedef struct {
     signed char goyle_splits;
     float ar_health;                /* Agni & Rudra: 7000 each; the Jester: 5000 */
     unsigned short ar_seen;         /* the last of Dante's moves he reacted to */
+    /* Agni & Rudra's own movement (FUN_003b0090 / FUN_003b02b0): local speeds (x right, y up, z ahead) +0x60, their
+     * accelerations +0x70 and caps +0x2e00; two clocks (+0x2e30, +0x2e34); a hop's phase (+6); where his own move
+     * left him (to tell a wall's push, FUN_002575a0); blows met on his guard (+0x2ec4) and in his swing (+0x2ee5);
+     * whether he's attacked yet (+0x2de5); his guard (+0x1e4: 2 in the guard stances). */
+    float ar_v[3], ar_a[3], ar_cap[3], ar_c30, ar_c34, ar_was[2];
+    unsigned char ar_sub, ar_guarded, ar_parried, ar_attacked, ar_guard;
+    unsigned char ar_air;           /* off the floor by his own fall (not Enemy.air: the walls pass checks an airborne
+                                       body at its floor's height too, which boxes him in on his pedestal) */
+    unsigned char placed;           /* set where it is this frame, not moved there: the walls pass doesn't sweep it */
+    /* The survivor's second sword, in his other hand (bone 11 for Agni, 7 for Rudra). */
+    float hand2_rot[3][3], hand2_pos[3];
     unsigned char encounter;        /* the Jester: which of his three fights (+0x481e, the spawn record's op 8) */
     unsigned char j_second, j_pending, j_up;   /* the Jester's second set (+0x481d), its threshold crossed (+0x4d30),
                                                   up off the floor (+0x4818) */
@@ -332,6 +343,7 @@ static void ar_update(float f, float px, float py, float pz);
 static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z);
 static float ar_health_total(float *maximum);
 static void goyle_turn_to(float px, float pz, float rate, float f);
+static int ar_both_swords(void);
 static void giga_orb(const float from[3], int kind, float px, float py, float pz);
 static void spawn_one(int kind, float x, float z);
 static float ai_unit(void);
@@ -2444,7 +2456,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         if (e->active && e->kind < ENEMY_KIND_COUNT && stage_loaded()) {
             float x = e->pos[0], y = e->pos[1], z = e->pos[2];
             /* A warp is placement, not travel through the intervening walls. */
-            if (hypotf(x-was_x,z-was_z) > 600) { was_x = x; was_y = y; was_z = z; }
+            if (hypotf(x-was_x,z-was_z) > 600 || e->placed) { was_x = x; was_y = y; was_z = z; e->placed = 0; }
             e->pos[0] = was_x; e->pos[1] = was_y; e->pos[2] = was_z;
             body_move(e, x, y, z);
         }
@@ -2674,6 +2686,11 @@ static void update_pose(float elapsed, float interval, int index, int count) {
     skin();
     memcpy(e->hand_rot, world_rot[kind_hand[e->kind]].m, sizeof(e->hand_rot));
     memcpy(e->hand_pos, world_pos[kind_hand[e->kind]], sizeof(e->hand_pos));
+    if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) {
+        int other = kind_hand[e->kind == ENEMY_AGNI ? ENEMY_RUDRA : ENEMY_AGNI];
+        memcpy(e->hand2_rot, world_rot[other].m, sizeof(e->hand2_rot));
+        memcpy(e->hand2_pos, world_pos[other], sizeof(e->hand2_pos));
+    }
     ++poses_done;
 }
 
@@ -2752,6 +2769,19 @@ static void draw_one(void) {
         sceGuTexFlush();
         sceGumDrawArray(GU_TRIANGLES, VTYPE, m->weapon_index_count, weapon_indices[e->kind], weapon_vertices[e->kind]);
         sceGumPopMatrix();
+        if (ar_both_swords()) {
+            /* The survivor holds his brother's sword too, in the hand his brother held it in (+0x2f40 = 2). */
+            int other = e->kind == ENEMY_AGNI ? ENEMY_RUDRA : ENEMY_AGNI;
+            const float (*q)[3] = e->hand2_rot;
+            mm.x.x = q[0][0]; mm.x.y = q[1][0]; mm.x.z = q[2][0];
+            mm.y.x = q[0][1]; mm.y.y = q[1][1]; mm.y.z = q[2][1];
+            mm.z.x = q[0][2]; mm.z.y = q[1][2]; mm.z.z = q[2][2];
+            mm.w.x = e->hand2_pos[0]; mm.w.y = e->hand2_pos[1]; mm.w.z = e->hand2_pos[2];
+            sceGumPushMatrix();
+            sceGumMultMatrix(&mm);
+            sceGumDrawArray(GU_TRIANGLES, VTYPE, enemy_models[other].weapon_index_count, weapon_indices[other], weapon_vertices[other]);
+            sceGumPopMatrix();
+        }
     }
     if (translucent) {
         sceGuColor(0xffffffffu);
@@ -3960,6 +3990,15 @@ static int ar_formation = 5;
 static int ar_dante_action;     /* Dante's current move, the command table's action id (FUN_0021e920), 0 none */
 static float ar_dante_yaw;
 static int ar_force = -1;   /* tests: the next state either brother takes from idle */
+static int ar_ticks;        /* tests: frames of the fight, for the log */
+static void ar_note(int state);
+/* Their arena: room 121 and its copies 414 and 435, where FUN_0039fa30 places them and FUN_003af970 aims the opening
+ * and the climb at fixed points. Elsewhere (the debug street) the opening aims at Dante and the survivor takes up
+ * both swords where he stands. */
+static int ar_room = -1;
+void enemy_set_room(int room) { ar_room = room; }
+static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
+static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
 void enemy_ar_force(int state) { ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
@@ -4012,6 +4051,43 @@ static Enemy *ar_brother(void) {
 }
 static ArBrain *ar_brain(void) { return &ar_brains[e->kind == ENEMY_AGNI ? 0 : 1]; }
 
+static int ar_both_swords(void) {
+    return (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) && e->action != AR_STATUE_STATE && ar_brain()->set == 2;
+}
+
+/* ---- Their own movement (FUN_003b0090, FUN_003b02b0), in local speeds: x right, y up, z ahead. ---- */
+#define AR_ANGLE (2.0f * PI / 65536.0f)
+static void ar_still(void) {
+    memset(e->ar_v, 0, sizeof e->ar_v); memset(e->ar_a, 0, sizeof e->ar_a); memset(e->ar_cap, 0, sizeof e->ar_cap);
+}
+/* FUN_003b0090: each of x and z runs by its acceleration up to its cap, and he moves by them. */
+static void ar_slide(float f) {
+    int k;
+    for (k = 0; k < 3; k += 2) {
+        if (e->ar_a[k] == 0.0f) continue;
+        e->ar_v[k] += e->ar_a[k] * f;
+        if (e->ar_a[k] > 0.0f ? e->ar_v[k] >= e->ar_cap[k] : e->ar_v[k] <= e->ar_cap[k]) e->ar_v[k] = e->ar_cap[k];
+    }
+    move_local(e->ar_v[0] * f, 0.0f, e->ar_v[2] * f);
+}
+/* FUN_003b02b0: up by y's speed, which falls by its acceleration to no less than its cap. */
+static void ar_fall(float f) {
+    float v = e->ar_v[1] + e->ar_a[1] * f;
+    e->pos[1] += e->ar_v[1] * f;
+    e->ar_v[1] = v < e->ar_cap[1] ? e->ar_cap[1] : v;
+    e->ar_air = 1;
+}
+/* vtable +0x1bc (FUN_00257570): on the floor. */
+static int ar_landed(void) {
+    if (!e->ar_air) return 1;
+    if (e->ar_v[1] > 0.0f || e->pos[1] > e->floor_y + 0.5f) return 0;
+    e->pos[1] = e->floor_y;
+    e->ar_air = 0;
+    return 1;
+}
+/* vtable +0x1c0 (FUN_002575a0): the walls pushed him more than 1 cm since his own move last frame. */
+static int ar_pushed(void) { return fabsf(e->pos[0] - e->ar_was[0]) > 1.0f || fabsf(e->pos[2] - e->ar_was[1]) > 1.0f; }
+
 /* The state's next script, or done when it has no more. */
 static void ar_phase_start(const ArStateInfo *in) {
     int n = e->step < 6 ? in->scripts[e->step] : -1;
@@ -4022,11 +4098,23 @@ static void ar_phase_start(const ArStateInfo *in) {
 
 static void ar_go(int s) {
     const ArStateInfo *in = ar_state_info(s);
-    giga_note(e->kind == ENEMY_AGNI ? "agni" : "rudra", s, e->ar_health);
+    ar_note(s);
     e->action = (unsigned char)s;
     e->step = 0;
     e->timer = 0.0f;
     e->vel[0] = e->vel[1] = 0.0f;
+    e->ar_sub = 0;
+    /* +0x1e4 / +0x1e5: the guard stances raise it; a blow on the guard keeps it through his hold if he's attacked
+     * before (+0x2de5), else lowers it at once; every other state lowers it. */
+    e->ar_guard = (s == 21 || s == 23 || s == 25) ? 2 : (s == 22 || s == 24 || s == 26) && e->ar_attacked ? 2 : 0;
+    if (s == 22 || s == 24 || s == 26 || (s >= 27 && s <= 29)) {
+        /* FUN_003a44c0 / 003a5140: he may counter (+0x2de6 = 2) unless the formation keeps him from attacking. */
+        Enemy *bro = ar_brother();
+        if (!bro || !(ar_brain()->flags & 0x100)) ar_brain_counter(ar_brain());
+        if (s <= 26) {
+            if (!e->ar_attacked) e->step = 1;   /* no hold: only the guard lowered */
+        } else e->ar_guarded = 0;
+    }
     if (in->dash >= 0) {
         float start, top, hold, slow;
         int side;
@@ -4107,6 +4195,311 @@ static void ar_opening(float f, float px, float pz, float d, const float *root, 
     if (e->action == AR_OPENING && e->step != s) giga_note(e->kind == ENEMY_AGNI ? "agni_open" : "rudra_open", e->step, d);
 }
 
+/* FUN_003acd50, past a frame of a landing: a new move of Dante's he answers (FUN_003aeec0) or Dante beyond his side
+ * line (FUN_003af2c0) ends it early. */
+static int ar_interrupt(ArBrain *b, float d, int sector) {
+    if (ar_dante_action == 0) e->ar_seen = 0;
+    else if (e->ar_seen != (unsigned short)ar_dante_action) {
+        e->ar_seen = (unsigned short)ar_dante_action;
+        if (ar_reacts(b, ar_dante_action, d, sector)) { ar_go(b->set == 0 ? 21 : 23); return 1; }
+    }
+    if (sector & 1) { ar_go(0); return 1; }
+    return 0;
+}
+
+/* FUN_003b09c0: hop n by its record (agni_rudra.c), its phase in ar_sub (the game's +6), turning to (tx, tz) at
+ * the record's rate: take-off; the rise from its start speed, x and z running to their caps; past the top the
+ * fall's accelerations; landed, the landing (dust: effect 0x2c, FUN_003ac750); 85 frames into it he may break off.
+ * 1 when the landing's done. */
+static int ar_hop_run(int n, float tx, float tz, float f, ArBrain *b, float d, int sector) {
+    const ArHop *h = ar_hop(n);
+    if (h->turn) goyle_turn_to(tx, tz, (float)h->turn * AR_ANGLE, f);
+    switch (e->ar_sub) {
+    case 0:
+        ar_play(h->scripts[0]);
+        e->ar_sub = 1;
+        return 0;
+    case 1:
+        if (!e->done) return 0;
+        ar_play(h->scripts[1]);
+        e->ar_sub = 10;
+        ar_still();
+        e->ar_v[1] = h->up;
+        e->ar_a[0] = h->rise_ax; e->ar_a[1] = h->rise_ay; e->ar_a[2] = h->rise_az;
+        e->ar_cap[0] = h->rise_cap_x; e->ar_cap[2] = h->rise_cap_z;
+        break;
+    case 10: case 11:
+        e->ar_sub = 11;
+        if (e->ar_v[1] <= 0.0f) {
+            e->ar_sub = 0x14;
+            e->ar_a[0] = h->fall_ax; e->ar_a[1] = h->fall_ay; e->ar_a[2] = h->fall_az;
+            e->ar_cap[0] = h->fall_cap_x; e->ar_cap[1] = h->fall_cap_y; e->ar_cap[2] = h->fall_cap_z;
+        }
+        break;
+    case 0x14: case 0x15:
+        if (e->ar_sub == 0x14) { e->ar_sub = 0x15; ar_play(h->scripts[2]); }
+        if (ar_landed()) {
+            float at[3] = {e->pos[0], e->floor_y, e->pos[2]};
+            e->ar_sub = 0x1f;
+            ar_play(h->scripts[3]);
+            ar_still();
+            fx_dust(at);
+            return 0;
+        }
+        break;
+    case 0x1f:
+        if (e->frame >= 85.0f && ar_interrupt(b, d, sector)) return 0;
+        if (e->done) { e->ar_sub = 0x28; return 1; }
+        return 0;
+    default:
+        return 1;
+    }
+    ar_slide(f);
+    ar_fall(f);
+    return 0;
+}
+
+static int ar_zone(float d) { return d <= 210.0f ? 0 : d <= 350.0f ? 1 : d <= 650.0f ? 2 : d <= 1000.0f ? 3 : 4; }
+
+/* State 11, the leap (FUN_003a3860): take-off (2); the rise (3) speeding 3 a frame to 16 at him, turning 0x800; the air
+ * (4) for 5 frames, or until a wall stops him (then the landing (5) and, with him beyond 350 in front, hop 1 ahead,
+ * state 17); then the landing (5), slowing 1.5 a frame (from 25 frames in he may break off). The survivor with both
+ * swords flies on until within 350 and lands slamming (91 + swords, FUN_003a3e30). */
+static void ar_leap(float f, float px, float pz, ArBrain *b, float d, int sector) {
+    const float turn = 0x800 * AR_ANGLE;
+    int pushed = ar_pushed();
+    switch (e->step) {
+    case 0:
+        e->step = 1;   /* 2 playing (ar_go) */
+        break;
+    case 1:
+        if (e->done) { ar_play(3); e->step = 2; ar_still(); e->ar_a[2] = 3.0f; e->ar_cap[2] = 16.0f; }
+        break;
+    case 2:
+        goyle_turn_to(px, pz, turn, f);
+        ar_slide(f);
+        if (e->done) { ar_play(4); e->ar_c30 = 5.0f; e->step = 3; }
+        break;
+    case 3:
+        goyle_turn_to(px, pz, turn, f);
+        ar_slide(f);
+        if (pushed) { ar_play(5); e->ar_a[2] = -1.5f; e->ar_cap[2] = 0.0f; e->step = 5; }
+        else if ((e->ar_c30 -= f) <= 0.0f) {
+            if (b->set != 2) { ar_play(5); e->ar_a[2] = -1.5f; e->ar_cap[2] = 0.0f; e->step = 6; }
+            else if (ar_zone(d) < 2) { ar_play(91 + b->set); e->step = 10; }
+        }
+        break;
+    case 5: case 6:
+        ar_slide(f);
+        if (e->frame >= 25.0f && ar_interrupt(b, d, sector)) { ar_still(); break; }
+        if (e->done) { int was = e->step; ar_still(); ar_go(was == 5 && ar_zone(d) > 1 && !(sector & 1) ? 17 : AR_IDLE); }
+        break;
+    case 10:
+        ar_slide(f);
+        if (e->frame >= 20.0f) { e->ar_a[2] = -1.5f; e->ar_cap[2] = 0.0f; e->step = 11; }
+        break;
+    default:
+        ar_slide(f);
+        if (e->done) { ar_still(); ar_go(AR_IDLE); }
+        break;
+    }
+}
+
+/* State 36, his swing broken (FUN_003a5ee0): staggered (46), the charge gone; held (47) for 150 frames (0x5b7420, rank
+ * 0); then (48) from frame 66 a hop up at 24.4, falling from frame 75 at 2 a frame to 30, spinning 14 degrees a frame
+ * over frames 60-85 (FUN_003aff80); landed, the recovery (49), recharging the survivor's swords; he may counter
+ * (+0x2de6 = 4) and, from frame 102, break off. */
+static void ar_stun(float f, ArBrain *b, float d, int sector) {
+    switch (e->step) {
+    case 0:
+        e->ar_parried = 0;
+        b->charged = 0.0f;
+        if (!ar_brother() || !(b->flags & 0x100)) ar_brain_counter(b);
+        e->step = 10;
+        break;
+    case 10:
+        if (e->done) { ar_play(47); e->ar_c30 = 150.0f; e->step = 0x14; }
+        break;
+    case 0x14:
+        if ((e->ar_c30 -= f) <= 0.0f) { ar_play(48); e->step = 0x1e; }
+        break;
+    case 0x1e:
+        if (e->frame >= 8.0f) e->step = 0x1f;
+        break;
+    case 0x1f:
+        if (e->frame >= 66.0f) { ar_still(); e->ar_v[1] = 24.4444f; e->ar_air = 1; e->step = 0x28; }
+        break;
+    case 0x28:
+        if (e->frame >= 75.0f) {
+            e->ar_a[1] = -2.0f; e->ar_cap[1] = -30.0f;
+            if (b->set == 2) ar_brain_charged(b);
+            e->step = 0x32;
+        }
+        break;
+    case 0x32:
+        if (ar_landed()) {
+            float at[3] = {e->pos[0], e->floor_y, e->pos[2]};
+            ar_play(49); ar_still(); fx_dust(at);
+            e->ar_attacked = 1;
+            e->step = 0x3c;
+        }
+        break;
+    default:
+        if (e->frame >= 102.0f && ar_interrupt(b, d, sector)) return;
+        if (e->done) ar_go(AR_IDLE);
+        return;
+    }
+    if (e->step >= 0x1e && e->step <= 0x32 && e->frame >= 60.0f && e->frame < 85.0f)
+        e->yaw = wrap_angle(e->yaw - 14.0f * (PI / 180.0f) * f);
+    if (e->step >= 0x28 && e->step <= 0x32) ar_fall(f);
+}
+
+/* States 56 and 65, the leap at Dante (FUN_003a94c0): 56 crouches first (74, turning 0x800, still); the spring (75) at
+ * 45 up, slowing 2 a frame; in the air (76) past the top falling 3 a frame to 30, turning 0xc0 (0x5b74b0 + 0x100); ahead
+ * at 10 to 30 by how far he is (10 with Dante beside); landed, the landing (77; dust, effect 0x2e5), then idle. */
+static void ar_pounce(float f, float px, float pz, float d, int sector) {
+    const float turn = 0x800 * AR_ANGLE;
+    switch (e->step) {
+    case 0:
+        if (e->action == 56) { e->step = 10; goyle_turn_to(px, pz, turn, f); return; }
+        goyle_turn_to(px, pz, turn, f);
+        goto spring;   /* 65: 75 playing (ar_go) */
+    case 10:
+        goyle_turn_to(px, pz, turn, f);
+        if (!e->done) return;
+        ar_play(75);
+    spring:
+        e->step = 0x14;
+        ar_still();
+        e->ar_v[1] = 45.0f; e->ar_a[1] = -2.0f;
+        e->ar_air = 1;
+        break;
+    case 0x14:
+        if (e->done) { ar_play(76); e->step = 0x15; }
+        break;
+    case 0x15:
+        if (e->ar_v[1] <= 0.0f) { e->step = 0x1e; e->ar_a[1] = -3.0f; e->ar_cap[1] = -30.0f; }
+        goyle_turn_to(px, pz, 0xc0 * AR_ANGLE, f);
+        break;
+    case 0x1e:
+        if (ar_landed()) {
+            float at[3] = {e->pos[0], e->floor_y, e->pos[2]};
+            ar_play(77); ar_still(); fx_dust(at);
+            e->step = 0x29;
+            return;
+        }
+        break;
+    default:
+        if (e->done) ar_go(AR_IDLE);
+        return;
+    }
+    if (e->step >= 0x14 && e->step <= 0x1e) {
+        float v = (d - 350.0f) / 10.0f + 10.0f;
+        if (sector & 1) v = 10.0f;
+        else if (v < 10.0f) v = 10.0f;
+        else if (v > 30.0f) v = 30.0f;
+        e->ar_v[2] = e->ar_a[2] = e->ar_cap[2] = v;
+        ar_slide(f);
+        ar_fall(f);
+    }
+}
+
+/* States 59 / 60 on his own pedestal, taking up both swords (FUN_003aa180 0 / 1): facing the room (78 / 79); at 110
+ * frames his sword's flash (FUN_003ac670: effect 0x3b3 / 0x3b4 and sound 0x59, not shown); at 173, 215 more, then the
+ * call (80 / 81) and 95 more; at its frame 112 he holds both swords (+0x2f40 = 2, the survivor's parameter block
+ * 0x61a760) and leaves the pair's brain (+0x2ee7 = 0); then (82 / 83), at its frame 300 set at the pedestal's front
+ * edge (y 939) with both swords charged; when it ends, the leap at Dante (56). */
+static void ar_pedestal(float f, ArBrain *b) {
+    int p = e->action == 60;
+    switch (e->step) {
+    case 0:
+        ar_still();
+        e->yaw = 0.0f;
+        e->ar_air = 0;
+        e->ar_c30 = 173.0f; e->ar_c34 = 110.0f;
+        e->step = 10;
+        return;
+    case 10:
+        e->ar_c30 -= f;
+        if ((e->ar_c34 -= f) <= 0.0f) e->step = 11;
+        return;
+    case 11:
+        if ((e->ar_c30 -= f) <= 0.0f) { e->ar_c30 = 215.0f; e->step = 0x14; }
+        return;
+    case 0x14:
+        if ((e->ar_c30 -= f) <= 0.0f) { ar_play(80 + p); e->ar_c30 = 95.0f; e->step = 0x1e; }
+        return;
+    case 0x1e:
+        if ((e->ar_c30 -= f) <= 0.0f) e->step = 0x28;
+        return;
+    case 0x28:
+        if (e->frame >= 112.0f) { b->set = 2; b->paired = 0; e->ar_parried = 0; e->step = 0x29; }
+        return;
+    case 0x29:
+        if (e->done) { ar_play(82 + p); e->step = 0x2a; }
+        return;
+    case 0x2a:
+        if (e->frame >= 300.0f) {
+            e->pos[0] = p ? 1958.0f : 3061.0f; e->pos[1] = 939.0f; e->pos[2] = 1816.0f;
+            e->placed = 1;
+            b->charge_sword = p;
+            ar_brain_charged(b);
+            e->step = 0x2b;
+        }
+        /* fall through */
+    default:
+        if (e->done) ar_go(56);
+        return;
+    }
+}
+
+/* State 63, the climb (FUN_003aad50), when the pair's controller sends the survivor (flags 0x8000): from beyond 100 of
+ * the floor in front of his pedestal ((2860, 2200) Agni's, (2170, 2200) Rudra's: FUN_003af970's target) a turn to it
+ * (26, from its frame 5), a leap there (2, 3 speeding 3 a frame to 16, 4) until within 150; then hop 5 straight up,
+ * turning to the room's middle (2500, 3000), and past y 960 he's on his pedestal ((3065, 960, 1780) or (1930, 960,
+ * 1778), state 59 / 60). Landing short of it, he begins again. */
+static void ar_climb(float f, ArBrain *b, float d, int sector) {
+    int p = e->kind == ENEMY_RUDRA;
+    float tx = e->step < 0x14 ? (p ? 2170.0f : 2860.0f) : 2500.0f, tz = e->step < 0x14 ? 2200.0f : 3000.0f;
+    float dx = tx - e->pos[0], dz = tz - e->pos[2], dt = sqrtf(dx * dx + dz * dz);
+    switch (e->step) {
+    case 0:
+        e->step = dt > 100.0f ? 1 : 0x14;   /* 26 playing (ar_go) */
+        break;
+    case 1:
+        if (e->frame >= 5.0f) e->step = 2;
+        break;
+    case 2:
+        goyle_turn_to(tx, tz, 0x888 * AR_ANGLE, f);
+        if (e->done) { ar_play(2); e->step = 11; }
+        break;
+    case 11:
+        if (e->done) { ar_play(3); ar_still(); e->ar_a[2] = 3.0f; e->ar_cap[2] = 16.0f; e->step = 12; }
+        break;
+    case 12:
+        goyle_turn_to(tx, tz, 0x800 * AR_ANGLE, f);
+        ar_slide(f);
+        if (e->done) { ar_play(4); e->step = 13; }
+        break;
+    case 13:
+        goyle_turn_to(tx, tz, 0x800 * AR_ANGLE, f);
+        ar_slide(f);
+        if (dt <= 150.0f) { ar_still(); e->ar_sub = 0; e->step = 0x15; }
+        break;
+    default:
+        tx = 2500.0f; tz = 3000.0f;
+        if (ar_hop_run(5, tx, tz, f, b, d, sector)) { e->step = 0; e->ar_sub = 0; ar_play(26); break; }
+        if (e->action == 63 && e->pos[1] >= 960.0f) {
+            e->pos[0] = p ? 1930.0f : 3065.0f; e->pos[1] = 960.0f; e->pos[2] = p ? 1778.0f : 1780.0f;
+            e->placed = 1;
+            ar_still();
+            e->ar_air = 0;
+            ar_go(59 + p);
+        }
+        break;
+    }
+}
+
 static void ar_statue(int which) {
     e->plan = P_WATCH;
     e->action = AR_STATUE_STATE;
@@ -4115,21 +4508,26 @@ static void ar_statue(int which) {
     e->hit_left[0] = e->hit_left[1] = 0.0f;
     e->health = 1;
     e->ar_health = AR_HEALTH_MAX;
+    ar_still();
+    e->ar_air = 0; e->ar_sub = 0; e->ar_guard = 0; e->ar_guarded = 0; e->ar_parried = 0; e->ar_attacked = 0;
+    ar_brains[which].set = which;   /* each his own sword until the pedestal */
 }
 
 static void ar_rudra_spawn(void) { ar_statue(1); }
 
-/* The one spawn (class 27) brings both: Agni here, Rudra beside him. */
+/* The one spawn (class 27) brings both: Agni here, Rudra beside him. In the arena they stand where FUN_0039fa30
+ * puts them: Agni (+0x2dd4 = 0) at (2900, 2125), Rudra at (2120, 2125). */
 static void ar_spawn(void) {
     Enemy *agni = e;
-    int k;
-    agni->pos[0] += 180.0f;
+    int k, arena = ar_arena();
+    if (arena) { agni->pos[0] = 2900.0f; agni->pos[2] = 2125.0f; }
+    else agni->pos[0] += 180.0f;
     ar_statue(0);
     for (k = 0; k < ENEMY_MAX; ++k) {
         Enemy *o = &enemies[k];
         if (o->active) continue;
         e = o;
-        spawn_one(ENEMY_RUDRA, agni->pos[0] - 360.0f, agni->pos[2]);
+        spawn_one(ENEMY_RUDRA, arena ? 2120.0f : agni->pos[0] - 360.0f, agni->pos[2]);
         break;
     }
     e = agni;
@@ -4141,8 +4539,10 @@ static void ar_update(float f, float px, float py, float pz) {
     ArBrain *b = ar_brain();
     const ArStateInfo *in;
     ArSense s;
+    int sector, custom;
+    if (e->kind == ENEMY_AGNI || !bro) ++ar_ticks;
     if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
-    e->pos[1] = e->floor_y;
+    if (!e->ar_air) e->pos[1] = e->floor_y;
     if (e->action == AR_STATUE_STATE) {
         /* They stand as statues until he comes near, strikes one, or waits; then both wake. */
         e->timer += f;
@@ -4151,6 +4551,7 @@ static void ar_update(float f, float px, float py, float pz) {
             fx_dust(at); fx_explosion(at);
             ar_brain_reset(b, e->kind == ENEMY_AGNI ? 0 : 1);
             ar_formation_time = 0.0f;
+            ar_side = fabsf(4000.0f - pz) <= fabsf(2200.0f - pz) ? 1 : 2;
             ar_go(AR_OPENING);   /* +0x2de7: the pair's opening first (FUN_003aedd0) */
         }
         return;
@@ -4163,12 +4564,22 @@ static void ar_update(float f, float px, float py, float pz) {
         return;
     }
     if (e->action == AR_OPENING) {
-        ar_opening(f, px, pz, d, root, bro, b->set);
+        /* FUN_003af970: in the arena the opening's first leap aims at the floor before his pedestal (by +0x2de7), its
+         * turn after at the room's middle, and only from step 0x1e at Dante. */
+        float tx = px, tz = pz;
+        if (ar_arena() && e->step < 0x1e) {
+            int agni = e->kind == ENEMY_AGNI;
+            if (e->step >= 0x14) { tx = 2500.0f; tz = 3000.0f; }
+            else if (ar_side == 1) { tx = agni ? 2860.0f : 2170.0f; tz = 2200.0f; }
+            else { tx = agni ? 2862.0f : 2133.0f; tz = 4000.0f; }
+        }
+        dx = tx - e->pos[0]; dz = tz - e->pos[2];
+        ar_opening(f, tx, tz, sqrtf(dx * dx + dz * dz), root, bro, b->set);
         keep_apart(px, py, pz, f);
         return;
     }
-    /* The survivor takes up his brother's sword (+0x2f40 = 2). */
-    if (!bro && b->set != 2) b->set = 2;
+    /* His brother down, the pair's controller gives him formation 9 (FUN_004810f0): up his pedestal for both swords. */
+    if (!bro && b->paired && !(b->flags & 0x8000)) ar_pair_survivor(b);
     s.distance = d; s.above = py - e->pos[1];
     s.health_fraction = e->ar_health / AR_HEALTH_MAX;
     s.brother_alive = bro != 0;
@@ -4190,8 +4601,14 @@ static void ar_update(float f, float px, float py, float pz) {
     }
     ar_brain_tick(b, &s, f);
     in = ar_state_info(e->action);
+    sector = ar_sector(wrap_angle(atan2f(dx, dz) - e->yaw));
     if (in->brain) {
-        int sector = ar_sector(wrap_angle(atan2f(dx, dz) - e->yaw));
+        /* FUN_003acfb0 first: the formation's 0x8000 sends him up his pedestal (63), while he keeps the pair's brain.
+         * Away from the arena (no pedestals) he takes up both swords where he stands. */
+        if (b->paired && (b->flags & 0x8000)) {
+            if (ar_arena()) { ar_go(63); return; }
+            b->set = 2; b->paired = 0;
+        }
         /* FUN_003af2c0: Dante beyond his side line: he turns to him (state 0, ar26) before anything else. */
         if (sector & 1) { ar_go(0); return; }
         /* FUN_003aeec0: a new move of Dante's that he answers: Agni hops back (21), Rudra guards (23). */
@@ -4201,7 +4618,21 @@ static void ar_update(float f, float px, float py, float pz) {
             if (ar_reacts(b, ar_dante_action, d, sector)) { ar_go(b->set == 0 ? 21 : 23); return; }
         }
     }
-    if (in->turn) goyle_turn_to(px, pz, (float)in->turn * (2.0f * PI / 65536.0f), f);
+    custom = e->action == 11 || (e->action >= 16 && e->action <= 20) || e->action == 36 || e->action == 56 ||
+             e->action == 59 || e->action == 60 || e->action == 63 || e->action == 65;
+    if (custom) {
+        switch (e->action) {
+        case 11: ar_leap(f, px, pz, b, d, sector); break;
+        case 36: ar_stun(f, b, d, sector); break;
+        case 56: case 65: ar_pounce(f, px, pz, d, sector); break;
+        case 59: case 60: ar_pedestal(f, b); break;
+        case 63: ar_climb(f, b, d, sector); break;
+        default: if (ar_hop_run(e->action - 16, px, pz, f, b, d, sector)) ar_go(AR_IDLE); break;
+        }
+    } else {
+    /* The guard stances and the guard broken turn to him for their first 20 frames (+0x2e34). */
+    if (in->turn && !(e->action >= 21 && e->action <= 29 && e->timer >= 20.0f))
+        goyle_turn_to(px, pz, (float)in->turn * (2.0f * PI / 65536.0f), f);
     if (in->dash >= 0) {
         /* FUN_003b0450's dash: up to its top speed, held, then slowing. */
         float start, top, hold, slow, v;
@@ -4215,7 +4646,9 @@ static void ar_update(float f, float px, float py, float pz) {
     } else {
         move_local(root[0], 0.0f, root[2]);
     }
+    }
     keep_apart(px, py, pz, f);
+    e->ar_was[0] = e->pos[0]; e->ar_was[1] = e->pos[2];
     if (e->hit_left[0] > 0.0f || e->hit_left[1] > 0.0f) test_attack(px, py, pz);
     {
         float hx = e->hand_pos[0], hz = e->hand_pos[2], sn = sinf(e->yaw), cs = cosf(e->yaw);
@@ -4252,13 +4685,14 @@ static void ar_update(float f, float px, float py, float pz) {
             b->charge_fx = 0;
         }
     }
+    if (custom) return;
     /* A script that loops (a fall, a hold) gives way after 150 frames: what it waits on isn't followed. */
     if (e->done || (e->loop && !in->brain && e->wake > 150.0f)) {
         ++e->step;
         if (e->step < 6 && in->scripts[e->step] >= 0) ar_phase_start(in);
         else {
             if (e->action == 50 || e->action == 51) { b->charge_sword = e->action == 51; ar_brain_charged(b); }
-            if (e->action >= 22 && e->action <= 26 && e->action != 23 && e->action != 25) ar_brain_counter(b);
+            if (e->action >= 21 && e->action <= 26) e->ar_guarded = 0;   /* +0x2ec4 as the guard ends */
             if (e->action == AR_DEATH) return;
             ar_go(in->next >= 0 ? in->next : AR_IDLE);
             return;
@@ -4266,7 +4700,9 @@ static void ar_update(float f, float px, float py, float pz) {
     }
     if (in->brain && ar_force >= 0) { int st = ar_force; ar_force = -1; ar_go(st); return; }
     if (in->brain) {
-        int next = ar_brain_decide(b, &s, e->action);
+        int had = b->may_attack, next = ar_brain_decide(b, &s, e->action);
+        /* An attack taken (FUN_003acfb0): +0x2de5 = 1, the guard's count (+0x2ec4) cleared. */
+        if (had && !b->may_attack) { e->ar_attacked = 1; e->ar_guarded = 0; }
         if (next >= 0) ar_go(next);
     }
 }
@@ -4277,10 +4713,40 @@ static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z) {
     ++hits;
     fx_hit_spark(at);
     if (e->action == AR_STATUE_STATE) { e->step = 1; return; }   /* struck awake */
-    if ((e->action == 21 || e->action == 23 || e->action == 25) && e->step == 0 && kind != HIT_PISTOL) {
-        /* Guarding (+0x1e4 = 2): the blow is turned, and he holds on to counter (22, 24, 26). */
-        ar_go(e->action + 1);
-        return;
+    {
+        /* FUN_003a1a50 (vtable +0xc4): a blow from in front (Dante in an even sector) on a guard isn't taken. The
+         * guard is the stances' (+0x1e4 / +0x1e5 = 2, blades and guns) or, for blades, his swing's own: the scripts
+         * raise flag 0 over their swings (op 3; FUN_003af800 in 30, 31, 33, 34 and 42-49): 4 while he's met fewer than
+         * (0x619580: 1 at rank 0, twice with both swords) - 1 blows in his swings, else 3. */
+        ArBrain *b = ar_brain();
+        float dx = hit_from_x - e->pos[0], dz = hit_from_z - e->pos[2];
+        int gun = kind == HIT_PISTOL, mode = e->ar_guard, parry_max = b->set == 2 ? 2 : 1;
+        int a = e->action, swing = a == 30 || a == 31 || a == 33 || a == 34 || (a >= 42 && a <= 49);
+        if (!gun && !mode && swing && e->flags[0]) mode = e->ar_parried < parry_max - 1 ? 4 : 3;
+        if (mode && !(ar_sector(wrap_angle(atan2f(dx, dz) - e->yaw)) & 1)) {
+            if (mode == 2) {
+                /* Counted (+0x2ec4: 2 a blade, 1 a bullet); FUN_003a27f0: a blade past 11 (0x619588, rank 0) breaks
+                 * the guard (27-29, by swords), else the blow's taken on it (22, 24, 26); bullets past 11 cost him his
+                 * hold (+0x2de5 = 0) unless the formation keeps him from attacking. Dante's own recoil from it
+                 * (the hit's +0x34) isn't modelled. */
+                e->ar_guarded = (unsigned char)(e->ar_guarded + (gun ? 1 : 2));
+                if (!gun && e->ar_guarded >= 11) ar_go(27 + b->set);
+                else {
+                    if (gun && e->ar_guarded >= 11 && (!ar_brother() || !(b->flags & 0x100))) e->ar_attacked = 0;
+                    ar_go(22 + 2 * b->set);
+                }
+            } else {
+                /* FUN_003a24d0 (vtable +0xe8): his swing meets the blow. Under the count, the parry by the swing he was
+                 * in (30-35, which counter); at it, his swing's broken (36). */
+                if (++e->ar_parried < parry_max) {
+                    int st = (a == 34 || a == 45 || a == 49) ? 34 : (a == 33 || a == 44 || a == 48) ? 33 :
+                             (a == 31 || a == 43 || a == 47) ? 31 : (a == 30 || a == 42 || a == 46) ? 30 :
+                             b->set == 0 ? 32 : b->set == 1 ? 35 : -1;
+                    if (st >= 0) ar_go(st);
+                } else ar_go(36);
+            }
+            return;
+        }
     }
     if (mortal) {
         /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]. Agni's fire is weak to
@@ -4290,6 +4756,7 @@ static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z) {
         e->ar_health -= damage;
         if (e->ar_health <= 0.0f) {
             e->ar_health = 0.0f;
+            e->ar_air = 0;
             ar_go(AR_DEATH);
             e->plan = P_DEATH;
             e->timer = 0.0f;
@@ -4372,6 +4839,13 @@ static void giga_note(const char *what, int a, float b) {
                                  "giga t=%d %s %d %.1f hp=%.1f\n", giga_ticks, what, a, b, giga.health);
 }
 const char *enemy_giga_log(void) { return giga_log_text; }
+/* Agni & Rudra's states for the test log: frame, who, state, where, health. */
+static void ar_note(int state) {
+    if (state >= 2 && state <= 10) return;   /* idle and the moves: too many to keep */
+    if (giga_log_len < (int)sizeof(giga_log_text) - 96)
+        giga_log_len += snprintf(giga_log_text + giga_log_len, sizeof(giga_log_text) - giga_log_len, "ar t=%d %s %d at %.0f %.0f %.0f hp=%.0f\n",
+                                 ar_ticks, e->kind == ENEMY_AGNI ? "agni" : "rudra", state, e->pos[0], e->pos[1], e->pos[2], e->ar_health);
+}
 static unsigned short *giga_head_idx, *giga_body_idx;
 static Vertex *giga_head_v, *giga_body_v;
 static void *giga_tex[GIGA_TEXTURE_COUNT];

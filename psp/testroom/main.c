@@ -1220,6 +1220,7 @@ static void draw_debug_menu(int viewer) {
     sceGuColor(0xffffffffu);
 }
 
+static int cmp_camat_on; static float cmp_camat[6];   /* tests: a fixed view ("camat") */
 static void render_scene(const Player *player, const FollowCamera *camera_state,
                          const char *hud[HUD_LINES], int show_bones) {
     FollowCamera camera_copy = *camera_state;
@@ -1285,7 +1286,16 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     {
         /* The game's vertical FOV for this camera (camera.c; 55 degrees on the follow camera by default). */
         float fov = camera->fov > 0.05f ? camera->fov * 57.29578f : 60.0f;
-        if (demo_active()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 50.0f, 60000.0f);   /* a demo's stage is city-sized */
+        if (demo_active()) {
+            /* A demo's stage is city-sized, but its close-ups put the eye 20-40 cm from a face (demo 1's cm027:
+             * 41 cm, fov 15): a fixed 50 cm near plane cut the face away and showed the inside of the head. The
+             * near plane follows the eye's distance to its target, a third of it, 4-50 cm. */
+            float dx = camera->tx - camera->x, dy = camera->ty - camera->y, dz = camera->tz - camera->z;
+            float near = sqrtf(dx * dx + dy * dy + dz * dz) * 0.33f;
+            if (near < 4.0f) near = 4.0f;
+            if (near > 50.0f) near = 50.0f;
+            sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
+        }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
         else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
     }
@@ -1295,6 +1305,10 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         ScePspFVector3 eye = {camera->x, camera->y, camera->z};
         ScePspFVector3 target = {camera->tx, camera->ty, camera->tz};
         ScePspFVector3 up = {0.0f, 1.0f, 0.0f};
+        if (cmp_camat_on) {   /* tests: "camat x y z tx ty tz", a fixed view */
+            eye.x = cmp_camat[0]; eye.y = cmp_camat[1]; eye.z = cmp_camat[2];
+            target.x = cmp_camat[3]; target.y = cmp_camat[4]; target.z = cmp_camat[5];
+        }
         /* The game's camera roll (rail points, pan cameras: FUN_00131990 turns the view about its axis). */
         if (camera->roll != 0.0f) sceGumRotateZ(camera->roll);
         sceGumLookAt(&eye, &target, &up);
@@ -2106,6 +2120,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "forceclear ", 11) == 0) cmp_force_clear = atoi(line + 11);   /* "demo n": play demo n from the start (demo.c) */
         else if (strncmp(line, "nodemo", 6) == 0) cmp_no_demo = 1;
         else if (strncmp(line, "arforce ", 8) == 0) sscanf(line + 8, "%d %d", &cmp_force_at, &cmp_force_state);   /* "arforce frame state" */
+        else if (strncmp(line, "camat ", 6) == 0) cmp_camat_on = sscanf(line + 6, "%f %f %f %f %f %f", &cmp_camat[0], &cmp_camat[1], &cmp_camat[2], &cmp_camat[3], &cmp_camat[4], &cmp_camat[5]) == 6;
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
         else if (strncmp(line, "creditsat ", 10) == 0) cmp_credits_at = atoi(line + 10);   /* tests: M20's street from this frame */
@@ -3169,6 +3184,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     spheres_enter(mission_mode && mission_choice.mission == 16 ? room_number(room) : -1);   /* 109's and 146's spheres */
     m19_enter(mission_mode && mission_choice.mission == 19 ? room_number(room) : -1, room_is_cleared(room) || item_state[57] != 0);   /* 404's hourglass */
     wagon_enter(mission_mode ? room_number(room) : -1, m10_previous == 240);   /* 216's ride (wagon.c): backward from 240 */
+    enemy_set_room(mission_mode ? room_number(room) : -1);   /* Agni & Rudra's room places (enemy.c) */
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
