@@ -20,7 +20,7 @@
 
 #include "nfx.h"
 
-#define MAX_INST 64
+#define MAX_INST 96   /* demo 8 (Lady's missiles) peaks past 64 */
 #define MAX_PARTS 24
 #define PI 3.14159265f
 
@@ -50,9 +50,11 @@ typedef struct {
 
 static Inst inst[MAX_INST];
 static unsigned short generation = 1;
-static int enabled = 1, started;
+static int enabled = 1, started, dropped, peak;
 void pfx_enable(int on) { enabled = on; }
 int pfx_started(void) { return started; }
+int pfx_dropped(void) { return dropped; }
+int pfx_peak(void) { return peak; }
 static unsigned int seed = 0x9e3779b9u;
 
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
@@ -286,7 +288,7 @@ int pfx_spawn(int bank, const unsigned char *rec, const PfxFrame *place, int own
     if (type > 4) return 0;   /* Line02: not ported */
     n = sub_count(rec, p);
     i = new_inst();
-    if (i < 0) return 0;
+    if (i < 0) { ++dropped; return 0; }
     inst[i].bank = (unsigned char)bank; inst[i].type = (unsigned char)type; inst[i].rec = rec; inst[i].p = p;
     inst[i].owner = owner; inst[i].root = root; inst[i].loop = (unsigned char)loop;
     inst[i].place = *place;
@@ -297,6 +299,7 @@ int pfx_spawn(int bank, const unsigned char *rec, const PfxFrame *place, int own
     }
     start_main(&inst[i]);
     ++started;
+    { int live = pfx_live(); if (live > peak) peak = live; }
     for (j = 0; j < n && j < 8; ++j) {
         int f = new_inst();
         if (f < 0) break;
@@ -438,8 +441,9 @@ void pfx_update(float frames) {
             if (s->type == 3 && s->p[0x118] == 0) atlas_step(s, frames);
             continue;
         }
-        s->life -= frames;
-        if (s->life < 0.0f) {
+        /* a life under -10000 never runs out (the game counts it down only from -10000 up): Nevan's bats' -20000 */
+        if (s->life >= -10000.0f) s->life -= frames;
+        if (s->life < 0.0f && s->life >= -10000.0f) {
             if (s->loop) {
                 /* +0x98: it starts again (state 2, the class's start once more), the fakes with it */
                 int j;

@@ -39,10 +39,13 @@ CERBERUS_P = (58, 59)
 SKIP_E = {2}
 # Agni & Rudra's charged blades (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's. The slam (FUN_003a8200 phase
 # 0x1f): V785 at Agni's blade, V786 at Rudra's (E0 and the P24 / P44 particles).
-AGNI_RUDRA_V = (588, 589, 785, 786)
+AGNI_RUDRA_V = (588, 589, 785, 786, 0x7b, 0x1d5 | 0x8000)   # + the long attacks' V0x7b and G0x1d5 (FUN_003ac770 / 790)
+# Started by their code: P44 as one lands (FUN_003ac750) and P44 / P15 as one falls dead (FUN_003a6820).
+AGNI_RUDRA_P = (15, 44)
 # The Jester's (em037 [10]): the cross (0054d610: V0x3f9 once, V0x3f8 looping; 0054dc70: V0x3fa at its end) and the
 # bomb (0054e710: V0x417 in flight; 0054edc0: V0x41c as it goes off).
-JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c)
+JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c,
+            0x3cb, 0x3cc, 0x3f3)   # his second set's (enemy.c jester_fx): 0x3cb / 0x3cc trails, 0x3f3 rising
 # Effect models whose second chunk is a 16-byte reference rather than their own textures. The reference's
 # meaning isn't decoded. A model takes a twin's textures when one has the same vertices, else the ice texture
 # of the icicle model M54 (the ice pieces and frozen floor are the same material).
@@ -243,21 +246,41 @@ def main():
              "typedef struct { int id, vertex_count, index_count; const NfxVertex *vertices; const unsigned short *indices; int texture; } NfxModel;",
              "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; const NfxRecord *p; int p_count; const NfxRecord *a; int a_count; } NfxBank;"]
     summary = []
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V, ORB_E))
+    # P44 (dust): the Arachne's landings start it from the shared pack (FUN_003fb580 and its kin).
+    # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0).
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c), ORB_E, (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
-    summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, ()))
+    summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, (), AGNI_RUDRA_P))
     summary.append(write_bank(lines, 5, records(pac_list(read(140))[10]), JESTER_V, ()))
     # 6 em008's pack (GDATA 120, PNST chunk 24): the Hell Vanguard's P312 only (its V / E are vanguard_fx.py's).
     summary.append(write_bank(lines, 6, records(pnst_entries(read(120))[24]), (), (), (312,)))
+    # 7 em028's effect pack (GDATA 133, PAC entry 9): Nevan's. Action 22's V0x199 (FUN_003b6c90) and her bats' P
+    # (FUN_003c9870: P203 / P235 / P251 at random on each).
+    summary.append(write_bank(lines, 7, records(pac_list(read(133))[9]), (409, 0x110, 0x1a8 | G_FLAG, 0x97 | G_FLAG), (),
+                              (203, 235, 251)))
+    # 8 em034's pack (GDATA 138, PAC entry 28): Lady's rocket (CEm034Shl02: V0x179 in flight, V0x21f as it bursts).
+    summary.append(write_bank(lines, 8, records(pac_list(read(138))[28]), (0x179, 0x21f), ()))
+    # 9 em010's pack (GDATA 121, PNST chunk 21): the Arachne's web (CEm010Shl00).
+    summary.append(write_bank(lines, 9, records(pnst_entries(read(121))[21]), (0x29e, 0x2a3, 0x308, 0x309, 0x2a2, 0x304), ()))
+    # 10 em011's pack (GDATA 122, PNST chunk 8): the Fallen's spear (CEm011Shl00: V0x367, V0x368).
+    summary.append(write_bank(lines, 10, records(pnst_entries(read(122))[8]), (0x367, 0x368), ()))
+    # 11 room 405's effect pack (GDATA 758): Mission 19's mirrors (CStageSetMirror: V0x1ea shattering; their E0x2e0 glow is a model
+    # whose texture reference isn't decoded, so mission19.c keeps its stand-in).
+    summary.append(write_bank(lines, 11, records(read(758)), (0x1ea,), ()))
+    # 12 a stage effect pack (GDATA 526; 646 has the same): the crystals' V554 (a type-3 crystal struck, FUN_004203c0).
+    summary.append(write_bank(lines, 12, records(read(526)), (554,), ()))
+    # 13 the Nausika's effect pack (GDATA 694): CStageSetNausika's blows (V0x22b / V0x22c, FUN_00493590) and its
+    # aura (V0x352 on a bone, FUN_00492630: not played, see nausika.c).
+    summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c), ()))
     # st423's effect bank (GDATA 830), shared by the ten Palace arena variants.
     # STAY 100/101/102 explicitly name V965/V967/V964 (water/lightning/fire).
-    summary.append(write_bank(lines, 7, records(read(830)), (965,967,964), ()))
+    summary.append(write_bank(lines, 14, records(read(830)), (965,967,964), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

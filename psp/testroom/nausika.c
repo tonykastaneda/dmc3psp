@@ -1,6 +1,7 @@
 #include "nausika.h"
 #include "motion.h"
 #include "enemy.h"
+#include "nfx.h"
 #include "swizzle.h"
 #include <pspgu.h>
 #include <pspgum.h>
@@ -147,6 +148,8 @@ void nausika_enter(int room) {
     chase.enabled=1;chase.hp=3000;chase.timer=30;chase.node=1;
     chase.pos[0]=nausika_path[0].x;chase.pos[1]=nausika_path[0].y;chase.pos[2]=nausika_path[0].z;
 }
+/* Its looping V0x352 (FUN_00492630, on a bone) isn't played: drawn about the body it fills the view with white
+ * squares, so its bone and scale need decoding first. */
 float nausika_update(float frames,float x,float y,float z) {
     float dx,dz,d,damage=0;
     if(!chase.enabled || chase.state==4)return 0;
@@ -181,6 +184,11 @@ void nausika_hit(float x,float y,float z,float yaw,float reach,int kind) {
     if(!chase.enabled || !chase.started || chase.state==4 || d>reach+500 || fabsf(y+150-chase.pos[1])>600)return;
     if(d>1 && (dx*sinf(yaw)+dz*cosf(yaw))/d<.2f)return;
     damage=(kind==HIT_LIGHT || kind==HIT_AIR)?42:84;
+    {   /* A blow's effect where it lands (FUN_00493180 -> 00493590): V0x22c, or V0x22b by the hit record's +2 (taken as
+         * light / heavy [inferred]); the point taken on the line to it, at the reach, 100 up [estimate]. */
+        float r=fminf(d,reach),at[3]={x+sinf(yaw)*r,y+100,z+cosf(yaw)*r};
+        nfx_spawn(NFX_NAUSIKA,(kind==HIT_LIGHT || kind==HIT_AIR)?0x22c:0x22b,at,yaw,0);
+    }
     chase.hp-=damage;chase.stagger+=damage;
     if(chase.hp<=0)chase.state=4;
     else if(chase.stagger>750) {chase.state=3;chase.age=0;chase.timer=90;chase.stagger=0;}

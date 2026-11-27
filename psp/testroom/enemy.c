@@ -3627,6 +3627,12 @@ static void jester_puff(void) {
     }
 }
 
+/* His second set's own effects (em037 [10], NFX_JESTER; their P particles pfx.c's), on his frame: V0x3cb as he lands
+ * from 0x7b's fall (00539c80) and at each of 0x80's hops (0053b520), and every so often in 0x7f's wind-up (0053a670);
+ * V0x3cc through 0x7f's charge (0053a9d0); V0x3f3 as 0x79 starts, at the arena's middle 500 up (00539540). The
+ * wind-up's and charge's intervals (+0x4c74 / +0x4c7c) aren't read: 10 frames [estimate]. */
+static void jester_fx(int v) { float at[3] = {e->pos[0], e->pos[1], e->pos[2]}; nfx_spawn(NFX_JESTER, v, at, e->yaw, 0); }
+
 static void jester_spawn(void) {
     e->plan = P_WATCH;
     e->motion = -1;
@@ -3771,7 +3777,7 @@ static void jester_update(float f, float px, float py, float pz) {
                 e->pos[0] = 3500.0f; e->pos[1] = -220.0f; e->pos[2] = 3500.0f;
                 e->yaw = atan2f(px - e->pos[0], pz - e->pos[2]);
                 e->frame = 0.0f; e->done = 0;
-                jester_puff();
+                { float at[3] = {3500.0f, 500.0f, 3500.0f}; nfx_spawn(NFX_JESTER, 0x3f3, at, e->yaw, 0); }
             } else e->frame = 0.0f;
         } else {
             e->pos[1] += 6.0f * f;
@@ -3796,7 +3802,7 @@ static void jester_update(float f, float px, float py, float pz) {
             e->vel[1] -= 1.1111f * f;
             e->pos[0] += e->vel[0] * f; e->pos[2] += e->vel[2] * f;
             jester_sphere(px, py, pz, 1000.0f);
-            if (e->pos[1] < JESTER_FLOOR) { e->pos[1] = JESTER_FLOOR; jester_puff(); jester_state(J_IDLE); }
+            if (e->pos[1] < JESTER_FLOOR) { e->pos[1] = JESTER_FLOOR; jester_fx(0x3cb); jester_state(J_IDLE); }
         }
         break;
     case J_CHARGE:
@@ -3804,6 +3810,7 @@ static void jester_update(float f, float px, float py, float pz) {
          * (0x5e302c) charging along his facing at 45 a frame (0x5e3024), turned back toward the middle within 35
          * degrees at random (0x5e3028) at the arena's edge (+0x4d1d) [the edge as the port's arena clamp]; his
          * sphere (kind 1: 160 cm, record 6, 1000) is live, resting 30 frames after a hit. Then 60 frames (js03). */
+        if ((int)(e->timer / 10.0f) != (int)((e->timer - f) / 10.0f)) jester_fx(e->step == 0 ? 0x3cb : 0x3cc);
         if (e->step == 0) {
             goyle_turn_to(px, pz, 5.0f * PI / 180.0f, f);
             if (e->timer >= 120.0f) { e->step = 1; e->timer = 0.0f; e->vel[0] = sinf(e->yaw) * 45.0f; e->vel[2] = cosf(e->yaw) * 45.0f; e->vel[1] = 0.0f; }
@@ -3828,7 +3835,7 @@ static void jester_update(float f, float px, float py, float pz) {
          * (0x5e3074); falling, his sphere (kind 2, record 7, 1000) is live. Then 60 frames. */
         e->yaw += 10.0f * PI / 180.0f * f;
         if (e->step == 0) {
-            if (e->timer >= 120.0f) { e->step = 1; e->j_hops = 5; jester_hop(px, pz); }
+            if (e->timer >= 120.0f) { e->step = 1; e->j_hops = 5; jester_hop(px, pz); jester_fx(0x3cb); }
         } else {
             e->pos[1] += e->vel[1] * f + e->j_g * 0.5f * f * f;
             e->vel[1] += e->j_g * f;
@@ -3836,8 +3843,7 @@ static void jester_update(float f, float px, float py, float pz) {
             if (e->vel[1] < 0.0f) jester_sphere(px, py, pz, 1000.0f);
             if (e->pos[1] < JESTER_FLOOR) {
                 e->pos[1] = JESTER_FLOOR;
-                jester_puff();
-                if (--e->j_hops > 0) jester_hop(px, pz); else jester_state(J_RECOVER);
+                if (--e->j_hops > 0) { jester_hop(px, pz); jester_fx(0x3cb); } else jester_state(J_RECOVER);
             }
         }
         break;
@@ -4533,6 +4539,48 @@ static void ar_spawn(void) {
     e = agni;
 }
 
+/* P effects the brothers' code starts itself (pfx.c, NATIVE_FX.md "Direct P spawns"): FUN_003ac750, P44 dust at him
+ * as he lands from a jump (state 1 and the hops into script 25, a dash into its last script, the slam into its fourth:
+ * FUN_003a2fb0 / 003b09c0 / 003b0450 / 003a8200); FUN_003a6820, as he falls dead (state 39), P44 from motion frame 220
+ * and P15 from 280, each at one of his bones (taken at his feet [estimate]). States 36 and 55 land too, but the port's
+ * scripts there don't show where [not wired]. */
+static void ar_particles(int dead) {
+    static signed char prev_step[ENEMY_MAX];
+    static short prev_action[ENEMY_MAX];
+    static float prev_frame[ENEMY_MAX];
+    int slot = (int)(e - enemies);
+    float at[3] = {e->pos[0], e->floor_y, e->pos[2]};
+    if (slot < 0 || slot >= ENEMY_MAX) return;
+    if (dead) {
+        if (prev_frame[slot] < 220.0f && e->frame >= 220.0f) nfx_spawn_p(NFX_AGNI_RUDRA, 44, at, e->yaw, 0);
+        if (prev_frame[slot] < 280.0f && e->frame >= 280.0f) nfx_spawn_p(NFX_AGNI_RUDRA, 15, at, e->yaw, 0);
+        prev_frame[slot] = e->frame;
+        return;
+    }
+    /* The long attacks (46-49, FUN_003a7510 and kin): at motion frame 65 V0x7b at him and G0x1d5 riding him, a
+     * looping dust trail (FUN_003ac770 / 003ac790), until 77 (FUN_003ac7e0). */
+    {
+        static int trail[ENEMY_MAX];
+        int long_attack = e->action >= 46 && e->action <= 49;
+        if (long_attack && prev_frame[slot] < 65.0f && e->frame >= 65.0f) {
+            nfx_spawn(NFX_AGNI_RUDRA, 0x7b, at, e->yaw, 0);
+            if (!nfx_alive(trail[slot])) trail[slot] = nfx_spawn(NFX_AGNI_RUDRA, 0x1d5 | 0x8000, at, e->yaw, 1);
+        }
+        if (trail[slot] && (!long_attack || e->frame >= 77.0f)) { nfx_kill(trail[slot]); trail[slot] = 0; }
+        else if (trail[slot]) nfx_move(trail[slot], at, e->yaw);
+        prev_frame[slot] = long_attack ? e->frame : 0.0f;
+    }
+    if (e->step != prev_step[slot] || e->action != prev_action[slot]) {
+        const ArStateInfo *in = ar_state_info(e->action);
+        int script = e->step >= 0 && e->step < 6 ? in->scripts[e->step] : -1;
+        int land = (e->action == 1 || (e->action >= 16 && e->action <= 21)) ? script == 25
+                 : (e->action >= 12 && e->action <= 15) || (e->action >= 52 && e->action <= 54) ? e->step == 3 && script >= 0 : 0;
+        if (land) nfx_spawn_p(NFX_AGNI_RUDRA, 44, at, e->yaw, 0);
+        prev_step[slot] = (signed char)e->step;
+        prev_action[slot] = (short)e->action;
+    }
+}
+
 static void ar_update(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, root[3];
     Enemy *bro = ar_brother();
@@ -4559,6 +4607,7 @@ static void ar_update(float f, float px, float py, float pz) {
     script_tick(f, root);
     e->wake += f;
     e->timer += f;
+    ar_particles(e->plan == P_DEATH);
     if (e->plan == P_DEATH) {
         if (e->done && e->timer > 200.0f) e->active = 0;
         return;
@@ -5435,7 +5484,7 @@ float enemy_giga_max_health(void) { return GIGA_HEALTH; }
  * Root motion is x1.5 (FUN_00402ba0: +0x1fc9 isn't 1 for this, the 1400-health block [inferred]). */
 #define AN_TURN(deg_rate) (deg_rate)   /* its turn rates are radians a frame (FUN_00402a30 -> FUN_00105760) */
 #define AN_WEBS 8
-typedef struct { int on, owner, holding; float pos[3], vel[3], life, hold; } AnWeb;
+typedef struct { int on, owner, holding; float pos[3], vel[3], life, hold; int fx; } AnWeb;
 static AnWeb an_webs[AN_WEBS];
 static float an_gate[ENEMY_MAX], an_wall[ENEMY_MAX][3], an_target[ENEMY_MAX][3];
 static unsigned char an_loops[ENEMY_MAX], an_on_wall[ENEMY_MAX], an_tries[ENEMY_MAX], an_shot[ENEMY_MAX];
@@ -5510,7 +5559,7 @@ static void an_webs_launch(float px, float py, float pz) {
         AnWeb *w = &an_webs[i];
         float a = (float)k / 4.0f * 2.0f * PI, tx = px + sinf(a) * 150.0f, tz = pz + cosf(a) * 150.0f, t, dx, dz, l;
         if (w->on) continue;
-        w->on = 1; w->owner = (int)(e - enemies); w->holding = 0; w->life = 1000.0f; w->hold = 0.0f;
+        w->on = 1; w->owner = (int)(e - enemies); w->holding = 0; w->life = 1000.0f; w->hold = 0.0f; w->fx = 0;
         w->pos[0] = from[0]; w->pos[1] = from[1]; w->pos[2] = from[2];
         t = from[1] < py ? 20.0f : sqrtf((from[1] - py) * 1.6f) / 0.8f;
         if (t < 1.0f) t = 1.0f;
@@ -5528,22 +5577,40 @@ static void an_webs_update(float f, float px, float py, float pz) {
         AnWeb *w = &an_webs[i];
         float dx, dy, dz;
         if (!w->on || w->owner != me) continue;
+        /* Its effects (CEm010Shl00, em010's pack, nfx bank 9): V0x29e in flight (FUN_004f46d0); on Dante V0x2a3 and
+         * V0x309, and V0x308 held on him (FUN_004f4a60, flag 0x40; on his body, taken at his middle); V0x2a2 where it
+         * misses (0x20000); V0x304 100 over him as he breaks free (FUN_004f50d0). */
         if (w->holding) {
+            float at[3] = {px, py + 100.0f, pz};
             w->pos[0] = px; w->pos[1] = py + 40.0f; w->pos[2] = pz;
-            if (hold_freed() || (w->hold -= f) < 0.0f) { hold_let_go(1); w->on = 0; }
-            else { float v[3] = {0.0f, 0.0f, 0.0f}; fx_mote(w->pos, v, 90.0f, 90.0f, 0.05f, 0xc0f0f0f0u); }
+            if (hold_freed() || (w->hold -= f) < 0.0f) {
+                hold_let_go(1); w->on = 0;
+                if (w->fx) { nfx_kill(w->fx); w->fx = 0; }
+                nfx_spawn(NFX_ARACHNE, 0x304, at, 0.0f, 0);
+            } else if (nfx_alive(w->fx)) nfx_move(w->fx, at, 0.0f);
             continue;
         }
         w->pos[0] += w->vel[0] * f; w->pos[1] += w->vel[1] * f; w->pos[2] += w->vel[2] * f;
         w->vel[1] -= 0.8f * f;
         dx = px - w->pos[0]; dy = py + 100.0f - w->pos[1]; dz = pz - w->pos[2];
         if (attacks_on && !hold_owner && dx * dx + dy * dy + dz * dz < (100.0f + DANTE_RADIUS) * (100.0f + DANTE_RADIUS)) {
+            float at[3] = {px, py + 100.0f, pz};
             hold_take(35);
             w->holding = 1; w->hold = 300.0f;
+            if (w->fx) nfx_kill(w->fx);
+            nfx_spawn(NFX_ARACHNE, 0x2a3, w->pos, 0.0f, 0);
+            nfx_spawn(NFX_ARACHNE, 0x309, w->pos, 0.0f, 0);
+            w->fx = nfx_spawn(NFX_ARACHNE, 0x308, at, 0.0f, 1);
             continue;
         }
-        if ((w->life -= f) < 0.0f || w->pos[1] < e->floor_y - 50.0f) { w->on = 0; continue; }
-        { float v[3] = {0.0f, 0.0f, 0.0f}; fx_mote(w->pos, v, 40.0f, 40.0f, 0.05f, 0xc0f0f0f0u); }   /* its look (effects 0x29e / 0x2a3 aren't converted) */
+        if ((w->life -= f) < 0.0f || w->pos[1] < e->floor_y - 50.0f) {
+            w->on = 0;
+            if (w->fx) { nfx_kill(w->fx); w->fx = 0; }
+            nfx_spawn(NFX_ARACHNE, 0x2a2, w->pos, 0.0f, 0);
+            continue;
+        }
+        if (!nfx_alive(w->fx)) w->fx = nfx_spawn(NFX_ARACHNE, 0x29e, w->pos, atan2f(w->vel[0], w->vel[2]), 1);
+        else nfx_move(w->fx, w->pos, atan2f(w->vel[0], w->vel[2]));
     }
 }
 
@@ -5636,6 +5703,7 @@ static void an_decide(float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), rel;
     zone = d < 400.0f ? 0 : d < 700.0f ? 1 : 2;
     rel = wrap_angle(atan2f(dx, dz) - e->yaw);
+    if (ar_force >= 0) { int st = ar_force; ar_force = -1; an_go(st, px, py, pz); return; }   /* tests: "arforce frame action" */
     if (an_on_wall[me]) {
         if (an_gate[me] > 150.0f && attack_token <= 0.0f && attacks_on) {
             attack_token = ATTACK_TOKEN_SECONDS;
@@ -5777,10 +5845,16 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
                 an_go(0x73, px, py, pz);
             }
         } else if (e->vel[1] < 0.0f && floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g) && e->pos[1] <= g) {
+            int k;
             e->pos[1] = e->floor_y = g; e->acc[1] = 0.0f; e->vel[0] = e->vel[1] = e->vel[2] = 0.0f;
+            /* Landing: P44 dust at each of its six legs' bones (states 0x23 / 0x28 / 0x2b / 0x32: FUN_003fb580,
+             * 003ffcd0, 003ffec0, 003ff050; the static pack's P44), the legs taken 110 cm out round it [estimate]. */
+            for (k = 0; k < 6; ++k) {
+                float a = e->yaw + (float)k * (PI / 3.0f) + PI / 6.0f;
+                float at[3] = {e->pos[0] + sinf(a) * 110.0f, e->floor_y, e->pos[2] + cosf(a) * 110.0f};
+                nfx_spawn_p(NFX_STATIC, 44, at, a, 0);
+            }
             if (e->action == 0x7b) {   /* 0x58: the landing (motion 0x32), its hit by the script */
-                float at[3] = {e->pos[0], e->pos[1] + 30.0f, e->pos[2]};
-                fx_dust(at);
                 e->action = 0x58; an_play(0x32);
             } else an_decide(px, py, pz);
         }
@@ -6617,6 +6691,8 @@ static void soul_hit_glue(HitKind kind) {
 #include "fallen.h"
 extern int testroom_frame;
 static FallenBrain fallen_brain[ENEMY_MAX];
+static int fallen_spear[ENEMY_MAX];             /* its spear's arrow slot + 1 (0: none) */
+static float fallen_spear_at[ENEMY_MAX][3];
 static int fallen_motion_id[FALLEN_M_COUNT] = {-2};
 static float fallen_rest;   /* FUN_003442c0: the enemy manager lets one attack, then rests 3 s */
 static void fallen_play(int m, int restart) {
@@ -6682,7 +6758,15 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
         /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
         float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
         float to[3] = {px, py + 100.0f, pz};
-        { int k = goyle_bullet(from, to); if (k >= 0) arrows[k].damage = 900.0f; }   /* record 0 (0x5c2dd0): 900 */
+        { int k = goyle_bullet(from, to); if (k >= 0) { arrows[k].damage = 900.0f; fallen_spear[e - enemies] = k + 1; } }   /* record 0 (0x5c2dd0): 900 */
+        nfx_spawn(NFX_FALLEN, 0x367, from, e->yaw, 0);
+    }
+    /* Its spear's effects (CEm011Shl00, FUN_0045a330; em011's pack, nfx bank 10): V0x367 as it's let go, V0x368 where it
+     * ends (it hits, or flies 2000 out). */
+    {
+        int k = fallen_spear[e - enemies] - 1;
+        if (k >= 0 && arrows[k].active) memcpy(fallen_spear_at[e - enemies], arrows[k].pos, sizeof(float) * 3);
+        else if (k >= 0) { nfx_spawn(NFX_FALLEN, 0x368, fallen_spear_at[e - enemies], e->yaw, 0); fallen_spear[e - enemies] = 0; }
     }
     if (b->remove) e->active = 0;
 }

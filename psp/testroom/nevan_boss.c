@@ -27,6 +27,7 @@
 #include <math.h>
 #include "nevan_boss.h"
 #include "fx.h"
+#include "nfx.h"
 
 const char *const nevan_motion_names[NEVAN_M_COUNT] = {
     "nv200", "nv210", "nv211", "nv212", "nv213", "nv214", "nv216", "nv217", "nv224", "nv225", "nv230", "nv240",
@@ -78,6 +79,12 @@ static void act(NevanBrain *b, int a) {
      * (FUN_0043e1c0) and lives only while she's in them (FUN_0043e250). */
     if (a == 29 || a == 38) { b->field = 0; b->field_wait = 50.0f; b->field_done = 0; }
     if (a == 25) b->orbs_pending = 1;   /* FUN_003b7460, state 0 */
+    /* 21 (her fall) starts G0x1a8 and 27 G0x97, each at a bone of hers (FUN_003b67a0 / FUN_003b7a50: +0x724), taken
+     * 100 up at her middle [estimate]. */
+    if (a == 21 || a == 27) {
+        float at[3] = {b->pos[0], b->pos[1] + 100.0f, b->pos[2]};
+        nfx_spawn(NFX_NEVAN, (a == 21 ? 0x1a8 : 0x97) | 0x8000, at, b->yaw, 0);
+    }
     b->action = a;
     b->want = scripts[a].motion;
     b->restart = 1;
@@ -157,7 +164,30 @@ static void release_bats_n(NevanBrain *b, int count, float gap) {
     }
 }
 
-static void release_bats(NevanBrain *b) { release_bats_n(b, bat_count[b->phase], 8.0f); }
+/* Action 22 also plays V0x199 there, on her frame (FUN_003b6c90: (0, 100, 150) turned by her yaw). */
+static void release_bats(NevanBrain *b) {
+    float at[3] = {b->pos[0] + sinf(b->yaw) * 150.0f, b->pos[1] + 100.0f, b->pos[2] + cosf(b->yaw) * 150.0f};
+    nfx_spawn(NFX_NEVAN, 0x199, at, b->yaw, 0);
+    release_bats_n(b, bat_count[b->phase], 8.0f);
+}
+
+/* Each bat is a P effect riding it (FUN_003c9870: P203, P251 or P235 at random, 12 bat sprites that never run out),
+ * started as it's let go and gone with it. */
+static void bats_particles(NevanBrain *b) {
+    static unsigned int pick = 0x2468aceu;
+    int i;
+    for (i = 0; i < NEVAN_BATS; ++i) {
+        NevanBat *t = &b->bats[i];
+        int shown = t->on && t->wait <= 0.0f;
+        float yaw = atan2f(t->dir[0], t->dir[2]);
+        if (shown && !nfx_alive(t->fx)) {
+            static const short ids[3] = {203, 251, 235};
+            pick = pick * 1664525u + 1013904223u;
+            t->fx = nfx_spawn_p(NFX_NEVAN, ids[(pick >> 16) % 3u], t->pos, yaw, 1);
+        } else if (shown) nfx_move(t->fx, t->pos, yaw);
+        else if (t->fx) { if (nfx_alive(t->fx)) nfx_kill(t->fx); t->fx = 0; }
+    }
+}
 
 /* Action 23's swarm (FUN_003ba470 → FUN_003c9080, mode 1): each with a random vector of 0x5bc7d0's 15 (1..15; her
  * side, up and forward [their frame taken as hers, inferred]) as its first heading, let go 20 / 15 / 12 frames apart. */
@@ -268,12 +298,14 @@ static void bats_update(NevanBrain *b, float f, float px, float py, float pz, in
         dx -= t->dir[0] * d; dy -= t->dir[1] * d; dz -= t->dir[2] * d;
         t->pos[0] += t->dir[0] * s; t->pos[1] += t->dir[1] * s; t->pos[2] += t->dir[2] * s;
         if (dx * dx + dy * dy + dz * dz < (BAT_RADIUS + 60.0f) * (BAT_RADIUS + 60.0f)) {
+            nfx_spawn(NFX_NEVAN, 0x110, t->pos, 0.0f, 0);   /* a bat's strike (FUN_003c8810: V0x110 where it hits) */
             t->on = 0;
             if (attacks) { b->land = 2; b->land_damage = BAT_DAMAGE; }
             continue;
         }
         if ((t->life -= f) <= 0.0f) t->on = 0;
     }
+    bats_particles(b);
 }
 
 static void keep_on_stage(NevanBrain *b) {
@@ -788,8 +820,8 @@ void nevan_draw_fx(const NevanBrain *b) {
         const NevanBat *t = &b->bats[i];
         float still[3] = {0.0f, 0.0f, 0.0f};
         if (!t->on || t->wait > 0.0f) continue;
-        /* A bat: a dark core with a crackle of electricity round it (the bats' own models aren't converted). */
+        /* A bat is its P effect (bats_particles); a mote only if that couldn't start. */
+        if (nfx_alive(t->fx)) continue;
         fx_mote(t->pos, still, 40.0f, 30.0f, 0.04f, 0xff401030u);
-        fx_mote(t->pos, still, 70.0f, 20.0f, 0.04f, 0x80ffa0e0u);
     }
 }

@@ -123,7 +123,7 @@ void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
 }
 
 static const NfxBank *bank_of(int b) {
-    return b == NFX_PALACE ? &nfx7 : b == NFX_DEMO ? &demo_bank : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
+    return b == NFX_PALACE ? &nfx14 : b == NFX_DEMO ? &demo_bank : b == NFX_NEVAN ? &nfx7 : b == NFX_LADY ? &nfx8 : b == NFX_ARACHNE ? &nfx9 : b == NFX_FALLEN ? &nfx10 : b == NFX_MIRROR ? &nfx11 : b == NFX_CRYSTAL ? &nfx12 : b == NFX_NAUSIKA ? &nfx13 : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
          : b == NFX_CERBERUS ? &nfx1 : &nfx0;
 }
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
@@ -254,6 +254,7 @@ void nfx_tint(int h, unsigned int r, unsigned int g, unsigned int b) {
 void nfx_kill(int h) { Seq *s = from_handle(h); if (s) { s->killed = 1; pfx_kill_root(h); } }
 int nfx_alive(int h) { return from_handle(h) != 0; }
 int nfx_live_elements(void) { int i, n = 0; for (i = 0; i < MAX_EL; ++i) n += els[i].active; return n; }
+int nfx_live_seqs(void) { int i, n = 0; for (i = 0; i < MAX_SEQ; ++i) n += seqs[i].active; return n; }
 
 static void g_tick(int i, float frames);
 static int owner_emitting(int seq);
@@ -318,6 +319,10 @@ void nfx_unref(int handle) {
     release(i);
 }
 static int root_at(int i, const float pos[3], float yaw, int loop);
+void nfx_crystal_break(const float pos[3], int type) {
+    nfx_spawn(NFX_STATIC, 0x1c, pos, 0.0f, 0);
+    if (type == 2) nfx_spawn(NFX_STATIC, 4, pos, 0.0f, 0); else nfx_spawn(NFX_CRYSTAL, 554, pos, 0.0f, 0);
+}
 int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop) {
     return root_at(new_single_kind(bank, 0, p_id, -1), pos, yaw, loop);
 }
@@ -500,8 +505,10 @@ static void g_tick(int i, float frames) {
     float scale;
     unsigned int ramp = rd16(g + 0x40);
     if (!s->g_on) return;
-    /* +0x30: no end while a looping owner lasts; under a one-off owner it keeps its life [inferred]. */
-    if (!g[0x30] || !root_of(s)->loop) {
+    /* +0x30: no end. A cutscene's emits until the demo ends (seen on the PS2: demo 123's G79 fire on the demons burns
+     * on for seconds past its 60-frame life); elsewhere, while a looping owner lasts, and under a one-off owner it keeps
+     * its life [inferred, so an enemy's one-off effect can't emit for ever]. */
+    if (!g[0x30] || (!root_of(s)->loop && s->bank != NFX_DEMO)) {
         s->g_life -= frames;
         if (s->g_life < 0.0f) { s->g_on = 0; return; }
     }

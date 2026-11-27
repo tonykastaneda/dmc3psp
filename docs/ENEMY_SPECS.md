@@ -825,8 +825,8 @@ flinch js05, stun js14, launched js04, death js16.
   recover. In each, a sphere rides him (`00548fb0`, 150 up, 160 cm `0x5e3238`): kind 1 in the charge (record 6,
   1000, live, resting 30 frames after a hit), kind 2 falling in 0x7b / 0x80 (record 7, 1000), both knock-downs.
   **In the port**: all of it (`enemy.c` J_RISE / J_FALL / J_CHARGE / J_HOPS); stand-ins: the charge's edge is the
-  port's arena clamp, his attacks clear +0x4818 as they end [inferred from `005373c0`], the effects (0x3cb / 0x3cc trails,
-  0x3f3) and the room flag 0x79 sets aren't shown, the 0x7b / 0x80 hop motions are js01 / js29 as `0053bd90` names them.
+  port's arena clamp, his attacks clear +0x4818 as they end [inferred from `005373c0`], the effects 0x3cb / 0x3cc / 0x3f3 play (enemy.c
+  jester_fx; the wind-up's and charge's trail interval 10 frames [estimate]) but the room flag 0x79 sets isn't shown, the 0x7b / 0x80 hop motions are js01 / js29 as `0053bd90` names them.
 - **In the port**: the attack choice, its 500-frame wait, the teleport and the three throw motions are the game's;
   each throw starts the emitter its no-repeat pick names (`jester_projectiles_begin`, AI rank 0), the attack holds
   its last pose until the emitter's cycle is through (`jester_projectiles_minimum`) and its end stops the emitter;

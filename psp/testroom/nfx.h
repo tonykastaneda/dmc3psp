@@ -7,7 +7,7 @@
  * particle programs (pfx.c, started here for V / G children). Times are 60 Hz frames, distances centimetres. */
 
 enum { NFX_STATIC = 0, NFX_CERBERUS = 1, NFX_LEVIATHAN = 2, NFX_DEMO = 3, NFX_AGNI_RUDRA = 4, NFX_JESTER = 5,
-       NFX_VANGUARD = 6 /* em008's P312 only */, NFX_PALACE = 7 };
+       NFX_VANGUARD = 6 /* em008's P312 only */, NFX_NEVAN = 7, NFX_LADY = 8, NFX_ARACHNE = 9, NFX_FALLEN = 10, NFX_MIRROR = 11, NFX_CRYSTAL = 12, NFX_NAUSIKA = 13, NFX_PALACE = 14 };
 /* A cutscene's own effects (demo.c): its bank's description at blob + at (0, 0: none). */
 void nfx_set_demo_bank(const unsigned char *blob, unsigned int at);
 
@@ -28,6 +28,7 @@ void nfx_update(float frames);
 /* After the world and characters, before the 2D. eye: the camera position. */
 void nfx_draw(const float eye[3]);
 int nfx_live_elements(void);
+int nfx_live_seqs(void);      /* tests: timelines running (of 255) */
 
 /* For pfx.c: bank b's record of kind 'P' or 'A' by id (0 if none); a texture's size and binding (0 if none); a live
  * handle's frame (columns the axes, as pfx's PfxFrame; 0 once it's gone or killed). */
@@ -39,5 +40,7 @@ int nfx_frame(int handle, float m[3][3], float p[3]);
 void nfx_unref(int handle);
 /* A P record started on its own at pos, turned by yaw (as nfx_spawn), in the world; loop: bursts until nfx_reset. */
 int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop);
+/* A struck crystal (CStageSetCrystal, FUN_00420450): V0x1c and V4 (type 2) or V554 (type 3), at it. */
+void nfx_crystal_break(const float pos[3], int type);
 
 #endif

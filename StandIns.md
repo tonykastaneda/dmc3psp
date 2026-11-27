@@ -33,7 +33,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Stand-in guard motion** without a loop range. `combat.c` ~1436.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
-- **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
+- **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (the Jester's
   trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
   particle programs). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
@@ -57,7 +57,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Arachne**: its class is ported (ENEMY_SPECS H); stand-ins: its hits' bones (a sphere 100 ahead), flag 4 taken as
   its scripts' first event, the wall's normal (the ray back, flattened) and its pose there (turned 90 degrees), 0x6d's
   web-line swing (a leap), 0x6f's speed (8), the web's struggle count (35 [inferred]), its fall when struck on a wall,
-  root motion x1.5 [inferred]; webs drawn as motes; spiderlings (0x76) and the charge (0x78) never chosen at rank 0.
+  root motion x1.5 [inferred]; its web's held effect sits at Dante's middle, not his bone; spiderlings (0x76) and the charge (0x78) never chosen at rank 0.
   `enemy.c` The Arachne, PortJobs.
 - **Fallen**: its damage handler isn't decoded [estimates]; facing taken from Dante, not his facing; on the ground it
   closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
@@ -132,8 +132,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 17**: 128's God-cubes aren't moved (Dante comes in at start 2); 131's spikes are Mission 6's stand-in.
 - **Mission 18**: gates are doors; the bingo board's rule (CStageSetBingo) read as 3 × 3 in door order; the mirror is
   a glow; 401's chessmen spawn as Pawns or Prides.
-- **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect and tint, the port's burst for the
-  shatter, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
+- **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect (E0x2e0's model texture isn't decoded) and tint, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
 - **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded); Dante keeps his usual model (the PS2's open-coat ending model isn't loaded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them, as a hit of Dante's of its weight (her damage on enemies isn't decoded); her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); what fills her rocket counter (+0x4838) isn't decoded (a tenth a burst [estimate]); 0x85's three shots and the rocket's frame are estimates; action 0x49's aim pose isn't one of the port's motions (the drawn guns stand in); enemies don't attack her and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound).
