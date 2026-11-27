@@ -148,11 +148,16 @@ void nausika_enter(int room) {
     chase.enabled=1;chase.hp=3000;chase.timer=30;chase.node=1;
     chase.pos[0]=nausika_path[0].x;chase.pos[1]=nausika_path[0].y;chase.pos[2]=nausika_path[0].z;
 }
-/* Its looping V0x352 (FUN_00492630, on a bone) isn't played: drawn about the body it fills the view with white
- * squares, so its bone and scale need decoding first. */
+/* Its looping V0x352 (FUN_00492630): G512 dropping P443 every 8 frames where it is, a dark red smoke over 4 m round it
+ * (world-fixed bursts), on its +0x27c bone: taken 150 up at its middle [estimate]. */
+static int aura;
 float nausika_update(float frames,float x,float y,float z) {
     float dx,dz,d,damage=0;
-    if(!chase.enabled || chase.state==4)return 0;
+    if(!chase.enabled || chase.state==4) { if(aura){nfx_kill(aura);aura=0;} return 0; }
+    if(chase.started) {
+        float at[3]={chase.pos[0],chase.pos[1]+150,chase.pos[2]};
+        if(!nfx_alive(aura))aura=nfx_spawn(NFX_NAUSIKA,0x352,at,chase.yaw,1); else nfx_move(aura,at,chase.yaw);
+    }
     dx=x-chase.pos[0];dz=z-chase.pos[2];d=sqrtf(dx*dx+dz*dz);
     if(!chase.started) {
         /* Area-0 story camera is omitted: crossing the tunnel entrance starts it. */

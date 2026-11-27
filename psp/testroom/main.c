@@ -1216,6 +1216,7 @@ static void draw_debug_menu(int viewer) {
     sceGuTexFlush();
     sceGuColor(0xffffffffu);
     draw_text(x, y, "DEBUG");
+    if (bp_active()) draw_text(8, 8, "PALACE PORTALS +1 / +10 / +100");
     for (i = 0; i < DEBUG_ITEMS; ++i) {
         sceGuColor(i == debug_cursor ? 0xff40e0ffu : 0xffffffffu);
         if (i == debug_cursor) draw_text(x - 12, y + 16 + i * 12, ">");
@@ -1292,8 +1293,10 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
          * for the 3D pass (credits_fight.c) and the stage's colours doubled (stage_set_double). */
         unsigned int clear = mission_mode ? 0xff000000u : CLEAR_COLOR;
         int fog = credits_fight_fog(&clear);
-        if (fog) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
+        int haze = !fog && demo_fog();   /* a cutscene's GFG; the credits fog keeps its own colour and clear */
+        if (fog || haze) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
         stage_set_double(fog);
+        stage_set_sky_unfog(haze);
         sceGuClearColor(clear);
     }
     sceGuClearDepth(0);
@@ -1311,12 +1314,18 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
              * 41 cm, fov 15): a fixed 50 cm near plane cut the face away and showed the inside of the head. The
              * near plane follows the eye's distance to its target, a third of it, 4-25 cm: demo 3's frame 1240 puts
              * the eye in front of Dante's chest while it looks at enemies metres away, and a 50 cm cap cut his whole
-             * front off (the PS2 shows his chest and mouth there). What still crosses is clipped (near_clip.h). */
+             * front off (the PS2 shows his chest and mouth there). What still crosses is clipped (near_clip.h).
+             * Channel 12 is a vertical angle (the PS2's FUN_001ac750: Y scale 1/tan of half the angle, and the
+             * screen height cancels). Drawn raw across these 272 lines the picture is wider than the PS2 stills,
+             * so a cut uses the 326-line fit (demo_screen_fov) [stand-in]. Test line "rawfov 1" passes the decoded
+             * angle. The 16:9 screen keeps that vertical angle and shows more to the sides. The cinema bars are
+             * drawn later. */
             float dx = camera->tx - camera->x, dy = camera->ty - camera->y, dz = camera->tz - camera->z;
             float near = sqrtf(dx * dx + dy * dy + dz * dz) * 0.33f;
+            float use = demo_raw_fov ? fov : demo_screen_fov(fov);
             if (near < 4.0f) near = 4.0f;
             if (near > 25.0f) near = 25.0f;
-            sceGumPerspective(demo_screen_fov(fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
+            sceGumPerspective(use, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
         }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
         else sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 10.0f, 6000.0f);
@@ -1499,7 +1508,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
         else hud_draw(player);
-        bp_draw();
+        if (!debug_open && !pause_active) bp_draw();
         if (!credits_fight_active()) {
             float hp, maximum;
             if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);
@@ -1519,6 +1528,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
 scene_done:
     if (!demo_active()) draw_hud(hud);
     else {
+        sceGuDisable(GU_FOG);   /* bars, fade and subtitles are 2D; the demo path skips the disable above */
         /* The cutscene's subtitle: its height from the PS2's 448 lines, centred (the PS2's x was set for its own font). */
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
@@ -1901,6 +1911,241 @@ static unsigned int weapon_fx_color(const Player *p) {
     return p->melee_weapon == 2 ? 0xff2090ffu : p->melee_weapon == 4 ? 0xffffffffu : 0xff2020ffu;
 }
 
+/* The PS2's effect colour for a melee weapon (FUN_002fd1c0: Air Hike's ring, the Devil Trigger's aura), 0x80 = 1. */
+static void weapon_fx_tint(int weapon, unsigned char rgb[3]) {
+    static const unsigned char tint[5][3] = {{0x80, 0, 0}, {0x60, 0x80, 0x90}, {0xa0, 0x40, 0x10}, {0x70, 0x40, 0xa0}, {0x80, 0x80, 0x80}};
+    memcpy(rgb, tint[weapon >= 0 && weapon < 5 ? weapon : 0], 3);
+}
+
+/* Where an effect hangs on Dante: bone b (< 24, the PS2's player +0x1380[b], the model's bone list), or the melee
+ * weapon (ARM_AGNI / ARM_RUDRA: the A&R weapon object's +0x108 / +0x104 frames, taken as its placement's origin on
+ * its bone). */
+#define ARM_AGNI 100
+#define ARM_RUDRA 101
+static void arm_point(const Combat *c, const Player *p, int at, float out[3]) {
+    float l[3];
+    int k;
+    const WeaponPlace *place = at >= ARM_AGNI ? combat_weapon_place(c, p, p->melee_weapon, at == ARM_RUDRA) : 0;
+    if (place && place->bone < DMC3_BONE_COUNT && !place->owner && place->mode != 255) {
+        const float *bp = pose.world_pos[place->bone];
+        const Mat3 *br = &pose.world_rot[place->bone];
+        for (k = 0; k < 3; ++k) l[k] = bp[k] + br->m[k][0] * place->pos[0] + br->m[k][1] * place->pos[1] + br->m[k][2] * place->pos[2];
+    } else {
+        memcpy(l, pose.world_pos[at < DMC3_BONE_COUNT ? at : BONE_R_HAND], sizeof(l));
+    }
+    model_to_world(p, l, out);
+}
+
+/* The Devil Arms' own effects, from their action handlers (docs/NATIVE_FX.md, "Dante's effects"). when: 0 as the
+ * script starts, n > 0 n frames into it, -1 / -0x40 / -0x80 as window 0 byte 0 bit 0 / byte 1 bit 0x40 / 0x80
+ * turns on, -2 / -3 on its flag 1 / 2 (+0x24d5). at: arm_point's. follow: the PS2 gives it the frame (+0x90 / +0x94)
+ * rather than a place. */
+typedef struct { const char *script; short when; unsigned char bank, at, follow; unsigned short id; } ArmFx;
+static const ArmFx arm_fx[] = {
+    {"3:8", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},          /* Rebellion action 14, Million Stab (FUN_00266220): its start */
+    {"14:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* Cerberus action 45 (FUN_00272210): its start */
+    {"14:4", 40, NFX_ARM_CERBERUS, BONE_ROOT, 1, 0x252}, /* and 40 frames into its spin */
+    {"5:25", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x288},      /* Agni & Rudra action 57 (FUN_00272c70) */
+    {"5:23", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x285},      /* actions 58-60's last swing (FUN_00273150) */
+    {"5:9", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x37e},    /* action 56: each blade's swing (FUN_00296ae0) */
+    {"5:9", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x37d},
+    {"5:30", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},   /* action 64 (G0x1cc on Agni, V0x302 on Rudra) */
+    {"5:30", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"5:26", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"5:26", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"5:11", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"5:11", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"15:8", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},   /* action 71, Swordmaster's */
+    {"15:8", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"15:9", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"15:9", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"15:10", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"15:10", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"6:33", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* Nevan action 81/82 (FUN_00274c70): the finishers */
+    {"6:9", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},
+    {"6:10", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},
+    {"6:14", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x2c1},  /* and its other swing */
+    {"6:40", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x2c1},
+    {"6:34", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* action 88 (FUN_00276ac0) */
+    {"16:4", -2, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* action 92 (FUN_00277350), Swordmaster's */
+    {"7:10", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* Beowulf action 115 (FUN_0027abf0): its charge */
+    {"7:11", 17, NFX_ARM_BEOWULF, BONE_HIPS, 0, 0x382},  /* and 17 frames into the blow, where his hips are then */
+    /* CEfcPub (FUN_002fbec0 -> FUN_00332240) ids the handlers start with a motion, on the bone they name. */
+    /* Trickster's dash (state 0x16, FUN_00225c90, id 0x1c) and Sky Star (0x17, FUN_002261b0, id 0x2e): V0xc0 (the
+     * default costume's, +0x28b1), Sky Star V0x295 too. */
+    {"23:0", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:1", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:2", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:3", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:24", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:25", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:26", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:27", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:17", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:11", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:11", 0, NFX_STATIC, BONE_HIPS, 1, 0x295},
+    /* Air Trick (state 0x18, FUN_00226550) as it starts: V0x26a through FUN_002086e0 (the default costume's; +0x28b1
+     * picks V0x26b / 0x8f / 0x215 for others). */
+    {"23:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x26a},
+    {"23:16", 0, NFX_STATIC, BONE_HIPS, 1, 0x26a},
+    /* Stinger's dash (actions 7/8, FUN_00264fe0, id 0xb): G0x5f, V0x29, V0x7b, as Beowulf's 7:31. High Time (action
+     * 10, FUN_002656a0, id 0xc): V0xa1 + V0xf3; action 11's 3:13 (FUN_00265950, id 0xd): V0xb0 + V0xf5. */
+    {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    /* The same set starts Dance Macabre's 13:17 (action 200, FUN_00266b90, id 0x25) and the Shotgun's 19:3 (action 146,
+     * FUN_0026de00, id 0x3e). The Shotgun's 19:0 / 19:1 (actions 144 / 145, FUN_0026d6b0 / 0026da00, id 0x1b): G0xb2. */
+    {"13:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"13:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"13:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    {"19:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"19:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"19:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    {"19:0", 0, NFX_GUN_SHOTGUN, BONE_HIPS, 1, 0xb2 | 0x8000},
+    {"19:1", 0, NFX_GUN_SHOTGUN, BONE_HIPS, 1, 0xb2 | 0x8000},
+    /* Beowulf actions 124 / 125 (FUN_0027cb00 / 0027cf70, id 0x12): V0x189 on the right hand 35 / 6 frames in [the
+     * handlers repeat it every 7 / 6 frames after; not ported]. */
+    {"17:1", 35, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
+    /* Artemis action 154 (FUN_0026ebf0, id 0x53): V0x2f4 2 frames into 20:2, on the gun (FUN_002e1d90: weapon 7's
+     * frame; the port's guns are in the left hand). */
+    {"20:2", 2, NFX_GUN_ARTEMIS, BONE_L_HAND, 1, 0x2f4},
+    /* Royalguard's Release (actions 190-197, FUN_0027d9f0 / 0027e130, id 0xf): V0x29 (the default costume's) as the
+     * action starts, whichever motion it opens on; V0x2a6 too when +0x3c86 is set [not told apart]. */
+    {"#190", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#191", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#192", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#193", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#194", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#195", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#196", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"#197", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"17:2", 6, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
+    {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xa1},
+    {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xf3},
+    {"3:13", 0, NFX_DANTE, BONE_HIPS, 1, 0xb0},
+    {"3:13", 0, NFX_DANTE, BONE_HIPS, 1, 0xf5},
+    {"3:8", 10, NFX_DANTE, BONE_HIPS, 1, 0x44 | 0x8000}, /* Million Stab, 10 frames in (FUN_00266220, id 0xa) */
+    {"3:8", 10, NFX_DANTE, BONE_HIPS, 1, 0x7d | 0x8000},
+    {"13:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xc7},         /* action 18 (FUN_00268150, id 0x11) */
+    {"14:5", 0, NFX_ARM_CERBERUS, BONE_SPINE1, 1, 0x262},/* action 46 (FUN_00272470, id 0x29) */
+    {"5:26", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x287},      /* action 64 (FUN_00272e20, id 0x5a) */
+    {"5:18", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x28a},      /* action 62 (FUN_00273970, id 0x49) */
+    {"15:0", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x284},      /* actions 65-67, 70 (FUN_00273d40 .. 002744c0) */
+    {"15:1", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x27e},
+    {"15:2", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x25c},
+    {"15:7", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x286},
+    {"6:16", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b7},     /* actions 84/85 (FUN_00276150, id 0x36) */
+    {"6:17", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2b8},     /* its 6:17 (id 0x37) */
+    {"6:19", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},     /* actions 86/87 (FUN_00276640, id 0x35): 87's 6:19, 86's 6:35 */
+    {"6:35", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x2a7},
+    {"6:11", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 83 (FUN_00275410): V0x90 and id 0x55 on the root */
+    {"6:11", 0, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x234 | 0x8000},
+    {"15:8", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* A&R action 71 (FUN_002746d0): V0x90 and id 0x54 */
+    {"15:8", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x273},
+    {"7:16", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2ba},   /* Beowulf action 120 (FUN_0027b9e0, id 0x3c; 7:58 without +0x299b) */
+    {"7:58", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2ba},
+    /* actions 121/122 (FUN_0027bd20, id 0x58) as 7:31 starts: G0x5f, then V0x29 (by +0x28b1, the costume: 0) and V0x7b (by
+     * +0x2928: 0-10) on this+0x40, its copy of the hips' frame. */
+    {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    {"16:5", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 93 (FUN_00277550): V0x90 as it starts, V0x38e on */
+    {"16:5", -2, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* flag 1, id 0x10 (G0x179 on the root) on flag 2 */
+    {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},
+    {"16:9", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x260},     /* action 94 (FUN_00277730, id 0x3a) */
+    {"6:26", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x187},     /* action 95 (FUN_00277d70, id 0x31) */
+    /* action 113 (FUN_0027a1f0, id 0x33): 76 frames into 7:7 uncharged, else as the release after 7:27 starts (7:7 /
+     * 7:47 / 7:48); actions 117/118 (FUN_0027af70, id 0x2f): 23 frames into 7:14, else as the release after 7:29 starts
+     * (7:14 / 7:51 / 7:52). */
+    {"7:7", 76, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:47", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:48", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2a8},
+    {"7:14", 23, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
+    {"7:51", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
+    {"7:52", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x299},
+    {"7:15", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x29a},   /* action 119 (FUN_0027b6c0, id 0x30) */
+    {"17:0", 0, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x18a}, /* action 123 (FUN_0027c740, id 0x32, +0x13b4: bone 13) */
+    {"17:4", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* action 126 (FUN_0027d280): V0x90, then id 0x39 */
+    {"17:4", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x27d},
+    {"17:3", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x27b},   /* action 128 (FUN_0027d6d0, id 0x2b) */
+};
+/* The Devil Trigger's look (CEfcPub ids 0x20-0x24 / 0x42-0x46, FUN_002298f0 -> FUN_00332240): as it starts, V0xdc
+ * on his hips tinted the melee weapon's colour; while it lasts, E0x140 (tinted) and V0x3c looping there. A change of
+ * weapon in it ends those and starts them again in the new colour without V0xdc; its end ends them. Returns 0 if
+ * they couldn't start (the port's glow stands in). */
+static int devil_fx_aura[2], devil_fx_weapon = -1;
+static int update_devil_fx(const Player *p) {   /* after the pose, before update_move_fx */
+    float at[3];
+    unsigned char t[3];
+    int k;
+    arm_point(0, p, BONE_HIPS, at);
+    if (!p->devil || p->melee_weapon != devil_fx_weapon) {
+        for (k = 0; k < 2; ++k) { if (devil_fx_aura[k]) nfx_kill(devil_fx_aura[k]); devil_fx_aura[k] = 0; }
+        if (!p->devil) { devil_fx_weapon = -1; return 1; }
+    }
+    weapon_fx_tint(p->melee_weapon, t);
+    if (devil_fx_weapon < 0) {
+        int h = nfx_spawn(NFX_STATIC, 0xdc, at, p->yaw, 0);
+        if (h) nfx_tint(h, t[0], t[1], t[2]);
+    }
+    if (p->melee_weapon != devil_fx_weapon) {
+        devil_fx_aura[0] = nfx_spawn_e(NFX_STATIC, 0x140, at, p->yaw, 1);
+        devil_fx_aura[1] = nfx_spawn(NFX_STATIC, 0x3c, at, p->yaw, 1);
+        if (devil_fx_aura[0]) nfx_tint(devil_fx_aura[0], t[0], t[1], t[2]);
+        devil_fx_weapon = p->melee_weapon;
+    }
+    for (k = 0; k < 2; ++k) if (devil_fx_aura[k]) nfx_move(devil_fx_aura[k], at, p->yaw);
+    return devil_fx_aura[0] || devil_fx_aura[1];
+}
+
+#define ARM_FOLLOW 12
+static char arm_fx_log[256];   /* tests: "script:id frame" of each started, in FOCUS_DONE.TXT */
+static void update_arm_fx(const Combat *c, const Player *p) {
+    static int last_script = -1, last_bits, last_move = -1, last_action;
+    static float last_frame, since;
+    static struct { int handle, at; } follow[ARM_FOLLOW];
+    const char *key = combat_script_key(c->script);
+    int restarted = c->script != last_script || c->frame < last_frame, rise, i;
+    float prev = since;
+    if (restarted) { since = 0.0f; last_bits = 0; prev = -1.0f; }
+    else since += c->frame - last_frame;
+    rise = (c->window_bits | (c->active ? 0x80 : 0)) & ~last_bits;
+    for (i = 0; c->script >= 0 && i < (int)(sizeof(arm_fx) / sizeof(arm_fx[0])); ++i) {   /* "#n" entries too */
+        const ArmFx *a = &arm_fx[i];
+        int go;
+        if (a->script[0] == '#') {   /* "#n": as action n starts, whatever its motion */
+            if (atoi(a->script + 1) != c->action || c->action == last_action) continue;
+            go = 1;
+        } else if (strcmp(a->script, key) != 0) continue;
+        else go = a->when > 0 ? prev < a->when && since >= a->when
+           : a->when == 0 ? c->script != last_script || c->move != last_move   /* not a held move's loop */
+           : a->when == -2 ? c->flag == 1
+           : a->when == -3 ? c->flag == 2
+           : (rise & (a->when == -1 ? 1 : -a->when)) != 0;
+        if (go) {
+            float at[3];
+            int h, k;
+            arm_point(c, p, a->at, at);
+            h = nfx_spawn(a->bank, a->id, at, p->yaw, 0);
+            if (strlen(arm_fx_log) < sizeof(arm_fx_log) - 24)
+                sprintf(arm_fx_log + strlen(arm_fx_log), "%s:%x%s@%d ", a->script, a->id & 0x7fff, h ? "" : "!", (int)since);
+            for (k = 0; h && a->follow && k < ARM_FOLLOW; ++k)
+                if (!nfx_alive(follow[k].handle)) { follow[k].handle = h; follow[k].at = a->at; break; }
+        }
+    }
+    for (i = 0; i < ARM_FOLLOW; ++i)
+        if (follow[i].handle && nfx_alive(follow[i].handle)) {
+            float at[3];
+            arm_point(c, p, follow[i].at, at);
+            nfx_move(follow[i].handle, at, p->yaw);
+        } else follow[i].handle = 0;
+    last_script = c->script;
+    last_move = c->move;
+    last_action = c->action;
+    last_frame = c->frame;
+    last_bits = c->window_bits | (c->active ? 0x80 : 0);
+}
+
 static void update_move_fx(const Combat *c, Player *p, float dt) {
     if (p->melee_weapon != 4) weapon_motion_update(&gun_models[p->melee_weapon], combat_weapon_place(c, p, p->melee_weapon, 0), c, dt);
     weapon_motion_update(&gun_models[p->gun_weapon], combat_weapon_place(c, p, p->gun_weapon, 0), c, dt);
@@ -1910,75 +2155,100 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
     float feet[3] = {p->x, p->y, p->z};
     if (c->move != last_move) {
         switch (c->move) {
-        case MOVE_TR_SKY_STAR: {
-            float chest[3] = {p->x, p->y + 100.0f, p->z};
-            float way[3] = {sinf(p->yaw), 0.0f, cosf(p->yaw)};
-            fx_star_seal(chest, way, 0xff2020ffu);
-            break;
-        }
         default: break;
         }
         last_move = c->move;
     }
     if (p->hike_fx) {
-        if (p->hike_fx == 1) fx_hike_seal(feet, weapon_fx_color(p));
-        else fx_jump_burst(feet);
+        /* Air Hike: V0x83 at his feet, tinted the melee weapon's colour (FUN_00222700, FUN_002fd1c0: +0x9b mode 2);
+         * Enemy Step: V0x14d there (FUN_00228950). The port's seal / burst only if they can't start. */
+        int h = nfx_spawn(NFX_STATIC, p->hike_fx == 1 ? 0x83 : 0x14d, feet, p->yaw, 0);
+        if (h && p->hike_fx == 1) {
+            unsigned char t[3];
+            weapon_fx_tint(p->melee_weapon, t);
+            nfx_tint(h, t[0], t[1], t[2]);
+        }
+        if (!h) { if (p->hike_fx == 1) fx_hike_seal(feet, weapon_fx_color(p)); else fx_jump_burst(feet); }
         p->hike_fx = 0;
     }
+    update_arm_fx(c, p);
     was_on_ground = p->on_ground;
     last_vy = p->vy;
     (void)was_on_ground; (void)last_vy;
-    {
-        /* Fast Trickster moves leave a streak behind him. */
-        static float last_chest[3];
-        float chest[3] = {p->x, p->y + 100.0f, p->z};
-        float dx = chest[0] - last_chest[0], dy = chest[1] - last_chest[1], dz = chest[2] - last_chest[2];
-        float step = dx * dx + dy * dy + dz * dz;
-        switch (c->move) {
-        case MOVE_TR_DASH: case MOVE_TR_DASH_BACK: case MOVE_TR_DASH_LEFT: case MOVE_TR_DASH_RIGHT:
-        case MOVE_TR_DASH2: case MOVE_TR_DASH2_BACK: case MOVE_TR_DASH2_LEFT: case MOVE_TR_DASH2_RIGHT:
-        case MOVE_TR_DASH_CHAIN: case MOVE_TR_SKY_STAR: case MOVE_TR_AIR_TRICK: case MOVE_TR_AIR_TRICK_AIR:
-            if (step > 15.0f * 15.0f && step < 300.0f * 300.0f) fx_streak(last_chest, chest);
-            break;
-        default: break;
-        }
-        memcpy(last_chest, chest, sizeof(chest));
-    }
 
-    /* The blade's streak while the script says the attack is live. */
-    if (c->active && !combat_move_is_gun(c->move) && p->melee_weapon <= 3 && p->melee_weapon != 1) {
-        static const float length[4] = {137.0f, 0.0f, 92.0f, 169.0f};
-        const WeaponPlace *place = combat_weapon_place(c, p, p->melee_weapon, 0);
-        if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
-            /* The blade runs along the model's +Z: the third column of place_rotation. */
-            const float *e = place->rot;
-            float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
-            float axis[3] = {cz * sy * cx + sz * sx, sz * sy * cx - cz * sx, cy * cx};
-            float base[3], tip[3], wb[3], wt[3], len = length[p->melee_weapon];
-            const float *bp = pose.world_pos[place->bone];
-            const Mat3 *br = &pose.world_rot[place->bone];
-            int k;
-            for (k = 0; k < 3; ++k) {
-                float l[3], t[3];
-                int j;
-                for (j = 0; j < 3; ++j) {
-                    l[j] = place->pos[j] + axis[j] * len * 0.3f;
-                    t[j] = place->pos[j] + axis[j] * len;
+    /* The blade's sweep (docs/NATIVE_FX.md "Blade trails"): the game's weapon trail (FUN_00309030), sampling the weapon's
+     * frame every frame and fed while the attack window is open (FUN_0030bce0). The shared weapon object (FUN_002953c0 /
+     * 002954b0) has type 0, model M34 (Dante's pack), fed while +0x24ed is set; Agni & Rudra's (FUN_00296ae0) types 1 /
+     * 2: M30 on Agni while bit 0x80, M31 on Rudra while bit 0x40 (A&R's pack). */
+    {
+        int slot;
+        for (slot = 0; slot < 2; ++slot) {
+            int ar = p->melee_weapon == 2, on;
+            const WeaponPlace *place;
+            if (p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
+            on = !combat_move_is_gun(c->move) && (ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40)));
+            place = combat_weapon_place(c, p, p->melee_weapon, slot);
+            if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {
+                /* The weapon's frame: his yaw, the bone's rotation, the placement's (Rz Ry Rx), at the placement. */
+                const float *e = place->rot;
+                float cx = cosf(e[0]), sx = sinf(e[0]), cy = cosf(e[1]), sy = sinf(e[1]), cz = cosf(e[2]), sz = sinf(e[2]);
+                float r[3][3] = {{cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx},
+                                 {sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx},
+                                 {-sy, cy * sx, cy * cx}};
+                float sw = sinf(p->yaw), cw = cosf(p->yaw), br[3][3], wr[3][3], o[3], wo[3];
+                const float *bp = pose.world_pos[place->bone];
+                const Mat3 *bm = &pose.world_rot[place->bone];
+                int a, b, k;
+                for (a = 0; a < 3; ++a) for (b = 0; b < 3; ++b)
+                    br[a][b] = bm->m[a][0] * r[0][b] + bm->m[a][1] * r[1][b] + bm->m[a][2] * r[2][b];
+                for (b = 0; b < 3; ++b) {
+                    wr[0][b] = cw * br[0][b] + sw * br[2][b];
+                    wr[1][b] = br[1][b];
+                    wr[2][b] = -sw * br[0][b] + cw * br[2][b];
                 }
-                base[k] = bp[k] + br->m[k][0] * l[0] + br->m[k][1] * l[1] + br->m[k][2] * l[2];
-                tip[k] = bp[k] + br->m[k][0] * t[0] + br->m[k][1] * t[1] + br->m[k][2] * t[2];
+                for (k = 0; k < 3; ++k) o[k] = bp[k] + bm->m[k][0] * place->pos[0] + bm->m[k][1] * place->pos[1] + bm->m[k][2] * place->pos[2];
+                model_to_world(p, o, wo);
+                fx_trail_sample(slot, ar ? (slot ? 31 : 30) : 34, wr, wo, on);
             }
-            model_to_world(p, base, wb);
-            model_to_world(p, tip, wt);
-            fx_trail_add(wb, wt, 0x38f0f0ffu);
         }
     }
+}
+
+/* Ebony & Ivory's charge state (FUN_002688c0, actions 130-133; FUN_002698d0; the reset at 0x260cc8), Gunslinger
+ * level 2 (the full moveset), config chunk 11: each shot counts (+0x7db1, up to 50) and restarts a 25-frame timer
+ * (+0x2cc) that runs down only while he isn't in action 130 / 131, clearing the count and the burst at 0. A shot from
+ * an action other than 130 with no burst left starts one: kind 5, the charge shot, for it and the next 7 (+0x678;
+ * levels 0 / 1: 3 / 5). Else Gunslinger's ordinary shots are kind 1, and from the 4th of a run (+0x2d8; 8 / 6) kind 9
+ * (levels 0 / 1: 7 / 8); other styles' kind 0. */
+static int focus_cmp;
+static int ei_count, ei_burst;
+static float ei_timer;
+static int ei_shot_kind(const Combat *c, const Player *p) {
+    int kind;
+    if (ei_burst == 0) {
+        if (c->action != 130) { kind = 5; ei_burst = 7; }
+        else kind = p->style == STYLE_GUNSLINGER ? 1 : 0;
+    } else kind = 5;
+    if (ei_burst) --ei_burst;
+    if (ei_count < 50) ++ei_count;
+    ei_timer = 25.0f;
+    if (kind == 1 && ei_count >= 4) kind = 9;
+    return kind;
 }
 
 static void fire_pending_shots(Combat *c, const Player *p, float dt) {
     int shots = combat_take_shots(c);
     bullets_update(dt);
+    if (c->action != 130 && c->action != 131 && ei_timer > 0.0f) {
+        ei_timer -= dt * 60.0f;
+        if (ei_timer <= 0.0f) ei_count = ei_burst = 0;
+    }
     while (shots-- > 0) {
+        if (p->gun_weapon == 5) {
+            int kind = ei_shot_kind(c, p);
+            bullets_set_shot_kind(kind);
+            if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 8) sprintf(arm_fx_log + strlen(arm_fx_log), "ei%d ", kind);
+        }
         int bone = BONE_L_HAND;
         float s = sinf(p->yaw), co = cosf(p->yaw), hx, hz, muzzle[3], target[3];
         if (p->gun_weapon == 5 && (c->shot_hand++ & 1)) bone = BONE_R_HAND;
@@ -2070,10 +2340,11 @@ static int cmp_demo_shots[32], cmp_demo_shot_count;   /* "demoshot N": a still a
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
-static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1) or looping P (2) 2 m before Dante */
+static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1), looping P (2) or E (3) 2 m before Dante */
 static int cmp_no_trace, cmp_heap_leave, cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
 static int cmp_bp_floor, cmp_bp_visits, cmp_bp_boss=-1, cmp_bp_group=-1;
 static int cmp_bp_warp[32][2], cmp_bp_warps;
+static int cmp_dact[16][2], cmp_dact_count;   /* "dact frame action": Dante starts that command-table action's move then */
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
@@ -2163,6 +2434,9 @@ static void cmp_load(void) {
             if (cmp_fxtest_count < 16 && sscanf(line + 7, "%d %d %d %d", &cmp_fxtest[cmp_fxtest_count][0], &cmp_fxtest[cmp_fxtest_count][1],
                                               &cmp_fxtest[cmp_fxtest_count][2], &cmp_fxtest[cmp_fxtest_count][3]) == 4) ++cmp_fxtest_count;
         }
+        else if (strncmp(line, "dact ", 5) == 0) {
+            if (cmp_dact_count < 16 && sscanf(line + 5, "%d %d", &cmp_dact[cmp_dact_count][0], &cmp_dact[cmp_dact_count][1]) == 2) ++cmp_dact_count;
+        }
         else if (strncmp(line, "bosshits ", 9) == 0) {
             if (cmp_boss_hit_count < 8 && sscanf(line + 9, "%d %d", &cmp_boss_hits[cmp_boss_hit_count][0], &cmp_boss_hits[cmp_boss_hit_count][1]) == 2) ++cmp_boss_hit_count;
         }
@@ -2235,6 +2509,8 @@ static void cmp_load(void) {
         else if (strncmp(line, "demohide ", 9) == 0) { extern int demo_hide_slot; demo_hide_slot = atoi(line + 9); }
         else if (strncmp(line, "nearcull ", 9) == 0) { extern int near_cull_on; near_cull_on = atoi(line + 9); }
         else if (strncmp(line, "nearclip ", 9) == 0) { extern int near_clip_off; near_clip_off = !atoi(line + 9); }
+        else if (strncmp(line, "rawfov ", 7) == 0) demo_raw_fov = atoi(line + 7);   /* tests: 1 passes channel 12 raw */
+        else if (strncmp(line, "nofog ", 6) == 0) demo_no_fog = atoi(line + 6);     /* tests: 1 leaves GFG off */
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
@@ -3226,6 +3502,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     msg_room_fought = 0;
     mission_room = room;
     bp_enter(room_number(room));
+    enemy_set_attack_slot_limit(bp_attack_slot_limit());
     {   /* Bosses this room's script spawns get their model's buffers now, behind the loading screen (enemy.c). */
         const RoomScript *rs = &missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room];
         PalaceOp po;
@@ -3948,6 +4225,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
+    enemy_set_attack_slot_limit(1);   /* Includes the Debug Room path, which skips enter_room. */
     if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
     music_stop();   /* the rooms' music from here (music_room) */
     vanguard_set_difficulty(choice->difficulty);
@@ -4093,6 +4371,7 @@ int main(int argc, char *argv[]) {
     music_init(game_dir);
     sfx_init(game_dir);
     credits_fight_init(game_dir);
+    bp_init(game_dir);
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
@@ -4512,7 +4791,8 @@ int main(int argc, char *argv[]) {
                 int k;
                 for (k = 0; k < cmp_fxtest_count; ++k) if (frames == cmp_fxtest[k][0]) {
                     float at[3] = {player.x + sinf(player.yaw) * 200.0f, player.y, player.z + cosf(player.yaw) * 200.0f};
-                    if (cmp_fxtest[k][2]) nfx_spawn_p(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, cmp_fxtest[k][2] == 2);
+                    if (cmp_fxtest[k][2] == 3) nfx_spawn_e(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, 0);
+                    else if (cmp_fxtest[k][2]) nfx_spawn_p(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, cmp_fxtest[k][2] == 2);
                     else nfx_spawn(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, 0);
                 }
             }
@@ -4713,6 +4993,7 @@ int main(int argc, char *argv[]) {
             MoveId before = combat.move;
             /* Devil Trigger runs him 1.1x as fast (HD Collection traces). */
             PROF_MARK();
+            { int k; for (k = 0; k < cmp_dact_count; ++k) if (cmp_dact[k][0] == frames) combat_force_action(&combat, cmp_dact[k][1]); }
             if (!credits_fight_frozen()) combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);   /* op 7e [3] stops him */
             PROF_END(1);
             {   /* His moves' sound events (gen_sfx.py: the motion definitions' 0x30 / 0x34) as their frames pass. */
@@ -4856,17 +5137,42 @@ int main(int argc, char *argv[]) {
              * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
             combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
             if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
-            if (focus_cmp && frames == cmp_hit_frame)
-                combat_player_hit_kind(&combat, &player, player.x + sinf(player.yaw) * 100.0f, player.z + cosf(player.yaw) * 100.0f, cmp_hit_kind, (float)cmp_hit_damage);
-            if (enemy_attack_landed(&from_x, &from_z, &heavy)) {
+            {
+            int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
+            float blow_damage = 0.0f;
+            if (landed) { blow_kind = enemy_attack_kind(heavy); blow_damage = enemy_attack_damage(); }
+            if (focus_cmp && frames == cmp_hit_frame) {   /* "hitme": a blow from 1 m ahead, through the same path */
+                landed = 1; blow_kind = cmp_hit_kind; blow_damage = (float)cmp_hit_damage;
+                from_x = player.x + sinf(player.yaw) * 100.0f; from_z = player.z + cosf(player.yaw) * 100.0f;
+            }
+            if (landed) {
                 float chest[3] = {player.x, player.y + 110.0f, player.z};
-                if (combat_player_hit_kind(&combat, &player, from_x, from_z, enemy_attack_kind(heavy), enemy_attack_damage())) {
+                if (combat_player_hit_kind(&combat, &player, from_x, from_z, blow_kind, blow_damage)) {
                     fx_hit_spark(chest);
+                    if (combat.guard_type == 2) {
+                        /* A guard break (FUN_004416f0): V0x269 on his left forearm (+0x13a0), within 25 cm at random. */
+                        float at[3], l[3];
+                        int k;
+                        for (k = 0; k < 3; ++k) l[k] = pose.world_pos[BONE_L_FOREARM][k] + ((float)(rand() % 51) - 25.0f);
+                        model_to_world(&player, l, at);
+                        nfx_spawn(NFX_STATIC, 0x269, at, player.yaw, 0);
+                    }
+                    if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
+                        sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", combat.guard_type, frames, (int)combat.guard_frames);
                     if(focus_cmp)vanguard_note("player_hurt",player.health);
                 } else {
-                    fx_guard_flash(chest);
+                    /* A Royalguard block (FUN_00224db0): V6 (guard types 0-2), V0x265 (3), V0x264 (4) near the attacker's
+                     * bone, facing Dante: taken 50 cm toward the blow; V0x267 (5) on his hips. */
+                    float dx = from_x - player.x, dz = from_z - player.z, dl = sqrtf(dx * dx + dz * dz);
+                    float at[3] = {chest[0] + (dl > 1.0f ? dx / dl * 50.0f : 0.0f), chest[1], chest[2] + (dl > 1.0f ? dz / dl * 50.0f : 0.0f)};
+                    int gt = combat.guard_type, v = gt == 3 ? 0x265 : gt == 4 ? 0x264 : gt == 5 ? 0x267 : 6;
+                    if (gt == 5) arm_point(0, &player, BONE_HIPS, at);
+                    if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 12)
+                        sprintf(arm_fx_log + strlen(arm_fx_log), "guard%d@%d/%d ", gt, frames, (int)combat.guard_frames);
+                    if (!nfx_spawn(NFX_STATIC, v, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
                     if(focus_cmp)vanguard_note("player_guard",player.health);
                 }
+            }
             }
             {
                 /* Bodies shove him after his own wall pass, so the shove has to meet the walls too: an enemy
@@ -4979,8 +5285,10 @@ int main(int argc, char *argv[]) {
         coat_update(&pose, &player, dt);
         {
             float chest[3] = {player.x, player.y + 110.0f, player.z};
-            if (input.devil) fx_devil_burst(chest);
-            if (player.devil) fx_devil_aura(chest);
+            /* The port's own glow only if the game's (update_devil_fx) couldn't start. */
+            update_devil_fx(&player);
+            if (input.devil && player.devil && !devil_fx_aura[0] && !devil_fx_aura[1]) fx_devil_burst(chest);
+            if (player.devil && !devil_fx_aura[0] && !devil_fx_aura[1]) fx_devil_aura(chest);
         }
         update_move_fx(&combat, &player, dt);
         doppel_trail[doppel_head][0] = player.x; doppel_trail[doppel_head][1] = player.y;
@@ -5216,7 +5524,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
                 if (report) {
-                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d pfx_dropped=%d pfx_peak=%d nfx_seqs=%d\n%s", cmp_frames, enemy_poses_done(), pfx_started(), pfx_dropped(), pfx_peak(), nfx_live_seqs(), enemy_giga_log());
+                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d pfx_dropped=%d pfx_peak=%d nfx_seqs=%d\narm_fx %s\n%s", cmp_frames, enemy_poses_done(), pfx_started(), pfx_dropped(), pfx_peak(), nfx_live_seqs(), arm_fx_log, enemy_giga_log());
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
                     { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }
@@ -5228,6 +5536,7 @@ int main(int argc, char *argv[]) {
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
+                    { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }
                     { int s_; fprintf(report, "upd sum/max/slow(us):"); for (s_ = 0; s_ < 20; ++s_) fprintf(report, " %u/%u/%u", prof_acc[s_], prof_max[s_], prof_slow[s_]); fprintf(report, "\n"); }
                     { char bt[200]; enemy_spawn_timing(bt, sizeof bt); fprintf(report, "%s\n", bt); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());

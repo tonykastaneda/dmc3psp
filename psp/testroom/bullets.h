@@ -13,6 +13,8 @@ typedef enum {
 
 void bullets_reset(void);
 void bullets_fire(int kind, const float muzzle[3], const float yaw, int has_target, const float target[3]);
+/* The PS2 kind of the next Ebony & Ivory shot (0 ordinary, 5 charged, 7-9 rapid fire upgraded): its flash and damage. */
+void bullets_set_shot_kind(int kind);
 void bullets_update(float dt);
 int bullets_shots(void);
 int bullets_hits(void);

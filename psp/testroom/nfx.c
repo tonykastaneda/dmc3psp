@@ -123,7 +123,8 @@ void nfx_set_demo_bank(const unsigned char *blob, unsigned int at) {
 }
 
 static const NfxBank *bank_of(int b) {
-    return b == NFX_PALACE ? &nfx19 : b == NFX_DEMO ? &demo_bank : b == NFX_NEVAN ? &nfx7 : b == NFX_LADY ? &nfx8 : b == NFX_ARACHNE ? &nfx9 : b == NFX_FALLEN ? &nfx10 : b == NFX_MIRROR ? &nfx11 : b == NFX_CRYSTAL ? &nfx12 : b == NFX_NAUSIKA ? &nfx13 : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
+    return b == NFX_PALACE ? &nfx19 : b == NFX_DEMO ? &demo_bank : b == NFX_NEVAN ? &nfx7 : b == NFX_LADY ? &nfx8 : b == NFX_ARACHNE ? &nfx9 : b == NFX_FALLEN ? &nfx10 : b == NFX_MIRROR ? &nfx11 : b == NFX_CRYSTAL ? &nfx12 : b == NFX_NAUSIKA ? &nfx13 : b == NFX_GUN_EI ? &nfx14 : b == NFX_GUN_SHOTGUN ? &nfx15 : b == NFX_GUN_ARTEMIS ? &nfx16 :
+           b == NFX_GUN_SPIRAL ? &nfx17 : b == NFX_GUN_KALINA ? &nfx18 : b == NFX_DANTE ? &nfx20 : b == NFX_ARM_CERBERUS ? &nfx21 : b == NFX_ARM_AGNI ? &nfx22 : b == NFX_ARM_NEVAN ? &nfx23 : b == NFX_ARM_BEOWULF ? &nfx24 : b == NFX_VANGUARD ? &nfx6 : b == NFX_JESTER ? &nfx5 : b == NFX_AGNI_RUDRA ? &nfx4 : b == NFX_LEVIATHAN ? &nfx2
          : b == NFX_CERBERUS ? &nfx1 : &nfx0;
 }
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
@@ -272,6 +273,7 @@ const unsigned char *nfx_record(int bank, int kind, int id) {
 }
 static const NfxTexture *texture(const NfxBank *b, int id);
 static void bind(const NfxTexture *t);
+static const NfxTexture *bound;
 int nfx_texture_size(int bank, int id, int *width, int *height) {
     const NfxTexture *t = texture(bank_of(bank), id);
     if (!t) return 0;
@@ -280,7 +282,7 @@ int nfx_texture_size(int bank, int id, int *width, int *height) {
 }
 int nfx_bind_texture(int bank, int id) {
     const NfxTexture *t = texture(bank_of(bank), id);
-    if (t) bind(t);
+    if (t) { bound = 0; bind(t); }   /* its caller (pfx.c, fx.c's trails) may have bound others since */
     return t != 0;
 }
 int nfx_frame(int handle, float m[3][3], float p[3]) {
@@ -367,7 +369,10 @@ void nfx_update(float frames) {
         e->age += frames;
         if (e->life > 0.0f && e->age >= e->life) {
             /* Its own timeline's loop: a G's children (loop 0) play once inside a looping owner. */
-            if (seqs[e->seq].loop) e->age = fmodf(e->age, e->life);
+            /* Palace E +0x84 marks cyclic column elements. Its startup smoke
+             * (E1515, 46 frames) is not cyclic, even under a persistent STAY.
+             * Keep the established lifetime policy for other banks. */
+            if (seqs[e->seq].loop && (e->bank != NFX_PALACE || e->e[0x84])) e->age = fmodf(e->age, e->life);
             else { e->active = 0; release(e->seq); }
         } else if (e->life <= 0.0f && !owner_emitting(e->seq)) { e->active = 0; release(e->seq); }
     }
@@ -582,7 +587,6 @@ static const NfxTexture *texture(const NfxBank *b, int id) {
     for (i = 0; i < b->texture_count; ++i) if (b->textures[i].id == id) return &b->textures[i];
     return 0;
 }
-static const NfxTexture *bound;
 static void bind(const NfxTexture *t) {
     if (t == bound) return;
     bound = t;
@@ -613,6 +617,12 @@ static void draw_sprite(const El *el, const Frame *f, const float eye[3], unsign
     if (!t || (color >> 24) == 0) return;
     u0 = (float)rd16(e + 12) / (float)t->width; v0 = (float)rd16(e + 14) / (float)t->height;
     u1 = u0 + (float)rd16(e + 16) / (float)t->width; v1 = v0 + (float)rd16(e + 18) / (float)t->height;
+    if (el->bank == NFX_PALACE) {
+        /* Sample within the authored tile, avoiding adjacent texels on the
+         * magnified portal sheets. Models retain repeating UVs below. */
+        if (rd16(e + 16)) { u0 += 0.5f/t->width; u1 -= 0.5f/t->width; }
+        if (rd16(e + 18)) { v0 += 0.5f/t->height; v1 -= 0.5f/t->height; }
+    }
     if (e[1] == 2) {
         /* Placed: a quad in its frame's XZ plane (E153's frost lies on the floor at rotation 0), turning
          * about its normal at its +0x148 rate. */
@@ -643,6 +653,10 @@ static void draw_sprite(const El *el, const Frame *f, const float eye[3], unsign
         }
     }
     bind(t);
+    if (el->bank == NFX_PALACE) {
+        sceGuTexFilter(GU_LINEAR,GU_LINEAR);
+        sceGuTexWrap(GU_CLAMP,GU_CLAMP);
+    }
     v = sceGuGetMemory(sizeof(SpriteVertex) * 6);
     for (i = 0; i < 6; ++i) {
         const float *p = c[corner[i]];
@@ -652,6 +666,7 @@ static void draw_sprite(const El *el, const Frame *f, const float eye[3], unsign
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, 6, 0, v);
+    if (el->bank == NFX_PALACE) sceGuTexWrap(GU_REPEAT,GU_REPEAT);
 }
 
 static void draw_model(const El *el, const Frame *f, unsigned int color) {
@@ -662,8 +677,12 @@ static void draw_model(const El *el, const Frame *f, unsigned int color) {
     ScePspFMatrix4 mat;
     Frame turned;
     float s[3];
+    const NfxModel *skin = 0;
     for (i = 0; i < b->model_count; ++i) if (b->models[i].id == id) m = &b->models[i];
-    if (!m || m->texture < 0 || (color >> 24) == 0) return;
+    /* +0x211: the textures are those of model +0x212 (FUN_001f1760), the geometry still +0x28's. */
+    if (e[0x211]) { int t = (int)rd16(e + 0x212); for (i = 0; i < b->model_count; ++i) if (b->models[i].id == t) skin = &b->models[i]; }
+    else skin = m;
+    if (!m || !skin || skin->texture < 0 || (color >> 24) == 0) return;
     for (i = 0; i < 3; ++i) s[i] = curve(e, i, el->age);
     {
         /* Its turn rates (+0x144, degrees a frame): E140, the ice sphere, rolls 10 a frame. */
@@ -679,7 +698,7 @@ static void draw_model(const El *el, const Frame *f, unsigned int color) {
     mat.y.x = f->m[0][1] * s[1]; mat.y.y = f->m[1][1] * s[1]; mat.y.z = f->m[2][1] * s[1]; mat.y.w = 0.0f;
     mat.z.x = f->m[0][2] * s[2]; mat.z.y = f->m[1][2] * s[2]; mat.z.z = f->m[2][2] * s[2]; mat.z.w = 0.0f;
     mat.w.x = f->p[0]; mat.w.y = f->p[1]; mat.w.z = f->p[2]; mat.w.w = 1.0f;
-    bind(&b->textures[m->texture]);
+    bind(&b->textures[skin->texture]);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadMatrix(&mat);
     sceGuColor(color);
@@ -722,7 +741,12 @@ void nfx_draw(const float eye[3]) {
                 if (glow) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             } else {
                 sceGuColor(0xffffffffu);
-                if (i == 0 || pass == 1) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffff);
+                /* E1515 is the water portal's finite grey startup smoke,
+                 * not a light source. The columns/rings keep their own pass. */
+                const NfxBank *b=bank_of(el->bank);
+                int smoke=el->bank==NFX_PALACE && el->e==find(b->e,b->e_count,1515);
+                if (smoke) sceGuBlendFunc(GU_ADD,GU_SRC_ALPHA,GU_ONE_MINUS_SRC_ALPHA,0,0);
+                else if (i == 0 || pass == 1) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffff);
                 draw_sprite(el, &f, eye, color);
             }
         }

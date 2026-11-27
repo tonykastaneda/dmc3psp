@@ -158,7 +158,7 @@ In step 2 she also checks her timer +0x4840 and her distance to Dante:
 - If either of her guns' motions has ended → 0x2f.
 - Otherwise she keeps her aim pose (0x49).
 
-[I: +0x4838 is a charge counter for the rocket. It isn't decoded.]
++0x4838 is the rocket's counter: `FUN_004497f0` (her shot's event) adds **5** a bullet when her sight flag +0x4861 is set, else 1, up to **100** (0x61a574 / 0x61a570); `FUN_0044cc40` takes **50** (0x61a578) [I: as the rocket goes].
 
 **The other modes:**
 - **0x31** (`FUN_00448650`): action **0x85** (the pistol burst from her mode 0x1a; motion [6] 50), turning to the
@@ -271,7 +271,7 @@ in `analysis/testroom/` (local).
 - **Lady's damage on enemies:** her attack records' damage (80 a bullet, 1500 the rocket), given as that many of
   Dante's hits in the port's health units. Only her target can take them.
 - **Lady's estimates and gaps:**
-  - Her rocket counter's fill, 0x85's three shots and the rocket's frame are estimates.
+  - 0x85's three shots and the rocket's frame are estimates; her sight flag (5 or 1 a bullet) is taken as set.
   - Enemies don't attack her [inferred: their AI targets the player, section 5].
 - **The freeze:** op 7e [3] / [4] stop and resume all of Dante's and the enemies' updates [inferred: task groups 5
   and 6].

@@ -5,13 +5,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
+#include <ctype.h>
 
 static int active, level, previous, visits, room_number, group;
 static unsigned int groups_used, bosses_used;
 static int next_boss, forced_boss = -1, forced_group = -1;
-static float clear_frames;
+static float clear_frames, entry_frames;
 static int reward, pending_reward;
 static float reward_pos[3], reward_vy;
+static int best_floor, saved_floor, test_run;
+static char best_path[320];
+void bp_init(const char *directory) {
+    FILE *f; char line[64], *end; long value; size_t len;
+    best_floor=saved_floor=0; best_path[0]=0;
+    if (!directory || !(len=strlen(directory))) return;
+    if (snprintf(best_path,sizeof best_path,"%s%sBP_BEST.TXT",directory,
+                 directory[len-1]=='/' || directory[len-1]=='\\'?"":"/") >= (int)sizeof best_path) {
+        best_path[0]=0; return;
+    }
+    f=fopen(best_path,"r"); if (!f) return;
+    if (fgets(line,sizeof line,f) && fgetc(f)==EOF && !strncmp(line,"BPB1 ",5)) {
+        value=strtol(line+5,&end,10);
+        if (end!=line+5) {
+            while (isspace((unsigned char)*end)) ++end;
+            if (!*end && value>=0 && value<=9999) best_floor=saved_floor=(int)value;
+        }
+    }
+    fclose(f);
+}
+int bp_best_floor(void) { return best_floor; }
+static void record_floor(void) {
+    FILE *f; int written, closed;
+    if (test_run) return;   /* Scripted starts/warps must never overwrite the player's record. */
+    if (level>best_floor) best_floor=level;
+    if (!best_path[0] || best_floor<=saved_floor) return;
+    f=fopen(best_path,"w"); if (!f) return;
+    written=fprintf(f,"BPB1 %d\n",best_floor); closed=fclose(f);
+    if (written>0 && !closed) saved_floor=best_floor;
+}
 static const int boss_rooms[17] = {433,434,435,436,437,438,439,440,441,442,443,444,445,446,422,448,449};
 static const int increments[3] = {1,10,100};
 static int ordinary(int room) { return room >= 423 && room <= 432; }
@@ -25,21 +57,25 @@ static int pick(unsigned int *used, int count) {
 }
 void bp_reset(int enabled) {
     active=enabled; level=previous=visits=0; groups_used=bosses_used=0;
-    room_number=-1; group=0; next_boss=0; clear_frames=0;
+    room_number=-1; group=0; next_boss=0; clear_frames=entry_frames=0;
     forced_boss=forced_group=-1;
     reward=pending_reward=0;reward_vy=0;
+    test_run=0;
 }
 int bp_active(void) { return active; }
 int bp_floor(void) { return level; }
+int bp_attack_slot_limit(void) { return active?level/1000+1:1; }
 void bp_test_start(int floor, int count, int boss, int encounter) {
     if (!active) return;
+    test_run=1;
     level=previous=floor<0?0:floor>9999?9999:floor;
     visits=count<0?0:count; forced_boss=boss; forced_group=encounter;
 }
 void bp_enter(int room) {
     int i;
     if (!active) return;
-    room_number=room; clear_frames=0;
+    room_number=room; clear_frames=entry_frames=0;
+    record_floor();
     reward=0;reward_vy=0;
     for (i=0;i<BP_PICKUP_COUNT && pending_reward;++i) {
         const PalacePickup *p=&palace_pickups[i];
@@ -72,7 +108,10 @@ int bp_op(int index, PalaceOp *out) {
     return 0;
 }
 void bp_update(float frames, int cleared) {
-    if (active) clear_frames=cleared?clear_frames+frames:0;
+    if (active) {
+        clear_frames=cleared?clear_frames+frames:0;
+        entry_frames+=frames;
+    }
 }
 int bp_portal_ready(int portal) {
     if (!active || portal<0 || portal >= (ordinary(room_number)?3:1)) return 0;
@@ -96,17 +135,20 @@ int bp_route(int portal, int *room, int *start) {
 int bp_finished(void) { return active && level==9999 && room_number==444 && clear_frames>=180.0f; }
 void bp_draw(void) {
     char text[64];
-    if (!active || !menu_loaded()) return;
+    float x, brightness;
+    unsigned int alpha;
+    if (!active || !menu_loaded() || entry_frames>=200) return;
+    /* CSceneGame 0x23e900/0x23eab8: x=35, y=200 (centred vertical units),
+     * brightness=200--, timer=360--; slide x-=3 once timer<240. */
+    x=(35.0f-3.0f*fmaxf(0,entry_frames-121.0f))*480.0f/512.0f;
+    brightness=(200.0f-entry_frames)*2.0f;
+    alpha=(unsigned int)fminf(255,brightness);
     snprintf(text,sizeof text,"Level %d",level);
-    menu_font_draw(12,237,18,text,0xffffffffu);
-    if (clear_frames>=60.0f && ordinary(room_number)) {
-        snprintf(text,sizeof text,"PORTALS  +1   +10   +100");
-        menu_font_draw(120,238,15,text,0xffffffffu);
-    }
+    menu_font_draw_scaled(x,240,18,2.6f,text,(alpha<<24)|0x00ffffffu);
 }
 void bp_status(char *out, int size) {
-    snprintf(out,size,"palace on=%d level=%d room=%d visits=%d group=%d clear=%.0f boss=%d finished=%d pickup=%d",
-             active,level,room_number,visits,group,clear_frames,next_boss,bp_finished(),reward);
+    snprintf(out,size,"palace on=%d level=%d room=%d visits=%d group=%d clear=%.0f boss=%d finished=%d pickup=%d attack_slots=%d best=%d test=%d",
+             active,level,room_number,visits,group,clear_frames,next_boss,bp_finished(),reward,bp_attack_slot_limit(),best_floor,test_run);
 }
 int bp_pickup_position(float out[3]) {
     if (!active || !reward) return 0;

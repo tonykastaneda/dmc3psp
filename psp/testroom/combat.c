@@ -11,6 +11,7 @@
 #include "leviathan_boss.h"
 #include "stage.h"
 #include "nfx.h"
+#include "nfx.h"
 
 #define FADE_SECONDS 0.10f
 #define SWORD_OUT_SECONDS 1.6f
@@ -347,6 +348,7 @@ static void end_move(Combat *c, Player *player) {
     c->script = -1;
     c->pending = 0;
     c->active = 0;
+    c->window_bits = 0;
     memset(c->gates, 0, sizeof(c->gates));
     c->dashes = 0;        /* FUN_0021f500 (back to neutral) clears the dash count */
     c->warp_time = 0.0f;
@@ -383,6 +385,8 @@ static void seek_events(Combat *c) {
  * a continuation keeps the action. */
 static void start_move(Combat *c, MoveId move, int action) {
     const Motion *m;
+    if ((move == MOVE_RG_BLOCK || move == MOVE_RG_AIR_BLOCK) && c->move != MOVE_RG_BLOCK && c->move != MOVE_RG_HOLD &&
+        c->move != MOVE_RG_AIR_BLOCK) c->guard_frames = 0.0f;
     /* A charge phase with the button already up goes straight on to its first tier: a tap
      * must not show the charge's pose for a frame. */
     if (moves[move].next_on == NEXT_CHARGE && moves[move].tiers[0] != MOVE_NONE) {
@@ -440,6 +444,7 @@ static void start_move(Combat *c, MoveId move, int action) {
     if (moves[move].set_speed > 0.0f) { c->air_v[0] = moves[move].set_speed; c->air_v[1] = 0.0f; }
     c->pending = 0;
     c->active = 0;
+    c->window_bits = 0;
     c->phase_time = 0.0f;
     c->hover_done = 0;
     memset(c->gates, 0, sizeof(c->gates));
@@ -747,6 +752,7 @@ static int run_events(Combat *c) {
         else if (e->kind == EV_ACTIVE) {
             if (e->a && !c->active) ++hits;
             c->active = e->a;
+            c->window_bits = e->b;
         } else if (e->kind == EV_HIT && (c->active || !script_has_active(sd))) {
             /* Window 0 byte 2 0x2n re-arms the attack: a new hit inside an
              * active window, or each stab of a move without one (Million Stab). */
@@ -1345,6 +1351,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     float root[3];
     unsigned int inputs = read_inputs(c, player, input, dt);
     int action, hits;
+    c->guard_frames += dt * MOTION_FPS;
 
     c->held_tri = input->melee_held;
     c->held_sq = input->gun_held;
@@ -1593,7 +1600,14 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             player->vy = 0.0f;
             player->on_ground = 1;
             c->air = 0;
-            if (d->land_finish) return;   /* the move carries on, on the ground, to its motion's end */
+            if (d->land_finish) {
+                /* Helm Breaker's landing (FUN_00264b90): V0x8e on him (Dante's pack) and P44 dust at his feet (V0xf2
+                 * on floor material 0xb, not told apart here). */
+                float feet[3] = {player->x, player->y, player->z};
+                nfx_spawn(NFX_DANTE, 0x8e, feet, player->yaw, 0);
+                nfx_spawn_p(NFX_STATIC, 44, feet, player->yaw, 0);
+                return;   /* the move carries on, on the ground, to its motion's end */
+            }
             if (d->next == MOVE_NONE) {
                 /* State 8: the jump's landing frames, stopped. */
                 int land = motion_find("2-04");
@@ -1806,8 +1820,20 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
         c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK ||
         c->move == MOVE_DOWN || c->move == MOVE_DOWN_FAR || c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR ||
         c->move == MOVE_RECOVER || c->move == MOVE_POP || c->move == MOVE_POP_LAND || player->health <= 0.0f) return 1;
-    /* An estimate: the real block's rules (the gauge, the timing) aren't ported. */
-    if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) return 0;
+    /* Royalguard's judgement (FUN_002e7f10 -> FUN_004416f0): the time since the guard began (+0x3c8c) against the
+     * style level's windows (config chunk 9 +0x18c.. / +0x198..: within 5 frames grade 3, within 0 / 8 / 10 grade 4,
+     * else grade 0), then table 0x5c9400 by the blow's guard class (+0x3e) and the grade: 0 / 1 blocked (1: by a table on the record's +0x18, not read), 2 a guard
+     * break, 3 / 4 the timed blocks, 6 not blocked. The port's blows carry no guard class: a knockdown kind (2-7) is
+     * taken as class 1, the rest class 0 [estimate]. Level 2 (the full moveset); grade 5 (+0x3c82, a block straight
+     * after a type-5 one) isn't reached; the gauge isn't ported. */
+    c->guard_type = 6;
+    if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) {
+        static const unsigned char table[5][4] = {{0, 4, 3, 5}, {2, 2, 3, 5}, {2, 2, 3, 2}, {6, 6, 3, 5}, {6, 6, 3, 6}};
+        int grade = c->guard_frames <= 5.0f ? 2 : c->guard_frames <= 10.0f ? 1 : 0;   /* columns: 0, 4, 3, 5 */
+        int cls = kind >= 2 && kind <= 7 ? 1 : 0;
+        c->guard_type = table[cls][grade];
+        if (c->guard_type != 2 && c->guard_type != 6) return 0;
+    }
     if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
     player->health -= damage;
     if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
@@ -1843,6 +1869,11 @@ int combat_player_hit(Combat *c, Player *player, float from_x, float from_z, int
 }
 const char *combat_script_key(int script) {
     return script >= 0 ? script_data[script].key : "-";
+}
+
+void combat_force_action(Combat *c, int action) {
+    MoveId m = action_move(action);
+    if (m != MOVE_NONE) start_move(c, m, action);
 }
 
 int combat_selftest(int *total, int *failed_action, int *fallbacks) {

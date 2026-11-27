@@ -79,12 +79,17 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
  * port hasn't read (FUN_00369180). Measured on the HD Collection in Turbo: 49 swings from 4 enemies,
  * never under 3.0 real seconds apart, so it doesn't scale with game speed. */
 #define ATTACK_TOKEN_SECONDS 3.0f
+#include "attack_slots.h"
 /* The game's value comes from a mission object not read yet. 0 gives what Mission 2 on Easy shows
  * on the HD Collection: plans 27, 32, 51 and 52 only. */
 #define AI_RANK 0.0f
 /* How much a Pride takes, in units of a light hit. An estimate: on the HD Collection a maxed Dante kills
  * one in about three to five hits on Easy. The game's health and damage values aren't read yet. */
 #define ENEMY_HEALTH 6
+/* Ebony & Ivory's ordinary bullet: its record (0x5a5a30, copied by the bullet's constructor 002efaa0) +4, the damage.
+ * docs/VANGUARD_SPEC.md. */
+#define DANTE_BULLET_DAMAGE 10.0f
+float enemy_bullet_damage = DANTE_BULLET_DAMAGE;   /* bullets.c sets the shot's record's damage (its kind) */
 /* Bosses' health from their classes' parameter blocks (+0x2c, the value FUN_002f0560 starts the health with). */
 #define NEVAN_MAX 7000
 #define BEOWULF_MAX 10000
@@ -178,6 +183,7 @@ typedef struct {
     unsigned char cloth_ready;
     float cloth_frames;
     float veil;                     /* 0 opaque; above, drawn blended with alpha 1 - veil (Nevan's fades) */
+    float bullet_hp;                /* Ebony & Ivory's damage not yet a whole unit of health (enemy_hit) */
     /* The Soul Eater (CEm016): its sight gauge (+0x4bc: 30 out of Dante's view, down while he looks), how shown it is
      * (+0x4c4, 0-30), its hover over him (+0x4b4) and when that's re-rolled (+0x4b8), its local velocity (+0x60), its
      * teleport's point (+0x3b0), its charge count (+0x448), whether a hit came while it couldn't react (+0x4d2). */
@@ -208,7 +214,8 @@ static float landed_x, landed_z;
 static int landed_heavy;
 static float landed_damage = -1.0f;
 static int landed_kind = -1;   /* the attack record's kind (+0x18), -1 unknown */
-static float attack_token;
+static AttackSlots attack_slots = {1,{0}};
+void enemy_set_attack_slot_limit(int limit) { attack_slots_reset(&attack_slots,limit); }
 static int mortal;
 static int dummy_kind;
 static int hit_weapon;   /* the melee weapon of the hits being dealt */
@@ -593,6 +600,7 @@ static void spawn_one_body(int kind, float x, float z) {
     e->cloth_ready = 0;
     e->cloth_frames = 0.0f;
     e->veil = 0.0f;
+    e->bullet_hp = 0.0f;
     e->active = 1;
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
     if (kind == ENEMY_GOYLE) { goyle_spawn(); return; }
@@ -1546,10 +1554,10 @@ static void plan_set(int p) {
 
 /* Pick from the game's lists: which list by whether it may attack, which row by how far Dante is. */
 static void decide(float distance) {
-    int attack = attack_token <= 0.0f, band = 0, column = 0, i;
+    int attack = attack_slots_available(&attack_slots), band = 0, column = 0, i;
     const EnemyAiRow *row;
     float r, total = 0.0f;
-    if (attack) attack_token = ATTACK_TOKEN_SECONDS;
+    if (attack) attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
     e->gauge = 0.0f;
     const EnemyAiClass *ai = ai_class();
     while (band < ai->band_count - 1 && distance >= ai->bands[band]) ++band;
@@ -1674,7 +1682,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (!e->active) return;
     if (e->kind == ENEMY_VANGUARD) vanguard_select((int)(e-enemies));
     if (e->kind == ENEMY_LEVIATHAN) {
-        float damage=kind==HIT_PISTOL ? 8.0f : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
+        float damage=kind==HIT_PISTOL ? enemy_bullet_damage : (kind==HIT_LIGHT || kind==HIT_AIR ? 42.0f : 84.0f);
         if (leviathan_boss_dying()) return;
         ++hits;
         if(leviathan_boss_hit(leviathan_boss_target(),damage,mortal)) {e->plan=P_DEATH;died();}
@@ -1719,6 +1727,7 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_LADY) { if (lady_brain.ally) return; ++hits; lady_hit_glue(kind); return; }   /* the ending's ally takes none of his */
     if (e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { ar_hit(kind, from_x, from_z); return; }
     if (e->kind == ENEMY_GOYLE) { ++hits; { float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]}; fx_hit_spark(at); } goyle_hit(kind, from_x, from_z); return; }
+    int gun = kind == HIT_PISTOL;
     if(kind==HIT_PISTOL && e->kind!=ENEMY_VANGUARD)kind=HIT_LIGHT;
     ++hits;  /* infinite health: hits only cause reactions */
     {
@@ -1733,7 +1742,12 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
     if (e->kind == ENEMY_VANGUARD) { if(vanguard_hit(kind,mortal)) {e->plan=P_DEATH;died();} return; }
     if (e->plan == P_DEATH) return;
     if (mortal && !e->mirror_bound) {
-        e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
+        if (gun) {
+            /* A bullet does its record's damage (0x5a5a30 +4: 10), a quarter of a unit of health (a Pride's 250 is
+             * ENEMY_HEALTH): kept until it makes a whole one. It still flinches it as a light hit. */
+            e->bullet_hp += enemy_bullet_damage;
+            if (e->bullet_hp >= 250.0f / ENEMY_HEALTH) { e->bullet_hp -= 250.0f / ENEMY_HEALTH; --e->health; }
+        } else e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->air = 0;
             plan_set(P_DEATH);
@@ -2476,11 +2490,16 @@ void enemy_finish_collisions(float px, float py, float pz) {
     }
 }
 
+static unsigned int big_moves[64];   /* tests: a body asked to move over 3 m in a frame, not placed: its brain undoing the walls */
+void enemy_big_moves(char *out, int size) {
+    int k, n = snprintf(out, (size_t)size, "bigmoves");
+    for (k = 0; k < 64 && n < size - 12; ++k) if (big_moves[k]) n += snprintf(out + n, (size_t)(size - n), " k%d=%u", k, big_moves[k]);
+}
 void enemy_update(float dt, float px, float py, float pz) {
     Enemy *selected = e;
     int i;
     ++trace_tick;
-    if (attack_token > 0.0f) attack_token -= dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f);
+    attack_slots_update(&attack_slots,dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f));
     for (i = 0; i < ENEMY_MAX; ++i) {
         float was_x, was_y, was_z;
         e = &enemies[i];
@@ -2498,6 +2517,7 @@ void enemy_update(float dt, float px, float py, float pz) {
         if (e->active && e->kind < ENEMY_KIND_COUNT && stage_loaded()) {
             float x = e->pos[0], y = e->pos[1], z = e->pos[2];
             /* A warp is placement, not travel through the intervening walls. */
+            if (!e->placed && hypotf(x-was_x,z-was_z) > 300 && e->kind < 64) ++big_moves[e->kind];   /* tests: enemy_big_moves */
             if (hypotf(x-was_x,z-was_z) > 600 || e->placed) { was_x = x; was_y = y; was_z = z; e->placed = 0; }
             e->pos[0] = was_x; e->pos[1] = was_y; e->pos[2] = was_z;
             body_move(e, x, y, z);
@@ -3163,8 +3183,8 @@ static void enigma_update(float f, float px, float py, float pz) {
             e->shoot_timer[k] -= f;
             if (e->shoot_timer[k] > 0.0f) continue;
             e->shoot_timer[k] = (near ? arm_near_base[k] + 200.0f * ai_unit() : arm_far_base[k] + 100.0f * ai_unit());
-            if (attack_token > 0.0f) continue;
-            attack_token = ATTACK_TOKEN_SECONDS;
+            if (!attack_slots_available(&attack_slots)) continue;
+            attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
             e->shoot_set = (signed char)k;
             e->shoot_fan = ai_unit() * 100.0f >= (near ? 80.0f : 60.0f);
             e->shoot_phase = 0;
@@ -3350,8 +3370,8 @@ static void goyle_decide(float d) {
         if (next == G_WINDUP) {
             /* An attack needs fewer than 2 attacking (FUN_002fbdc0(mgr, 1)) and the attack token (3 s). Else the
              * next row. Under 350 the game also asks a check of its own (vfunc 0x1c8) that isn't decoded. */
-            if (!attacks_on || attack_token > 0.0f || goyle_in(G_WINDUP, G_AIM, G_DIVE, G_SHOOT) >= 2) continue;
-            attack_token = 3.0f;
+            if (!attacks_on || !attack_slots_available(&attack_slots) || goyle_in(G_WINDUP, G_AIM, G_DIVE, G_SHOOT) >= 2) continue;
+            attack_slots_take(&attack_slots,3.0f);
             /* From further off it may shoot instead of diving [the port's choice; state 11's own pick isn't read]. */
             goyle_state(d > 500.0f && ai_unit() < 0.5f ? G_SHOOT : G_WINDUP);
             return;
@@ -4002,8 +4022,8 @@ static void jester_hit(HitKind kind) {
     ++hits;
     fx_hit_spark(at);
     if (mortal) {
-        /* The port's hit values (as the Vanguard's: 42 light, 84 heavy, 8 a bullet), scaled as the row says. */
-        float dmg = gun ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        /* The port's hit values (as the Vanguard's: 42 light, 84 heavy; a bullet its record's 10), scaled as the row says. */
+        float dmg = gun ? enemy_bullet_damage : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
         dmg *= stunned ? 1.0f : 0.01f;
         e->ar_health -= dmg;
         if (e->ar_health <= 0.0f) {
@@ -4055,7 +4075,7 @@ static int ar_room = -1;
 void enemy_set_room(int room) { ar_room = room; }
 static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
 static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
-void enemy_ar_force(int state) { ar_force = state; }
+void enemy_ar_force(int state) { if(!vergil_boss_test_state(state)) ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
 
@@ -4848,9 +4868,9 @@ static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z) {
         }
     }
     if (mortal) {
-        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet 8 [estimate]. Agni's fire is weak to
+        /* As the Vanguard's: 42 a light hit, 84 a heavy one, a bullet its record's 10 (DANTE_BULLET_DAMAGE). Agni's fire is weak to
          * Cerberus's ice (the guide): twice the damage is an estimate. */
-        damage = kind == HIT_PISTOL ? 8.0f : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
+        damage = kind == HIT_PISTOL ? enemy_bullet_damage : (kind == HIT_LIGHT || kind == HIT_AIR) ? 42.0f : 84.0f;
         if (e->kind == ENEMY_AGNI && kind != HIT_PISTOL && hit_weapon == 1) damage *= 2.0f;
         e->ar_health -= damage;
         if (e->ar_health <= 0.0f) {
@@ -5755,8 +5775,8 @@ static void an_decide(float px, float py, float pz) {
     rel = wrap_angle(atan2f(dx, dz) - e->yaw);
     if (ar_force >= 0) { int st = ar_force; ar_force = -1; an_go(st, px, py, pz); return; }   /* tests: "arforce frame action" */
     if (an_on_wall[me]) {
-        if (an_gate[me] > 150.0f && attack_token <= 0.0f && attacks_on) {
-            attack_token = ATTACK_TOKEN_SECONDS;
+        if (an_gate[me] > 150.0f && attack_slots_available(&attack_slots) && attacks_on) {
+            attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
             an_gate[me] = 0.0f;
             an_go(an_pick(an_wall_attack[zone], 4), px, py, pz);
         } else an_go(0x72, px, py, pz);   /* 0x5c6740: the leap down, whatever the zone */
@@ -5765,7 +5785,7 @@ static void an_decide(float px, float py, float pz) {
     if (an_gate[me] <= 150.0f || !attacks_on) { an_go(an_pick(an_move[zone], 8), px, py, pz); return; }
     if (fabsf(rel) > PI * 0.75f) { an_go(0x6c, px, py, pz); return; }   /* behind: the turn first (dot < -0.707) */
     an_gate[me] = 0.0f;
-    if (attack_token <= 0.0f) { attack_token = ATTACK_TOKEN_SECONDS; an_go(an_pick(an_attack[zone], 6), px, py, pz); }
+    if (attack_slots_available(&attack_slots)) { attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS); an_go(an_pick(an_attack[zone], 6), px, py, pz); }
     else an_go(an_pick(an_no_token[zone], 6), px, py, pz);
 }
 
@@ -6929,14 +6949,14 @@ static void lady_update_glue(float f, float px, float py, float pz) {
                 /* Her shot on its target, with its attack record's damage. Her bullet (FUN_00483ad0, vtable 0x6106a0)
                  * takes the ally flag (+0x46d); FUN_004c89b0 then gives its hit team 1, which hits enemies, not
                  * Dante, with the same record (0x5cbc40: 80). The rocket is record_damage's 1500. In the port's health
-                 * (ENEMY_HEALTH a Pride's 250) that's 2 of Dante's pistol hits, or 18 heavy ones, each through the
+                 * (ENEMY_HEALTH a Pride's 250) that's 2 light hits, or 18 heavy ones, each through the
                  * target's own hit code, until it dies. */
                 Enemy *was = e;
                 float lx = e->pos[0], lz = e->pos[2];
                 int heavy = b->ally_hit == 2, units = (int)(b->ally_hit_damage * ENEMY_HEALTH / 250.0f + 0.5f), n;
                 e = target;
                 for (n = 0; n < units && e->active && e->plan != P_DEATH; n += heavy ? 2 : 1)
-                    enemy_hit(heavy ? HIT_HEAVY : HIT_PISTOL, lx, lz);
+                    enemy_hit(heavy ? HIT_HEAVY : HIT_LIGHT, lx, lz);   /* a light hit is a unit (about 42): Dante's bullet is 10 */
                 e = was;
             }
         }

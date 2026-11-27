@@ -10,6 +10,9 @@ DEMO_nnn.BIN (little endian; offsets from its start):
   MOTs: the runtime reads those and streams each motion as its clip comes up), subtitles, subtitle count; 64 bytes
   then fades, fade count (DMO3 +0x28: 0 in files without them)
   fade (16 bytes): {f32 from, length, u32 out (1) / in (0), u8 RGBA (A 128 = opaque)}
+  fog (24 bytes, ScrEfc GFG, after the Program colour clips): {f32 start, life, StartZ, EndZ, u32 MaxColor
+  ABGR, u8 MinAlpha, MaxAlpha, Type, pad}. Their count is the high 16 bits of the light count at +0x3c
+  (0 in a bin from before this). Life is the clip's Life / ClipScale.
   subtitle (128 bytes): {f32 from, to (demo frames), i16 x, y (PS2 640 x 448), size, pad, char text[112] (\n breaks)}
   camera: frames x {f32 eye[3], f32 target[3], f32 fov (degrees), f32 channel 13}
   texture: {u32 width, height, pixels (8-bit, swizzled), palette (256 ABGR)}
@@ -274,6 +277,9 @@ def bake_effects(timeline, work: Path, blob: bytearray, slot_to_actor):
         if kind == 5:
             m = struct.unpack_from("<H", rec, 0x28)[0]
             if ("M", m) in recs:
+                models.setdefault(m, None)
+            m = struct.unpack_from("<H", rec, 0x212)[0]
+            if rec[0x211] and ("M", m) in recs:   # its textures are model +0x212's (FUN_001f1760, nfx.c draw_model)
                 models.setdefault(m, None)
         elif tex != 0xFFFF and ("T", tex) in recs:
             try:
@@ -801,12 +807,33 @@ def bake_lights(timeline) -> bytes:
     return bytes(out)
 
 
+FOG_RECORD = 24
+
+
+def bake_fog(timeline) -> bytes:
+    """ScrEfc GFG clips. The runtime maps MinAlpha/128 at StartZ to MaxAlpha/128 at EndZ onto sceGuFog."""
+    out = bytearray()
+    clips = sorted((c for t in timeline["tracks"] if t["kind"] == "ScrEfc" for c in t["clips"]
+                    if str(c.get("Id", "")) == "GFG"), key=lambda c: float(c.get("SetFrame", 0.0)))
+    for c in clips:
+        scale = float(c.get("ClipScale", 1.0) or 1.0)
+        life = max(float(c.get("Life", 1.0)) / scale, 1.0)
+        color = int(c.get("MaxColor", 0)) & 0xFFFFFFFF
+        min_a = max(0, min(255, int(float(c.get("MinAlpha", 0)))))
+        max_a = max(0, min(255, int(float(c.get("MaxAlpha", 0)))))
+        kind = int(float(c.get("Type", 1))) & 0xFF
+        out += struct.pack("<4fI4B", float(c.get("SetFrame", 0.0)), life, float(c.get("StartZ", 0.0)),
+                           float(c.get("EndZ", 0.0)), color, min_a, max_a, kind, 0)
+    return bytes(out)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
     parser.add_argument("demo", type=int)
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "testroom")
     parser.add_argument("--audio-only", action="store_true", help="only its sound (DAUD_nnn.BIN)")
+    parser.add_argument("--no-stage", action="store_true", help="write DEMO_nnn.BIN only; leave DSTG_nnn.BIN alone")
     args = parser.parse_args()
     # DMC3_DEMO_WORK: unpack into another folder (build/demo can be a shared cache)
     work = Path(os.environ.get("DMC3_DEMO_WORK") or ROOT / "build" / "demo") / str(args.demo)
@@ -845,7 +872,9 @@ def main():
     blob += struct.pack("<I", len(programs))
     for start, no, arg in programs:
         blob += struct.pack("<fI4f", start, no, *(arg + [0.0] * (4 - len(arg))))
-    # Then the stage's own hide track (its model slot's Hide clips: a cut's .hid keys the stage's SCM objects one by
+    fogs = bake_fog(timeline)
+    blob += fogs   # right after the Program clips; their count is the high half of +0x3c
+    # Then, after the fogs, the stage's own hide track (its model slot's Hide clips: a cut's .hid keys the stage's SCM objects one by
     # one; demo 3 hides the walls in front of its later cameras): u32 count, then {f32 demo frame, u16 object, u16
     # hidden}, by frame. A clip without a .hid shows them all. The stage's batches carry object + 1 (prepare_stage).
     events = stage_hide_events(timeline, files)
@@ -861,12 +890,15 @@ def main():
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))
     struct.pack_into("<3I", blob, 0x30, *fx)   # +0x30 effect bank, effect clips, clip count (0: none)
-    struct.pack_into("<I", blob, 0x3c, len(lights) // LIGHT_RECORD)   # +0x3c Light clips, after the fades
+    struct.pack_into("<I", blob, 0x3c, (len(lights) // LIGHT_RECORD) | ((len(fogs) // FOG_RECORD) << 16))
     print(f"  {len(subs)} subtitles" + (f": {subs[0][5][:40]!r} ..." if subs else ""))
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / f"DEMO_{args.demo:03d}.BIN"
     out.write_bytes(blob)
 
+    if args.no_stage:
+        print(f"  fog clips: {len(fogs) // FOG_RECORD}")
+        return
     # The stage: slot 00's .scm clip, its texture, built as a room; its play area the camera's reach.
     # The stage proper (stNNN.scm), not its pieces (ss...scm).
     scms = [c for t in timeline["tracks"] if t["kind"] == "Model" for c in t["clips"]

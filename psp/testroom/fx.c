@@ -6,7 +6,9 @@
 #include <math.h>
 #include <string.h>
 
+#include "nfx.h"
 #include "fx_runtime.h"
+#include "trail_runtime.h"
 #include "vanguard_fx_runtime.h"
 
 /* Sized for a boss fight: E&I's flashes (three a shot) and hit sparks no longer recycle a boss's own
@@ -33,10 +35,100 @@ static Sprite sprites[MAX_SPRITES];
 static int next_sprite;
 static unsigned int seed = 12345u;
 
-static struct { float base[3], tip[3], age; } trail[TRAIL_POINTS];
-static int trail_count;
-static unsigned int trail_color;
-static int trail_fresh;
+/* Two sweeps (A&R's two blades). Textured as the game's weapon trails (docs/NATIVE_FX.md "Blade trails"): an nfx
+ * texture and the rectangle of it its trail model maps, u along the sweep (newest first), v hilt to tip. */
+static struct {
+    struct { float base[3], tip[3], age; } p[TRAIL_POINTS];
+    int count, fresh, bank, tex;
+    unsigned int color;
+    float u0, u1, v0, v1;
+} trails[2];
+
+/* The game's model trails (docs/NATIVE_FX.md "Blade trails", FUN_00309030 kinds 2 / 3): the weapon frame's last 11
+ * matrices (FUN_0030a380, a sample every frame), made into 33 bone frames (FUN_0030aa50: 4 a segment, the rotations
+ * blended 1 / 0.75 / 0.5 / 0.25, the places a quadratic B-spline through the segments' midpoints, the first the newest
+ * frame itself) that carry the trail model's vertices. Alpha (FUN_00309d30, the table's +8 / +9 / +10 / +0xc): up by
+ * the step a frame to the top while fed, down by it to the floor from +0xc frames after the last feed. */
+#define MTRAIL_HISTORY 11
+static struct {
+    float m[MTRAIL_HISTORY][3][3], p[MTRAIL_HISTORY][3];
+    int count, model;
+    float alpha, since;
+} mtrails[2];
+typedef struct { const TrailVertex *v; const unsigned short *idx; int nv, ni, bank, tex; float top, step, floor_, delay; } MTrailModel;
+static const MTrailModel *mtrail_model(int model) {
+    static const MTrailModel models[3] = {
+        {trail_m34_vertices, trail_m34_indices, TRAIL_M34_VERTICES, TRAIL_M34_INDICES, NFX_DANTE, 10034, 128, 16, 0, 3},
+        {trail_m30_vertices, trail_m30_indices, TRAIL_M30_VERTICES, TRAIL_M30_INDICES, NFX_ARM_AGNI, 10030, 128, 24, 8, 5},
+        {trail_m31_vertices, trail_m31_indices, TRAIL_M31_VERTICES, TRAIL_M31_INDICES, NFX_ARM_AGNI, 10031, 128, 24, 8, 5}};
+    return model == 34 ? &models[0] : model == 30 ? &models[1] : model == 31 ? &models[2] : 0;
+}
+void fx_trail_sample(int slot, int model, const float m[3][3], const float p[3], int feed) {
+    int i;
+    if (slot < 0 || slot > 1 || !mtrail_model(model)) return;
+    if (mtrails[slot].model != model) { mtrails[slot].model = model; mtrails[slot].count = 0; mtrails[slot].alpha = 0.0f; mtrails[slot].since = 99.0f; }
+    if (mtrails[slot].count < MTRAIL_HISTORY) ++mtrails[slot].count;
+    for (i = mtrails[slot].count - 1; i > 0; --i) {
+        memcpy(mtrails[slot].m[i], mtrails[slot].m[i - 1], sizeof(mtrails[slot].m[i]));
+        memcpy(mtrails[slot].p[i], mtrails[slot].p[i - 1], sizeof(mtrails[slot].p[i]));
+    }
+    memcpy(mtrails[slot].m[0], m, sizeof(mtrails[slot].m[0]));
+    memcpy(mtrails[slot].p[0], p, sizeof(mtrails[slot].p[0]));
+    if (feed) mtrails[slot].since = 0.0f;
+}
+static void mtrail_update(float frames) {
+    int k;
+    for (k = 0; k < 2; ++k) {
+        const MTrailModel *t = mtrail_model(mtrails[k].model);
+        if (!t) continue;
+        mtrails[k].since += frames;
+        if (mtrails[k].since > t->delay) { mtrails[k].alpha -= t->step * frames; if (mtrails[k].alpha < t->floor_) mtrails[k].alpha = t->floor_; }
+        else { mtrails[k].alpha += t->step * frames; if (mtrails[k].alpha > t->top) mtrails[k].alpha = t->top; }
+    }
+}
+static void mtrail_draw(void) {
+    static const float w[4][3] = {{1.0f, 0.0f, 0.0f}, {0.5625f, 0.375f, 0.0625f}, {0.25f, 0.5f, 0.25f}, {0.0625f, 0.375f, 0.5625f}};
+    static const float ab[4][2] = {{1.0f, 0.0f}, {0.75f, 0.25f}, {0.5f, 0.5f}, {0.25f, 0.75f}};
+    int k;
+    for (k = 0; k < 2; ++k) {
+        const MTrailModel *t = mtrail_model(mtrails[k].model);
+        float bm[33][3][3], bp[33][3];
+        int n = mtrails[k].count, b = 0, i, j, a, c;
+        unsigned int color;
+        FxVertex *v;
+        if (!t || n < 2 || mtrails[k].alpha <= t->floor_ || !nfx_bind_texture(t->bank, t->tex)) continue;
+        for (i = 0; i < 9 && b < 33; ++i) {
+            int i0 = i < n ? i : n - 1, i1 = i + 1 < n ? i + 1 : n - 1, i2 = i + 2 < n ? i + 2 : n - 1;
+            for (j = 0; j < 4 && b < 33; ++j, ++b) {
+                for (a = 0; a < 3; ++a) {
+                    float len = 0.0f;
+                    for (c = 0; c < 3; ++c) {
+                        bm[b][c][a] = mtrails[k].m[i0][c][a] * ab[j][0] + mtrails[k].m[i1][c][a] * ab[j][1];
+                        len += bm[b][c][a] * bm[b][c][a];
+                    }
+                    len = len > 1e-6f ? 1.0f / sqrtf(len) : 0.0f;
+                    for (c = 0; c < 3; ++c) bm[b][c][a] *= len;
+                }
+                for (c = 0; c < 3; ++c)
+                    bp[b][c] = (i == 0 && j == 0) ? mtrails[k].p[0][c]
+                             : (mtrails[k].p[i0][c] + mtrails[k].p[i1][c]) * 0.5f * w[j][0] + mtrails[k].p[i1][c] * w[j][1]
+                               + (mtrails[k].p[i1][c] + mtrails[k].p[i2][c]) * 0.5f * w[j][2];
+            }
+        }
+        color = ((unsigned int)(mtrails[k].alpha * 255.0f / 128.0f) << 24) | 0xffffffu;
+        v = sceGuGetMemory(sizeof(FxVertex) * t->ni);
+        for (i = 0; i < t->ni; ++i) {
+            const TrailVertex *s = &t->v[t->idx[i]];
+            int bn = s->bone < b ? s->bone : b - 1;
+            float q[3];
+            for (c = 0; c < 3; ++c) q[c] = bp[bn][c] + bm[bn][c][0] * s->x + bm[bn][c][1] * s->y + bm[bn][c][2] * s->z;
+            v[i] = (FxVertex){s->u, s->v, color, q[0], q[1], q[2]};
+        }
+        sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff);
+        sceGuDisable(GU_CULL_FACE);
+        sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, t->ni, 0, v);
+    }
+}
 static void vg_fx_reset(void);
 
 static float fx_rand(void) {   /* 0..1 */
@@ -52,7 +144,8 @@ unsigned int fx_random_u32(void) {
 
 void fx_reset(void) {
     memset(sprites, 0, sizeof(sprites));
-    trail_count = 0;
+    trails[0].count = trails[1].count = 0;
+    memset(mtrails, 0, sizeof(mtrails));
     vg_fx_reset();
 }
 
@@ -94,9 +187,12 @@ void fx_update(float dt) {
         for (k = 0; k < 3; ++k) s->pos[k] += s->vel[k] * dt;
         s->angle += s->spin * dt;
     }
-    for (i = 0; i < trail_count; ++i) trail[i].age += dt;
-    while (trail_count > 0 && trail[trail_count - 1].age > TRAIL_SECONDS) --trail_count;
-    trail_fresh = 0;
+    mtrail_update(dt * 60.0f);
+    for (k = 0; k < 2; ++k) {
+        for (i = 0; i < trails[k].count; ++i) trails[k].p[i].age += dt;
+        while (trails[k].count > 0 && trails[k].p[trails[k].count - 1].age > TRAIL_SECONDS) --trails[k].count;
+        trails[k].fresh = 0;
+    }
 }
 
 /* Matched to the real game frame by frame: a big white and orange spiked flash for two
@@ -245,16 +341,23 @@ void fx_guard_flash(const float at[3]) {
     spawn(FX_SHEET_FLARE, 2, 1, at, 70.0f, 40.0f, 0.16f, 0xffffffffu);
 }
 
-void fx_trail_add(const float base[3], const float tip[3], unsigned int color) {
+void fx_trail_add_slot(int slot, const float base[3], const float tip[3], unsigned int color, int bank, int tex,
+                       float u0, float u1, float v0, float v1) {
     int i;
-    if (trail_fresh) return;
-    trail_fresh = 1;
-    trail_color = color;
-    if (trail_count < TRAIL_POINTS) ++trail_count;
-    for (i = trail_count - 1; i > 0; --i) trail[i] = trail[i - 1];
-    memcpy(trail[0].base, base, sizeof(trail[0].base));
-    memcpy(trail[0].tip, tip, sizeof(trail[0].tip));
-    trail[0].age = 0.0f;
+    if (slot < 0 || slot > 1 || trails[slot].fresh) return;
+    trails[slot].fresh = 1;
+    trails[slot].color = color;
+    trails[slot].bank = bank; trails[slot].tex = tex;
+    trails[slot].u0 = u0; trails[slot].u1 = u1; trails[slot].v0 = v0; trails[slot].v1 = v1;
+    if (trails[slot].count < TRAIL_POINTS) ++trails[slot].count;
+    for (i = trails[slot].count - 1; i > 0; --i) trails[slot].p[i] = trails[slot].p[i - 1];
+    memcpy(trails[slot].p[0].base, base, sizeof(trails[slot].p[0].base));
+    memcpy(trails[slot].p[0].tip, tip, sizeof(trails[slot].p[0].tip));
+    trails[slot].p[0].age = 0.0f;
+}
+
+void fx_trail_add(const float base[3], const float tip[3], unsigned int color) {
+    fx_trail_add_slot(0, base, tip, color, -1, -1, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 static unsigned int scale_alpha(unsigned int color, float k) {
@@ -366,7 +469,7 @@ static void sprite_corners(const Sprite *s, const float eye[3], float c[4][3]) {
 }
 
 void fx_draw(const float eye[3]) {
-    int sheet, i;
+    int sheet, i, k;
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     sceGuDepthMask(GU_TRUE);    /* test against the world, don't write */
@@ -416,19 +519,37 @@ void fx_draw(const float eye[3]) {
         }
     }
 
-    /* The blade's sweep: a pale fan, solid at the tip, gone at the hilt and with age. */
-    if (trail_count >= 2) {
-        FxPlainVertex *v = sceGuGetMemory(sizeof(FxPlainVertex) * 2 * trail_count);
-        int n = 0;
-        for (i = 0; i < trail_count; ++i) {
-            float k = 1.0f - trail[i].age / TRAIL_SECONDS;
-            if (k < 0.0f) k = 0.0f;
-            v[n++] = (FxPlainVertex){scale_alpha(trail_color, k * 0.15f), trail[i].base[0], trail[i].base[1], trail[i].base[2]};
-            v[n++] = (FxPlainVertex){scale_alpha(trail_color, k), trail[i].tip[0], trail[i].tip[1], trail[i].tip[2]};
+    mtrail_draw();
+    /* The blade's sweep. Textured (the game's trail model's texture, added): u runs along it from the newest sample,
+     * fading with age. Else a pale fan, solid at the tip, gone at the hilt and with age. */
+    for (k = 0; k < 2; ++k) {
+        int count = trails[k].count;
+        if (count < 2) continue;
+        if (trails[k].tex >= 0 && nfx_bind_texture(trails[k].bank, trails[k].tex)) {
+            FxVertex *v = sceGuGetMemory(sizeof(FxVertex) * 2 * count);
+            int n = 0;
+            sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff);
+            for (i = 0; i < count; ++i) {
+                float a = 1.0f - trails[k].p[i].age / TRAIL_SECONDS, t = (float)i / (float)(TRAIL_POINTS - 1);
+                float u = trails[k].u0 + (trails[k].u1 - trails[k].u0) * t;
+                unsigned int c = scale_alpha(trails[k].color, a < 0.0f ? 0.0f : a);
+                v[n++] = (FxVertex){u, trails[k].v0, c, trails[k].p[i].base[0], trails[k].p[i].base[1], trails[k].p[i].base[2]};
+                v[n++] = (FxVertex){u, trails[k].v1, c, trails[k].p[i].tip[0], trails[k].p[i].tip[1], trails[k].p[i].tip[2]};
+            }
+            sceGumDrawArray(GU_TRIANGLE_STRIP, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
+        } else {
+            FxPlainVertex *v = sceGuGetMemory(sizeof(FxPlainVertex) * 2 * count);
+            int n = 0;
+            for (i = 0; i < count; ++i) {
+                float a = 1.0f - trails[k].p[i].age / TRAIL_SECONDS;
+                if (a < 0.0f) a = 0.0f;
+                v[n++] = (FxPlainVertex){scale_alpha(trails[k].color, a * 0.15f), trails[k].p[i].base[0], trails[k].p[i].base[1], trails[k].p[i].base[2]};
+                v[n++] = (FxPlainVertex){scale_alpha(trails[k].color, a), trails[k].p[i].tip[0], trails[k].p[i].tip[1], trails[k].p[i].tip[2]};
+            }
+            sceGuDisable(GU_TEXTURE_2D);
+            sceGumDrawArray(GU_TRIANGLE_STRIP, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
+            sceGuEnable(GU_TEXTURE_2D);
         }
-        sceGuDisable(GU_TEXTURE_2D);
-        sceGumDrawArray(GU_TRIANGLE_STRIP, GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, n, 0, v);
-        sceGuEnable(GU_TEXTURE_2D);
     }
 
     sceGuDisable(GU_BLEND);

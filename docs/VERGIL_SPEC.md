@@ -107,8 +107,7 @@ All of section 4 at rank 0, variant 0. Approximations:
   light hit plays reaction 2 or 3 and a heavy one 0x12; during attacks he doesn't flinch. Hits from the front
   during the guard are blocked.
 - **Damage taken:** Cerberus's per-hit values (42 light, 84 heavy, × 1.1; Easy × 2), guns 20%.
-- **The leap's fall:** `FUN_003599f0` only snaps to the floor; the port solves the arc to come down where Dante
-  is.
+- **Air movement:** vertical root motion and the fixed downward Helm Breaker vector now follow the decoded update below; floor collision still uses the port's room-floor query.
 - **Cloth:** the coat is rigid on body bone 3; the scabbard's cord hangs straight down.
 - **Effects:** the teleport's 0x338 and the sword trails aren't drawn (a hit spark marks the teleport).
 - **Death:** he plays reaction 1:11 and the mission clears; demo 322 isn't played.
@@ -232,3 +231,22 @@ its animation rate/resistance without granting a fresh maintained-DT duration. H
 paused during this temporary form and resumes on recovery. Entering from maintained DT leaves its
 existing duration intact. A host regression covers the temporary form's entry, recovery and paused
 cooldown. This replaces another form transition omitted by the first M20 port.
+
+## Air movement follow-up
+
+The earlier gravity=1 and destination-fitted arc were wrong. `4e4570` adds the complete model root delta
+(X/Y/Z) to the actor. `4e22a0` at `4e27a0` then subtracts **10 from Y per native update**, except hidden
+travel action 55 or flag +b9a0. `4e0fc0` sets that flag for **27 / 5f / 6f** and clears it for other actions.
+This is a constant floor pull, not acceleration. The port now consumes vertical root motion and removes
+it from the rendered root, preserving the takeoff height in the actor/collision position.
+
+State 29 (`4d9680`) plays 27 until window 1 byte 0 is 1. That motion rises about 209 cm by its chain point.
+State 3d (`4dd840`) then sets action 5f and rotates (0,0,45) using the absolute vertical target separation
+(`131b50`) and a pitch clamped to 25..75 degrees. The rotation helper `131760` has Z basis (0,-sin,cos):
+**the resulting Y velocity is negative**, not an upward launch. This vector is added while window 1 byte 0
+is 1; it is never accelerated or fitted to Dante's destination. `3599f0` runs outside that window too,
+lands within floor+10 and changes to 60. The room-floor approximation is retained for the collision query.
+
+`run_vergil_variants.py` checks takeoff height, unchanged negative dive velocity, landing/recovery and the
+existing M7/M13/M20 regressions. The existing `arforce` test command now routes to Vergil's native state
+when he is active, allowing the uppercut-to-dive chain to be checked in his actual fight.
