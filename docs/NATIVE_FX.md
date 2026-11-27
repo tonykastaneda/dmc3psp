@@ -232,7 +232,7 @@ y, width, height, then an s8 centre. UVs are x / width .. (x + width - 1) / widt
 
 ### The port
 
-- One `Inst` per main and per fake (64 at most; 24 particles each), with the owner's frame followed while the
+- One `Inst` per main and per fake (64 at most, a start past that is dropped; 24 particles each), with the owner's frame followed while the
   owning V / G lives (`nfx_frame`); `nfx_kill` on the root ends them at once.
 - Drawn after nfx's elements: sprites as textured triangles, the rest untextured, depth tested, not written.
 - Stand-ins: the GS's 0x41 blend has no PSP equation and takes Cd - Cs As; a camera-facing emitter (+0x50) takes its
@@ -241,3 +241,5 @@ y, width, height, then an s8 centre. UVs are x / width .. (x + width - 1) / widt
   sprite's top.
 - Cost (PPSSPP, Mission 2's street, 31 looping instances of 12 Cerberus P records, about 350 primitives): the
   display-list build 7.2 ms against 6.7 ms without (seconds 1-6 of PERF.TXT); the update didn't move.
+  Demo 8 (Lady's missiles, 358 instances started over 22 s): 7.8-8.7 ms against 7.3-8.1 ms with `nopfx 1` in its
+  smoke-heavy seconds, no missed frames at 60.
