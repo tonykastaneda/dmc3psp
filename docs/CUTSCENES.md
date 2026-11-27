@@ -148,6 +148,19 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   demo 3's over-the-shoulder shot (frame 1260) shows holes in Dante's shoulder (the PSP drops triangles crossing its
   near plane, here 50 cm; a nearer plane put the eye inside his collar).
 
+**Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm
+in front of Dante's chest while it looks at enemies metres away. With the near plane at a third of the eye-to-target
+distance capped at 50 cm, his whole front was cut away and the port showed the inside of his back through the
+gaps (the "holes"). The PS2 shows his chest and mouth there (`analysis/testroom/near_plane_demo3.png`). The cap is now
+25 cm (`main.c` render_scene); wide shots show no depth fighting (demo 5) and frame times are unchanged.
+- At 25 cm a dark slab with a light edge (likely Rebellion, `wp100`) sits in front of the eye on the right of that
+  frame; the PS2 shows the street there. At 40 cm the slab goes but his chest is cut again, so the PS2's near plane
+  alone doesn't explain it: the weapon's place in that cut is still to check.
+- `near_clip.c` clips near-crossing triangles (per-model sphere test, each vertex's depth cached once, only the
+  crossing triangles redrawn clipped). In PPSSPP the GE already draws them clipped, so it changed nothing visibly and
+  cost about 2 ms a frame with the camera against Dante (7.1 against 5.2 ms of draw time). It is off by default
+  (test line `nearclip 1`) until real hardware shows whether its GE drops such triangles.
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
