@@ -1,4 +1,5 @@
 #include "enemy.h"
+#include "chess.h"
 
 #include "fx.h"
 
@@ -208,6 +209,10 @@ static Enemy enemies[ENEMY_MAX];
 static float torso_offset[ENEMY_MAX][3];
 static int torso_kind(int kind) { return kind <= ENEMY_GREED || kind == ENEMY_ENVY || kind == ENEMY_ABYSS; }
 static Enemy *e = &enemies[0];
+static ChessMaster chess_master;
+static ChessPiece chess_actors[ENEMY_MAX];
+static short chess_last_hp[ENEMY_MAX];
+ChessPiece *enemy_chess_actor(void) { return &chess_actors[e-enemies]; }
 static int hits, attacks_on;
 static int landed;
 static float landed_x, landed_z;
@@ -520,7 +525,8 @@ static void spawn_one_body(int kind, float x, float z) {
         return;
     }
     if (kind == ENEMY_CERBERUS) {
-        e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
+        memset(enemy_chess_actor(),0,sizeof(ChessPiece));
+    e->kind = kind; e->active = 1; e->plan = P_WATCH; e->hidden = 0;
         e->pos[0] = 2500.0f; e->pos[1] = e->floor_y = 0.0f; e->pos[2] = 3250.0f;
         e->yaw = PI;
         cerberus_boss_spawn();
@@ -2528,6 +2534,14 @@ void enemy_big_moves(char *out, int size) {
 void enemy_update(float dt, float px, float py, float pz) {
     Enemy *selected = e;
     int i;
+    for(i=0;i<ENEMY_MAX;++i) {
+        ChessPiece *p=&chess_actors[i];
+        p->active=enemies[i].active && enemies[i].plan!=P_DEATH && p->est>=35 && p->est<=40;
+        p->hurt=p->active && enemies[i].health<chess_last_hp[i];
+        chess_last_hp[i]=enemies[i].health;
+        memcpy(p->pos,enemies[i].pos,sizeof p->pos);
+    }
+    chess_update(&chess_master,chess_actors,ENEMY_MAX,0,ai_unit); /* existing AI uses rank0 */
     ++trace_tick;
     attack_slots_update(&attack_slots,dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f));
     for (i = 0; i < ENEMY_MAX; ++i) {
@@ -4102,7 +4116,7 @@ static void ar_note(int state);
  * and the climb at fixed points. Elsewhere (the debug street) the opening aims at Dante and the survivor takes up
  * both swords where he stands. */
 static int ar_room = -1;
-void enemy_set_room(int room) { ar_room = room; }
+void enemy_set_room(int room) { ar_room = room; chess_reset(&chess_master); memset(chess_actors,0,sizeof chess_actors); }
 static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
 static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
 void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state)) ar_force = state; }

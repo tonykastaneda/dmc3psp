@@ -1323,3 +1323,9 @@ magazine and burst count, and her records' damage; her waypoints, walk, 0x28, 0x
 rocket on 0x56, a grenade each 0x72 [inferred]), 0x5c's motion (its slot, [6] 9, is empty: the gun's draw), her run's
 speed [estimate], shots per burst (3; the second gun 1), which record each weapon uses (pistols 80, second gun 500,
 grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.
+
+## Damned Chessmen: shared controller
+
+See [CHESS.md](CHESS.md) for CEm017Master43f160, the six EST dispatches, native
+wait tables, concurrent-turn capacity, Queen response, Rook/King castling commands
+and King-death cascade. `chess.h` documents the shared actor interface.

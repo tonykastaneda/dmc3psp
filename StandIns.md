@@ -80,7 +80,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   token's manager (FUN_00369180) isn't read: "no one else attacks for 3 s". ENEMY_AI.md, GAME_FLOW.md.
 - **Abyss**: the Pride's hit-script list (its block's +0x14 pairs aren't read); its scythe is the largest of [3]-[5]
   [inferred]. `gen_enemy_ai.py`, `prepare_skinned_model.py`.
-- **Damned Pawns**: the chess master that times their turns isn't ported; EST 36-38 (the other chessmen) and 39 / 40
+- **Damned Pawns**: the shared chess master is ported (docs/CHESS.md), at fixed difficulty0; EST 36 and38 and39 /40
   (Queen, King) spawn as Pawns or Prides. `enemy.c`, GAME_FLOW.md (Missions 14, 18).
 - **Hell Greeds**: when they summon is an estimate. `greed.inc`.
 - **Blood-goyle**: its bullets fly at 25 a frame for 120 frames [estimate]; the split timing [estimate]; its rest
