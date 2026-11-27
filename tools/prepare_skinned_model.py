@@ -89,8 +89,12 @@ def build_mesh(model_data: bytes, bone_count: int):
         for face in strip_faces(adc):
             mesh["indices"].extend(base + v for v in face)
         mesh["old_triangles"] += len(item["faces"])
+        # The object record's byte 8: its blend, as the game's GS ALPHA table at 0x566ec0 has them (0 / 1 normal
+        # 0x44, 2 additive 0x48, 3 subtractive 0x42; read as that table's index [inferred]: 3 is only on Arkham's
+        # vein overlays, 2 on eye highlights).
+        mode = model_data[0x30 + item["index"] * 48 + 8] if 0x30 + item["index"] * 48 + 8 < len(model_data) else 0
         mesh["objects"].append({"texture": item["header_count"], "index_start": start,
-                                "index_count": len(mesh["indices"]) - start})
+                                "index_count": len(mesh["indices"]) - start, "mode": mode if mode <= 3 else 0})
     if len(mesh["positions"]) > 65535:
         raise ValueError("Too many vertices for 16-bit indices")
     return mesh
@@ -313,6 +317,23 @@ def psp_texture(texture):
 
 def indexed_texture(texture):
     """(pixels, 256 ABGR words), colour and alpha quantized together."""
+    # TIM2's indexed pictures already fit a PSP CLUT. FASTOCTREE merges even
+    # distinct source palettes with <=256 colours, changing skin tones and alpha.
+    # Preserve those pictures exactly, assigning entries in first-pixel order.
+    rgba = bytes(texture["rgba"])
+    if len(rgba) != texture["width"] * texture["height"] * 4:
+        raise ValueError("RGBA byte count does not match texture dimensions")
+    entries, pixels = {}, []
+    for offset in range(0, len(rgba), 4):
+        color = rgba[offset:offset + 4]
+        if color not in entries:
+            if len(entries) == 256:
+                break
+            entries[color] = len(entries)
+        pixels.append(entries[color])
+    else:
+        words = [int.from_bytes(color, "little") for color in entries]
+        return pixels, words + [0] * (256 - len(words))
     from PIL import Image
     image = Image.frombytes("RGBA", (texture["width"], texture["height"]), bytes(texture["rgba"]))
     quant = image.quantize(colors=256, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)

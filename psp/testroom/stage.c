@@ -28,6 +28,7 @@ typedef struct { unsigned int first, count; } Cell;
 #define BATCH_ALPHA 1
 #define BATCH_DECAL 2
 #define BATCH_BLEND 4
+#define BATCH_SKY 8     /* tools/prepare_stage.py: a STAY sky dome, drawn first past the far plane */
 /* Depth bias for coplanar overlays (prepare_stage.py flags them). With the
  * depth range 65535 (near) .. 0 (far), a positive offset pulls them toward
  * the camera just enough to win against their base surface. */
@@ -214,6 +215,8 @@ static int chunk_hidden(const Chunk *c) {
 }
 
 int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
+static int stage_double;
+void stage_set_double(int on) { stage_double = on; }
 
 void stage_draw(void) {
     const TexEntry *textures;
@@ -240,12 +243,45 @@ void stage_draw(void) {
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_DEPTH_TEST);
     sceGuDepthMask(GU_FALSE);
+    if (stage_double) sceGuEnable(GU_FRAGMENT_2X); else sceGuDisable(GU_FRAGMENT_2X);   /* the GE doubles the colour */
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuTexWrap(GU_REPEAT, GU_REPEAT);   /* stage UVs tile */
     sceGuColor(0xffffffff);
+    {
+        /* The sky (BATCH_SKY, ordered first): under the same projection with its far plane moved out to 80000 (the
+         * stage's is 16000; st012's dome reaches 45052), without depth, so everything else draws over it. */
+        ScePspFMatrix4 far = cull_proj;
+        float a = cull_proj.z.z, bz = cull_proj.w.z, n = bz / (a - 1.0f), f = 80000.0f;
+        int sky = 0;
+        for (i = 0; i < header->batches && (batches[i].flags & BATCH_SKY); ++i) {
+            const Batch *b = &batches[i];
+            unsigned int k;
+            if (!sky) {
+                far.z.z = (f + n) / (n - f); far.w.z = 2.0f * f * n / (n - f);
+                sceGumMatrixMode(GU_PROJECTION); sceGumLoadMatrix(&far); sceGumMatrixMode(GU_MODEL);
+                sceGuDisable(GU_DEPTH_TEST);
+                sceGuEnable(GU_BLEND);
+                sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+                sky = 1;
+            }
+            bind_texture(&textures[b->texture]);
+            bound = (int)b->texture;
+            for (k = 0; k < b->chunk_count; ++k) {
+                const Chunk *c = &chunks[b->chunk_first + k];
+                sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                                (int)c->count, 0, vertices + (size_t)c->first * 24);
+            }
+        }
+        if (sky) {
+            sceGumMatrixMode(GU_PROJECTION); sceGumLoadMatrix(&cull_proj); sceGumMatrixMode(GU_MODEL);
+            sceGuEnable(GU_DEPTH_TEST);
+            sceGuDisable(GU_BLEND);
+        }
+    }
     for (i = 0; i < header->batches; ++i) {
         const Batch *b = &batches[i];
         unsigned int k, visible = 0;
+        if (b->flags & BATCH_SKY) continue;   /* drawn above */
         if (b->pad[0] && b->pad[0] < 256 && group_hidden[b->pad[0]]) continue;   /* a broken prop */
         int posed=b->pad[0]<256 && group_pose[b->pad[0]].active;
         int lift = b->pad[0] == LIFT_TAG || posed;
@@ -313,6 +349,8 @@ void stage_draw(void) {
         if (lift) { sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity(); }
     }
     sceGuDepthOffset(0);
+    sceGuDisable(GU_FRAGMENT_2X);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuDisable(GU_BLEND);
     sceGuDepthMask(GU_FALSE);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);

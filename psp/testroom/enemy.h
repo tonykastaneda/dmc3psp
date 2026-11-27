@@ -63,6 +63,7 @@ void enemy_mirror_blow(float from_x, float from_z);   /* 405's lit mirror struck
 void enemy_mirror_kill(void);         /* 405's mirrors broken: the Abyss bound to them die */
 void enemy_trim(int keep);
 void enemy_ar_force(int state);       /* tests: Agni or Rudra next takes this game state */
+void enemy_set_room(int room);        /* the mission's room entered (-1 none): Agni & Rudra's arena places */
 void enemy_clear_minions(void);      /* tests: retain the boss and the script's alive-count gates */
 void enemy_remove_defeated(void);    /* encounter transition: retire completed wave actors */
 /* Keep the ones there are; add new ones in a ring around (x, z) or remove the last ones. */
