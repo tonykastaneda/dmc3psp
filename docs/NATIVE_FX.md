@@ -234,6 +234,20 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` the Arachne's landings (states 0x23, 0x32, 0x28, 0x2b) | 44 | dust at its six legs' bones (+0x104 matrices); 0x32's events 1 / 2 one at its body | yes (any landing, legs 110 cm out round it) |
 | `00264b90` | 44 | (Dante's code range; not traced) | no |
 
+### Still not played (P-bearing effects found by a census of every `FUN_00208590` call with a constant id)
+
+| Owner | Effect (P) | Why |
+| --- | --- | --- |
+| The Gigapede's head orb / ground wave (CEm023Shl03 / Shl04, `0051a470`, `00519ac0`) | V0x39e, V0x38c (P464) | the head attack's shells aren't ported |
+| The Damned Bishop's fireball (CEm017Shl00, `00513430`) | V0x210 (P245, 309) | the Bishop's spell isn't decoded (`bishop.c` stands in) |
+| CEm022Shl00 (`0043ea30`) | V0x36c (P349) | its owner isn't identified yet |
+| The Soul Eater's state 0x11 (`00433e00`) | V0x1d8 (P306, 466) | that state isn't ported |
+| The Nausika's aura (`00492630`) | V0x352 (P443) | its bone and scale undecoded |
+| Agni & Rudra's states 36, 55 (`003a5ee0`, `003a8c60`), `003a94c0`, `003aa960` | P44, V0x30f / V0x2e5 / V0x2f6 | their landings and steps aren't located in the port's scripts |
+| Nevan's swarm bats as she's struck (`003c8ab0`) | V0x386 (P339) | the swarm's break on her hit isn't ported |
+| Dante's own moves and shells (`002d...`, `002fbf20`, CPl000Shl10 ...) | many | the moveset's owners' code |
+| CUIDStatusFile (`0042f3d0` ...) | V0x198 / 1be / 36d | the status screen isn't ported |
+
 ### Atlases (A records, `FUN_001ec360`)
 
 +2 frames a picture, +3 the last picture, +4 loop, +5 where a loop restarts; pictures from +6, 10 bytes each: s16 x,
