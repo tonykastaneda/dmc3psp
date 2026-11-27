@@ -250,9 +250,11 @@ def main():
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
     summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, ()))
     summary.append(write_bank(lines, 5, records(pac_list(read(140))[10]), JESTER_V, ()))
+    # 6 em008's pack (GDATA 120, PNST chunk 24): the Hell Vanguard's P312 only (its V / E are vanguard_fx.py's).
+    summary.append(write_bank(lines, 6, records(pnst_entries(read(120))[24]), (), (), (312,)))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

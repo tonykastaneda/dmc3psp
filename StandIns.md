@@ -35,7 +35,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
   trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
-  particle programs, the Vanguard's P312 dissolve). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
+  particle programs). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera matrix and `FUN_001b2dc0`'s half turn); fake
   sprite layers face the camera; the sheet's top taken as a sprite's top; Line02 isn't ported.
@@ -103,7 +103,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   game), but plays Dante's moveset on his body (his own isn't ported), with no coat or sword, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
   rigid, their count and the summon clock's reload [estimates]; his hits' damage not from records; demo 53 / 328 not
   played. `arkham_boss.c`, ARKHAM_SPEC.md, PortJobs.
-- **Hell Vanguard**: the P312 dissolve. VANGUARD_EFFECTS.md.
+- **Hell Vanguard**: the model's fade out and in round P312 (the game hides and shows it). VANGUARD_EFFECTS.md.
 
 ## Missions and rooms
 
