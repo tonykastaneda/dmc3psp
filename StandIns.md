@@ -65,8 +65,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
-  shown, his idle's turn rate [inferred], the bomb and the hand trap are his own models but rigid (the hand's motions aren't played: it rises and sinks by an estimate), the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes, a bullet's stun value 8
-  [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
+  shown, his idle's turn rate [inferred], the bomb stays rigid with estimated tumbling; the hand trap plays its native motion and opacity envelope, the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes; ordinary E&I stun uses the native raw10 x1.75, the arena clamp is the stand-in's. G0x1c8 belongs to a separate player-weapon actor, not his hand (ENEMY_SPECS E). `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit
   records); the second attack table after a guard; the hops' records; the effects (0x311 / 0x312 a burst within 300
@@ -78,9 +77,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Beowulf**: which of Dante's blows are his kind-4 records (the port's heavy, slam, launch [inferred]); a feather heads
   out from his centre 200 up [inferred] and its burst isn't drawn; the run stops at once, not at its next stride's event; his charge (4) from the
   run isn't taken. `enemy.c` Beowulf, PortJobs.
-- **Lady**: her grapple (0x1d) and ledge mode (0x1e) are ported, but the wire isn't drawn and she rises straight up
-  (its direction, 0044b780, isn't read); the ledges aren't in the port's collision, so she perches at y 501 by hand
-  until her hop; FUN_00449120 taken as the ledge nearest Dante; the hop's landing 0x0e plays 0x61's (its slot is
+- **Lady**: her grapple (0x1d), native hook/skinned cable and its direction (0044b780), and ledge mode (0x1e) are ported;
+  her ledges now use the room's authored box collision; FUN_00449120 taken as the ledge nearest Dante; the hop's landing 0x0e plays 0x61's (its slot is
   empty); 0x8f fires one pistol shot [inferred];  what 0x1b / 0x1c fire (a rocket, a
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses
@@ -129,6 +127,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   shatter, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
+- **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded); Dante keeps his usual model (the PS2's open-coat ending model isn't loaded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them, as a hit of Dante's of its weight (her damage on enemies isn't decoded); her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); what fills her rocket counter (+0x4838) isn't decoded (a tenth a burst [estimate]); 0x85's three shots and the rocket's frame are estimates; action 0x49's aim pose isn't one of the port's motions (the drawn guns stand in); enemies don't attack her and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound).
 - **Secret Missions**: 600's goal [inferred]; 605's 60 s limit [estimate]; 608's wagons (CStageSetTruck's timetable,
   the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall); 610's spikes (Mission 6's stand-in);
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.

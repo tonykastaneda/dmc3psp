@@ -6,9 +6,9 @@ EventTbl20 route and `VERGIL_SPEC.md` for the additive final Vergil variant and 
 
 The mission starts in room 411 at native start 0, runs group 0 (one 10000-HP Vergil, variant 2),
 and automatically enters room 012 start 0 after his defeat. This replaces demos 57/58. The ending
-street runs its native Easy/Normal group 0, omitting EST 55, variant 1: that record is Lady as an
-ally, and spawning the existing hostile Lady boss would prevent the ending. Lady's friendly AI,
-ending credits, scoring, dialogue and cinematic cameras are not implemented.
+street runs its native Easy/Normal group 0, with EST 55 variant 1 as Lady the ally, the kill counter, the
+staff roll and the timed ending (the fade, the 100-kill card, demos 59 and 60): docs/CREDITS_FIGHT.md 8,
+`credits_fight.c`. Dialogue and cinematic cameras are not implemented.
 
 The street lasts 13920 native frames (232 seconds): the port treats EventTbl20's undecoded op 8c
 argument 13620 as a delay, followed by the explicit 300-frame wait. This interpretation and the

@@ -56,8 +56,9 @@ void jester_projectiles_begin(JesterProjectiles*w,int kind,int rank,float x,floa
 }
 float jester_projectiles_minimum(const JesterProjectiles*w){
     /* The body stand-in previously ended the throw before its emitter could release anything.
-     * Hold its final pose long enough for one native emission cycle. */
-    return w->kind==0?ball_wait[w->rank]+69+99+60+8:w->kind==1?trap_wait[w->rank]+4:0;
+     * Hold its final pose long enough for one native emission cycle. The trap
+     * emitter starts after body frame 30, so its wait must start there too. */
+    return w->kind==0?ball_wait[w->rank]+69+99+60+8:w->kind==1?30+trap_wait[w->rank]+4:0;
 }
 static void jp_land(JesterProjectiles*w,float x,float z,float damage,int heavy){
     if(w->landed)return;w->landed=1;w->from_x=x;w->from_z=z;w->damage=damage;w->heavy=heavy;
