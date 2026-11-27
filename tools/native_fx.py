@@ -266,9 +266,12 @@ def main():
     summary.append(write_bank(lines, 9, records(pnst_entries(read(121))[21]), (0x29e, 0x2a3, 0x308, 0x309, 0x2a2, 0x304), ()))
     # 10 em011's pack (GDATA 122, PNST chunk 8): the Fallen's spear (CEm011Shl00: V0x367, V0x368).
     summary.append(write_bank(lines, 10, records(pnst_entries(read(122))[8]), (0x367, 0x368), ()))
+    # 11 room 405's effect pack (GDATA 758): Mission 19's mirrors (CStageSetMirror: V0x1ea shattering; their E0x2e0 glow is a model
+    # whose texture reference isn't decoded, so mission19.c keeps its stand-in).
+    summary.append(write_bank(lines, 11, records(read(758)), (0x1ea,), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

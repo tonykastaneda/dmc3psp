@@ -227,6 +227,7 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | `00496540` / `00496a80` Lady's rocket (CEm034Shl02) | V0x179 (P337), V0x21f (P2, 3, 16, 18) | the first rides it in flight, the second as it bursts | yes (`lady_boss.c` rockets_fx, nfx bank 8) |
 | `004f46d0` / `004f4a60` / `004f50d0` the Arachne's web (CEm010Shl00) | V0x29e, V0x2a3 (P412), V0x308, V0x309, V0x2a2, V0x304 (P412) | in flight; on Dante (V0x308 held on him); where it misses; as he breaks free | yes (`enemy.c` an_webs_update, nfx bank 9) |
 | `0045a330` the Fallen's spear (CEm011Shl00) | V0x367 (P3, 16), V0x368 (P91) | as it's let go; where it ends | yes (`enemy.c` Fallen glue, nfx bank 10) |
+| `00462f90` Mission 19's mirrors (CStageSetMirror) | V0x1ea (P113) | each mirror as it shatters | yes (`mission19.c`, nfx bank 11, GDATA 758); the lit glow E0x2e0 is a model with an undecoded 1-byte texture reference: stand-in kept |
 | `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` the Arachne's landings (states 0x23, 0x32, 0x28, 0x2b) | 44 | dust at its six legs' bones (+0x104 matrices); 0x32's events 1 / 2 one at its body | yes (any landing, legs 110 cm out round it) |
 | `00264b90` | 44 | (Dante's code range; not traced) | no |
 
