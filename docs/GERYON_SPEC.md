@@ -127,5 +127,6 @@ remain separate from this change.
 
 PPSSPP Mission 12 room 228: boss_geryon_windows_live (nodemo, twenty heavy hits at frame 30)
 checks the bridge-to-ground fight and consumes exactly forty logged events, first at frame126 and
-last at691, then native turn6. Captures analysis/testroom/boss_geryon_windows_live_450.png, _700.png
-and _1000.png show galloping, the turn and subsequent attacks. Local trace: build/boss_decode/geryon_live_log.txt.
+last at691, then native turn6. Readable visual checks use an inner-arena camera:
+analysis/testroom/boss_geryon_inner_camera_430.png, _450.png and _470.png show the horse and cart
+following the ring in successive gallop poses. Local trace: build/boss_decode/geryon_live_log.txt.
