@@ -2042,7 +2042,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
 static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1) or looping P (2) 2 m before Dante */
-static int cmp_heap_leave, cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
+static int cmp_no_trace, cmp_heap_leave, cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
 static int cmp_bp_floor, cmp_bp_visits, cmp_bp_boss=-1, cmp_bp_group=-1;
 static int cmp_bp_warp[32][2], cmp_bp_warps;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
@@ -2153,6 +2153,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "creditskills ", 13) == 0) cmp_credits_kills = atoi(line + 13);   /* tests: ... with these kills */
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
+        else if (strncmp(line, "notrace ", 8) == 0) cmp_no_trace = atoi(line + 8);
         else if (strncmp(line, "heapleave ", 10) == 0) cmp_heap_leave = atoi(line + 10);   /* tests: from frame 2, hold all but this many KB of the heap */
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
         else if (strncmp(line, "gigaorb ", 8) == 0) { if (cmp_orb_count < 8) cmp_orb_at[cmp_orb_count++] = atoi(line + 8); }
@@ -3191,6 +3192,15 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     msg_room_fought = 0;
     mission_room = room;
     bp_enter(room_number(room));
+    {   /* Bosses this room's script spawns get their model's buffers now, behind the loading screen (enemy.c). */
+        const RoomScript *rs = &missions[mission_choice.mission - 1].scripts[mission_choice.difficulty & 1][room];
+        PalaceOp po;
+        int k;
+        for (k = 0; bp_active() ? bp_op(k, &po) : k < rs->count; ++k) {
+            if (bp_active()) { if (po.op == ROOM_OP_SPAWN) enemy_preload_class(po.a); }
+            else if (rs->ops[k].op == ROOM_OP_SPAWN) enemy_preload_class(rs->ops[k].a);
+        }
+    }
     memset(bp_portal_fx,0,sizeof bp_portal_fx);
     if (bp_active()) {
         int number=room_number(room);
@@ -4079,6 +4089,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(path, sizeof(path), "ENEMY_AUDIT.CSV");
                 enemy_audit_start(path);
             }
+            if (!cmp_no_trace) {   /* "notrace 1": the bosses' logs off, to time them as a player would run them */
             path_in_game_dir(path,sizeof(path),"VANGUARD_LOG.TXT");
             vanguard_trace(path);
             path_in_game_dir(path,sizeof(path),"CERBERUS_LOG.TXT");
@@ -4095,6 +4106,7 @@ int main(int argc, char *argv[]) {
             path_in_game_dir(path,sizeof(path),"ARKHAM_LOG.TXT");
             remove(path);
             arkham_boss_trace(path);
+            }
             vanguard_render_test(bench_no_texture,bench_no_lighting);
         }
     }
@@ -5151,6 +5163,7 @@ int main(int argc, char *argv[]) {
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
+                    { char bt[200]; enemy_spawn_timing(bt, sizeof bt); fprintf(report, "%s\n", bt); }
                     if(mission_choice.mission==13)fprintf(report,"m13 room=%d key=%d puzzle=%d broken=%u variant=%d hp=%.0f dt=%d\n",room_number(mission_room),item_state[51],mission13_open(),mission13_broken(),vergil_boss_variant(),vergil_boss_health(),vergil_boss_devil());
                     if(mission_choice.mission==8)fprintf(report,"m8 room=%d ignis=%d eyes=%u boss_started=%d clears=%d\n%s",atoi(rooms[mission_room].file+5),item_state[46],mission8_eye_bits(),m8_boss_started,m8_clears_seen,leviathan_boss_log());
                     fclose(report);

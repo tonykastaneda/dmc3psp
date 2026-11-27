@@ -802,3 +802,4 @@ int geryon_boss_init(void) {
     if (motion_ids[0][0] < 0 || motion_ids[1][0] < 0) return 0;
     return 1;
 }
+int geryon_boss_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */

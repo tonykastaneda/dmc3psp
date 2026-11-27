@@ -37,4 +37,5 @@ void vergil_boss_note(const char *event, float a, float b, float c, float d);
 void vergil_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out));
 
 void vergil_boss_data_release(void);   /* frees its model's buffers unless it's active (made again at its next spawn) */
+int vergil_boss_data_load(void);   /* makes its model's buffers now (a room load, ahead of its spawn) */
 #endif
