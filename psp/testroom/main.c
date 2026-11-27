@@ -2205,10 +2205,41 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
     }
 }
 
+/* Ebony & Ivory's charge state (FUN_002688c0, actions 130-133; FUN_002698d0; the reset at 0x260cc8), Gunslinger
+ * level 2 (the full moveset), config chunk 11: each shot counts (+0x7db1, up to 50) and restarts a 25-frame timer
+ * (+0x2cc) that runs down only while he isn't in action 130 / 131, clearing the count and the burst at 0. A shot from
+ * an action other than 130 with no burst left starts one: kind 5, the charge shot, for it and the next 7 (+0x678;
+ * levels 0 / 1: 3 / 5). Else Gunslinger's ordinary shots are kind 1, and from the 4th of a run (+0x2d8; 8 / 6) kind 9
+ * (levels 0 / 1: 7 / 8); other styles' kind 0. */
+static int focus_cmp;
+static int ei_count, ei_burst;
+static float ei_timer;
+static int ei_shot_kind(const Combat *c, const Player *p) {
+    int kind;
+    if (ei_burst == 0) {
+        if (c->action != 130) { kind = 5; ei_burst = 7; }
+        else kind = p->style == STYLE_GUNSLINGER ? 1 : 0;
+    } else kind = 5;
+    if (ei_burst) --ei_burst;
+    if (ei_count < 50) ++ei_count;
+    ei_timer = 25.0f;
+    if (kind == 1 && ei_count >= 4) kind = 9;
+    return kind;
+}
+
 static void fire_pending_shots(Combat *c, const Player *p, float dt) {
     int shots = combat_take_shots(c);
     bullets_update(dt);
+    if (c->action != 130 && c->action != 131 && ei_timer > 0.0f) {
+        ei_timer -= dt * 60.0f;
+        if (ei_timer <= 0.0f) ei_count = ei_burst = 0;
+    }
     while (shots-- > 0) {
+        if (p->gun_weapon == 5) {
+            int kind = ei_shot_kind(c, p);
+            bullets_set_shot_kind(kind);
+            if (focus_cmp && strlen(arm_fx_log) < sizeof(arm_fx_log) - 8) sprintf(arm_fx_log + strlen(arm_fx_log), "ei%d ", kind);
+        }
         int bone = BONE_L_HAND;
         float s = sinf(p->yaw), co = cosf(p->yaw), hx, hz, muzzle[3], target[3];
         if (p->gun_weapon == 5 && (c->shot_hand++ & 1)) bone = BONE_R_HAND;

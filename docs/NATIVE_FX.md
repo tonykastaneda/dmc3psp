@@ -309,6 +309,7 @@ the rectangle the models map, added, fading over 0.14 s. Not ported: the models'
 | Effect | Where | Port |
 | --- | --- | --- |
 | E&I V0x22, Shotgun V0x23, Spiral V0x228, Kalina Ann V0x21b | the muzzle flash, by shot kind (`FUN_002fbf20`; tables `0x5aa630` / `0x5aa680`: ±31 cm on the gun bone, turned down the barrel) | `bullets.c`, nfx banks 14-18 (GDATA 102-106) |
+| E&I's charge state (V0x129 + V0x15c, V0x145, impact V0x32) | the shot's kind (`FUN_002688c0` actions 130-133 -> `FUN_002698d0` -> `FUN_0026a520` / `FUN_002fbf20`): a shot from an action other than 130 with no burst left is kind 5, the charge shot (Gunslinger's 131 / 133 come from a 90-frame hold and release), and starts a burst: the next shots stay kind 5 for config chunk 11 +0x670 / 0x674 / 0x678 = 3 / 5 / 7 shots by Gunslinger level; Gunslinger's ordinary shots are kind 1, and kind 7 / 8 / 9 from the +0x2d0 / 0x2d4 / 0x2d8 = 8 / 6 / 4th of a run (+0x7db1, up to 50); a 25-frame timer (+0x2cc) runs down while he isn't in 130 / 131 and clears both (0x260cc8). Kind 5's flash is V0x129 and V0x15c, 7-9's V0x145; 5 and 7-9 land as V0x32; their shells' records (0x5a5a30): damage 10 / 30 / 12 | `ei_shot_kind` (`main.c`), `bullets_set_shot_kind`; level 2 |
 | Artemis V0xd3 | riding its shot (CPl000Shl10, `FUN_005232b0`) | yes |
 | V0xa (V0x32 charged) | where a bullet lands (`002efaa0`) | E&I and Shotgun |
 | Kalina Ann V0x21f | its rocket's burst [inferred] | yes |
