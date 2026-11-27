@@ -1941,6 +1941,28 @@ static const ArmFx arm_fx[] = {
     {"7:10", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* Beowulf action 115 (FUN_0027abf0): its charge */
     {"7:11", 17, NFX_ARM_BEOWULF, BONE_HIPS, 0, 0x382},  /* and 17 frames into the blow, where his hips are then */
     /* CEfcPub (FUN_002fbec0 -> FUN_00332240) ids the handlers start with a motion, on the bone they name. */
+    /* Trickster's dash (state 0x16, FUN_00225c90, id 0x1c) and Sky Star (0x17, FUN_002261b0, id 0x2e): V0xc0 (the
+     * default costume's, +0x28b1), Sky Star V0x295 too. */
+    {"23:0", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:1", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:2", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:3", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:24", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:25", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:26", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:27", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:17", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:11", 0, NFX_STATIC, BONE_HIPS, 1, 0xc0},
+    {"23:11", 0, NFX_STATIC, BONE_HIPS, 1, 0x295},
+    /* Stinger's dash (actions 7/8, FUN_00264fe0, id 0xb): G0x5f, V0x29, V0x7b, as Beowulf's 7:31. High Time (action
+     * 10, FUN_002656a0, id 0xc): V0xa1 + V0xf3; action 11's 3:13 (FUN_00265950, id 0xd): V0xb0 + V0xf5. */
+    {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"3:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
+    {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xa1},
+    {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xf3},
+    {"3:13", 0, NFX_DANTE, BONE_HIPS, 1, 0xb0},
+    {"3:13", 0, NFX_DANTE, BONE_HIPS, 1, 0xf5},
     {"3:8", 10, NFX_DANTE, BONE_HIPS, 1, 0x44 | 0x8000}, /* Million Stab, 10 frames in (FUN_00266220, id 0xa) */
     {"3:8", 10, NFX_DANTE, BONE_HIPS, 1, 0x7d | 0x8000},
     {"13:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xc7},         /* action 18 (FUN_00268150, id 0x11) */
@@ -1960,6 +1982,11 @@ static const ArmFx arm_fx[] = {
     {"15:8", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x273},
     {"7:16", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2ba},   /* Beowulf action 120 (FUN_0027b9e0, id 0x3c; 7:58 without +0x299b) */
     {"7:58", 0, NFX_ARM_BEOWULF, BONE_HIPS, 1, 0x2ba},
+    /* actions 121/122 (FUN_0027bd20, id 0x58) as 7:31 starts: G0x5f, then V0x29 (by +0x28b1, the costume: 0) and V0x7b (by
+     * +0x2928: 0-10) on this+0x40, its copy of the hips' frame. */
+    {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x5f | 0x8000},
+    {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"7:31", 0, NFX_STATIC, BONE_HIPS, 1, 0x7b},
     {"16:5", -3, NFX_ARM_NEVAN, BONE_ROOT, 1, 0x179 | 0x8000},   /* action 93 on its flag 2 (FUN_00277550, id 0x10) */
     {"16:9", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x260},     /* action 94 (FUN_00277730, id 0x3a) */
     {"6:26", 0, NFX_ARM_NEVAN, BONE_HIPS, 1, 0x187},     /* action 95 (FUN_00277d70, id 0x31) */
@@ -2053,12 +2080,6 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
     float feet[3] = {p->x, p->y, p->z};
     if (c->move != last_move) {
         switch (c->move) {
-        case MOVE_TR_SKY_STAR: {
-            float chest[3] = {p->x, p->y + 100.0f, p->z};
-            float way[3] = {sinf(p->yaw), 0.0f, cosf(p->yaw)};
-            fx_star_seal(chest, way, 0xff2020ffu);
-            break;
-        }
         default: break;
         }
         last_move = c->move;
@@ -2086,9 +2107,8 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
         float dx = chest[0] - last_chest[0], dy = chest[1] - last_chest[1], dz = chest[2] - last_chest[2];
         float step = dx * dx + dy * dy + dz * dz;
         switch (c->move) {
-        case MOVE_TR_DASH: case MOVE_TR_DASH_BACK: case MOVE_TR_DASH_LEFT: case MOVE_TR_DASH_RIGHT:
-        case MOVE_TR_DASH2: case MOVE_TR_DASH2_BACK: case MOVE_TR_DASH2_LEFT: case MOVE_TR_DASH2_RIGHT:
-        case MOVE_TR_DASH_CHAIN: case MOVE_TR_SKY_STAR: case MOVE_TR_AIR_TRICK: case MOVE_TR_AIR_TRICK_AIR:
+        /* The dash and Sky Star play the game's V0xc0 (arm_fx); Air Trick's isn't found yet. */
+        case MOVE_TR_AIR_TRICK: case MOVE_TR_AIR_TRICK_AIR:
             if (step > 15.0f * 15.0f && step < 300.0f * 300.0f) fx_streak(last_chest, chest);
             break;
         default: break;

@@ -259,8 +259,8 @@ def main():
     # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0). V6: a Royalguard block (FUN_00224db0).
     # V0x83: Air Hike (FUN_00222700); V0x14d: Enemy Step (FUN_00228950); V0x90: Cerberus's and Beowulf's charges start
     # (FUN_00272210, FUN_0027abf0) and kicks off a wall or an enemy. V0xdc, E0x140, V0x3c: the Devil Trigger (CEfcPub,
-    # FUN_00332240 ids 0x20-0x24 / 0x42-0x46).
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90, 0xdc, 0x3c), ORB_E + (0x140,), (44,)))
+    # FUN_00332240 ids 0x20-0x24 / 0x42-0x46). G0x5f, V0x29, V0x7b: CEfcPub 0x58 (Beowulf's 7:31) for the default costume.
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90, 0xdc, 0x3c, 0x5f | G_FLAG, 0x29, 0x7b, 0xc0, 0x295), ORB_E + (0x140,), (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
@@ -298,7 +298,7 @@ def main():
     summary.append(write_bank(lines, 19, records(read(830)), (965,967,964), ()))
     # 20 Dante's own effect pack (GDATA 97): Helm Breaker's landing V0x8e (FUN_00264b90).
     effects = next(p for p in pnst_entries(read(97)) if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
-    summary.append(write_bank(lines, 20, records(effects), (0x8e, 0xc7, 0x44 | G_FLAG, 0x7d | G_FLAG), ()))
+    summary.append(write_bank(lines, 20, records(effects), (0x8e, 0xc7, 0x44 | G_FLAG, 0x7d | G_FLAG, 0xa1, 0xf3, 0xb0, 0xf5), ()))
     # 21-24 the Devil Arms' packs (GDATA 98 Cerberus, 99 Agni & Rudra, 100 Nevan, 101 Beowulf): their action handlers'
     # effects (FUN_00272210, 00272c70, 00273150, 00296ae0, 00274c70, 00276ac0, 00277350, 0027abf0).
     # And their CEfcPub ids' (FUN_00332240; docs/NATIVE_FX.md "Dante's effects").
