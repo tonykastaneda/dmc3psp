@@ -239,7 +239,9 @@ y, width, height, then an s8 centre. UVs are x / width .. (x + width - 1) / widt
 - Host checks: `python tools/tests/run_pfx_logic.py` (life, motion, colour keys, the hollow box, loops and the owner's
   reference, on a synthetic sprite record).
 - Stand-ins: the GS's 0x41 blend has no PSP equation and takes Cd - Cs As; a camera-facing emitter (+0x50) takes its
-  axes from the eye and world up, not from the camera matrix and the half turn `FUN_001b2dc0` applies; a fake sprite
+  axes from the eye and world up, not the camera's own up (`FUN_001b2dc0` builds them with FUN_00131920 from the camera's
+  eye, target and up, then turns them half round x, `FUN_00105668` = sceVu0RotMatrixX: right, screen-up, toward the camera,
+  as the port's); a fake sprite
   layer faces the camera though the game's are turned by the parent's emitter; the sheet's top is taken as the
   sprite's top.
 - Cost (PPSSPP, Mission 2's street, 31 looping instances of 12 Cerberus P records, about 350 primitives): the
