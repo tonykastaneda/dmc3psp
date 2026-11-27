@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from dmc3_image import AfsArchive, Iso9660
+from gen_enemy_ai import Elf
 from mod_skeleton import parse_skeleton
 from mot_ps2 import parse_mot
 from decimate import slim_mesh
@@ -106,6 +107,12 @@ def generate(iso_path, output):
         gdata = AfsArchive(iso, "GDATA.AFS")
         entry = gdata.entries[SLOT]
         data = iso.read_file("GDATA.AFS", entry["offset"], entry["size"])
+        executable = Elf(iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"]))
+    regions = [(executable.real(0x5b7950+i*16),executable.real(0x5b7958+i*16)) for i in range(7)]
+    (output / "boss_doppel_regions.h").write_text(
+        "/* Native area centres 5b7950, selected by 3c47a0/3c4840. Local disc data. */\n#pragma once\n"
+        + "static const float doppel_regions[7][2] = {" + ",".join(
+            "{%0.6ff,%0.6ff}" % point for point in regions) + "};\n", encoding="ascii")
     pack = pac_list(data)
     parts = write_models(pack, output)
     motions = write_motions(pack, output)
