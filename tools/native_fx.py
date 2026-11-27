@@ -40,6 +40,8 @@ SKIP_E = {2}
 # Agni & Rudra's charged blades (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's. The slam (FUN_003a8200 phase
 # 0x1f): V785 at Agni's blade, V786 at Rudra's (E0 and the P24 / P44 particles).
 AGNI_RUDRA_V = (588, 589, 785, 786)
+# Started by their code: P44 as one lands (FUN_003ac750) and P44 / P15 as one falls dead (FUN_003a6820).
+AGNI_RUDRA_P = (15, 44)
 # The Jester's (em037 [10]): the cross (0054d610: V0x3f9 once, V0x3f8 looping; 0054dc70: V0x3fa at its end) and the
 # bomb (0054e710: V0x417 in flight; 0054edc0: V0x41c as it goes off).
 JESTER_V = (0x3f8, 0x3f9, 0x3fa, 0x417, 0x41c)
@@ -248,7 +250,7 @@ def main():
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
                               sorted(number for kind, number in leviathan if kind == "V"), ()))
-    summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, ()))
+    summary.append(write_bank(lines, 4, records(pnst_entries(read(131))[18]), AGNI_RUDRA_V, (), AGNI_RUDRA_P))
     summary.append(write_bank(lines, 5, records(pac_list(read(140))[10]), JESTER_V, ()))
     # 6 em008's pack (GDATA 120, PNST chunk 24): the Hell Vanguard's P312 only (its V / E are vanguard_fx.py's).
     summary.append(write_bank(lines, 6, records(pnst_entries(read(120))[24]), (), (), (312,)))

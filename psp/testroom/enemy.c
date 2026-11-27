@@ -4135,6 +4135,36 @@ static void ar_spawn(void) {
     e = agni;
 }
 
+/* P effects the brothers' code starts itself (pfx.c, NATIVE_FX.md "Direct P spawns"): FUN_003ac750, P44 dust at him
+ * as he lands from a jump (state 1 and the hops into script 25, a dash into its last script, the slam into its fourth:
+ * FUN_003a2fb0 / 003b09c0 / 003b0450 / 003a8200); FUN_003a6820, as he falls dead (state 39), P44 from motion frame 220
+ * and P15 from 280, each at one of his bones (taken at his feet [estimate]). States 36 and 55 land too, but the port's
+ * scripts there don't show where [not wired]. */
+static void ar_particles(int dead) {
+    static signed char prev_step[ENEMY_MAX];
+    static short prev_action[ENEMY_MAX];
+    static float prev_frame[ENEMY_MAX];
+    int slot = (int)(e - enemies);
+    float at[3] = {e->pos[0], e->floor_y, e->pos[2]};
+    if (slot < 0 || slot >= ENEMY_MAX) return;
+    if (dead) {
+        if (prev_frame[slot] < 220.0f && e->frame >= 220.0f) nfx_spawn_p(NFX_AGNI_RUDRA, 44, at, e->yaw, 0);
+        if (prev_frame[slot] < 280.0f && e->frame >= 280.0f) nfx_spawn_p(NFX_AGNI_RUDRA, 15, at, e->yaw, 0);
+        prev_frame[slot] = e->frame;
+        return;
+    }
+    prev_frame[slot] = 0.0f;
+    if (e->step != prev_step[slot] || e->action != prev_action[slot]) {
+        const ArStateInfo *in = ar_state_info(e->action);
+        int script = e->step >= 0 && e->step < 6 ? in->scripts[e->step] : -1;
+        int land = (e->action == 1 || (e->action >= 16 && e->action <= 21)) ? script == 25
+                 : (e->action >= 12 && e->action <= 15) || (e->action >= 52 && e->action <= 54) ? e->step == 3 && script >= 0 : 0;
+        if (land) nfx_spawn_p(NFX_AGNI_RUDRA, 44, at, e->yaw, 0);
+        prev_step[slot] = (signed char)e->step;
+        prev_action[slot] = (short)e->action;
+    }
+}
+
 static void ar_update(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, root[3];
     Enemy *bro = ar_brother();
@@ -4158,6 +4188,7 @@ static void ar_update(float f, float px, float py, float pz) {
     script_tick(f, root);
     e->wake += f;
     e->timer += f;
+    ar_particles(e->plan == P_DEATH);
     if (e->plan == P_DEATH) {
         if (e->done && e->timer > 200.0f) e->active = 0;
         return;
