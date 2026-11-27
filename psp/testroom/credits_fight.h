@@ -3,13 +3,14 @@
 /* Mission 20's ending street (room 012): the kill counter, the staff roll and the timed ending, after EventTbl20's
  * room 12 script and CStaffRoll (docs/CREDITS_FIGHT.md). main.c only calls these. */
 
-void credits_fight_init(const char *game_dir);
+void credits_fight_init(const char *game_dir);   /* where STAFF_nn.BIN are (tools/prepare_staffroll.py) */
 /* Room 012's fog (LIG2's fog colour, fitted distances): 1 and sets sceGuFog and the clear colour while the street runs. */
-int credits_fight_fog(unsigned int *clear);  /* where STAFF_nn.BIN are (tools/prepare_staffroll.py) */
+int credits_fight_fog(unsigned int *clear);
 void credits_fight_begin(void);          /* entering room 012 in Mission 20 (the room's on-enter block) */
 void credits_fight_reset(void);           /* leaving the mission */
 int credits_fight_active(void);
 void credits_fight_kill(int kind);        /* an enemy died while the street runs */
+void credits_fight_spawned(int ok);       /* tests: the room script asked for one (ok 0: no free slot) */
 int credits_fight_kills(void);            /* enemy manager +0x8a0 */
 /* One update; frames at 60 a second. Returns 1 when the street is over (op 7e [4] and the demo after it). */
 int credits_fight_update(float frames);

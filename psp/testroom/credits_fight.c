@@ -51,6 +51,7 @@ static char dir[256];
 static Page pages[3];            /* the roll's slots, +0x3c */
 static int active, kills, extended, stage;   /* stage 0 fighting, 1 the roll's end (7e 2 and 3), 2 over (7e 4) */
 static int next_record, fade, card_shown;
+static int spawns, spawn_fails, last_kind = -1;   /* tests: the script's spawns in the street, and the last kill's kind */
 static float street_clock, roll_clock, since_end, roll_acc;
 
 /* Room 012's look (docs/CREDITS_FIGHT.md 9). Its LIG2 header's second colour (95, 90, 100) is the fog colour: PCSX2,
@@ -107,6 +108,7 @@ static void page_show(Page *p, int n, float hold) {
 void credits_fight_reset(void) {
     active = kills = extended = stage = 0;
     next_record = fade = card_shown = 0;
+    spawns = spawn_fails = 0; last_kind = -1;
     street_clock = since_end = roll_acc = 0.0f;
     roll_clock = ROLL_START;
     pages_free();
@@ -126,6 +128,12 @@ int credits_fight_frozen(void) { return active && stage >= 1; }
 void credits_fight_kill(int kind) {
     if (!active || stage >= 1 || kind == ENEMY_LADY) return;
     if (kills < 999) ++kills;   /* the counter shows at most 999 */
+    last_kind = kind;
+}
+
+void credits_fight_spawned(int ok) {
+    if (!active) return;
+    if (ok) ++spawns; else ++spawn_fails;
 }
 
 /* 0x518430, a frame at a time. */
@@ -189,8 +197,9 @@ void credits_fight_test_kills(int n) { kills = n; }
 void credits_fight_status(char *out, int size) {
     float at[3] = {0, 0, 0};
     int mode = -1, shots = 0, ally = enemy_ally_state(at, &mode, &shots);
-    snprintf(out, (size_t)size, "credits on=%d clock=%.0f roll=%.0f page=%d kills=%d stage=%d extended=%d fade=%d card=%d ally=%d mode=0x%x shots=%d at=%.0f,%.0f,%.0f",
-             active, street_clock, roll_clock, next_record, kills, stage, extended, fade, card_shown, ally, mode, shots, at[0], at[1], at[2]);
+    snprintf(out, (size_t)size, "credits on=%d clock=%.0f roll=%.0f page=%d kills=%d stage=%d extended=%d fade=%d card=%d ally=%d mode=0x%x shots=%d at=%.0f,%.0f,%.0f spawns=%d fails=%d last=%d",
+             active, street_clock, roll_clock, next_record, kills, stage, extended, fade, card_shown, ally, mode, shots, at[0], at[1], at[2],
+             spawns, spawn_fails, last_kind);
 }
 
 typedef struct { float u, v, x, y, z; } V2;
