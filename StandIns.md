@@ -154,7 +154,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   smoke now expires rather than looping and uses alpha blending; sprite tiles use inset clamped linear sampling
   (remaining GS blend/particle rendering differences are approximate). Arrival
   green/white orbs use their decoded positions and recovery values, but mote visuals, simplified falling and
-  collection within 120 cm; Lady's extra defeat pickups are omitted. Floor display stays visible, unlike the PS2's transient Level label. Arena camera
+  collection within 120 cm; Lady's extra defeat pickups are omitted. The transient Level label uses a widened substitute serif font; native position, fade and slide timing are restored. Arena camera
   initialization starts its collision sweep at Dante's head: the default safe point lies beneath the raised arena.
   Boss entrance/defeat camera sequences are skipped; boss behaviors retain their documented story-mode stand-ins.
   Boss exits use an item glow in place of their room-specific warp effects; unmapped EST enemy classes retain

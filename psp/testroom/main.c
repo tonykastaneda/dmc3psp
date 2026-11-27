@@ -1481,7 +1481,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
     if (!anim.viewer && !(mission_mode && camera_event_on())) {   /* a cut is up: no HUD (FUN_00195cf0's elements off) */
         if (credits_fight_active()) credits_fight_draw();   /* the ending flag: the counter in place of the cockpit */
         else hud_draw(player);
-        bp_draw();
+        if (!debug_open && !pause_active) bp_draw();
         if (!credits_fight_active()) {
             float hp, maximum;
             if (enemy_boss_health(&hp, &maximum)) hud_draw_boss(enemy_boss_name(), hp, maximum);

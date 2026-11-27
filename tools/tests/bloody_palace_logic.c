@@ -3,6 +3,9 @@
 #include <assert.h>
 #include <stdio.h>
 int menu_loaded(void) { return 0; }
+float menu_font_draw_scaled(float x,float y,float h,float w,const char *s,unsigned int c) {
+    (void)x;(void)y;(void)h;(void)w;(void)s;(void)c;return 0;
+}
 float menu_font_draw(float x,float y,float h,const char *s,unsigned int c) {
     (void)x;(void)y;(void)h;(void)s;(void)c;return 0;
 }

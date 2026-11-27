@@ -9,7 +9,7 @@
 static int active, level, previous, visits, room_number, group;
 static unsigned int groups_used, bosses_used;
 static int next_boss, forced_boss = -1, forced_group = -1;
-static float clear_frames;
+static float clear_frames, entry_frames;
 static int reward, pending_reward;
 static float reward_pos[3], reward_vy;
 static const int boss_rooms[17] = {433,434,435,436,437,438,439,440,441,442,443,444,445,446,422,448,449};
@@ -25,7 +25,7 @@ static int pick(unsigned int *used, int count) {
 }
 void bp_reset(int enabled) {
     active=enabled; level=previous=visits=0; groups_used=bosses_used=0;
-    room_number=-1; group=0; next_boss=0; clear_frames=0;
+    room_number=-1; group=0; next_boss=0; clear_frames=entry_frames=0;
     forced_boss=forced_group=-1;
     reward=pending_reward=0;reward_vy=0;
 }
@@ -39,7 +39,7 @@ void bp_test_start(int floor, int count, int boss, int encounter) {
 void bp_enter(int room) {
     int i;
     if (!active) return;
-    room_number=room; clear_frames=0;
+    room_number=room; clear_frames=entry_frames=0;
     reward=0;reward_vy=0;
     for (i=0;i<BP_PICKUP_COUNT && pending_reward;++i) {
         const PalacePickup *p=&palace_pickups[i];
@@ -72,7 +72,10 @@ int bp_op(int index, PalaceOp *out) {
     return 0;
 }
 void bp_update(float frames, int cleared) {
-    if (active) clear_frames=cleared?clear_frames+frames:0;
+    if (active) {
+        clear_frames=cleared?clear_frames+frames:0;
+        entry_frames+=frames;
+    }
 }
 int bp_portal_ready(int portal) {
     if (!active || portal<0 || portal >= (ordinary(room_number)?3:1)) return 0;
@@ -96,9 +99,16 @@ int bp_route(int portal, int *room, int *start) {
 int bp_finished(void) { return active && level==9999 && room_number==444 && clear_frames>=180.0f; }
 void bp_draw(void) {
     char text[64];
-    if (!active || !menu_loaded()) return;
+    float x, brightness;
+    unsigned int alpha;
+    if (!active || !menu_loaded() || entry_frames>=200) return;
+    /* CSceneGame 0x23e900/0x23eab8: x=35, y=200 (centred vertical units),
+     * brightness=200--, timer=360--; slide x-=3 once timer<240. */
+    x=(35.0f-3.0f*fmaxf(0,entry_frames-121.0f))*480.0f/512.0f;
+    brightness=(200.0f-entry_frames)*2.0f;
+    alpha=(unsigned int)fminf(255,brightness);
     snprintf(text,sizeof text,"Level %d",level);
-    menu_font_draw(12,237,18,text,0xffffffffu);
+    menu_font_draw_scaled(x,249,18,2.6f,text,(alpha<<24)|0x00ffffffu);
 }
 void bp_status(char *out, int size) {
     snprintf(out,size,"palace on=%d level=%d room=%d visits=%d group=%d clear=%.0f boss=%d finished=%d pickup=%d",

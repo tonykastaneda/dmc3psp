@@ -152,3 +152,10 @@ existing E lifetime/blend policy. PS2 references: `polish_ps2_portals_later.png`
 
 The PS2 portal room has no textual portal legend. The port's helper now appears only in the existing
 Start+Select debug overlay, at its top, rather than in the normal Palace HUD.
+
+The Level label follows CSceneGame setup at 0x23e900: x=35, y=200 in centred vertical units,
+brightness=200 and a 360-frame counter. Drawing at 0x23eab8 decrements brightness each native frame,
+and moves x left by 3 once fewer than 240 frames remain. The PSP maps the left edge to x=33 and
+the baseline near the bottom edge, using a horizontally widened substitute serif font (exact native
+lettering remains a stand-in). It resets on room entry, disappears during play, and is omitted behind
+pause/debug overlays so it cannot overlap their text. Reference: polish_ps2_floor0.png.

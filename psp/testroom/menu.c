@@ -205,7 +205,7 @@ float menu_font_width(float height, const char *text) {
     return w;
 }
 
-float menu_font_draw(float x, float y, float height, const char *text, unsigned int color) {
+float menu_font_draw_scaled(float x, float y, float height, float width_scale, const char *text, unsigned int color) {
     float k = height / (float)MENU_GLYPH_CELL, start = x;
     if (!header || MENU_GLYPH_ATLAS < 0) return 0.0f;
     sceGuDisable(GU_DEPTH_TEST);
@@ -222,10 +222,14 @@ float menu_font_draw(float x, float y, float height, const char *text, unsigned 
         if (c < 0 || c >= 95) c = '?' - 32;
         g = &menu_glyphs[c];
         if (c) sprite((float)g->u0 / texture_w, (float)g->v0 / texture_h, (float)g->u1 / texture_w, (float)g->v1 / texture_h,
-                      x - g->left * k, y, x - g->left * k + (float)(g->u1 - g->u0) * k, y + height, color);
-        x += g->advance * k;
+                      x - g->left * k * width_scale, y, x - g->left * k * width_scale + (float)(g->u1 - g->u0) * k * width_scale, y + height, color);
+        x += g->advance * k * width_scale;
     }
     return x - start;
+}
+
+float menu_font_draw(float x, float y, float height, const char *text, unsigned int color) {
+    return menu_font_draw_scaled(x,y,height,1.0f,text,color);
 }
 
 /* A screen-unit box's corners in PSP pixels, spread as unit_quad does. */
