@@ -240,6 +240,11 @@ Past the threshold (100 at rank 0) it resets the gauge and picks from a weighted
 
 Higher ranks add the wide swing (28) and side steps (33, 34).
 
+**The attack token.** `00369180` reserves the first free slot on the manager at enemy-manager +0x840
+  and selects list 0 on success, list 1 otherwise. Its setter (`004257f0`) caps the budget at ten.
+  Each occupied slot loses the simulation frame step divided by 60 from its timer and frees when it goes
+  below zero (`00425850`). The Hells request 3.0 seconds. Bloody Palace supplies the floor's budget.
+
 ## What each plan does
 
 | Plan | Action | Script | Motion | Notes |
@@ -269,9 +274,6 @@ taunts last 233 and 223, and a leap lasts about 64 and peaks at 458 or 343 cm. A
 
 Things that are still not the game's:
 
-- **The attack token.** The manager at `(0x1d0d70c + 0x20) + 0x840` hasn't been read. The game passes
-  it 3.0 (`FUN_00369180`). The port treats this as "no one else may attack for 3 seconds", which fits the
-  HD Collection: 49 swings from 4 enemies, never under 3.0 real seconds apart.
 - **The rank.** The game takes it from a mission object not read yet. The port fixes it at 0, which
   gives what Mission 2 on Easy shows on the HD Collection: plans 27, 32, 51 and 52.
 - **How hard Dante's moves throw it.** The game reads an angle and speed from each move's hit record, and
