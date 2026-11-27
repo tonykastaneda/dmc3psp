@@ -44,6 +44,7 @@ CRYSTAL_HITS, CRYSTAL_ORBS = 10, 10
 STORY = {"006": [(1, 3, (102, 104, 109)), (4, 20, (100, 103, 104))]}
 # 210, the Sunken Opera House: EventTbl09 switches STAY 150 off on entry (gimmick_cmd10 [150, 0]).
 STORY["210"] = [(9, 20, ())]
+STORY["436"] = [(21, 21, ())]  # EventTbl21 +0x53a0: Nevan's white STAY 150 sheet is off here too.
 # COLLISION sets that belong to a story piece of the same number: 122's rubble (STAY 100) and its three walls
 # in front of the door to 127, which the Mute Goddess blasts away in Mission 6 (psp/testroom/mission6.c).
 STORY_WALLS = {"122": (100,), "237": (201,)}   # 237: the wall behind its combat adjudicator

@@ -3160,7 +3160,13 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     int m10_previous=mission_room>=0?room_number(mission_room):-1;
     char path[320];
     
+    float palace_start[4];
     const float *s = rooms[room].starts[start];
+    if (bp_active() && room_number(room)==433) {
+        /* EventTbl21 +0x481c: op 5a [2500,0,1700,-201,0], keeping the entry yaw. */
+        memcpy(palace_start,s,sizeof palace_start);
+        palace_start[0]=2500;palace_start[1]=0;palace_start[2]=1700;s=palace_start;
+    }
     menu_show_loading();
     enemy_set_count(0, player->x, player->z);
     orbs_clear();

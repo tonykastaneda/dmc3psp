@@ -59,6 +59,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $StageM1)) {
 }
 
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "rooms_runtime.h")) -or
+    -not (Test-Path -LiteralPath (Join-Path $Generated "bloody_palace_runtime.h")) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\gen_rooms.py")).LastWriteTime -gt
     (Get-Item -LiteralPath (Join-Path $Generated "rooms_runtime.h")).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1

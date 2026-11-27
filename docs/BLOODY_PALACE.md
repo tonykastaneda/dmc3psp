@@ -51,7 +51,7 @@ unless implemented separately from the story difficulty.
 | 4 | 437 | 0 | Beowulf (51) |
 | 5 | 438 | 0 | Geryon (50), enter at start 2 |
 | 6 | 439 | 0 | Doppelganger (52) |
-| 7 | 440 | 0 | Blood-goyles (25) |
+| 7 | 440 | 0 | Hell Envies (25), the Leviathan-room wave |
 | 8 | 441 | 0 | Chess pieces (35–40) |
 | 9 | 442 | 0 | Vergil first encounter (58) |
 | 10 | 443 | 0 | Vergil second encounter (58) |
@@ -65,6 +65,9 @@ unless implemented separately from the story difficulty.
 The table is encoded by the three door_retarget records in each case (`0x134`–`0x5b8`). Room 447 is absent
 from the disc. Stage slot = **736 + 4*(room-400)** through 446; 448 uses **924**, 449 **928**; data is slot+1.
 Boss EST group numbers come from their EventTbl21 ROOM blocks (`0x4848` through `0x78b4`).
+Cerberus's room moves Dante to (2500,0,1700), keeping his yaw (op 0x5a at `0x481c`); this is applied on entry.
+Nevan's room hides STAY 150 (op 0x36 at `0x53a0`), as the story's room 210 does; otherwise its white sheet covers
+the floor. `gen_rooms.py` emits the matching Mission 21 visibility rule for room 436.
 At floor 9999, clearing room 444 waits 180 frames then executes mission_clear (`0x6b68`–`0x6b80`).
 
 ## Timer and reference checks
@@ -78,6 +81,12 @@ survival limit without evidence.
 Local reference captures: `build/bloody_palace/ps2_select.png` (unlocked row), `ps2_bp_start.png` (briefing),
 `ps2_floor.png` (Level 0), `ps2_floor_wait.png` (first combat, three Pride), `ps2_clear.png` (combat HUD).
 These are local reference images, not committed. PCSX2 was closed and its shared lock released after capture.
+An additional reference pass cleared the initial encounter and captured the water portal
+(`build/bloody_palace/ps2_portals_compare3.png`), then took the fire portal: PINE's event+0x79c changed **0 → 100**,
+and the screen showed **Level 100** (`ps2_fire_warp.png`). The full save maps melee to Square. Its Vergil attack
+multiplier was temporarily set from 1 to 1000 in runtime memory to speed clearing; no reference data was saved.
+The PSP's recovered water effect is brighter/more opaque than this PS2 capture; original assets alone do not
+recover the GS blend and every particle/rendering behavior. That remaining runtime approximation is documented.
 
 ## Port implementation and checks
 
@@ -105,4 +114,19 @@ places Dante at the authored portal and presses O, without bypassing fight/readi
 
 Floor-flow scene: `bp_flow_camera`, screenshots `analysis/testroom/bp_flow_camera_30.png`, `_250.png`,
 `_430.png`, `_740.png`; +1, +10, +100 takes Level 0 to 111 with the room encounter restarting each time.
-The initial `bp_boundary` check confirmed 990 +10 routes from room 423 to 424; repeat after camera correction.
+`bp_boundary_verified` repeats the 990 +10 crossing with the corrected camera and collects its white reward:
+`analysis/testroom/bp_boundary_verified_330.png`, `_400.png`; final state Level 1000, room 424, pickup consumed.
+
+All seventeen boss rooms were run with `killevery`, then their authored exit was taken; each returned to room
+423 at Level 500. Local logs: `build/bloody_palace/audit_batch1.txt`, `audit_batch2.txt`, `audit_batch3.txt` and
+the per-room `audit_NNN.txt` files. Images: `analysis/testroom/bp_boss_NNN_60.png`, `_450.png`, `_550.png`;
+`build/bloody_palace/boss_rooms_qa.png` is the contact sheet reviewed for room/exit visuals. Nevan's STAY fix
+is checked separately in `bp_nevan_verified_150.png` with a live encounter and the white sheet absent.
+
+`bp_final` starts at 9990, takes +100 (clamped to 9999), fights room 444's final Vergil and reaches Mission Clear:
+`analysis/testroom/bp_final_315.png`, `bp_final_menu_clear.png`. Final telemetry is Level 9999, room 444,
+clear=180, finished=1. `bp_rewards` takes +1 then +10 and collects each reward once; its green pickup at full HP
+changes the visible orb count from 27 to 327 (`bp_rewards_350.png`, `_380.png`); final Level 11, pickup=0.
+`bp_cerberus_verified` checks the decoded entry warp with a live Cerberus and return to Level 500
+(`bp_cerberus_verified_60.png`, `_550.png`). `bp_story_regression` checks Mission 20 room 411 after integration
+(`bp_story_regression_60.png`), with Palace inactive. Final build and the protected-credit check pass.
