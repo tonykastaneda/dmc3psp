@@ -143,3 +143,16 @@ the rescue hit (HUD 9310/10000). `arkham_camera_close_40.png` and
 captures were occluded by room geometry and are not visual evidence. The test hook
 forces the hold state; capture distance/phase ranges are additionally checked by the
 host test, rather than claimed as an unforced gameplay capture.
+
+After merging master (`26b767c`, through `e72ef80`), a full
+`pwsh -File tools/build_testroom.ps1 -Regenerate` completed at 07:02 on Nov 27
+(EBOOT 30,856,539 bytes). Host attacks and credit checks passed again. PPSSPP
+Mission 19 room 421 rechecks `arkham_merged_front`, `arkham_merged_legions`, and
+`arkham_merged_grab` retained front 1200/kind2, Legion 300/kind0, and the 690-HP
+grab drain followed by rescue/release (9310/10000 HP). Inspected captures:
+`analysis/testroom/arkham_merged_front_40.png`,
+`analysis/testroom/arkham_merged_legions_130.png`,
+`analysis/testroom/arkham_merged_grab_85.png` and `_150.png`.
+The full build also reported unrelated cutscene room/demo memory-budget warnings
+for rooms 237, 228, 111, 001 and DSTG_035 (128 bytes over); these were not changed
+as part of this boss decoding task.
