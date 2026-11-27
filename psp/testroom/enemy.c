@@ -4159,7 +4159,19 @@ static void ar_particles(int dead) {
         prev_frame[slot] = e->frame;
         return;
     }
-    prev_frame[slot] = 0.0f;
+    /* The long attacks (46-49, FUN_003a7510 and kin): at motion frame 65 V0x7b at him and G0x1d5 riding him, a
+     * looping dust trail (FUN_003ac770 / 003ac790), until 77 (FUN_003ac7e0). */
+    {
+        static int trail[ENEMY_MAX];
+        int long_attack = e->action >= 46 && e->action <= 49;
+        if (long_attack && prev_frame[slot] < 65.0f && e->frame >= 65.0f) {
+            nfx_spawn(NFX_AGNI_RUDRA, 0x7b, at, e->yaw, 0);
+            if (!nfx_alive(trail[slot])) trail[slot] = nfx_spawn(NFX_AGNI_RUDRA, 0x1d5 | 0x8000, at, e->yaw, 1);
+        }
+        if (trail[slot] && (!long_attack || e->frame >= 77.0f)) { nfx_kill(trail[slot]); trail[slot] = 0; }
+        else if (trail[slot]) nfx_move(trail[slot], at, e->yaw);
+        prev_frame[slot] = long_attack ? e->frame : 0.0f;
+    }
     if (e->step != prev_step[slot] || e->action != prev_action[slot]) {
         const ArStateInfo *in = ar_state_info(e->action);
         int script = e->step >= 0 && e->step < 6 ? in->scripts[e->step] : -1;

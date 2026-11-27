@@ -39,7 +39,7 @@ CERBERUS_P = (58, 59)
 SKIP_E = {2}
 # Agni & Rudra's charged blades (FUN_003ac280): V588 on Agni's sword, V589 on Rudra's. The slam (FUN_003a8200 phase
 # 0x1f): V785 at Agni's blade, V786 at Rudra's (E0 and the P24 / P44 particles).
-AGNI_RUDRA_V = (588, 589, 785, 786)
+AGNI_RUDRA_V = (588, 589, 785, 786, 0x7b, 0x1d5 | 0x8000)   # + the long attacks' V0x7b and G0x1d5 (FUN_003ac770 / 790)
 # Started by their code: P44 as one lands (FUN_003ac750) and P44 / P15 as one falls dead (FUN_003a6820).
 AGNI_RUDRA_P = (15, 44)
 # The Jester's (em037 [10]): the cross (0054d610: V0x3f9 once, V0x3f8 looping; 0054dc70: V0x3fa at its end) and the
