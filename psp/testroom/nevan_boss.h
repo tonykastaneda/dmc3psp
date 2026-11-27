@@ -9,7 +9,7 @@ extern const char *const nevan_motion_names[NEVAN_M_COUNT];
 
 #define NEVAN_BATS 12
 /* swarm: 0 action 22's, 1 the swarm's on its way out (homing), 2 on its way back to her */
-typedef struct { int on, swarm; float pos[3], dir[3], speed, wait, life, target[3], turn_wait; } NevanBat;
+typedef struct { int on, swarm; float pos[3], dir[3], speed, wait, life, target[3], turn_wait; int fx; } NevanBat;
 typedef struct {
     float pos[3], yaw, floor_y;  /* in and out */
     float home[3];               /* where she came in: she keeps to the stage around it */

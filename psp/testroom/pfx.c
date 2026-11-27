@@ -438,8 +438,9 @@ void pfx_update(float frames) {
             if (s->type == 3 && s->p[0x118] == 0) atlas_step(s, frames);
             continue;
         }
-        s->life -= frames;
-        if (s->life < 0.0f) {
+        /* a life under -10000 never runs out (the game counts it down only from -10000 up): Nevan's bats' -20000 */
+        if (s->life >= -10000.0f) s->life -= frames;
+        if (s->life < 0.0f && s->life >= -10000.0f) {
             if (s->loop) {
                 /* +0x98: it starts again (state 2, the class's start once more), the fakes with it */
                 int j;

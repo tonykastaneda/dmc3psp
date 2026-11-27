@@ -33,7 +33,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Stand-in guard motion** without a loop range. `combat.c` ~1436.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
-- **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
+- **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (the Jester's
   trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
   particle programs). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a

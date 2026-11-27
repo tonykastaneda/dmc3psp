@@ -222,7 +222,7 @@ a port of them calls `nfx_spawn_p(bank, id, pos, yaw, 0)` (the P must be in the 
 | `003ac750` Agni & Rudra | 44 (0x2c) | dust at the brother (+0x450) as he lands: state 1 (`003a2fb0`), the dashes (`003b0450`), the hops (`003b09c0`), the slam (`003a8200`, phase 0x1e → 0x1f); also states 36 (`003a5ee0`) and 55 (`003a8c60`) | yes (not 36, 55) |
 | `003a6820` Agni & Rudra, state 39 (dead) | 15 (0xf), 44 | P44 at bone +0xcf8 from motion frame 220, P15 at bone +0xcc0 from 280 | yes (at his feet) |
 | `00264b90` | 44 | (player code range) | no |
-| `003c9870` | 0xeb, 0xfb, 0xcb | | no |
+| `003c9870` Nevan's bats | 0xcb, 0xfb, 0xeb (203, 251, 235) | one at random riding each bat (+0x250), 12 bat sprites, life -20000: never runs out (`pfx.c` counts a life down only from -10000 up) | yes (`nevan_boss.c` bats_particles, nfx bank 7) |
 | `003fb580`, `003ff050`, `003ffcd0`, `003ffec0` | 44 | dust at six bones (+0x104 matrices) | no |
 
 ### Atlases (A records, `FUN_001ec360`)
