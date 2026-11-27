@@ -15,7 +15,9 @@ unsigned int demo_fade(void);   /* the Fade track's cover now, ABGR (0: none) */
 /* A demo's frame: cinema bars (0.712 of the height shows). The projection uses demo_screen_fov,
  * the 326-line fit. demo_raw_fov (test line "rawfov 1") passes channel 12 raw. */
 extern int demo_raw_fov;
+extern int demo_no_fog;                     /* tests: "nofog 1" leaves a cutscene's GFG off */
 float demo_screen_fov(float fov_degrees);
 void demo_letterbox(void);                  /* the bars, in the 2D pass */
+int demo_fog(void);                         /* GFG on this frame: 1, and sceGuFog is set */
 const char *demo_subtitle(int *x, int *y, int *size);   /* the line shown now, or 0 (PS2 640 x 448 place) */
 #endif
