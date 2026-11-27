@@ -1975,6 +1975,16 @@ static const ArmFx arm_fx[] = {
     /* Artemis action 154 (FUN_0026ebf0, id 0x53): V0x2f4 2 frames into 20:2, on the gun (FUN_002e1d90: weapon 7's
      * frame; the port's guns are in the left hand). */
     {"20:2", 2, NFX_GUN_ARTEMIS, BONE_L_HAND, 1, 0x2f4},
+    /* Royalguard's Release (actions 190-197, FUN_0027d9f0 / 0027e130, id 0xf): V0x29 (the default costume's) as it
+     * starts; V0x2a6 too when +0x3c86 is set [not told apart]. */
+    {"24:15", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"24:17", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"24:40", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"24:46", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"24:18", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"24:20", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"24:52", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
+    {"24:58", 0, NFX_STATIC, BONE_HIPS, 1, 0x29},
     {"17:2", 6, NFX_ARM_BEOWULF, BONE_R_HAND, 1, 0x189},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xa1},
     {"3:11", 0, NFX_DANTE, BONE_HIPS, 1, 0xf3},
