@@ -558,5 +558,13 @@ When a guard or Release's counter holds, `FUN_002e7f10` / `FUN_00441270` call th
 (CComEm000, vtable 0x607b20): `FUN_003681a0` on codes 2 / 3 takes their own blocked record as a hit (`FUN_00368bd0` ->
 +0x68), a flinch. Beowulf (CEm030) sets it to his +0x130: `FUN_002df7b0` on codes 2 / 3 while his action is 2-4 takes the
 hit, action 8 (`FUN_002df6d0`). Nevan (CEm028, `FUN_003bb540`) calls her +0x13c object's +0x10 [not read]; Lady, the
-Enigma and Cerberus's (`0x32a3a0`) do nothing. Other classes' handlers (Agni & Rudra's, the Gigapede's, ...) aren't
-read. Also: the guard timer +0x3c8c restarts on every press of the guard (0x243de8) and is 99 while it's up.
+Enigma and Cerberus's (`0x32a3a0`) do nothing. The rest, by class (the +0x130 sub-object's +0x28 unless noted):
+- Agni & Rudra (CEm027), Lady (CEm034), the Enigma (CEm013), Cerberus (CEm025), CEm026 / 031 / 035: `0x32a3a0`, nothing.
+- The Fallen (CEm011, `FUN_003493c0`) and CEm012 (`FUN_003d02b0`): codes 2 / 3, unless dying, `FUN_00259f10` -> their
+  +0x114 object's +0x3c [not read].
+- Blood-goyles (CEm014, `FUN_0039d960`), Soul Eaters (CEm016, `FUN_0049c9a0`), CEm017 / 021 (`FUN_00407bc0`): codes 2 / 3 / 4
+  call their +0x358, which only stores the record's +0x2c (+0x438 / +0x468 / +0x3c8); what their AI does with it isn't read.
+- Arachnes (CEm010, `FUN_003f5fa0`): drop their web effects; codes 2 / 4 call +0x2f0 (`FUN_003f7690`: +0x3a4d = 1, +0x3430 =
+  0) and set +0x3a4e [the state those start isn't read].
+- CEm032 (`FUN_003d4800`) calls its +0x13c object's +0x10, as Nevan.
+- The Gigapede (CEm023, `FUN_0038da60`) and CEm029 (`FUN_00384d00`): nothing. Also: the guard timer +0x3c8c restarts on every press of the guard (0x243de8) and is 99 while it's up.
