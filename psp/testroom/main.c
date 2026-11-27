@@ -2180,7 +2180,10 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
         for (slot = 0; slot < 2; ++slot) {
             int ar = p->melee_weapon == 2, on;
             const WeaponPlace *place;
-            if (p->melee_weapon > 3 || p->melee_weapon == 1 || (slot && !ar)) continue;
+            /* Only Rebellion's class (CPlWpSword, vtable 0x60346c: type 0 in its first update 0x295380) and A&R's
+             * (CPlWp2Sword) make trails: Nevan's CPlWpGuitar, Cerberus's CPlWpNunchaku and Beowulf's CPlWpFight
+             * make none (no FUN_00309030 call). */
+            if ((p->melee_weapon != 0 && !ar) || (slot && !ar)) continue;
             on = !combat_move_is_gun(c->move) && (ar ? (slot ? (c->window_bits & 0x40) != 0 : c->active) : (c->active || (c->window_bits & 0x40)));
             place = combat_weapon_place(c, p, p->melee_weapon, slot);
             if (place->mode == 0 && !place->owner && place->bone < DMC3_BONE_COUNT) {

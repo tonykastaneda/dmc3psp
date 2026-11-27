@@ -306,9 +306,11 @@ rotation blended 1 / 0.75 / 0.5 / 0.25 between samples i and i + 1 (0x5abd60), t
 i + 1 / i + 2), the first the newest sample itself; scaled by +0x8c..0x94 (1). Alpha (`FUN_00309d30`): up by +9 a frame
 to +8 while fed, down by +9 to +10 from +0xc frames after the last feed (type 0: 128 / 16 / 0 / 3; 1 / 2: 128 / 24 / 8 /
 5). The port (`fx.c` mtrails, `main.c`) does the same: `native_fx.py` writes the models as `trail_runtime.h` (each
-vertex's offset from its bone's rest place) and their textures as 10034 / 10030 / 10031; drawn added. Not read: the
-blend +0x70 / +0x71 and +0x98 / +0x9c of kind 3, and which other weapon classes make type 0 (the port: Rebellion and
-Nevan).
+vertex's offset from its bone's rest place) and their textures as 10034 / 10030 / 10031; kind 3 (type 0) sets its model's glow
+blend (vtable +100 with +0x70 | +0x71 << 1, +0x68 with +0x98 / +0x9c: the calls `FUN_001f1760` makes for an effect
+model with +0x56, which nfx.c adds), so it's drawn added; kind 2 (types 1 / 2) the plain one (+0x70), alpha-blended. Only Rebellion's class (CPlWpSword, vtable 0x60346c, its update 0x295380) and A&R's
+(CPlWp2Sword) make trails; Nevan's CPlWpGuitar, Cerberus's CPlWpNunchaku and Beowulf's CPlWpFight call no
+`FUN_00309030`.
 
 ## Dante's effects
 

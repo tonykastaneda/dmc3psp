@@ -55,12 +55,14 @@ static struct {
     int count, model;
     float alpha, since;
 } mtrails[2];
-typedef struct { const TrailVertex *v; const unsigned short *idx; int nv, ni, bank, tex; float top, step, floor_, delay; } MTrailModel;
+/* added: kind 3 (type 0) sets the model's glow blend (vtable +100 / +0x68, as an effect model with +0x56: nfx.c adds
+ * those); kind 2 (types 1 / 2) its plain one (+0x70), alpha-blended. */
+typedef struct { const TrailVertex *v; const unsigned short *idx; int nv, ni, bank, tex; float top, step, floor_, delay; int added; } MTrailModel;
 static const MTrailModel *mtrail_model(int model) {
     static const MTrailModel models[3] = {
-        {trail_m34_vertices, trail_m34_indices, TRAIL_M34_VERTICES, TRAIL_M34_INDICES, NFX_DANTE, 10034, 128, 16, 0, 3},
-        {trail_m30_vertices, trail_m30_indices, TRAIL_M30_VERTICES, TRAIL_M30_INDICES, NFX_ARM_AGNI, 10030, 128, 24, 8, 5},
-        {trail_m31_vertices, trail_m31_indices, TRAIL_M31_VERTICES, TRAIL_M31_INDICES, NFX_ARM_AGNI, 10031, 128, 24, 8, 5}};
+        {trail_m34_vertices, trail_m34_indices, TRAIL_M34_VERTICES, TRAIL_M34_INDICES, NFX_DANTE, 10034, 128, 16, 0, 3, 1},
+        {trail_m30_vertices, trail_m30_indices, TRAIL_M30_VERTICES, TRAIL_M30_INDICES, NFX_ARM_AGNI, 10030, 128, 24, 8, 5, 0},
+        {trail_m31_vertices, trail_m31_indices, TRAIL_M31_VERTICES, TRAIL_M31_INDICES, NFX_ARM_AGNI, 10031, 128, 24, 8, 5, 0}};
     return model == 34 ? &models[0] : model == 30 ? &models[1] : model == 31 ? &models[2] : 0;
 }
 void fx_trail_sample(int slot, int model, const float m[3][3], const float p[3], int feed) {
@@ -124,8 +126,8 @@ static void mtrail_draw(void) {
             for (c = 0; c < 3; ++c) q[c] = bp[bn][c] + bm[bn][c][0] * s->x + bm[bn][c][1] * s->y + bm[bn][c][2] * s->z;
             v[i] = (FxVertex){s->u, s->v, color, q[0], q[1], q[2]};
         }
-        sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff);
-        sceGuDisable(GU_CULL_FACE);
+        if (t->added) sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffff);
+        else sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
         sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D, t->ni, 0, v);
     }
 }
