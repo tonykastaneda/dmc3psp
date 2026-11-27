@@ -60,9 +60,9 @@ fix above wasn't the cause. Two things were:
   4 and the like). `prepare_skinned_model.build_mesh` keeps the byte (`mode`), `prepare_demo` packs it in an object's
   texture word (bits 16-19) and `demo.c` blends by it, without writing depth.
 
-Still different from the PS2 there (not textures): the PS2 frames cm027 tighter (brow to lip; the port shows crown
-to lip), so the cameras' fov is likely not vertical as the port takes it. The darker, warmer light and the faint veins
-came with the Light track (below).
+The live camera's channel 12 is a vertical field of view (`FUN_001ac750` builds the projection with
+m11 = 1/tan of half that angle) and channel 13 is roll in radians. cm027's tighter crop is the pre-rendered movie
+(below), not a different fov. The darker, warmer light and the faint veins came with the Light track (below).
 
 **The Light track** was the shared cause of the lighting differences (Arkham's face lit darker and warmer on the PS2,
 the ending's Dante under blue moonlight). The port lit demos with the room's fixed key / fill (ambient 0x90), so
@@ -125,7 +125,7 @@ weaker or more neutral (its vertex colour or alpha for this object). Not settled
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
 Arkham's blob (demo 53) were looked at in the port only (no save state reaches those demos): their textures and
-faces read right. Still different, not textures: the cameras' framing (fov), the stages' light (the PS2's ending street
+faces read right. Still different, not textures: the stages' light (the PS2's ending street
 is bluer), and a black slab across demo 53's frame 2300 (its stage).
 
 **The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
@@ -257,7 +257,8 @@ pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone
 at (frame - SetFrame) / ClipScale + SkipFrame from its start, MOT's Hermite with per-frame slopes, a key with bit 15
 clear linear to the next) and DSTG_nnn.BIN (slot 00's `.scm` and texture set through `tools/prepare_stage.py --scm --ptx`,
 its play area the cameras' reach). `psp/testroom/demo.c` plays it at 60 frames a second: the stage and the camera
-(field of view as the port's vertical one [inferred]). Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
+(channel 12 as a vertical field of view, channel 13 as roll). A demo is scissored to a centred 4:3 picture on the
+16:9 screen, the PS2 television's aspect; gameplay keeps the wider view. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
 arena through its cuts. **The cast**: each model slot's MOD (slimmed as the enemies'), its texture set (8-bit, swizzled), its motion clips
 (MOT, streamed: the BIN keeps all but the motions resident, 1.5 MB for demo 5, and reads a clip's MOT 20 frames before
 it starts, freeing it after). Two things the demos showed: **a cutscene MOT stores a bone's translation records first**,

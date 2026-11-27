@@ -1307,11 +1307,16 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         if (demo_active()) {
             /* A demo's stage is city-sized, but its close-ups put the eye 20-40 cm from a face (demo 1's cm027:
              * 41 cm, fov 15): a fixed 50 cm near plane cut the face away and showed the inside of the head. The
-             * near plane follows the eye's distance to its target, a third of it, 4-50 cm. */
+             * near plane follows the eye's distance to its target, a third of it, 4-50 cm.
+             * Channel 12 is a vertical angle (the PS2's FUN_001ac750). The framebuffer is 16:9, so that angle is
+             * wider than the 4:3 television: the scissor keeps the centred 4:3. Gameplay is not cut. */
             float dx = camera->tx - camera->x, dy = camera->ty - camera->y, dz = camera->tz - camera->z;
             float near = sqrtf(dx * dx + dy * dy + dz * dz) * 0.33f;
+            int view_w = (SCR_HEIGHT * 4) / 3;
+            int view_x = (SCR_WIDTH - view_w) / 2;
             if (near < 4.0f) near = 4.0f;
             if (near > 50.0f) near = 50.0f;
+            sceGuScissor(view_x, 0, view_w, SCR_HEIGHT);
             sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
         }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
@@ -1498,6 +1503,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
         draw_lock_on_reticle(player, camera);
     }
 scene_done:
+    if (demo_active()) sceGuScissor(0, 0, SCR_WIDTH, SCR_HEIGHT);   /* subtitles use the full 16:9 frame */
     if (!demo_active()) draw_hud(hud);
     else {
         /* The cutscene's subtitle: its height from the PS2's 448 lines, centred (the PS2's x was set for its own font). */

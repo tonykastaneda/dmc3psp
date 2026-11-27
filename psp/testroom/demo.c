@@ -402,8 +402,8 @@ int demo_update(float dt, FollowCamera *camera) {
     c = &cams[f];
     camera->x = c->eye[0]; camera->y = c->eye[1]; camera->z = c->eye[2];
     camera->tx = c->target[0]; camera->ty = c->target[1]; camera->tz = c->target[2];
-    camera->fov = c->fov * (3.14159265f / 180.0f);   /* [inferred: vertical, as the port's] */
-    camera->roll = 0.0f;
+    camera->fov = c->fov * (3.14159265f / 180.0f);   /* channel 12, degrees; the projection takes it as vertical */
+    camera->roll = c->roll;   /* channel 13, already radians */
     return 1;
 }
 
