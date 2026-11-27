@@ -645,13 +645,16 @@ static int object_shown(const DemoHideClip *h, unsigned int k) {
     return (int)shown;
 }
 
-/* The demo's lights on one actor, as the game picks them for a character (FUN_0027f230 with flag 2): the Light clips
- * running now whose ValidType (less bit 4) is 1 (everything) or 2 (characters), 3 being the stage's; the three that
- * reach it best by 1 - d^2 / Range^2 (FUN_0027f610 / FUN_0027f7e0; a 0 range reaches everywhere), a ValidType 8 one
- * (the scene's own slot, +0x40) first. Each light's strength 1 - d^2 / Force^2 (a 0 force: whole) and its colour /
- * 128 [inferred: the VU1 lighting isn't read; 0x80 is 1.0 as the GS's colours]. On the PSP, per actor: a directional
- * light from its centre toward each, the strength taken at the centre. IsMinus lights (they subtract) are left out.
- * Returns 0 (the room's lights stay) when the demo has no Light clips. */
+/* The demo's lights on one actor (FUN_0027f230). A CDraw's light flag defaults to 2 (FUN_00281010, the word at
+ * +1476). The model clip's Light key is the only writer (FUN_00219dc0, short at +1762; the update at 0x2366cc):
+ * 0 leaves 2, 1 sets 2, 2 sets 1. Class 3 needs flag 1. No stage slot sets Light, and demos 3, 5 and 59 set none,
+ * so the stage keeps flag 2 and these ValidType 3 clips reach no model. The draw ORs 0xC (FUN_001aa110) and still
+ * does not add that bit. The stage mesh stays the baked colour (stage.c): multiplying these class-1 and class-2
+ * lights onto it misses the PS2 stills (docs/CUTSCENES.md). Clips running now whose ValidType, less bit 4, is 1 or
+ * 2; the three best by 1 - d^2 / Range^2 (a 0 range reaches everywhere); a ValidType 8 one (the scene slot) first.
+ * Strength 1 - d^2 / Force^2 (a 0 force: whole) and colour / 128 [inferred: the VU1 lighting isn't read]. On the
+ * PSP, per actor, a directional light from its centre. IsMinus lights are left out. Returns 0 when there are no
+ * Light clips. */
 #define DEMO_AMBIENT 0xff303030u   /* [stand-in, by eye] when the demo's Program track sets no No 6 */
 typedef struct { float start; unsigned int no; float arg[4]; } DemoProgram;
 /* ScrEfc GFG, after the Program clips: depth fog from MinAlpha/128 at StartZ to MaxAlpha/128 at EndZ. */

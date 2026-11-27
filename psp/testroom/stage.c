@@ -305,7 +305,7 @@ void stage_draw(void) {
 
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
-    sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_LIGHTING);   /* baked vertex colour; a cutscene does not multiply the demo lights on */
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_DEPTH_TEST);
     sceGuDepthMask(GU_FALSE);

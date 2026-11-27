@@ -19,7 +19,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
   (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
   read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
-  matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
+  matched by eye]; IsMinus lights left out. The stage is the baked SCM colour: no stage clip sets Light, so it keeps
+  flag 2 and ValidType 3 stays idle, and the class-2 lights are not multiplied onto the bake (demos 3, 5 and 59;
+  docs/CUTSCENES.md).
 - **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
   colour scale and ambient [inferred from values]. The cutscene field of view is the 326-line fit (`demo_screen_fov`)
   [stand-in]: channel 12's raw angle (`FUN_001ac750`, the screen height cancels) frames wider than the PS2 stills

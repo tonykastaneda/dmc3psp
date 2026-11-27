@@ -74,12 +74,41 @@ every face came out bright and neutral. What the game does:
   Src to Dst over it) and `FUN_0027fc80` files it: ValidType bit 8 into the scene's one slot (+0x40), the rest into
   its light list (+0x14).
 - `FUN_0027f230` lights a model (called from the model draws `FUN_001aa110` / `001aa360` / `001aa540`) with flags: a
-  light whose ValidType, less bit 4, is 1 reaches models with flag 1 or 2, 2 those with flag 2 (the characters), 3
-  those with flag 1 (the stage); bit 4 lights only models asking for it (flag 0x10); the slot's light comes first.
+  light whose ValidType, less bit 4, is 1 reaches models with flag 1 or 2, 2 those with flag 2, 3 those with flag 1.
+  Flag 2 is the default, and the stage keeps it (below). Flag 1 is a model whose clip sets Light 2. Bit 4 of a light
+  reaches only a model asking for it (flag 0x10). The slot's light comes first.
   `FUN_0027f610` makes each one: the vector to it, w 1 / Force²; its colour (negated if IsMinus), w 1 / Range²; and
   its rank, 1 − d² / Range² clamped at 0 (a 0 range: 1). `FUN_0027f7e0` keeps the three best ranked.
 - The VU1 microcode that shades with them isn't read: the port takes a light's strength as 1 − d² / Force² (a 0
   force: whole) and its colour / 128 [inferred], at each actor's centre, as a PSP directional light toward it.
+
+**The stage keeps flag 2, and its picture is the baked vertex colour.** A CDraw is constructed with light flag 2
+(`FUN_00281010` stores 2 at +1476). The model clip's Light key (`FUN_00219dc0`, the string at 0x618488, a short at
+clip +1762) is the only writer, applied in the model update at 0x2366cc: 0 leaves the flag, 1 sets 2, 2 sets 1.
+`FUN_001aa110` ORs 0xC into that flag before `FUN_0027f230`, so both light lists are walked and the class-3 bit is
+still not set. Class 3 reaches only a model whose clip sets Light 2. No Model00 clip in the unpacked demos sets
+Light. Demos 3, 5 and 59 set no Light key on any slot, so the stage takes the same class-1 and class-2 lights as the
+cast, and their ValidType 3 clips hit nothing. Other demos set Light 2 on later slots only (15, 41, 42, 49, 55, 60);
+those models would drop class 2 and take class 3. ColChange (clip +91, `FUN_0021c280`) is unused in 3, 5 and 59.
+
+The port's stage mesh is that SCM colour (0x80 = 1) times the stage gain, with lighting off. The class-1 and class-2
+lights already fall on the cast. Multiplying the same colours onto the bake is the formula the stills reject: demo 5
+frame 300's two full-strength class-2 lights are (120, 100, 70) and (64, 64, 32), and the stage region already
+matches without them. Against the PS2 halves of cl2's compare sheets (current shots, letterbox interior):
+
+- Demo 5. Frame 300, (10, 50, 160, 200): PS2 [43.8, 26.0, 14.1], PSP [47.7, 28.9, 16.2] (`fog5_300.png`). Frame
+  1380, (280, 45, 460, 150): [64.3, 38.6, 21.0] against [63.2, 37.9, 23.2]. Frame 180's horizon is the unfogged sky.
+- Demo 59 frame 700, ground (5, 60, 140, 210) and (340, 60, 470, 210): PS2 [24.2, 28.6, 38.7] and [29.4, 35.1, 49.6],
+  PSP [27.1, 30.8, 44.0] and [32.1, 36.8, 53.3] (`fog59_700.png`). Same hue, a few levels brighter. st506's vertex
+  colours are grey, so the blue is the texture. A blue ValidType 6 on that frame would push it the wrong way. Frame
+  3700 is a hair close-up; the PS2 is brighter there, which is the skipped glow, not a stage class.
+- Demo 3's sheet is frames 360, 540 and 1980 (cl2's `fin3_360.png`, `fin3_540.png` and `fin3_1980.png` match the
+  sheet's right halves). Frame 360's open region (40, 70, 160, 150): PS2 [25.3, 18.0, 13.1], PSP [24.4, 18.5, 14.1]
+  (`stlight3b_360.png`). The right of that frame is the room-prop cover, not a darker light. Frame 540's two halves
+  are different pictures, so it is not a colour reading. Frame 1980 is brighter on the PSP and its two regions do not
+  move by one scale.
+
+The stage stays the bake. The VU program that shades a stage with the flag-2 lights is still unread.
 
 `prepare_demo.bake_lights` bakes the clips (80 bytes each, after the fades; their count is the low 16 bits of the header's +0x3c, and the high 16 bits are the GFG fog clips) and
 `demo.c` demo_lights sets them per actor, with an ambient of 0x30 [stand-in, by eye]. Checked against PCSX2:
@@ -197,8 +226,8 @@ the 25 cm cap draws a dark surface across the right of the frame (`n3_360_360.pn
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
 Arkham's blob (demo 53) were looked at in the port only (no save state reaches those demos): their textures and
-faces read right. Still different, not textures: the stages' light (the PS2's ending street
-is bluer).
+faces read right. The ending street's colour is that bake: demo 59 frame 700 is the same hue as the PS2, a few
+levels brighter, not a missing blue light.
 
 **The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
 FIX 0x80, Cd − Cs; 5-15 are on no character); bits 4 and 5 (0x10 / 0x20, values 16-19 and 48, nearly all on EFM
