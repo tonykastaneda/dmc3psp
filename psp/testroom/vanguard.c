@@ -578,3 +578,4 @@ void vanguard_draw(void) {
     if(alpha<0.99f) {sceGuDisable(GU_BLEND);sceGuAlphaFunc(GU_GREATER,0x7f,0xff);sceGuColor(0xffffffffu);}
     sceGuDisable(GU_ALPHA_TEST);
 }
+int vanguard_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */

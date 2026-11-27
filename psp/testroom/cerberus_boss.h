@@ -26,4 +26,5 @@ int cerberus_boss_attack_kind(void);   /* the last landed attack's record kind *
 void cerberus_boss_trace(const char *path);
 
 void cerberus_boss_data_release(void);   /* frees its model's buffers unless it's active (made again at its next spawn) */
+int cerberus_boss_data_load(void);   /* makes its model's buffers now (a room load, ahead of its spawn) */
 #endif

@@ -54,6 +54,24 @@ Shots against a build that loads at boot (`lzold_*` / `lz_*`, the same frames):
 - Doppelganger, Arkham, Vergil and Palace floor 439: identical.
 - Geryon at frame 400: within 10/255.
 - Cerberus at frame 850: 7 single pixels of his room's ice motes. His model is the same.
+**The first-spawn cost.** FOCUS_DONE's `bossspawn_us` line gives each boss's first and later spawn time and the room
+load's preload time, in microseconds of the PSP's clock (PPSSPP's emulated time).
+- A room load now makes the buffers of any boss its script spawns (`enemy_preload_class`, called after `bp_enter`).
+  A boss spawned some other way still makes them at its spawn.
+- Measured with `notrace 1` (the test runs' per-boss logs open and append a file at every event, the spawn
+  included, which adds 12-20 ms):
+
+| Boss | Made at room load | Spawn |
+|---|---|---|
+| Cerberus (M3 room 6) | 1.7 ms | 7.7 ms (his first pose and skin of every part, as before) |
+| Geryon (M12 room 228) | 1.6 ms | about 0 |
+| Doppelganger (M17 room 139) | 0.6 ms | about 0 |
+| Arkham (M19 room 421) | 2.9 ms | about 0 |
+| Vergil (M20 room 411) | 3.0 ms | about 0 |
+| Vanguard (Mission 2) | 0.5 ms | 0.3 ms |
+
+Made at the spawn instead, the buffers would add 0.6-3 ms, well under a 30 fps frame (33 ms). None of it was
+noticeable.
 
 Free heap after the MENU.BIN change alone (c91a796, before the Palace merge), 300 frames into each room:
 

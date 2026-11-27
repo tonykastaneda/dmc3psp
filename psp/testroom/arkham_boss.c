@@ -591,3 +591,4 @@ int arkham_boss_init(void) {
     if (body_ids[0] < 0 || shell_ids[0] < 0) return 0;
     return 1;
 }
+int arkham_boss_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */

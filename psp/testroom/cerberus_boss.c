@@ -1603,3 +1603,4 @@ int cerberus_boss_init(void) {
     }
     return 1;
 }
+int cerberus_boss_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */
