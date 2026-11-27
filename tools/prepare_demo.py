@@ -535,6 +535,14 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
                 try:
                     first, channels = parse_hid(files[hid])
                     switches.append((start, scale, 2, first, channels))
+                    # A per-object .hid clip lasts its Life [inferred]: demo 59's ss506_00_c01_1.hid (Life 300) hides
+                    # the book only in the first cut; the PS2 shows it on the desk later. Where no other clip of the
+                    # slot begins before then, the slot is shown again at its end.
+                    # A Life of 10 is the placeholder for "until the next clip" (33 clips; their keys run past it).
+                    end = start + float(hclip.get("Life", 0.0)) * scale
+                    if float(hclip.get("Life", 0.0)) > 10.0 and not any(start < float(o.get("SetFrame", 0.0)) <= end
+                                               for o in (tracks.get(("Hide", slot)) or {"clips": []})["clips"]):
+                        switches.append((end, scale, 1, 0.0, []))
                 except (ValueError, struct.error):   # not a hide track we read: shown
                     switches.append((start, scale, 1, 0.0, []))
         switches.sort(key=lambda s: s[0])
@@ -731,6 +739,11 @@ def stage_hide_events(timeline, files):
             events.append((start, obj, 0 if keys[0][1] else 1))   # before its first key: that key's state
             for local, shown in keys:
                 events.append((start + max(0.0, local - first) * scale, obj, 0 if shown else 1))
+        # Its Life ends it (shown again) unless another clip begins first or the Life is the placeholder 10.
+        end = start + float(clip.get("Life", 0.0)) * scale
+        if channels and float(clip.get("Life", 0.0)) > 10.0 and \
+                not any(start < float(o.get("SetFrame", 0.0)) <= end for o in track["clips"]):
+            events.append((end, 0xffff, 0))
     events.sort(key=lambda e: e[0])
     return events
 
