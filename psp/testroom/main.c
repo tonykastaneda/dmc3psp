@@ -1882,8 +1882,14 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
         last_move = c->move;
     }
     if (p->hike_fx) {
-        if (p->hike_fx == 1) fx_hike_seal(feet, weapon_fx_color(p));
-        else fx_jump_burst(feet);
+        /* Air Hike: V0x83 at his feet, tinted the melee weapon's colour (FUN_00222700, FUN_002fd1c0: +0x9b mode 2);
+         * Enemy Step: V0x14d there (FUN_00228950). The port's seal / burst only if they can't start. */
+        int h = nfx_spawn(NFX_STATIC, p->hike_fx == 1 ? 0x83 : 0x14d, feet, p->yaw, 0);
+        if (h && p->hike_fx == 1) {
+            unsigned int c = weapon_fx_color(p);
+            nfx_tint(h, (c & 0xff) >> 1, (c >> 8 & 0xff) >> 1, (c >> 16 & 0xff) >> 1);
+        }
+        if (!h) { if (p->hike_fx == 1) fx_hike_seal(feet, weapon_fx_color(p)); else fx_jump_burst(feet); }
         p->hike_fx = 0;
     }
     was_on_ground = p->on_ground;
@@ -2030,7 +2036,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
-static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1) or looping P (2) 2 m before Dante */
+static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1), looping P (2) or E (3) 2 m before Dante */
 static int cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
@@ -4350,7 +4356,8 @@ int main(int argc, char *argv[]) {
                 int k;
                 for (k = 0; k < cmp_fxtest_count; ++k) if (frames == cmp_fxtest[k][0]) {
                     float at[3] = {player.x + sinf(player.yaw) * 200.0f, player.y, player.z + cosf(player.yaw) * 200.0f};
-                    if (cmp_fxtest[k][2]) nfx_spawn_p(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, cmp_fxtest[k][2] == 2);
+                    if (cmp_fxtest[k][2] == 3) nfx_spawn_e(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, 0);
+                    else if (cmp_fxtest[k][2]) nfx_spawn_p(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, cmp_fxtest[k][2] == 2);
                     else nfx_spawn(cmp_fxtest[k][1], cmp_fxtest[k][3], at, player.yaw, 0);
                 }
             }
@@ -4681,7 +4688,11 @@ int main(int argc, char *argv[]) {
                     fx_hit_spark(chest);
                     if(focus_cmp)vanguard_note("player_hurt",player.health);
                 } else {
-                    fx_guard_flash(chest);
+                    /* A Royalguard block (FUN_00224db0): V6 (guard types 0-2; 3 / 4 / 5 play V0x265 / 0x264 / 0x267,
+                     * not told apart here) near the attacker's bone, facing Dante: taken 50 cm toward the blow. */
+                    float dx = from_x - player.x, dz = from_z - player.z, dl = sqrtf(dx * dx + dz * dz);
+                    float at[3] = {chest[0] + (dl > 1.0f ? dx / dl * 50.0f : 0.0f), chest[1], chest[2] + (dl > 1.0f ? dz / dl * 50.0f : 0.0f)};
+                    if (!nfx_spawn(NFX_STATIC, 6, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
                     if(focus_cmp)vanguard_note("player_guard",player.health);
                 }
             }

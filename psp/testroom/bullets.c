@@ -103,8 +103,12 @@ static int hitscan(int kind, const float from[3], const float to[3]) {
     if (t >= 0.0f) {
         hit = 1;
         for (k = 0; k < 3; ++k) end[k] = from[k] + (end[k] - from[k]) * t;
-    } else if (wall < 1.0f) {
-        fx_wall_spark(end);
+    }
+    if (hit || wall < 1.0f) {
+        /* Where a shot lands: V0xa (its shell, 002efaa0; V0x32 for a charged one, not told apart here), from the E&I
+         * pack, the Shotgun's own for its pellets; Spiral's keeps the port's spark. */
+        int bank = kind == BULLET_SHOTGUN ? NFX_GUN_SHOTGUN : kind == BULLET_EBONY_IVORY ? NFX_GUN_EI : -1;
+        if (bank < 0 || !nfx_spawn(bank, 0xa, end, atan2f(to[0] - from[0], to[2] - from[2]), 0)) fx_wall_spark(end);
     }
     if (kind == BULLET_SPIRAL) fx_tracer(from, end, guns[kind].color, 6.0f);
     return hit;

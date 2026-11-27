@@ -254,8 +254,9 @@ def main():
              "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; const NfxRecord *p; int p_count; const NfxRecord *a; int a_count; } NfxBank;"]
     summary = []
     # P44 (dust): the Arachne's landings start it from the shared pack (FUN_003fb580 and its kin).
-    # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0).
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c), ORB_E, (44,)))
+    # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0). V6: a Royalguard block (FUN_00224db0).
+    # V0x83: Air Hike (FUN_00222700); V0x14d: Enemy Step (FUN_00228950).
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d), ORB_E, (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
@@ -284,7 +285,7 @@ def main():
     summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c), ()))
     # 14-18 Dante's guns' effect packs (GDATA 97 + w: 102 E&I, 103 Shotgun, 104 Artemis, 105 Spiral, 106 Kalina Ann):
     # their muzzle flashes (FUN_002fbf20), Artemis's shot (CPl000Shl10, FUN_005232b0) and Kalina Ann's burst.
-    for bank, slot, vs in ((14, 102, (0x22,)), (15, 103, (0x23,)), (16, 104, (0xd3,)), (17, 105, (0x228,)), (18, 106, (0x21b, 0x21f))):
+    for bank, slot, vs in ((14, 102, (0x22, 0xa, 0x32)), (15, 103, (0x23, 0xa, 0x32)), (16, 104, (0xd3,)), (17, 105, (0x228,)), (18, 106, (0x21b, 0x21f))):
         pack = pnst_entries(read(slot))
         effects = next(p for p in pack if isinstance(p, (bytes, bytearray)) and _is_effect_pack(p))
         summary.append(write_bank(lines, bank, records(effects), vs, ()))

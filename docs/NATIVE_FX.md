@@ -20,6 +20,10 @@ The layouts are those already used for em008: scale curves at `+0x88/+0x8e/+0xa8
 
 Inferred, not decoded:
 
+- (Decoded since) A model element whose texture chunk is the 16-byte `"1"` (0x31) reference is dropped by the game
+  (`FUN_001f1760`) unless its spawner hands it a texture (+0x7a2 / +0x79c: Cerberus's shells do); the port's twin /
+  M54 fallback below covers those spawner-given cases.
+
 - E kind 5 records with `+0x1d` or `+0x56` set are drawn additively (glows); the others alpha-blended.
 - An effect model whose texture chunk is the 16-byte reference takes the textures of a twin model with the same
   vertices (M43 is M15). Failing that, it takes the icicle model M54's ice texture.
@@ -279,3 +283,17 @@ the port's demo 123 (`analysis/testroom/demo123b.mp4`), side by side in `analysi
 missile shots, the muzzle flash, the missiles' smoke trails and bursts and the burning demons match in place, size and
 colour. The one difference found, the demons' fire (G79 → E275) going out after a second where the PS2's burns on, was
 the no-end generator rule above, now fixed.
+
+## Dante's effects
+
+| Effect | Where | Port |
+| --- | --- | --- |
+| E&I V0x22, Shotgun V0x23, Spiral V0x228, Kalina Ann V0x21b | the muzzle flash, by shot kind (`FUN_002fbf20`; tables `0x5aa630` / `0x5aa680`: ±31 cm on the gun bone, turned down the barrel) | `bullets.c`, nfx banks 14-18 (GDATA 102-106) |
+| Artemis V0xd3 | riding its shot (CPl000Shl10, `FUN_005232b0`) | yes |
+| V0xa (V0x32 charged) | where a bullet lands (`002efaa0`) | E&I and Shotgun |
+| Kalina Ann V0x21f | its rocket's burst [inferred] | yes |
+| V6 (guard types 0-2), V0x265 / 0x264 / 0x267 | a Royalguard block (`FUN_00224db0`), near the attacker | V6 only, 50 cm toward the blow |
+| V0x83 | Air Hike, at his feet, tinted the weapon's colour (`FUN_00222700`, `FUN_002fd1c0`) | yes |
+| V0x14d (P247, 248) | Enemy Step (`FUN_00228950`) | yes |
+| V0x90 | kicks off a wall / an enemy (E235 is in the port already) | E235 alone |
+| Devil Trigger | state 0x24 plays motion 0:50 / 0:58; its look isn't an effect call found yet | `fx_devil_burst` / `fx_devil_aura` stand in |
