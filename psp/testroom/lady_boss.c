@@ -36,7 +36,8 @@ const char *const lady_motion_names[LADY_M_COUNT] = {
     /* 0x85; 0x5c (its slot, [6] 9, is empty: the gun's draw stands in), 0x56-0x59; 0x72, 0x73 */
     "ld650", "ld502", "ld603", "ld604", "ld605", "ld606", "ld631", "ld632",
     /* 0x1d's grapple 0x5e, 0x5f, 0x61, 0x62; mode 0x1e's 0x8f, 0x0c, 0x0e */
-    "ld611", "ld612", "ld614", "ld615", "ld660", "ld212", "ld614"};   /* 0x0e's slot, [2] 14, is empty: 0x61's landing */
+    "ld611", "ld612", "ld614", "ld615", "ld660", "ld212", "ld614",   /* 0x0e's slot, [2] 14, is empty: 0x61's landing */
+    "ld527"};   /* the ending ally's aim, action 0x49 ([5] 27) */
 
 enum { L_IDLE, L_GUN, L_GUN2, L_TURN, L_SHOOT, L_SHOOT2, L_MOVE, L_PAUSE, L_RELOAD, L_GRENADE, L_KALINA, L_ESCAPE,
        L_FLINCH, L_KNOCK, L_DOWN, L_POSE, L_BIG, L_VOLLEY, L_LEDGE };
@@ -383,9 +384,8 @@ static void ally_think(LadyBrain *b, float f, float px, float py, float pz) {
         if (!b->has_target) { ally_mode(b, A_WAIT); break; }
         {
             float off = face(b, t[0], t[2], TURN, f);
-            /* Within her cone (0x61a500: +-45 degrees, reach 10000): action 0x49, her aim (its slot isn't one of the
-             * port's motions: the drawn guns, 0x30's, stand in). */
-            if (b->step == 1 && fabsf(off) < 45.0f * DEG) { play(b, LADY_M_GUN); b->step = 2; }
+            /* Within her cone (0x61a500: +-45 degrees, reach 10000): action 0x49, her aim (PAC [5] 27). */
+            if (b->step == 1 && fabsf(off) < 45.0f * DEG) { play(b, LADY_M_ALLY_AIM); b->step = 2; }
         }
         if (b->step == 2) {
             b->shot_clock += f;
