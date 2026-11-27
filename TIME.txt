@@ -1978,3 +1978,4 @@
 [2026-11-27 07:03:06.240 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp-wt\cl2\build\testroom\EBOOT.PBP (30,847,627 bytes)
 [2026-11-27 07:21:16.848 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp-wt\cl2\build\testroom\EBOOT.PBP (30,847,787 bytes)
 [2026-11-27 07:23:32.526 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp-wt\cl2\build\testroom\EBOOT.PBP (30,847,787 bytes)
+[2026-11-27 07:53:42.065 -08:00] Test room build completed: C:\Users\tonyk\Documents\GitHub\dmc3psp\build\testroom\EBOOT.PBP (30,858,891 bytes)
