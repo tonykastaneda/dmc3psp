@@ -27,4 +27,6 @@ int doppelganger_boss_attack_landed(float *from_x, float *from_z, int *heavy, fl
 void doppelganger_boss_trace(const char *path);
 void doppelganger_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out));
 
+void doppelganger_boss_data_release(void);   /* frees its model's buffers unless it's active (made again at its next spawn) */
+int doppelganger_boss_data_load(void);   /* makes its model's buffers now (a room load, ahead of its spawn) */
 #endif

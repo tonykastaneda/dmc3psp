@@ -49,6 +49,7 @@ def main():
     ap.add_argument("--eboot", type=Path, help="use a pinned executable for before/after comparisons")
     ap.add_argument("--street", action="store_true", help="the test street with dummies, not a mission")
     ap.add_argument("--menu", action="store_true", help="go through the menus (drive them with --line \"mkey ...\")")
+    ap.add_argument("--filter", choices=("auto", "nearest", "linear"), default="auto", help="texture filtering for this run (--appendconfig; default auto, the game's own, as a PSP draws it; the shared ppsspp.ini forces nearest, TextureFiltering = 2, and is left alone)")
     args = ap.parse_args()
 
     sync()
@@ -69,7 +70,12 @@ def main():
     (GAME / "FOCUS.TXT").write_text("cmp\n")
     (GAME / "BOOT_MISSION.TXT").write_text(f"{args.mission} {args.difficulty}\n")
     timeout = args.timeout or 60 + args.frames // 10 + (args.video[1] - args.video[0] if args.video else 0) // 4
-    proc = subprocess.Popen([str(EMU), "--windowed", "--escape-exit", str(GAME / "EBOOT.PBP")], cwd=str(EMU.parent))
+    extra = []
+    if args.filter:
+        override = GAME / "FILTER_OVERRIDE.ini"
+        override.write_text(f"[Graphics]\nTextureFiltering = {({'auto': 1, 'nearest': 2, 'linear': 3})[args.filter]}\n")
+        extra = [f"--appendconfig={override}"]
+    proc = subprocess.Popen([str(EMU), "--windowed", "--escape-exit", *extra, str(GAME / "EBOOT.PBP")], cwd=str(EMU.parent))
     start = time.time()
     try:
         while not (GAME / "FOCUS_DONE.TXT").exists():

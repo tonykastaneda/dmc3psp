@@ -42,6 +42,9 @@ typedef struct {
     unsigned char *tex;          /* 512 x 512 (the GE's power of two), the picture's 448 rows */
     unsigned int clut[256] __attribute__((aligned(16)));
     int loaded;                  /* the STAFF file in it, -1 none */
+    int pending;                 /* the file being read into it, a piece a frame (page_read_piece), -1 none */
+    SceUID fd;
+    int phase, phase_page;      /* page_next's read in flight, and its file */
     int state;                   /* 0 none, 1 fading in, 2 holding, 3 fading out */
     int alpha;                   /* +0x6c8 */
     float hold;                  /* +0x6c0 */
@@ -51,6 +54,7 @@ static char dir[256];
 static Page pages[3];            /* the roll's slots, +0x3c */
 static int active, kills, extended, stage;   /* stage 0 fighting, 1 the roll's end (7e 2 and 3), 2 over (7e 4) */
 static int next_record, fade, card_shown;
+static int spawns, spawn_fails, last_kind = -1;   /* tests: the script's spawns in the street, and the last kill's kind */
 static float street_clock, roll_clock, since_end, roll_acc;
 
 /* Room 012's look (docs/CREDITS_FIGHT.md 9). Its LIG2 header's second colour (95, 90, 100) is the fog colour: PCSX2,
@@ -70,35 +74,71 @@ int credits_fight_fog(unsigned int *clear) {
 
 void credits_fight_init(const char *game_dir) {
     snprintf(dir, sizeof dir, "%s", game_dir);
+    { int i; for (i = 0; i < 3; ++i) pages[i].loaded = pages[i].pending = -1; }
 }
 
+static void page_drop(Page *p);
 static void pages_free(void) {
     int i;
-    for (i = 0; i < 3; ++i) { free(pages[i].tex); pages[i].tex = NULL; pages[i].loaded = -1; pages[i].state = 0; }
+    for (i = 0; i < 3; ++i) {
+        page_drop(&pages[i]);
+        free(pages[i].tex); pages[i].tex = NULL; pages[i].loaded = pages[i].pending = -1; pages[i].state = 0;
+    }
 }
 
-/* STAFF_nn.BIN into a slot; 0 if it isn't there (the build makes them from the disc). */
-static int page_load(Page *p, int n) {
-    char path[320];
-    unsigned char head[8];
-    SceUID fd;
-    int ok;
+/* STAFF_nn.BIN into a slot without waiting on the memory stick: the roll starts the next page's reads while its slot is
+ * free (sceIoOpenAsync, then sceIoReadAsync of its head, palette and picture) and polls them a frame at a time. A whole
+ * page read at once took about 13 ms on the PSP's clock: a dropped frame each page. page_load finishes it at once
+ * (sceIoWaitAsync) if it's due first. 0 if the file isn't there (the build makes them from the disc). */
+static unsigned char page_head[8];
+static unsigned int load_us_max, load_us_sum, load_count;   /* tests: page_read_piece's longest call, all, the calls */
+static void page_drop(Page *p) { if (p->pending >= 0) { sceIoClose(p->fd); p->pending = -1; } }
+/* The next read of the file once the last one is done: 1 head, 2 palette, 3 picture, then 4 done. */
+static int page_next(Page *p, long long res) {
+    switch (p->phase) {
+    case 0: if (res < 0) return 0; p->fd = (SceUID)res; p->phase = 1; return sceIoReadAsync(p->fd, page_head, 8) >= 0;
+    case 1: if (res != 8 || memcmp(page_head, "STF1", 4) != 0) return 0;
+            p->phase = 2; return sceIoReadAsync(p->fd, p->clut, sizeof p->clut) >= 0;
+    case 2: if (res != (long long)sizeof p->clut) return 0;
+            p->phase = 3; return sceIoReadAsync(p->fd, p->tex, TEX_W * TEX_H) >= 0;
+    case 3: if (res != TEX_W * TEX_H) return 0;
+            sceIoClose(p->fd); p->pending = -1;
+            memset(p->tex + TEX_W * TEX_H, 0, TEX_W * (512 - TEX_H));
+            sceKernelDcacheWritebackRange(p->tex, TEX_W * 512);
+            sceKernelDcacheWritebackRange(p->clut, sizeof p->clut);
+            p->loaded = p->phase_page; p->phase = 4;
+            return 1;
+    }
+    return 0;
+}
+/* wait 0: a frame's look (sceIoPollAsync); 1: to the end. */
+static int page_read_piece(Page *p, int n, int wait) {
+    unsigned int t0 = sceKernelGetSystemTimeLow();
+    int ok = 1;
     if (p->loaded == n) return 1;
-    if (!p->tex && !(p->tex = memalign(16, TEX_W * 512))) return 0;
-    snprintf(path, sizeof path, "%s/STAFF_%02d.BIN", dir, n);
-    if ((fd = sceIoOpen(path, PSP_O_RDONLY, 0)) < 0) return 0;
-    ok = sceIoRead(fd, head, 8) == 8 && memcmp(head, "STF1", 4) == 0 &&
-         sceIoRead(fd, p->clut, sizeof p->clut) == (int)sizeof p->clut &&
-         sceIoRead(fd, p->tex, TEX_W * TEX_H) == TEX_W * TEX_H;
-    sceIoClose(fd);
-    if (!ok) { p->loaded = -1; return 0; }
-    memset(p->tex + TEX_W * TEX_H, 0, TEX_W * (512 - TEX_H));
-    sceKernelDcacheWritebackRange(p->tex, TEX_W * 512);
-    sceKernelDcacheWritebackRange(p->clut, sizeof p->clut);
-    p->loaded = n;
-    return 1;
+    if (p->pending != n) {
+        char path[320];
+        SceUID fd;
+        page_drop(p);
+        p->loaded = -1;
+        if (!p->tex && !(p->tex = memalign(16, TEX_W * 512))) return 0;
+        snprintf(path, sizeof path, "%s/STAFF_%02d.BIN", dir, n);
+        if ((fd = sceIoOpenAsync(path, PSP_O_RDONLY, 0)) < 0) return 0;
+        p->fd = fd; p->pending = n; p->phase = 0; p->phase_page = n;
+    }
+    while (ok && p->pending == n) {
+        SceInt64 res;
+        int r = wait ? sceIoWaitAsync(p->fd, &res) : sceIoPollAsync(p->fd, &res);
+        if (r == 1) break;               /* still reading */
+        if (r < 0 || !page_next(p, res)) { page_drop(p); ok = 0; }
+        if (!wait) break;                /* one step a frame */
+    }
+    t0 = sceKernelGetSystemTimeLow() - t0; load_us_sum += t0; ++load_count; if (t0 > load_us_max) load_us_max = t0;
+    return ok;
 }
-
+static int page_load(Page *p, int n) {
+    return page_read_piece(p, n, 1) && p->loaded == n;
+}
 static void page_show(Page *p, int n, float hold) {
     if (!page_load(p, n)) return;
     p->state = 1; p->alpha = 0; p->hold = hold;
@@ -107,6 +147,7 @@ static void page_show(Page *p, int n, float hold) {
 void credits_fight_reset(void) {
     active = kills = extended = stage = 0;
     next_record = fade = card_shown = 0;
+    spawns = spawn_fails = 0; last_kind = -1;
     street_clock = since_end = roll_acc = 0.0f;
     roll_clock = ROLL_START;
     pages_free();
@@ -126,6 +167,12 @@ int credits_fight_frozen(void) { return active && stage >= 1; }
 void credits_fight_kill(int kind) {
     if (!active || stage >= 1 || kind == ENEMY_LADY) return;
     if (kills < 999) ++kills;   /* the counter shows at most 999 */
+    last_kind = kind;
+}
+
+void credits_fight_spawned(int ok) {
+    if (!active) return;
+    if (ok) ++spawns; else ++spawn_fails;
 }
 
 /* 0x518430, a frame at a time. */
@@ -144,7 +191,7 @@ static void roll_frame(void) {
     if (next_record < 35) {
         Page *p = &pages[next_record % 3];
         if (p->state == 0) {
-            page_load(p, next_record);   /* ahead, as the roll loads the next file once it's made the last page */
+            page_read_piece(p, next_record, 0);   /* ahead, a piece a frame, as the roll loads the next file once it's made the last page */
             if (records[next_record].time < roll_clock) { page_show(p, next_record, records[next_record].hold); ++next_record; }
         }
     }
@@ -189,8 +236,9 @@ void credits_fight_test_kills(int n) { kills = n; }
 void credits_fight_status(char *out, int size) {
     float at[3] = {0, 0, 0};
     int mode = -1, shots = 0, ally = enemy_ally_state(at, &mode, &shots);
-    snprintf(out, (size_t)size, "credits on=%d clock=%.0f roll=%.0f page=%d kills=%d stage=%d extended=%d fade=%d card=%d ally=%d mode=0x%x shots=%d at=%.0f,%.0f,%.0f",
-             active, street_clock, roll_clock, next_record, kills, stage, extended, fade, card_shown, ally, mode, shots, at[0], at[1], at[2]);
+    snprintf(out, (size_t)size, "credits on=%d clock=%.0f roll=%.0f page=%d kills=%d stage=%d extended=%d fade=%d card=%d ally=%d mode=0x%x shots=%d at=%.0f,%.0f,%.0f spawns=%d fails=%d last=%d pageload n=%u max=%u avg=%u",
+             active, street_clock, roll_clock, next_record, kills, stage, extended, fade, card_shown, ally, mode, shots, at[0], at[1], at[2],
+             spawns, spawn_fails, last_kind, load_count, load_us_max, load_count ? load_us_sum / load_count : 0u);
 }
 
 typedef struct { float u, v, x, y, z; } V2;

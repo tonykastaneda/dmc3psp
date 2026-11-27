@@ -2,10 +2,12 @@
 
 #include <pspgu.h>
 #include <pspgum.h>
+#include "model_blend.h"
 #include <pspiofilemgr.h>
 #include <psputils.h>
 
 #include <malloc.h>
+#include <stdio.h>
 #include <math.h>
 #include <string.h>
 
@@ -29,6 +31,12 @@ typedef struct { unsigned int first, count; } Cell;
 #define BATCH_DECAL 2
 #define BATCH_BLEND 4
 #define BATCH_SKY 8     /* tools/prepare_stage.py: a STAY sky dome, drawn first past the far plane */
+#define BATCH_ADD 16    /* the SCM object's blend (byte 8): 2 additive */
+#define BATCH_SUB 32    /* 3 subtractive */
+/* A batch's blend: 0 opaque, 1 alpha, 2 additive, 3 subtractive (model_blend.h's numbers). */
+static int batch_blend(unsigned int flags) {
+    return (flags & BATCH_ADD) ? 2 : (flags & BATCH_SUB) ? 3 : (flags & BATCH_BLEND) ? 1 : 0;
+}
 /* Depth bias for coplanar overlays (prepare_stage.py flags them). With the
  * depth range 65535 (near) .. 0 (far), a positive offset pulls them toward
  * the camera just enough to win against their base surface. */
@@ -215,7 +223,8 @@ static int chunk_hidden(const Chunk *c) {
 }
 
 int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
-static int stage_double;
+static int stage_double, sky_off;
+void stage_test_sky_off(int off) { sky_off = off; }   /* tests: "nosky 1", the sky pass's cost */
 void stage_set_double(int on) { stage_double = on; }
 
 void stage_draw(void) {
@@ -248,12 +257,13 @@ void stage_draw(void) {
     sceGuTexWrap(GU_REPEAT, GU_REPEAT);   /* stage UVs tile */
     sceGuColor(0xffffffff);
     {
-        /* The sky (BATCH_SKY, ordered first): under the same projection with its far plane moved out to 80000 (the
-         * stage's is 16000; st012's dome reaches 45052), without depth, so everything else draws over it. */
+        /* The sky (BATCH_SKY, ordered first): under the same projection with its far plane moved out to 500000 (the
+         * stage's is 16000; st012's dome reaches 45052, demo 5's st501_3 sky and far ground 185000 and more),
+         * without depth, so everything else draws over it. */
         ScePspFMatrix4 far = cull_proj;
-        float a = cull_proj.z.z, bz = cull_proj.w.z, n = bz / (a - 1.0f), f = 80000.0f;
+        float a = cull_proj.z.z, bz = cull_proj.w.z, n = bz / (a - 1.0f), f = 500000.0f;
         int sky = 0;
-        for (i = 0; i < header->batches && (batches[i].flags & BATCH_SKY); ++i) {
+        for (i = 0; !sky_off && i < header->batches && (batches[i].flags & BATCH_SKY); ++i) {
             const Batch *b = &batches[i];
             unsigned int k;
             if (!sky) {
@@ -266,8 +276,12 @@ void stage_draw(void) {
             }
             bind_texture(&textures[b->texture]);
             bound = (int)b->texture;
+            if (batch_blend(b->flags) >= 2) model_object_blend((unsigned int)batch_blend(b->flags), 1);
+            else sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             for (k = 0; k < b->chunk_count; ++k) {
                 const Chunk *c = &chunks[b->chunk_first + k];
+                /* chunk_hidden tests the sides and the eye, not the far plane, so it holds for the sky's chunks too. */
+                if (!chunk_visible[b->chunk_first + k]) continue;
                 sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
                                 (int)c->count, 0, vertices + (size_t)c->first * 24);
             }
@@ -275,6 +289,8 @@ void stage_draw(void) {
         if (sky) {
             sceGumMatrixMode(GU_PROJECTION); sceGumLoadMatrix(&cull_proj); sceGumMatrixMode(GU_MODEL);
             sceGuEnable(GU_DEPTH_TEST);
+            sceGuDepthMask(GU_FALSE);   /* a glow batch turned depth writes off */
+            sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             sceGuDisable(GU_BLEND);
         }
     }
@@ -316,10 +332,12 @@ void stage_draw(void) {
             bound = (int)b->texture;
         }
         if (b->flags & BATCH_ALPHA) sceGuEnable(GU_ALPHA_TEST); else sceGuDisable(GU_ALPHA_TEST);
-        if (((b->flags & BATCH_BLEND) != 0) != blend_mode) {
-            /* Translucent overlays (drawn last): blend, keep depth test, no depth writes. */
-            blend_mode = (b->flags & BATCH_BLEND) != 0;
-            if (blend_mode) {
+        if (batch_blend(b->flags) != blend_mode) {
+            /* Translucent overlays (drawn last): blend, keep depth test, no depth writes. The SCM object's own blend
+             * (its record's byte 8, as a MOD's: model_blend.h) adds or subtracts. */
+            blend_mode = batch_blend(b->flags);
+            if (blend_mode >= 2) model_object_blend((unsigned int)blend_mode, 1);
+            else if (blend_mode) {
                 sceGuEnable(GU_BLEND);
                 sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
                 sceGuDepthMask(GU_TRUE);
@@ -476,6 +494,13 @@ int stage_collide(float *x, float *z, float y, float radius) {
         if (!cell) continue;
         for (k = 0; k < cell->count; ++k) {
             const float *t = hit_tri(indices[cell->first + k]);
+            /* Out of reach by its bounds: the closest point lies inside them, so a triangle more than the radius
+             * away across x or z, or above the top height or below the bottom one by more than it, fails the tests
+             * below at every height. Skipping it here changes nothing (the street's rubble cells cost up to 8 ms). */
+            if (*x < fminf(t[0], fminf(t[3], t[6])) - radius || *x > fmaxf(t[0], fmaxf(t[3], t[6])) + radius ||
+                *z < fminf(t[2], fminf(t[5], t[8])) - radius || *z > fmaxf(t[2], fmaxf(t[5], t[8])) + radius ||
+                y + heights[0] > fmaxf(t[1], fmaxf(t[4], t[7])) + radius || y + heights[2] < fminf(t[1], fminf(t[4], t[7])) - radius)
+                continue;
             for (h = 0; h < 3; ++h) {
                 float p[3] = {*x, y + heights[h], *z}, q[3], dx, dz, dy, dist2, reach;
                 closest_on_triangle(p, t, t + 3, t + 6, q);

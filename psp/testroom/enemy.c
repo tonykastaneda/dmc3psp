@@ -27,6 +27,8 @@
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "swizzle.h"
 #include "model_runtime.h"   /* Dmc3Vec3 / Dmc3Uv / Dmc3ModelObject / Dmc3Texture types */
+#include "model_blend.h"
+int model_blend_off;
 #include "enemy_runtime.h"
 #include "enemy_ai_runtime.h"
 #include "agni_rudra_scripts.h"
@@ -494,7 +496,7 @@ static int kind_health(int kind) {
 
 
 static Enemy *last_spawned;   /* for the room script's values (enemy_set_spawn_param) */
-static void spawn_one(int kind, float x, float z) {
+static void spawn_one_body(int kind, float x, float z) {
     const EnemyModel *m;
     int i;
     last_spawned = e;
@@ -609,7 +611,43 @@ static void spawn_one(int kind, float x, float z) {
     script_play(0);
     e->fade = 0.0f;
 }
-
+/* Tests: how long each boss's spawn takes, the first time (its model's buffers made: load_data) and the last time
+ * after, in microseconds of the PSP's clock (PPSSPP's emulated time). enemy_spawn_timing reports them. */
+static unsigned int boss_spawn_us[2][6];
+static int boss_slot(int kind) {
+    return kind == ENEMY_VERGIL ? 0 : kind == ENEMY_CERBERUS ? 1 : kind == ENEMY_GERYON ? 2 : kind == ENEMY_ARKHAM ? 3
+         : kind == ENEMY_DOPPELGANGER ? 4 : kind == ENEMY_VANGUARD ? 5 : -1;
+}
+static void spawn_one(int kind, float x, float z) {
+    int b = boss_slot(kind);
+    unsigned int t0 = sceKernelGetSystemTimeLow(), us;
+    spawn_one_body(kind, x, z);
+    if (b < 0) return;
+    us = sceKernelGetSystemTimeLow() - t0;
+    if (!boss_spawn_us[0][b]) boss_spawn_us[0][b] = us ? us : 1; else boss_spawn_us[1][b] = us ? us : 1;
+}
+/* A room's script spawns this class: a boss's model buffers are made now, during the room load, not at his spawn
+ * (21-26 ms on the PSP's clock the first time: textures copied and swizzled). */
+static unsigned int boss_preload_us[6];
+void enemy_preload_class(int spawn_class) {
+    int b = boss_slot(enemy_kind_for_class(spawn_class));
+    unsigned int t0 = sceKernelGetSystemTimeLow();
+    switch (enemy_kind_for_class(spawn_class)) {
+    case ENEMY_VERGIL: vergil_boss_data_load(); break;
+    case ENEMY_CERBERUS: cerberus_boss_data_load(); break;
+    case ENEMY_GERYON: geryon_boss_data_load(); break;
+    case ENEMY_ARKHAM: arkham_boss_data_load(); break;
+    case ENEMY_DOPPELGANGER: doppelganger_boss_data_load(); break;
+    case ENEMY_VANGUARD: vanguard_data_load(); break;
+    default: break;
+    }
+    if (b >= 0) boss_preload_us[b] += sceKernelGetSystemTimeLow() - t0;   /* tests: the room load's share */
+}void enemy_spawn_timing(char *out, int size) {
+    snprintf(out, (size_t)size, "bossspawn_us vergil=%u/%u cerberus=%u/%u geryon=%u/%u arkham=%u/%u doppel=%u/%u vanguard=%u/%u preload_us %u %u %u %u %u %u",
+             boss_spawn_us[0][0], boss_spawn_us[1][0], boss_spawn_us[0][1], boss_spawn_us[1][1], boss_spawn_us[0][2], boss_spawn_us[1][2],
+             boss_spawn_us[0][3], boss_spawn_us[1][3], boss_spawn_us[0][4], boss_spawn_us[1][4], boss_spawn_us[0][5], boss_spawn_us[1][5],
+             boss_preload_us[0], boss_preload_us[1], boss_preload_us[2], boss_preload_us[3], boss_preload_us[4], boss_preload_us[5]);
+}
 void enemy_spawn(float x, float z) {
     int i;
     for (i = 1; i < ENEMY_MAX; ++i) enemies[i].active = 0;
@@ -782,6 +820,10 @@ void enemy_set_count(int count, float x, float z) {
     int i;
     if (count == 0) for (i = 0; i < ARROW_MAX_PUBLIC; ++i) arrows_clear(i);
     if (count == 0) { coffins_reset(); giga_clear(); }
+    if (count == 0) {   /* a room change: bosses that aren't up give their model's buffers back (made again at their spawn) */
+        vergil_boss_data_release(); cerberus_boss_data_release(); geryon_boss_data_release();
+        arkham_boss_data_release(); doppelganger_boss_data_release(); vanguard_data_release();
+    }
     for (i = 0; i < ENEMY_MAX; ++i) {
         e = &enemies[i];
         if (i >= count) {
@@ -2556,7 +2598,7 @@ static void pose_parts(void) {
     while (steps-- > 0) {
         for (c = 0; c < m->cloth_count; ++c) {
             const EnemyCloth *cl = &m->cloths[c];
-            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness, cl->axis, cl->limit};
+            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness, cl->axis, cl->limit, 0};
             ClothCapsule caps[4];
             int n = cl->capsule_count < 4 ? cl->capsule_count : 4;
             for (k = 0; k < n; ++k) {
@@ -2696,6 +2738,8 @@ static void update_pose(float elapsed, float interval, int index, int count) {
 
 static void draw_one(void) {
     int i, bound = -1, translucent, blend_was = 0;
+    unsigned int blend_on = 0;
+    int blend_before = 0;
     if (e->hidden) return;
     const EnemyModel *m = &enemy_models[e->kind];
     const EnemyTextureSet *set = &enemy_texture_sets[m->texture_set];
@@ -2740,6 +2784,11 @@ static void draw_one(void) {
             sceGuTexImage(0, set->textures[bound].width, set->textures[bound].height, set->textures[bound].width, tex[bound]);
             sceGuTexFlush();
         }
+        if (o->blend != blend_on) {
+            if (!blend_on) blend_before = sceGuGetStatus(GU_BLEND);
+            model_object_blend(o->blend, blend_before);
+            blend_on = o->blend;
+        }
         if (m->object_scroll[i] >= 0) {
             /* A .TSC scroll (FUN_0019daf0): the texture slides, wrapping. */
             const float *uv = scroll_uv[e->kind][m->object_scroll[i]];
@@ -2752,6 +2801,7 @@ static void draw_one(void) {
         }
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[e->kind] + o->index_start, e->vertices);
     }
+    if (blend_on) model_object_blend(0, blend_before);
     if (e->kind == ENEMY_GOYLE || e->kind == ENEMY_AGNI || e->kind == ENEMY_RUDRA) { sceGuAmbientColor(0xffffffffu); sceGuColor(0xffffffffu); sceGuEnable(GU_TEXTURE_2D); }
     if (e->kind != ENEMY_ENIGMA && e->kind != ENEMY_GOYLE) {
         /* The weapon in its hand: a Seven Hell's scythe. The Enigma's bows are part of its body. */
@@ -6721,6 +6771,10 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     const Motion *m;
     float g;
     int token = fallen_rest <= 0.0f, had = token;
+    /* The brain keeps its own position: take back where the walls left it (body_move), or each frame it puts the
+     * body back where they stopped it and the sweep runs the whole way again (6 m, 25 ms a frame, Mission 15's 222).
+     * Not while it comes in through the wall (0xe), which isn't walled (below). */
+    if (!fallen_appearing(b)) { b->pos[0] = e->pos[0]; b->pos[2] = e->pos[2]; }
     {
         int k;   /* the clock runs once a frame: on the first Fallen's turn */
         for (k = 0; k < ENEMY_MAX && !(enemies[k].active && enemies[k].kind == ENEMY_FALLEN); ++k) {}
@@ -6752,6 +6806,7 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     e->pos[0] = b->pos[0]; e->pos[1] = b->pos[1]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
     e->floor_y = b->floor_y;
     e->air = fallen_flying(b);
+    if (fallen_appearing(b)) e->placed = 1;   /* through the wall: a placement, not a walled move */
     if (b->restart || fallen_motion_id[b->want] != e->motion) { fallen_play(b->want, b->restart); b->restart = 0; }
     if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* its attack record's damage */
     if (b->spear) {
@@ -6871,11 +6926,17 @@ static void lady_update_glue(float f, float px, float py, float pz) {
             lady_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, sight);
             if (b->ally && b->ally_hit && target) {
                 ++ally_landed;
-                /* Her shot on its target: as a hit of Dante's of its weight (her damage on them isn't decoded). */
+                /* Her shot on its target, with its attack record's damage. Her bullet (FUN_00483ad0, vtable 0x6106a0)
+                 * takes the ally flag (+0x46d); FUN_004c89b0 then gives its hit team 1, which hits enemies, not
+                 * Dante, with the same record (0x5cbc40: 80). The rocket is record_damage's 1500. In the port's health
+                 * (ENEMY_HEALTH a Pride's 250) that's 2 of Dante's pistol hits, or 18 heavy ones, each through the
+                 * target's own hit code, until it dies. */
                 Enemy *was = e;
                 float lx = e->pos[0], lz = e->pos[2];
+                int heavy = b->ally_hit == 2, units = (int)(b->ally_hit_damage * ENEMY_HEALTH / 250.0f + 0.5f), n;
                 e = target;
-                enemy_hit(b->ally_hit == 2 ? HIT_HEAVY : HIT_PISTOL, lx, lz);
+                for (n = 0; n < units && e->active && e->plan != P_DEATH; n += heavy ? 2 : 1)
+                    enemy_hit(heavy ? HIT_HEAVY : HIT_PISTOL, lx, lz);
                 e = was;
             }
         }

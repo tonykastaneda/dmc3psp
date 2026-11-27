@@ -17,6 +17,7 @@
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "model_runtime.h"
+#include "model_blend.h"
 #include "boss_cerberus_runtime.h"
 #include "boss_cerberus_scripts.h"
 
@@ -428,7 +429,8 @@ static int object_visible(int part, int object) {
 }
 static void draw_part(int part) {
     const CerberusMesh *m = &cerberus_parts[part];
-    int i, bound = -1;
+    int i, bound = -1, was = sceGuGetStatus(GU_BLEND);
+    unsigned int blend = 0;
     for (i = 0; i < m->objects_count; ++i) {
         const Dmc3ModelObject *o = &m->objects[i];
         if (!object_visible(part, i)) continue;
@@ -440,8 +442,10 @@ static void draw_part(int part) {
             sceGuTexImage(0, t->width, t->height, t->width, textures[bound]);
             sceGuTexFlush();
         }
+        if (o->blend != blend) { model_object_blend(o->blend, was); blend = o->blend; }
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[part] + o->index_start, vertices[part]);
     }
+    if (blend) model_object_blend(0, was);
 }
 static void chain_transforms(int chain) {
     static const int body_bones[3] = {11, 9, 10};
@@ -500,15 +504,15 @@ void cerberus_boss_draw(void) {
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     draw_part(PART_BODY);
-    draw_part(PART_BODY_ICE);
     draw_part(PART_COLLAR);
     for (i = 0; i < 3; ++i) {
         draw_part(PART_HEAD0 + i);
-        if (cb.head_alive[i]) {
-            draw_part(PART_HEAD_ICE0 + i);
-            draw_part(PART_SMALL0 + i);
-        }
+        if (cb.head_alive[i]) draw_part(PART_SMALL0 + i);
     }
+    /* The ice armour is additive (its MOD objects' byte 8 is 2), so it goes on after what it covers. */
+    draw_part(PART_BODY_ICE);
+    for (i = 0; i < 3; ++i)
+        if (cb.head_alive[i]) draw_part(PART_HEAD_ICE0 + i);
     for (i = 0; i < 5; ++i) {
         if (cb.chains_detached && i > 0) continue;
         /* GE reads vertex memory asynchronously: each queued chain needs its
@@ -1423,7 +1427,9 @@ int cerberus_boss_update(float frames, float px, float py, float pz, int attacks
 }
 
 /* ---- Lifetime ------------------------------------------------------------ */
+static int load_data(void);   /* the model's buffers, made at the first spawn (below) */
 void cerberus_boss_spawn(void) {
+    if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     int i, j;
     memset(&cb, 0, sizeof(cb));
     cb.active = 1;
@@ -1544,22 +1550,24 @@ void cerberus_boss_clamp_player(float *z) {
     if (!cb.active || cb.dying) return;
     *z = fmaxf(1400.0f, fminf(3000.0f, *z));
 }
-int cerberus_boss_init(void) {
-    int bank, i, j;
-    for (bank = 0; bank < 4; ++bank) {
-        const char *prefix = bank == 0 ? "cb" : bank == 1 ? "c0" : bank == 2 ? "c1" : "c2";
-        for (i = 0; i < 60; ++i) {
-            char name[8];
-            snprintf(name, sizeof(name), "%s-%02d", prefix, i);
-            motion_ids[bank][i] = motion_find(name);
-        }
-        if (motion_ids[bank][0] < 0) return 0;
-    }
+/* Its model's buffers (skinned vertices, indices, swizzled textures) are made at its first spawn, not at boot, and
+ * freed by cerberus_boss_data_release when a room is left without it (docs/MEMORY.md): bosses held about 2.7 MB in every mission. */
+static int data_ready;
+static void free_data(void) {
+    int i;
+    for (i = 0; i < CERBERUS_PART_COUNT; ++i) { free(vertices[i]); free(indices[i]); vertices[i] = 0; indices[i] = 0; }
+    for (i = 0; i < CERBERUS_TEXTURE_COUNT; ++i) { free(textures[i]); textures[i] = 0; }
+    data_ready = 0;
+}
+void cerberus_boss_data_release(void) { if (!cb.active) free_data(); }
+static int load_data(void) {
+    int i, j;
+    if (data_ready) return 1;
     for (i = 0; i < CERBERUS_PART_COUNT; ++i) {
         const CerberusMesh *m = &cerberus_parts[i];
         vertices[i] = memalign(16, sizeof(Vertex) * m->vertices * (i == PART_CHAIN ? 5 : 1));
         indices[i] = memalign(16, sizeof(unsigned short) * m->indices_count);
-        if (!vertices[i] || !indices[i]) return 0;
+        if (!vertices[i] || !indices[i]) { free_data(); return 0; }
         memcpy(indices[i], m->indices, sizeof(unsigned short) * m->indices_count);
         for (j = 0; j < m->vertices; ++j) {
             vertices[i][j].u = m->uvs[j].u;
@@ -1574,10 +1582,25 @@ int cerberus_boss_init(void) {
         const Dmc3Texture *t = &cerberus_textures[i];
         size_t bytes = (size_t)t->width * t->height;
         textures[i] = memalign(16, bytes);
-        if (!textures[i]) return 0;
+        if (!textures[i]) { free_data(); return 0; }
         memcpy(textures[i], t->rgba, bytes);
-        if (!swizzle_texture8(textures[i], t->width, t->height)) return 0;
+        if (!swizzle_texture8(textures[i], t->width, t->height)) { free_data(); return 0; }
     }
     sceKernelDcacheWritebackAll();
+    data_ready = 1;
     return 1;
 }
+int cerberus_boss_init(void) {
+    int bank, i;
+    for (bank = 0; bank < 4; ++bank) {
+        const char *prefix = bank == 0 ? "cb" : bank == 1 ? "c0" : bank == 2 ? "c1" : "c2";
+        for (i = 0; i < 60; ++i) {
+            char name[8];
+            snprintf(name, sizeof(name), "%s-%02d", prefix, i);
+            motion_ids[bank][i] = motion_find(name);
+        }
+        if (motion_ids[bank][0] < 0) return 0;
+    }
+    return 1;
+}
+int cerberus_boss_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */
