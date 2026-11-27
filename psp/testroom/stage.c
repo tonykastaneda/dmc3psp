@@ -70,6 +70,61 @@ static StageInfo info;
 static StageInfo collision_info;
 static unsigned char *chunk_visible;   /* per chunk, this frame */
 static unsigned int chunk_total;
+/* An alpha-tested page whose opaque texels are a near-black field along one edge and a cut-out with bright
+ * veins on the rest (room 421 texture 6, the slab across demo 53). Alpha test draws that field solid black
+ * over the stone; adding it leaves the stone and keeps the veins. */
+#define GLOW_TEX_MAX 256
+static unsigned char tex_glow[GLOW_TEX_MAX];
+
+static void mark_glow_plates(void) {
+    const TexEntry *textures;
+    unsigned int i;
+    memset(tex_glow, 0, sizeof tex_glow);
+    if (!header || header->textures == 0) return;
+    textures = (const TexEntry *)(blob + header->tex_table);
+    for (i = 0; i < header->textures && i < GLOW_TEX_MAX; ++i) {
+        const TexEntry *t = &textures[i];
+        const unsigned char *sw;
+        const unsigned int *pal;
+        unsigned int x, y, n, area, clear = 0, black = 0, vein = 0, band[4];
+        unsigned int bh, bhi;
+        if (t->alpha != 1 || t->w < 16 || t->h < 32 || (t->w & 15) || (t->h & 7)) continue;
+        if (!t->levels || !t->level_offset[0] || !t->level_offset[7]) continue;
+        sw = blob + t->level_offset[0];
+        pal = (const unsigned int *)(blob + t->level_offset[7]);
+        n = t->w * t->h;
+        bh = t->h / 4;
+        area = bh * t->w;
+        band[0] = band[1] = band[2] = band[3] = 0;
+        for (y = 0; y < t->h; ++y) {
+            bhi = y / bh;
+            if (bhi > 3) bhi = 3;
+            for (x = 0; x < t->w; ++x) {
+                unsigned int block = ((y / 8) * (t->w / 16) + (x / 16)) * 128u + (y & 7) * 16u + (x & 15);
+                unsigned int word = pal[sw[block]];
+                unsigned int r = word & 255u, g = (word >> 8) & 255u, b = (word >> 16) & 255u, a = word >> 24;
+                unsigned int mx = r > g ? r : g;
+                if (b > mx) mx = b;
+                if (a < 16u) ++clear;
+                else if (a > 240u && mx < 32u) { ++black; ++band[bhi]; }
+                else if (a > 240u && mx > 100u) ++vein;
+            }
+        }
+        /* A cut-out, a real black field and bright veins, with the black piled on one edge of the page. */
+        {
+            unsigned int edge = band[0] > band[3] ? band[0] : band[3];
+            unsigned int peak = edge, lo = band[0];
+            int k;
+            for (k = 1; k < 4; ++k) {
+                if (band[k] > peak) peak = band[k];
+                if (band[k] < lo) lo = band[k];
+            }
+            if (clear * 20u > n * 3u && black * 25u > n * 3u && vein * 25u > n &&
+                edge * 20u > area * 11u && edge == peak && lo * 25u < area * 3u)
+                tex_glow[i] = 1;
+        }
+    }
+}
 
 /* The stage's buffer is kept and a new stage read into it when it fits (a cutscene's stage in the room's place, then
  * the room's again): freed and taken again, a room's few MB don't always come back in one piece. */
@@ -121,6 +176,7 @@ int stage_load(const char *path) {
         }
     }
     sceKernelDcacheWritebackAll();
+    mark_glow_plates();
     hits = (const HitsHeader *)(blob + 0x80);
     memcpy(info.spawn, header->spawn, sizeof(info.spawn));
     info.spawn_yaw = header->spawn_yaw;
@@ -226,7 +282,7 @@ void stage_draw(void) {
     const Chunk *chunks;
     const unsigned char *vertices;
     unsigned int i;
-    int bound = -1, decal_mode = 0, blend_mode = 0;
+    int bound = -1, decal_mode = 0, blend_mode = 0, add_mode = 0;
     if (!header) return;
     textures = (const TexEntry *)(blob + header->tex_table);
     batches = (const Batch *)(blob + header->batch_table);
@@ -320,16 +376,26 @@ void stage_draw(void) {
             bound = (int)b->texture;
         }
         if (b->flags & BATCH_ALPHA) sceGuEnable(GU_ALPHA_TEST); else sceGuDisable(GU_ALPHA_TEST);
-        if (((b->flags & BATCH_BLEND) != 0) != blend_mode) {
-            /* Translucent overlays (drawn last): blend, keep depth test, no depth writes. */
-            blend_mode = (b->flags & BATCH_BLEND) != 0;
-            if (blend_mode) {
-                sceGuEnable(GU_BLEND);
-                sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
-                sceGuDepthMask(GU_TRUE);
-            } else {
-                sceGuDisable(GU_BLEND);
-                sceGuDepthMask(GU_FALSE);
+        {
+            /* A glow plate adds: its black field contributes nothing and the veins sit on the stone.
+             * Other translucent batches blend and keep the depth test, without depth writes. */
+            int glow = (b->flags & BATCH_ALPHA) && b->texture < GLOW_TEX_MAX && tex_glow[b->texture];
+            int want_blend = !glow && (b->flags & BATCH_BLEND) != 0;
+            if (glow != add_mode || want_blend != blend_mode) {
+                add_mode = glow;
+                blend_mode = want_blend;
+                if (glow) {
+                    sceGuEnable(GU_BLEND);
+                    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffffu);
+                    sceGuDepthMask(GU_TRUE);
+                } else if (want_blend) {
+                    sceGuEnable(GU_BLEND);
+                    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+                    sceGuDepthMask(GU_TRUE);
+                } else {
+                    sceGuDisable(GU_BLEND);
+                    sceGuDepthMask(GU_FALSE);
+                }
             }
         }
         if (((b->flags & BATCH_DECAL) != 0) != decal_mode) {

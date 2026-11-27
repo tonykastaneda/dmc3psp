@@ -126,7 +126,7 @@ credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
 Arkham's blob (demo 53) were looked at in the port only (no save state reaches those demos): their textures and
 faces read right. Still different, not textures: the stages' light (the PS2's ending street
-is bluer), and a black slab across demo 53's frame 2300 (its stage).
+is bluer).
 
 **The blend on gameplay models.** The byte's low 4 bits are the table index (the table has 16 entries: 4 is 0xa1 with
 FIX 0x80, Cd − Cs; 5-15 are on no character); bits 4 and 5 (0x10 / 0x20, values 16-19 and 48, nearly all on EFM
@@ -258,7 +258,7 @@ at (frame - SetFrame) / ClipScale + SkipFrame from its start, MOT's Hermite with
 clear linear to the next) and DSTG_nnn.BIN (slot 00's `.scm` and texture set through `tools/prepare_stage.py --scm --ptx`,
 its play area the cameras' reach). `psp/testroom/demo.c` plays it at 60 frames a second: the stage and the camera
 (channel 12 as a vertical field of view, channel 13 as roll). A demo is scissored to a centred 4:3 picture on the
-16:9 screen, the PS2 television's aspect; gameplay keeps the wider view. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
+16:9 screen, the PS2 television's aspect; gameplay keeps the wider view. Room 421 texture 6, the crack page that drew as a black plate across demo 53's frame 2300, is added, so the plate no longer replaces the stone. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
 arena through its cuts. **The cast**: each model slot's MOD (slimmed as the enemies'), its texture set (8-bit, swizzled), its motion clips
 (MOT, streamed: the BIN keeps all but the motions resident, 1.5 MB for demo 5, and reads a clip's MOT 20 frames before
 it starts, freeing it after). Two things the demos showed: **a cutscene MOT stores a bone's translation records first**,
