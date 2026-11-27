@@ -247,7 +247,8 @@ def main():
              "typedef struct { const NfxRecord *v; int v_count; const NfxRecord *e; int e_count; const NfxTexture *textures; int texture_count; const NfxModel *models; int model_count; const NfxRecord *p; int p_count; const NfxRecord *a; int a_count; } NfxBank;"]
     summary = []
     # P44 (dust): the Arachne's landings start it from the shared pack (FUN_003fb580 and its kin).
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V, ORB_E, (44,)))
+    # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0).
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c), ORB_E, (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,
@@ -269,9 +270,11 @@ def main():
     # 11 room 405's effect pack (GDATA 758): Mission 19's mirrors (CStageSetMirror: V0x1ea shattering; their E0x2e0 glow is a model
     # whose texture reference isn't decoded, so mission19.c keeps its stand-in).
     summary.append(write_bank(lines, 11, records(read(758)), (0x1ea,), ()))
+    # 12 a stage effect pack (GDATA 526; 646 has the same): the crystals' V554 (a type-3 crystal struck, FUN_004203c0).
+    summary.append(write_bank(lines, 12, records(read(526)), (554,), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 
