@@ -277,10 +277,11 @@ def main():
     summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c), ()))
     # st423's effect bank (GDATA 830), shared by the ten Palace arena variants.
     # STAY 100/101/102 explicitly name V965/V967/V964 (water/lightning/fire).
-    summary.append(write_bank(lines, 14, records(read(830)), (965,967,964), ()))
+    # Leave 14-18 free for cl3's gun banks, reported in the run coordination log.
+    summary.append(write_bank(lines, 19, records(read(830)), (965,967,964), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

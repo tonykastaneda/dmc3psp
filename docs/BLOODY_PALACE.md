@@ -100,7 +100,7 @@ Readiness follows the three 60-frame ordinary portal reveals; boss exit readines
 `camera.c` starts ordinary Palace arena sweeps at Dante's head because the default (2500,200,2500) lies below
 the arena floor at approximately y=514. This is an explicit fallback, not a recovered PS2 camera initialization.
 The level label and portal legend use the menu font. Arena STAY 100/101/102 name **V965/V967/V964** at y=517:
-water/lightning/fire for +1/+10/+100. Their effect bank is **GDATA 830**, shared by st423–432. Bank 7 in `nfx.c`
+water/lightning/fire for +1/+10/+100. Their effect bank is **GDATA 830**, shared by st423–432. Bank 19 in `nfx.c`
 plays these through the native effect runtime; the generated closure has 23 V/G, 27 E, seven P, 17 textures,
 and ten models, with no missing G children. `bp_native_portals_280.png` is the first PPSSPP visual check.
 Arrival rewards use the event's positions and decoded recovery amounts; their mote visuals, simplified falling
@@ -130,3 +130,9 @@ changes the visible orb count from 27 to 327 (`bp_rewards_350.png`, `_380.png`);
 `bp_cerberus_verified` checks the decoded entry warp with a live Cerberus and return to Level 500
 (`bp_cerberus_verified_60.png`, `_550.png`). `bp_story_regression` checks Mission 20 room 411 after integration
 (`bp_story_regression_60.png`), with Palace inactive. Final build and the protected-credit check pass.
+
+The effects merge preserves cl3's banks 7–13 and reserves 14–18 for its in-flight gun effects; Palace uses 19.
+A full `-Regenerate` rebuild is checked in `bp_merge_verified2_280.png` and Mission 19's mirror shatter in
+`bp_merge_m19_mirror_20.png` / `_35.png` (bank 11, V490/P113). Startup now reads the requested mode before
+allocating its menu or test street: holding the unused 5.4 MiB street reserve caused the 10.5 MiB menu
+allocation to fail after the larger merged effect banks. Test capture buffers are allocated afterward.

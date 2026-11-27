@@ -4049,21 +4049,6 @@ int main(int argc, char *argv[]) {
     }
     combat_reset(&combat);
 
-    {
-        /* The Mission 2 street (st001) if STAGE.BIN is next to the EBOOT. */
-        char path[320];
-        path_in_game_dir(path, sizeof(path), "STAGE.BIN");
-        if (stage_load(path)) {
-            const StageInfo *si = stage_info();
-            player_spawn[0] = si->spawn[0];
-            player_spawn[1] = si->spawn[1];
-            player_spawn[2] = si->spawn[2];
-            player_spawn[3] = si->spawn_yaw;
-            player_room_limit = 1.0e9f;
-            player_floor_fn = stage_floor;
-            camera_auto_follow = 1;  /* st001's only camera zone is a follow zone */
-        }
-    }
     autotest = game_file_exists("AUTOEXIT.TXT");
     focus = game_file_exists("FOCUS.TXT");
     if (focus) {
@@ -4126,6 +4111,22 @@ int main(int argc, char *argv[]) {
         }
     }
     if (recording) autotest = 0;
+    {
+        char path[320];
+        /* Allocate the large menu before stage reserves/capture buffers.
+         * Menu runs load their selected room below; street tests need only the street. */
+        if ((!focus && !autotest && !recording && !tour) || cmp_menu) {
+            path_in_game_dir(path,sizeof path,"MENU.BIN");
+            menu_load(path);
+        } else {
+            path_in_game_dir(path,sizeof path,"STAGE.BIN");
+            if (stage_load(path)) {
+                const StageInfo *si=stage_info();
+                player_spawn[0]=si->spawn[0];player_spawn[1]=si->spawn[1];player_spawn[2]=si->spawn[2];player_spawn[3]=si->spawn_yaw;
+                player_room_limit=1.0e9f;player_floor_fn=stage_floor;camera_auto_follow=1;
+            }
+        }
+    }
     if (autotest || recording || focus) capture_buffer = memalign(64, FRAMEBUFFER_BYTES);
     player_reset(&player, &camera);
     /* Training dummy in the middle of the street (or ahead of Dante in the grid room). */
@@ -4195,7 +4196,7 @@ int main(int argc, char *argv[]) {
         combat_hit_fn = breakable_hit;
         menu_shop = &shop_state;
         menu_set_mission_mask(MISSION_PRESENT_MASK);
-        if (menu_load(path) && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
+        if (menu_loaded() && ((!focus && !autotest && !recording && !tour) || cmp_menu)) {
             mission_mode = 1;
             mission_stage = 2;   /* what's loaded */
             mission_choice.mission = 1;
@@ -4221,6 +4222,10 @@ int main(int argc, char *argv[]) {
             }
             start_mission(&mission_choice, &player, &camera);
             draw_buffer = menu_draw_buffer;
+        }
+        if (!mission_mode && !stage_loaded()) {
+            path_in_game_dir(path,sizeof path,"STAGE.BIN");
+            stage_load(path);
         }
     }
     last_time = sceKernelGetSystemTimeLow();
