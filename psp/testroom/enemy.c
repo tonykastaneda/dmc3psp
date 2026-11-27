@@ -2558,7 +2558,7 @@ static void pose_parts(void) {
     while (steps-- > 0) {
         for (c = 0; c < m->cloth_count; ++c) {
             const EnemyCloth *cl = &m->cloths[c];
-            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness, cl->axis, cl->limit};
+            ClothParams params = {cl->gravity, cl->spring, cl->max_speed, cl->stiffness, cl->axis, cl->limit, 0};
             ClothCapsule caps[4];
             int n = cl->capsule_count < 4 ? cl->capsule_count : 4;
             for (k = 0; k < n; ++k) {

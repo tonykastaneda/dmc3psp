@@ -207,6 +207,50 @@ file is a list of clips, `# Clip` ... `# End`, every clip with `SetFrame` (its s
   its objects one by one (keys stepped, on the .hid's own clock from its first frame, +0x0c); the demo meshes keep the
   MOD's objects apart (not merged by texture) for it.
 
+## Cloth
+
+A demo's cloth is the gameplay chain (`CCnsChain`, one bone stepped by `FUN_0022f270`). The `.clt` names the free
+bones and the spring values; the physics runs every frame. The motion does not bake the swing. Wind in these scripts
+is 0, and the files carry no capsule list (gameplay coats keep theirs in code).
+
+**Which script.** `FUN_00219dc0` (`0x219dc0`) reads `Cloth` on a model clip. The usual path keeps the model PAC's
+`.clt` (`[3]` / `[4]`) at the clip +`0x34`; a disk path is the other branch at `0x21ab2c`. `FUN_002342b0`
+(`0x2342b0`) loads it onto the model once: `FUN_00230060` reads `ClothNum`, then `FUN_0022fbd0` once per `ClothNo`
+(stride 192, chains at model +11312). `FUN_0021aec0` (`0x21aec0`) reads a motion clip's `Cloth` onto that clip
++`0x24`, and `FUN_00213720` (`0x213720`) loads it only when the pointer is set, so a clip with no `Cloth` key keeps
+the chains already loaded. A clip that names a file replaces them until a later clip names another. The same name in
+the model PAC and the motion PAC can be a different script: demo 5's `wp105.clt` starts at bone 4 with gravity
+-0.05 in the model copy, and at bone 3 with gravity -0.02 in the motion copy.
+
+**ClothMode.** The key is stored at the motion clip +`0x100` and the value at +`0x102`. `FUN_00213720` writes a
+byte at model +16308: a nonzero value becomes 1, and a clip with no key leaves the byte. The model update at
+`0x236140` steps the chains (vtable +200) whenever they are loaded. The byte gates `FUN_00230150` (`0x230150`)
+only, which multiplies the change in the owner's matrix onto each chain node that names this model (node +`0xfc`),
+so the chains ride the root and the body's own motion and gravity are what swing them. Demo 5's `pl101_01` is bound
+from the model clip, never sets ClothMode, and still steps. ClothMode 0 (demo 2 slot 13, demo 5 slot 13, parts of
+demos 23 and 48) skips that ride.
+
+**Reset.** `ResetClt` stores kind 1 at the motion clip +`0xe8`, `ResetClt2` kind 2, and `ResetCltLevel` the
+halfword at +`0xea`. `FUN_00213720` copies the kind to model +16272 and the level to +16276. Kind 1 also sets a
+one-shot at +16280 that clears the velocity words at each chain node +464 before the shared path. When the kind is
+above 0, the frame update calls `FUN_002302d0`: the node's velocity is zeroed and its matrix copied back from the
+rest at +`0x104`, then the chain updates `level` more times when `level` > 0. Level 20 (the usual cut) is a snap
+to rest and twenty settle steps. Level -1 is the snap with no extra settle. The update just before the snap is
+overwritten by it. A reset clip often names no file: the chains already loaded are snapped at the cut.
+
+**Who it hangs on.** Coat pieces are their own MODs, on a CnsPos bone, and the `.clt` lists that piece's free
+bones. The `_01` piece sits on bone 5 and the `_05` piece on bone 3: `pl101` in demo 5 (the Mission 3 opening;
+`pl101` is that demo's Dante), `pl100` in the later missions (demo 44, the Lady entrance, and demo 53). `pl102_01`
+is the other coat on bone 5 in demos 8, 16 and 44. The same keys drive weapons and scenery: `wp105` (a tassel, axis
+NX) and `em108` curtains (bones 4-21, usually from the model clip). `pl101_01` is one chain, bone 2 on NY then
+bones 4, 6 and 8 on Y (gravity -0.02, spring 0.02, stiffness 0.3). Across the unpacked scripts the bone axes are
+Y 4143, NY 139, NX 129, Z 75, NZ 44, X 33, and 27 chains mix axes, so a chain is not one axis. One motion
+`pl101_01.clt` (demo 53) has a Bone line whose axis token is not an axis.
+
+**The other simulator.** `ClothSim1D` (model clip +`0x38`, `FUN_002ec400`, applied from `FUN_002342b0` when that
+pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone pairs on the model work
+(+`0x664`). It is in demos 6, 7, 39 and 41 only. Coats use the chain above.
+
 ## In the port
 
 `tools/prepare_demo.py <iso> <id>` bakes DEMO_nnn.BIN (the camera per demo frame: each camera clip's `.cam` evaluated
@@ -254,7 +298,20 @@ summoning glow is one). 112 P clips (particle programs) aren't played, and timel
 
 **Sound**: a demo's Sound clip names an ADX stream that is the demo's own id, and its file is SDATA.AFS's `<package>.adx` (m03_s00.adx for demo 5): voices and music mixed. prepare_demo decodes it (ffmpeg) to the movies' IMA ADPCM, DAUD_nnn.BIN (`DAU1`, rate, sample pairs, start frame, a byte per stereo pair), and demo.c streams it from the memory stick on its own thread from the clip's frame; both it and the demo clock run on real time. Checked offline: decoded against ffmpeg's own, -42 dB error. 51 tracks, 232 MB.
 
-Not yet: cloth, P effects.
+**Cloth**: a slot's `.clt` chains step with `cloth.c` (`psp/testroom/demo_cloth.c`) in world space. The step is
+`FUN_0022f270` (gravity on world Y) and the joints keep last frame's place, so a bone that moves leaves them behind.
+ClothMode 1, and only 1, rides the parent model's root first (`FUN_00230150`: the new root matrix times the inverse
+of the last), which takes that root's travel and turn back out. In these demos bone 0 stays at the origin and the
+hip channel (bone 1) carries the world pose, so the ride follows the hips; riding bone 0 lets a cut lay the chains
+out along the jump and the coat leaves as a flat sheet. Demo 5's coat never sets the key, so it trails the whole pose. The model clip's script holds until a motion clip names another. `ResetClt` and `ResetClt2` snap to rest
+and, when `ResetCltLevel` is above 0, step that many times at the pose held for the cut (level -1 snaps only; a level
+above 32 is capped; the game's update just before the snap is overwritten by it). Each bone keeps its own axis, NY
+included. These scripts' wind is 0 and they name no capsules. A coat on Dante's 23-bone body still gets the
+gameplay capsules (spine and both legs), so the chains can't hang through him. `ClothSim1D` is not run. A Bone line whose axis token
+is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`);
+bone 8 is X and bone 6 takes that axis.
+
+Not yet: P effects.
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
 3: 8; 4: 10; 6: 15; 8: 20; 9: 24; 10: 26; 11: 30; 12: 35; 15: 42; 18: 50; 20: 59, 60 (`mission_clear_demos`), played when
