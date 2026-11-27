@@ -260,9 +260,11 @@ def main():
     # (FUN_003c9870: P203 / P235 / P251 at random on each).
     summary.append(write_bank(lines, 7, records(pac_list(read(133))[9]), (409, 0x110, 0x1a8 | G_FLAG, 0x97 | G_FLAG), (),
                               (203, 235, 251)))
+    # 8 em034's pack (GDATA 138, PAC entry 28): Lady's rocket (CEm034Shl02: V0x179 in flight, V0x21f as it bursts).
+    summary.append(write_bank(lines, 8, records(pac_list(read(138))[28]), (0x179, 0x21f), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

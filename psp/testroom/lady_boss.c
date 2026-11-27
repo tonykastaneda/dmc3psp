@@ -19,6 +19,7 @@
 #include <pspgum.h>
 #include "lady_boss.h"
 #include "fx.h"
+#include "nfx.h"
 #include "stage.h"
 #include "lady_wire_runtime.h"
 
@@ -195,6 +196,24 @@ static void fire(LadyBrain *b, int kind, float px, float py, float pz, float spr
     }
 }
 
+/* Her rocket (CEm034Shl02: it homes, FUN_0025a7d0) carries V0x179 in flight (FUN_00496540, looping on it) and bursts in
+ * V0x21f as it goes off (FUN_00496a80), from her pack (GDATA 138 [28], nfx bank 8), with their P particles. */
+static void rockets_fx(LadyBrain *b) {
+    int i;
+    for (i = 0; i < LADY_SHOTS; ++i) {
+        LadyShot *s = &b->shots[i];
+        float yaw = atan2f(s->vel[0], s->vel[2]);
+        if (s->on && s->kind == 2) {
+            if (!nfx_alive(s->fx)) s->fx = nfx_spawn(NFX_LADY, 0x179, s->pos, yaw, 1);
+            else nfx_move(s->fx, s->pos, yaw);
+        } else if (s->fx) {
+            nfx_kill(s->fx);
+            s->fx = 0;
+            nfx_spawn(NFX_LADY, 0x21f, s->pos, yaw, 0);
+        }
+    }
+}
+
 static void landed(LadyBrain *b, int heavy, float damage) { b->land = heavy ? 2 : 1; b->land_damage = damage; }
 
 static void shots_update(LadyBrain *b, float f, float px, float py, float pz, int attacks) {
@@ -221,13 +240,13 @@ static void shots_update(LadyBrain *b, float f, float px, float py, float pz, in
         s->life -= f;
         dx = px - s->pos[0]; dy = py + 100.0f - s->pos[1]; dz = pz - s->pos[2];
         if (dx * dx + dz * dz < (s->kind == 2 ? 120.0f * 120.0f : 60.0f * 60.0f) && fabsf(dy) < 140.0f) {
-            if (s->kind == 2) fx_explosion(s->pos);
             if (attacks) landed(b, s->kind != 0, s->kind == 2 ? record_damage[3] : s->kind == 3 ? record_damage[1] : record_damage[0]);
             s->on = 0;
             continue;
         }
-        if (s->life <= 0.0f) { if (s->kind == 2) fx_explosion(s->pos); s->on = 0; }
+        if (s->life <= 0.0f) s->on = 0;
     }
+    rockets_fx(b);
 }
 
 /* The modes' choice: FUN_00445210 from her walk, FUN_004455d0 / FUN_00445a20 between bursts. */
@@ -342,13 +361,13 @@ static void ally_shots(LadyBrain *b, float f) {
         s->life -= f;
         dx = b->target[0] - s->pos[0]; dy = b->target[1] + 100.0f - s->pos[1]; dz = b->target[2] - s->pos[2];
         if (b->has_target && dx * dx + dz * dz < (s->kind == 2 ? 120.0f * 120.0f : 60.0f * 60.0f) && fabsf(dy) < 140.0f) {
-            if (s->kind == 2) fx_explosion(s->pos);
             if (b->ally_hit < 2) { b->ally_hit = s->kind == 2 ? 2 : 1; b->ally_hit_damage = s->kind == 2 ? record_damage[3] : record_damage[0]; }
             s->on = 0;
             continue;
         }
-        if (s->life <= 0.0f) { if (s->kind == 2) fx_explosion(s->pos); s->on = 0; }
+        if (s->life <= 0.0f) s->on = 0;
     }
+    rockets_fx(b);
 }
 
 static void ally_think(LadyBrain *b, float f, float px, float py, float pz) {
