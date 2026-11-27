@@ -121,6 +121,34 @@ weaker or more neutral (its vertex colour or alpha for this object). Not settled
   "Opening" (mission select, DEMO DIGEST, scene select right once) is a pre-rendered movie of demo 1 (its dump is
   full-frame IMAGE uploads, no draws), so the dump has to come from Mission 1 itself.
 
+**Skies, letterbox, framing and the characters' colour** (checked against PCSX2 in Mission 3's opening, demo 5;
+Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_compare.png`, `demo3_compare.png`,
+`demo59_compare.png`, recordings in `analysis/ref/cast/`):
+- **Sky.** A demo stage's sky and horizon are its objects far wider than any play area (over 400 m; st501_3's dome
+  is 370 km across and reaches y 74201, with its far ground, cloud layer and sun glow). The cutscene crops (`--view`,
+  `--crop`) dropped them, so demo 5 showed a flat blue clear colour. `prepare_stage` now keeps those objects whole
+  and flags them sky (drawn first, without depth, farthest first, one chunk each), and `stage.c` draws the sky pass with
+  its far plane at 500000 cm (it was 80000; depth is off for it, so this costs no precision).
+- **The SCM object's blend.** An SCM object record's byte 8 is its blend, as a MOD object's (`scm_ps2` reads it;
+  `prepare_stage` flags the batch 16 additive / 32 subtractive; `stage.c` blends with `model_blend.h`): st501_3's
+  sun glow (texture 8, additive) is the orange blaze on the PS2's horizon.
+- **Exact stage palettes.** Stage pages of 256 colours or fewer now keep them byte for byte (as the models' do since
+  the palette fix); FASTOCTREE had posterised the smooth sky into blotches. Every room's and demo's stage is rebaked.
+- **Letterbox.** The PS2 draws demos with cinema bars, 0.712 of the height showing (measured in PCSX2 in demos 3, 5
+  and 59): `demo_letterbox`, 39 lines top and bottom.
+- **Framing.** Channel 12 is the vertical angle (`FUN_001ac750`) and is drawn across the full 16:9 width, so a
+  demo shows more to either side than a 4:3 television and there are no side bars. The fitted 326-line rescale
+  (`demo_screen_fov`) is not applied. Demos 3, 5, 6, 16, 44 and 53 were checked at wide frames; the extra width is
+  more of the same stage, so none is cropped back to 4:3.
+- **The characters' colour.** The Program track's No 5 (a colour scale, 128 = 1.0: demo 1 210 200 180, demo 47 15 20
+  25) and No 6 (their ambient: 30 20 20 in demos 1-5) [inferred from their values] scale the demo's lights and set
+  the ambient (`demo_program_colour`), replacing the by-eye 0x30 ambient where a demo sets them. Arkham's face in demo
+  5 is now warm like the PS2's. The world's ValidType 3 lights stay off characters: tried, they darkened him.
+- Not ported: the ScrEfc screen effects (FCS / DOF depth-of-field blur, GFG fog, SGA glow, BGA / BGO, ATF): a
+  full-screen blur pass is too costly for the PSP in a demo, so the PS2's soft backgrounds and haze aren't there;
+  demo 3's over-the-shoulder shot (frame 1260) shows holes in Dante's shoulder (the PSP drops triangles crossing its
+  near plane, here 50 cm; a nearer plane put the eye inside his collar).
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
@@ -257,8 +285,8 @@ pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone
 at (frame - SetFrame) / ClipScale + SkipFrame from its start, MOT's Hermite with per-frame slopes, a key with bit 15
 clear linear to the next) and DSTG_nnn.BIN (slot 00's `.scm` and texture set through `tools/prepare_stage.py --scm --ptx`,
 its play area the cameras' reach). `psp/testroom/demo.c` plays it at 60 frames a second: the stage and the camera
-(channel 12 as a vertical field of view, channel 13 as roll). A demo is scissored to a centred 4:3 picture on the
-16:9 screen, the PS2 television's aspect; gameplay keeps the wider view. Room 421 texture 6, the crack page that drew as a black plate across demo 53's frame 2300, is added, so the plate no longer replaces the stone. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
+(channel 12 as a vertical field of view, channel 13 as roll). That angle is drawn across the full 16:9 width, with
+the cinema bars above and below; gameplay uses the same wider frame. Room 421 texture 6, the crack page that drew as a black plate across demo 53's frame 2300, is added, so the plate no longer replaces the stone. Test line `demo n`. Checked in PPSSPP: demo 5's tower top, gate and
 arena through its cuts. **The cast**: each model slot's MOD (slimmed as the enemies'), its texture set (8-bit, swizzled), its motion clips
 (MOT, streamed: the BIN keeps all but the motions resident, 1.5 MB for demo 5, and reads a clip's MOT 20 frames before
 it starts, freeing it after). Two things the demos showed: **a cutscene MOT stores a bone's translation records first**,

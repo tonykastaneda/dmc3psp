@@ -2,6 +2,7 @@
 
 #include <pspgu.h>
 #include <pspgum.h>
+#include "model_blend.h"
 #include <pspiofilemgr.h>
 #include <psputils.h>
 
@@ -30,6 +31,12 @@ typedef struct { unsigned int first, count; } Cell;
 #define BATCH_DECAL 2
 #define BATCH_BLEND 4
 #define BATCH_SKY 8     /* tools/prepare_stage.py: a STAY sky dome, drawn first past the far plane */
+#define BATCH_ADD 16    /* the SCM object's blend (byte 8): 2 additive */
+#define BATCH_SUB 32    /* 3 subtractive */
+/* A batch's blend: 0 opaque, 1 alpha, 2 additive, 3 subtractive (model_blend.h's numbers). */
+static int batch_blend(unsigned int flags) {
+    return (flags & BATCH_ADD) ? 2 : (flags & BATCH_SUB) ? 3 : (flags & BATCH_BLEND) ? 1 : 0;
+}
 /* Depth bias for coplanar overlays (prepare_stage.py flags them). With the
  * depth range 65535 (near) .. 0 (far), a positive offset pulls them toward
  * the camera just enough to win against their base surface. */
@@ -282,7 +289,7 @@ void stage_draw(void) {
     const Chunk *chunks;
     const unsigned char *vertices;
     unsigned int i;
-    int bound = -1, decal_mode = 0, blend_mode = 0, add_mode = 0;
+    int bound = -1, decal_mode = 0, blend_mode = 0;
     if (!header) return;
     textures = (const TexEntry *)(blob + header->tex_table);
     batches = (const Batch *)(blob + header->batch_table);
@@ -306,10 +313,11 @@ void stage_draw(void) {
     sceGuTexWrap(GU_REPEAT, GU_REPEAT);   /* stage UVs tile */
     sceGuColor(0xffffffff);
     {
-        /* The sky (BATCH_SKY, ordered first): under the same projection with its far plane moved out to 80000 (the
-         * stage's is 16000; st012's dome reaches 45052), without depth, so everything else draws over it. */
+        /* The sky (BATCH_SKY, ordered first): under the same projection with its far plane moved out to 500000 (the
+         * stage's is 16000; st012's dome reaches 45052, demo 5's st501_3 sky and far ground 185000 and more),
+         * without depth, so everything else draws over it. */
         ScePspFMatrix4 far = cull_proj;
-        float a = cull_proj.z.z, bz = cull_proj.w.z, n = bz / (a - 1.0f), f = 80000.0f;
+        float a = cull_proj.z.z, bz = cull_proj.w.z, n = bz / (a - 1.0f), f = 500000.0f;
         int sky = 0;
         for (i = 0; !sky_off && i < header->batches && (batches[i].flags & BATCH_SKY); ++i) {
             const Batch *b = &batches[i];
@@ -324,6 +332,8 @@ void stage_draw(void) {
             }
             bind_texture(&textures[b->texture]);
             bound = (int)b->texture;
+            if (batch_blend(b->flags) >= 2) model_object_blend((unsigned int)batch_blend(b->flags), 1);
+            else sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             for (k = 0; k < b->chunk_count; ++k) {
                 const Chunk *c = &chunks[b->chunk_first + k];
                 /* chunk_hidden tests the sides and the eye, not the far plane, so it holds for the sky's chunks too. */
@@ -335,6 +345,8 @@ void stage_draw(void) {
         if (sky) {
             sceGumMatrixMode(GU_PROJECTION); sceGumLoadMatrix(&cull_proj); sceGumMatrixMode(GU_MODEL);
             sceGuEnable(GU_DEPTH_TEST);
+            sceGuDepthMask(GU_FALSE);   /* a glow batch turned depth writes off */
+            sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             sceGuDisable(GU_BLEND);
         }
     }
@@ -377,18 +389,14 @@ void stage_draw(void) {
         }
         if (b->flags & BATCH_ALPHA) sceGuEnable(GU_ALPHA_TEST); else sceGuDisable(GU_ALPHA_TEST);
         {
-            /* A glow plate adds: its black field contributes nothing and the veins sit on the stone.
-             * Other translucent batches blend and keep the depth test, without depth writes. */
+            /* A glow plate adds, like an SCM object's additive blend: its black field contributes nothing and the
+             * veins sit on the stone. Other translucent batches blend. Neither writes depth. */
             int glow = (b->flags & BATCH_ALPHA) && b->texture < GLOW_TEX_MAX && tex_glow[b->texture];
-            int want_blend = !glow && (b->flags & BATCH_BLEND) != 0;
-            if (glow != add_mode || want_blend != blend_mode) {
-                add_mode = glow;
-                blend_mode = want_blend;
-                if (glow) {
-                    sceGuEnable(GU_BLEND);
-                    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_FIX, 0, 0xffffffffu);
-                    sceGuDepthMask(GU_TRUE);
-                } else if (want_blend) {
+            int want = glow ? 2 : batch_blend(b->flags);
+            if (want != blend_mode) {
+                blend_mode = want;
+                if (want >= 2) model_object_blend((unsigned int)want, 1);
+                else if (want) {
                     sceGuEnable(GU_BLEND);
                     sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
                     sceGuDepthMask(GU_TRUE);
