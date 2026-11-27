@@ -2006,7 +2006,7 @@ static int cmp_melee = -1, cmp_gun = -1, cmp_lineup, cmp_ownall, cmp_m6_got;
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
 static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
-static int cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at;
+static int cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
 static int cmp_boss_hits[8][2], cmp_boss_hit_count;   /* "bosshits frame n": every enemy alive then takes n heavy hits */
 static struct { unsigned int button; int frame; } game_keys[MENU_SCRIPT_MAX];   /* "gkey button frame": menus in game */
 static int game_key_count;
@@ -2102,6 +2102,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "trim ", 5) == 0) sscanf(line + 5, "%d %d", &cmp_trim_at, &cmp_trim_keep);   /* "trim frame n": keep n enemies */
         else if (strncmp(line, "fastwaves ", 10) == 0) cmp_fastwaves = atoi(line + 10);
         else if (strncmp(line, "creditsat ", 10) == 0) cmp_credits_at = atoi(line + 10);   /* tests: M20's street from this frame */
+        else if (strncmp(line, "creditskills ", 13) == 0) cmp_credits_kills = atoi(line + 13);   /* tests: ... with these kills */
         else if (strncmp(line, "events ", 7) == 0) cmp_events_play = atoi(line + 7);   /* 1: play the scripts' events */
         else if (strncmp(line, "clearminions ", 13) == 0) cmp_clear_minions = atoi(line + 13);
         else if (strncmp(line, "mshot ", 6) == 0) { if (menu_shot_count < MENU_SCRIPT_MAX) menu_shots[menu_shot_count++] = atoi(line + 6); }
@@ -3241,7 +3242,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
     int done = held || script_run(dt, player->y), i, in_a_box = 0;
     if(mission_choice.mission==20 && room_number(mission_room)==12){
         /* EventTbl20's room 12 script: credits_fight.c. */
-        if(!credits_fight_active()){credits_fight_begin();if(focus_cmp && cmp_credits_at)credits_fight_skip((float)cmp_credits_at);}
+        if(!credits_fight_active()){credits_fight_begin();if(focus_cmp && cmp_credits_at)credits_fight_skip((float)cmp_credits_at);if(focus_cmp && cmp_credits_kills)credits_fight_test_kills(cmp_credits_kills);}
         m20_ending_frames+=dt*60;
         if(credits_fight_update(dt*60) && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;}
     }
@@ -4497,7 +4498,7 @@ int main(int argc, char *argv[]) {
         if (combat_ready && !anim.viewer) {
             MoveId before = combat.move;
             /* Devil Trigger runs him 1.1x as fast (HD Collection traces). */
-            combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);
+            if (!credits_fight_frozen()) combat_update(&combat, &player, &input, player.devil ? dt * 1.1f : dt);   /* op 7e [3] stops him */
             {   /* His moves' sound events (gen_sfx.py: the motion definitions' 0x30 / 0x34) as their frames pass. */
                 static int sfx_m = -1; static float sfx_f, sfx_t;
                 int m = combat.action ? combat.motion : -1;
@@ -4564,7 +4565,7 @@ int main(int argc, char *argv[]) {
             }
             /* Reading a message, or an event on (FUN_0021fd50(player, 1)): no input reaches him. */
             if (mission_mode && (msg_busy() || msg_event_on())) { memset(&input, 0, sizeof(input)); input.style = -1; }
-            player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
+            if (!credits_fight_frozen()) player_update(&player, &camera, &input, player.devil ? dt * 1.1f : dt);
             /* Walls along the whole way he moved this frame, not just where he ended: a dash or a long frame
              * covers more than his radius, and pushing out from the end alone lets him through a wall (Mission
              * 3's bar, its east wall at x 3000, during Trickster's dash). Steps of at most 15 cm, from where
@@ -4594,7 +4595,7 @@ int main(int argc, char *argv[]) {
                  * them isn't decoded), so they don't set on a Dante who can't move. */
                 if (!(mission_mode && msg_event_on()))
                     enemy_set_dante_yaw(player.yaw);
-            enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
+            if (!credits_fight_frozen()) enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
             {
                 float drained = enemy_take_dt_drain() / 1000.0f;   /* runes [1000 a rune inferred] */
                 if (drained > 0.0f && !player.devil) { player.dt_energy -= drained; if (player.dt_energy < 0.0f) player.dt_energy = 0.0f; }

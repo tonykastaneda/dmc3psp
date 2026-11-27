@@ -15,6 +15,7 @@ int credits_fight_frozen(void);           /* op 7e [3]: Dante and the enemies st
 float credits_fight_clock(void);          /* frames since the room's on-enter block */
 int credits_fight_extended(void);         /* op 7e [2] found 100 or more kills */
 void credits_fight_skip(float frames);           /* tests: on to this frame of the street's clock */
+void credits_fight_test_kills(int n);             /* tests: the counter at n */
 void credits_fight_status(char *out, int size);   /* tests: a line for FOCUS_DONE.TXT */
 void credits_fight_draw(void);           /* 2D, over the scene: the roll's pages, the fade, the counter */
 

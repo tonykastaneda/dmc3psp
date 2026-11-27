@@ -169,6 +169,8 @@ void credits_fight_skip(float frames) {
     while (active && street_clock + 1.0f <= frames) credits_fight_update(1.0f);
 }
 
+void credits_fight_test_kills(int n) { kills = n; }
+
 void credits_fight_status(char *out, int size) {
     float at[3] = {0, 0, 0};
     int mode = -1, shots = 0, ally = enemy_ally_state(at, &mode, &shots);
