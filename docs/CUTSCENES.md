@@ -282,8 +282,12 @@ Shots taken by the cutscene's own frame (`demoshot N`) and slot-by-slot hiding (
   (Mission 4, Vergil and Arkham) matches in framing and poses after the sky fix (`demo9_compare.png`). Still off in
   demo 9: its banners (`ss510_00/01.efm`, cloth on `ss510_05`) are bright tan in the port and a dim red-brown on the
   PS2 (their per-vertex words average 211, so it isn't baked colour: how effect models are lit isn't traced); the
-  PS2's stars over the sky aren't drawn. Mission 5's opening (demo 11) didn't play from mission select before the
-  briefing, so it isn't recorded.
+  PS2's stars over the sky aren't drawn.
+- Demo 11 (Mission 5's opening; it plays after Mission Start, `analysis/ref/cast/m5_open_ps2.mp4`,
+  `demo11_compare.png`): the shots and framing match. Open: the blood in the basin (`em114_01` objects 3 and 4, flat
+  discs on texture 1's red swirl, normals up) is bright red on the PS2 and nearly black in the port: at frame 1000 the
+  only character light (ValidType 2 at 1600 / 200 / 1800) is low and to the side and the ambient (No 6, 30 20 20) is
+  dim, so the PS2 must light or blend these objects otherwise (both carry byte 8 = 1, the other objects 0) [not traced].
 
 Weapon placement checked against PCSX2 (`analysis/testroom/demo3_weapons_compare.png`, `demo59_weapons_compare.png`):
 Rebellion in demo 3 (overhead, thrown, pointed at the end) matches; demo 59's sword was missing from the desk (now
