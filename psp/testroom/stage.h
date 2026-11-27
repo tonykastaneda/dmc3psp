@@ -21,6 +21,8 @@ const StageInfo *stage_collision_info(void);
 void stage_draw(void);
 /* The GE's colour doubling on the stage's draw (sceGuTexFunc's bit 16): room 012's baked colours are halved for it. */
 void stage_set_double(int on);
+/* A cutscene: stage triangles reaching behind the near plane are dropped, as the PS2 does (near_clip.h). */
+void stage_set_near_cull(int on);
 void stage_test_sky_off(int off);
 int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
@@ -34,6 +36,8 @@ int stage_walkable_below(float x, float z);
 /* A breakable prop's triangles (tagged with its number by tools/prepare_stage.py) aren't drawn once it's
  * broken. Loading a stage shows them all again. */
 void stage_hide_group(int number);
+/* A cutscene stage's object (its batches are tagged object index + 1): hidden or shown by the demo's slot 0 hide track. */
+void stage_set_object_hidden(int number, int hidden);
 /* The room's lift (its batches, tagged by tools/gimmicks.py) is drawn this far above where it was baked. */
 void stage_set_lift(float raise);
 /* Rigid story-piece pose, about a world-space XZ pivot. Loading resets it. */

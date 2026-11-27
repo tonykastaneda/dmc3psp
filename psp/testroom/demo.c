@@ -289,7 +289,31 @@ int demo_start(int demo, const char *dir) {
     return 1;
 }
 
+/* The stage's hide track (prepare_demo: after the Program clips, u32 count then {f32 frame, u16 object, u16 hidden};
+ * object 0xffff shows all): each object's state now, onto the stage's batches (tagged object + 1). */
+#define STAGE_HIDE_OBJECTS 511   /* 0-254 the stage's SCM objects, 255-510 the room's props (prepare_demo) */
+static void stage_hide_apply(int clear) {
+    unsigned char want[STAGE_HIDE_OBJECTS];
+    int k;
+    memset(want, 0, sizeof want);
+    if (!clear && head) {
+        const unsigned int *programs = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) +
+                                                              head->light_count * sizeof(DemoLight));
+        const unsigned int *count = programs + 1 + *programs * 6;   /* each Program clip is 24 bytes */
+        const struct { float frame; unsigned short obj, hidden; } *e = (const void *)(count + 1);
+        unsigned int i;
+        for (i = 0; i < *count && e[i].frame <= demo_clock; ++i) {
+            if (e[i].obj == 0xffff) memset(want, 0, 255);   /* the SCM objects only, not the props */
+            else if (e[i].obj == 0xfffe) memset(want, 1, 255);   /* HideKind H: the stage's objects hidden */
+            else if (e[i].obj < STAGE_HIDE_OBJECTS) want[e[i].obj] = (unsigned char)e[i].hidden;
+        }
+    }
+    for (k = 0; k < STAGE_HIDE_OBJECTS; ++k)
+        stage_set_object_hidden(k + 1, want[k]);   /* every frame: a stage reload clears them */
+}
+
 void demo_stop(void) {
+    stage_hide_apply(1);
     sound_stop();
     demo_cloth_reset();
     if (blob) { nfx_reset(); nfx_set_demo_bank(0, 0); }
@@ -354,6 +378,7 @@ static void effect_place(const DemoEffect *e, float out[3]) {
 }
 
 /* The Effect tracks' V, E, G and P effects (nfx's NFX_DEMO bank), started as the clock passes their frame. */
+int demo_hide_slot = -1;   /* test "demohide N": that model slot isn't drawn (which piece is which); -2: no effects */
 static void demo_effects(float dt) {
     const DemoEffect *fx;
     unsigned int i;
@@ -397,7 +422,8 @@ int demo_update(float dt, FollowCamera *camera) {
     demo_clock += dt * 60.0f;
     if (demo_clock >= (float)head->frames) { playing = 0; return 0; }
     demo_stream();
-    demo_effects(dt);
+    stage_hide_apply(0);
+    if (demo_hide_slot != -2) demo_effects(dt);   /* test "demohide -2": no Effect track */
     cams = (const DemoCamera *)(blob + head->camera);
     f = (unsigned int)demo_clock;
     c = &cams[f];
@@ -441,6 +467,20 @@ static void load_motion(Actor *a, int k) {
     a->motion_data[k] = data;
 }
 
+/* The motion clip a slot plays now: the one running, else the last one begun, held at its end (a clip's end doesn't
+ * drop the model to its rest pose at the origin: demo 59's sword, wp122, keeps its place on the desk after its one
+ * 154-frame clip; ss506_00 between its clips). -1 before its first. */
+static int demo_clip_now(const Actor *a) {
+    const DemoMotionClip *c = (const DemoMotionClip *)(blob + a->d->motion_at);
+    int k, clip = -1, held = -1;
+    float latest = -1.0f;
+    for (k = 0; k < a->d->motions; ++k) {
+        if (demo_clock >= c[k].set && demo_clock < c[k].end) clip = k;
+        if (c[k].set <= demo_clock && c[k].set > latest) { latest = c[k].set; held = k; }
+    }
+    return clip >= 0 ? clip : held;
+}
+
 static void demo_stream(void) {
     int i, k, loads = 0, best_i = -1, best_k = -1;
     float best = 1e9f;
@@ -452,7 +492,7 @@ static void demo_stream(void) {
         if (!a->d) continue;
         c = (const DemoMotionClip *)(blob + a->d->motion_at);
         for (k = 0; k < a->d->motions; ++k) {
-            int wanted = demo_clock >= c[k].set - 40.0f && demo_clock < c[k].end;
+            int wanted = (demo_clock >= c[k].set - 40.0f && demo_clock < c[k].end) || k == demo_clip_now(a);
             if (wanted && !a->motion_data[k] && c[k].set < best) { best = c[k].set; best_i = i; best_k = k; }
             else if (!wanted && a->motion_data[k]) {
                 free(a->motions[k].channels); a->motions[k].channels = 0; a->motions[k].channel_count = 0;
@@ -504,8 +544,7 @@ static void pose(Actor *a, int depth) {
         base_rot = t;
         attached = 1;
     }
-    for (k = 0; k < d->motions; ++k)
-        if (demo_clock >= clips[k].set && demo_clock < clips[k].end) clip = k;
+    clip = demo_clip_now(a);
     if (clip >= 0 && !a->motion_data[clip]) load_motion(a, clip);
     if (clip >= 0 && a->motion_data[clip] && a->motions[clip].channel_count) {
         const Motion *m = &a->motions[clip];
@@ -815,6 +854,7 @@ void demo_draw(void) {
         const DemoHideClip *hide;
         int near = 0;
         if (!a->d) continue;
+        if (a->d->slot == demo_hide_slot || demo_hide_slot == -3) continue;   /* test "demohide N" (-3: all) */
         obj = (const DemoObject *)(blob + a->d->object_at);
         idx = (const unsigned short *)(blob + a->d->index_at);
         if (demo_clock < a->d->shown_from || demo_clock >= a->d->shown_to) continue;

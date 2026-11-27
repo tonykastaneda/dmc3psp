@@ -161,6 +161,39 @@ gaps (the "holes"). The PS2 shows his chest and mouth there (`analysis/testroom/
   cost about 2 ms a frame with the camera against Dante (7.1 against 5.2 ms of draw time). It is off by default
   (test line `nearclip 1`) until real hardware shows whether its GE drops such triangles.
 
+**The "Rebellion slab" in demo 3 was the room's props and the GE's near clipping, not a weapon.** Rebellion
+(`wp100`, slot 9) sits where its motion puts it: hiding it, and every other actor slot, left the slab in place.
+Shots taken by the cutscene's own frame (`demoshot N`) and slot-by-slot hiding (`demohide N`) found three causes:
+- **Room props on the pieces' hide tracks.** A cutscene staged in a game room (`st001` is room 001) copies the room's
+  `ROOM_nnn.BIN`, which holds the room's placed STAY props. The cutscene's own pieces textured from the room
+  (`ss001_00/01`) are left out of the cast, and those props stand in for them, but always shown: `ss001_01` (the
+  arch's building, around the camera of frames 2466-2964) is hidden until 2964 on the PS2. Stage batches now carry
+  their SCM object (index + 1) or prop (256 + its index) in the batch's 8th word; `prepare_demo.piece_prop_events`
+  matches each left-out piece to the props inside its bounds and gives them its H / D clips (demo 3: prop 2), so the
+  PS2's view of Dante by the bus (frame 2700) and the arch behind him at 3300 both come out.
+- **Near-plane clipping.** With `GU_CLIP_PLANES` on, PPSSPP's GE clips the room's walls at the near plane into a slab
+  in front of the lens; the PS2 drops such triangles. The cutscene stage pass now runs with clip planes off, so the
+  GE drops them itself, at no cost (`nearcull N`: 2 default, 1 a CPU walk at about 1.4 ms, 0 the old clipping).
+- **Hide clips without files.** A Hide clip's `HideKind` H hides the slot and D shows it with no `.hid` named; they
+  were skipped, so pieces meant to stay hidden (`ss001_01` until 2964, the coats in slots 32 / 33) showed.
+  `prepare_demo` keeps them, and the stage's own hide track (its slot's `.hid` files: demo 3 hides `st001` objects
+  3 and 23-26 from 2282) is applied by object (`stage_hide_events`, `demo.c` stage_hide_apply).
+- `gen_rooms.py` built a room's stage only when its bin was missing, so rooms built on 2026-11-04 had missed the
+  exact palettes and these tags; it now rebuilds a room when `prepare_stage.py` / `scm_ps2.py` are newer (about 8
+  minutes once).
+
+- **Motion clips held at their end.** A slot whose clip has ended and whose next hasn't begun dropped to its rest pose
+  at the world origin. The game keeps the last frame: demo 59's sword (`wp122`, one 154-frame clip) stays leaning on
+  the desk. `demo.c` demo_clip_now holds the last clip begun (and keeps its motion loaded).
+- Test lines: `demoshot N` (a still at the cutscene's own frame N, `name_dN.png`), `demohide N` (slot N not drawn;
+  -2 no effects, -3 no actors).
+
+Weapon placement checked against PCSX2 (`analysis/testroom/demo3_weapons_compare.png`, `demo59_weapons_compare.png`):
+Rebellion in demo 3 (overhead, thrown, pointed at the end) matches; demo 59's sword was missing from the desk (now
+held there). Still open in demo 59: the book (in `ss506_00`, slot 8) is missing from the desk at frame 3040 and open in
+Dante's hand at 3580 where the PS2's is closed: how long a per-object `.hid` clip's keys last after its Life isn't
+known (the port keeps the last clip begun).
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
