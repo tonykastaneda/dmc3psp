@@ -21,6 +21,13 @@ void arkham_boss_position(float out[3]);
 void arkham_boss_target_position(float out[3]);
 void arkham_boss_push_out(float *x, float *z, float y, float r);
 int arkham_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *damage);
+int arkham_boss_attack_kind(void);
+/* Native type3 hold; no direct button-mash escape. The partner can interrupt it. */
+int arkham_boss_take_hold(void);
+float arkham_boss_take_drain(void);
+int arkham_boss_take_release(void);
+int arkham_boss_held_position(float out[3],float *yaw);
+int arkham_boss_test_state(int state);
 void arkham_boss_trace(const char *path);
 void arkham_boss_set_floor(int (*floor_fn)(float x, float y, float z, float *out));
 

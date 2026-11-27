@@ -68,12 +68,14 @@ summon passes 2000 / 1800 / 1600 (`0x5c2270`). At most 40 at a time (`0x28`).
 Sections 1-3 at variant 0. Approximations:
 - **He stays where the EST puts him** (2650, −10, 3200), his origin 730 over the floor; he only turns (state 2,
   0x200 a frame [estimate]).
-- **Hits on Dante:** each tentacle state hurts Dante if he's on that side at the script's attack frame (500, heavy);
-  the wide attack at frame 20 within 900 and 60° (700); each missile volley is three homing shells (300). The
-  records' damage isn't read.
-- **Legions:** four at frames 90 and 165 of the summon [the count is an estimate]; they fly at Dante at 8 a frame
-  and burst on touching him (400); one blade hit cuts one down. Drawn rigid. The summon clock's reload is 900 frames
-  [estimate].
+- **Hits on Dante:** the side-zone reach and one contact check at the event frame still approximate the native
+  moving collision caps. Damage/kind now come from their native records (below). Missiles still use three
+  simplified homing shells, with native record 5 (1500). The former 700-damage wide burst is replaced by the
+  decoded mouth capture, hold and drain; full cap-flag/held-handle release is approximated by a damaging rescue hit.
+- **Legions:** four/five/five by phase at frames 90 and 165 (count table 5c23b8, 4e9b50), with native
+  summon-clock reloads 3000/2700/2400 (5c2390, 3d7dc0). They still fly at an estimated 8 per frame, are drawn
+  rigid and die to one blade hit. Their contact uses native radius 40 and record 0 (300); the combined
+  horizontal/height collision test remains simpler than the native collision engine.
 - **Damage taken:** as Vergil's (42 light, 84 heavy, × 1.1; Easy × 2).
 - **The second round:** at 9000 he pauses 120 frames (demo 53 isn't played) and fights on at 9000; Vergil joins
   as above.
@@ -83,3 +85,74 @@ Sections 1-3 at variant 0. Approximations:
 
 Room 421, Mission 19 (`tools/tests/mission19_arkham.scene`): he roars, summons Legions that reach Dante and burst,
 120 heavy test hits bring the second round at 9000, 110 more and Mission Clear shows. Not compared with the PS2 yet.
+
+## Attack damage follow-up
+
+The absent attack-record opcodes in the front/left scripts are deliberate. Shell event slot 0 byte 0
+has values **4 / 5 / 6** after waits **45 / 105 / 45** in scripts 15/16/17. Their C++ handlers select the
+records themselves:
+
+| State | Handler | Record at 5c1c80 + n*0x40 | Damage | Kind / reaction | Enabled caps / duration |
+| --- | --- | --- | --- | --- | --- |
+| 0f front | 3d6710 | 2 | 1200 | 2 / 600 | 7,8,9,13,14 / 10 frames |
+| 10 left | 3d6830 | 3 | 800 | 2 / 300 | same / 30 frames |
+| 11 left | 3d6950 | 4 | 800 | 2 / 300 | same / 25 frames |
+
+`2949c0` puts table+n*0x40 into the cap set's current record (+c8), `2949f0` resets its hit id, and `294370`
+enables those caps. The set is shell +1950, bound to 5c1c80 by `3d1400`; scripts alone cannot reveal these
+record selections. The port exports the records/events and passes kind 2 through the enemy damage bridge,
+replacing the estimated 500 and generic reaction. Right-side records 0/1 and missile record 5 use the same
+exported table.
+
+### Green capture and release
+
+State **12** (`3d6a70`) checks full 3D distance (`132470`) to **shell bone 9**: pointer array +64c, slot +670.
+It can take Dante through `21f2e0(player,3,held_bank)` before event 7 at shell motion frame **40**. Range table
+**5c2560**, variant 0 by phase, is **150 / 150 / 200**. Missing the capture returns to idle, rather than
+unconditionally entering a damaging wide burst.
+
+State **13** (`3d6c70`) enables cap 15, keeps Dante attached, waits until its **60-frame** timer is below zero,
+then calls **21ecc0(frames * rate, player)** every update. That helper subtracts HP at player +2ad4; table
+**5c2590** gives **5 / 10 / 15 HP per native frame** for variant 0's phases. This damage is not an attack
+record. State **14** (`3d7090`) only plays the release animation and an effect; it has no separate damage burst.
+
+The attachment (`3d6f00`) is shell bone 9 plus rotated offset **(100,-80,-110)**, facing Arkham+180 degrees.
+The player's held type 3 follows a supplied motion bank without an independent button-mash escape. Chunk
+**[5] motion 30** is the native 24-bone held pose; it is now exported as `ah30` and used through the existing
+combat hold interface. The native owner checks sixteen cap contact flags (mask 0x1) and whether its held handle
+is still live to release; until those flags are wired, a damaging hit on Arkham supplies the rescue signal.
+Capture eligibility and interruption use the port's existing combat plumbing; his actor's vertical origin
+still has its documented 730-unit placement approximation.
+
+### Legion contact
+
+**3ed200** constructs each Legion's collision set at +bd0, binds **5db9d0**, explicitly selects **record 0**
+with `2949c0` and resets the hit id with `2949f0`. It creates a type-2 sphere of **radius 40** at +e20 and
+enables cap 0 indefinitely. Record 0 is **300 damage, kind 0, reaction 100**. Thus no Legion script opcode
+is required either. The port now exports that record instead of relying on its formerly hard-coded value.
+
+`python tools/tests/run_arkham_attacks.py` checks event boundaries, native front/left damage/kinds,
+Legion radius/contact, capture ranges, all three drain rates after the grace period, native held motion,
+one-shot hold notifications and the harmless release state.
+
+PPSSPP verification (2026-11-27, Mission 19 room 421): forced front/left/left2 states
+landed 1200/800/800 with kind 2; summoned Legions landed 300 with kind 0. A forced
+capture held Dante in `ah30`, drained 690 HP after the grace period, and released on
+the rescue hit (HUD 9310/10000). `arkham_camera_close_40.png` and
+`arkham_checked_left_65.png` show the boss in the actual fight. Earlier `_view`
+captures were occluded by room geometry and are not visual evidence. The test hook
+forces the hold state; capture distance/phase ranges are additionally checked by the
+host test, rather than claimed as an unforced gameplay capture.
+
+After merging master (`26b767c`, through `e72ef80`), a full
+`pwsh -File tools/build_testroom.ps1 -Regenerate` completed at 07:02 on Nov 27
+(EBOOT 30,856,539 bytes). Host attacks and credit checks passed again. PPSSPP
+Mission 19 room 421 rechecks `arkham_merged_front`, `arkham_merged_legions`, and
+`arkham_merged_grab` retained front 1200/kind2, Legion 300/kind0, and the 690-HP
+grab drain followed by rescue/release (9310/10000 HP). Inspected captures:
+`analysis/testroom/arkham_merged_front_40.png`,
+`analysis/testroom/arkham_merged_legions_130.png`,
+`analysis/testroom/arkham_merged_grab_85.png` and `_150.png`.
+The full build also reported unrelated cutscene room/demo memory-budget warnings
+for rooms 237, 228, 111, 001 and DSTG_035 (128 bytes over); these were not changed
+as part of this boss decoding task.

@@ -184,6 +184,7 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $VergilHeader) -or
 
 $ArkhamHeader = Join-Path $Generated "boss_arkham_runtime.h"
 if ($Regenerate -or -not (Test-Path -LiteralPath $ArkhamHeader) -or
+    -not (Test-Path -LiteralPath (Join-Path $Generated "boss_arkham_attacks.h")) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_arkham.py")).LastWriteTime -gt (Get-Item -LiteralPath $ArkhamHeader).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_arkham.py"), $Iso.FullName, "--output", $Generated)

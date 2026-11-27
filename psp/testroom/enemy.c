@@ -2164,12 +2164,15 @@ static void update_one(float dt, float px, float py, float pz) {
         int heavy;
         e->plan = arkham_boss_dying() ? P_DEATH : P_WATCH;
         arkham_boss_update(f, px, py, pz, attacks_on);
+        if(arkham_boss_take_hold()){hold_take(0x7fffffff);hold_motion="ah30";}
+        hold_drain+=arkham_boss_take_drain();
+        if(arkham_boss_take_release())hold_let_go(1);
         arkham_boss_position(e->pos);
         e->floor_y = e->pos[1];
         e->hidden = arkham_boss_hidden();
         if (arkham_boss_attack_landed(&hit_x, &hit_z, &heavy, &damage)) {
             land_attack(heavy);
-            landed_x = hit_x; landed_z = hit_z; landed_damage = damage;
+            landed_x = hit_x; landed_z = hit_z; landed_damage = damage; landed_kind=arkham_boss_attack_kind();
         }
         return;
     }
@@ -4075,7 +4078,7 @@ static int ar_room = -1;
 void enemy_set_room(int room) { ar_room = room; }
 static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
 static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
-void enemy_ar_force(int state) { if(!vergil_boss_test_state(state)) ar_force = state; }
+void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state)) ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
 

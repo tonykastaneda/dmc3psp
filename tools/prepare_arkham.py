@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 
 from dmc3_image import AfsArchive, Iso9660
+from gen_enemy_ai import Elf
+from prepare_vergil import compile_scripts, OP_WAIT, OP_EVENT
 from mod_skeleton import parse_skeleton
 from mot_ps2 import parse_mot
 from prepare_skinned_model import (array_lines, build_mesh, decode_textures, indexed_texture, pac_list,
@@ -20,7 +22,7 @@ from decimate import slim_mesh
 
 SLOT = 137
 PARTS = (("body", 1, 0), ("shell", 2, 0), ("legion", 12, 11))
-MOTIONS = ((3, "ak"), (4, "as"))
+MOTIONS = ((3, "ak"), (4, "as"), (5, "ah"))
 
 
 def write_models(pack, output):
@@ -89,6 +91,7 @@ def write_motions(pack, output):
     table, manifest = [], []
     for chunk, prefix in MOTIONS:
         for index, raw in enumerate(pac_list(pack[chunk])):
+            if prefix=="ah" and index!=30: continue  # Native held type3 uses this 24-bone Dante motion.
             if not raw:
                 continue
             try:
@@ -107,13 +110,37 @@ def write_motions(pack, output):
     return manifest
 
 
+def write_attacks(pack, executable, output):
+    def record(at):
+        return "{%0.6ff,%0.6ff,%d}" % (executable.real(at+4),executable.real(at+0x1c),executable.word(at+0x18))
+    ops,starts=compile_scripts(pack[6],[],table_end=len(pack[6]))
+    event_frames=[]
+    for state,event in ((15,4),(16,5),(17,6),(18,7)):
+        frame=None;found=None
+        for op,a,b,c in ops[starts[0][state]:starts[0][state+1]]:
+            if op==OP_WAIT: frame=b
+            if op==OP_EVENT and (a,b)==(0,event): found=frame
+        if found is None: raise ValueError("Missing Arkham shell event")
+        event_frames.append(found)
+    lines=["/* Native Arkham table 5c1c80, Legion setup 3ed200 and hold parameters. Local disc data. */",
+           "#pragma once", "typedef struct { float damage,reaction; int kind; } ArkhamAttack;",
+           "static const ArkhamAttack arkham_attacks[6] = {"+",".join(record(0x5c1c80+i*64) for i in range(6))+"};",
+           "static const ArkhamAttack arkham_legion_attack = "+record(0x5db9d0)+";",
+           "static const float arkham_side_events[4] = {"+",".join(f"{n}.0f" for n in event_frames)+"};"]
+    for name,at in (("hold_range",0x5c2560),("hold_drain",0x5c2590)):
+        lines += ["static const float arkham_"+name+"[3] = {"+",".join(f"{executable.real(at+i*4):.6f}f" for i in range(3))+"};"]
+    (output / "boss_arkham_attacks.h").write_text("\n".join(lines)+"\n",encoding="ascii")
+
+
 def generate(iso_path, output):
     output.mkdir(parents=True, exist_ok=True)
     with Iso9660(iso_path) as iso:
         gdata = AfsArchive(iso, "GDATA.AFS")
         entry = gdata.entries[SLOT]
         data = iso.read_file("GDATA.AFS", entry["offset"], entry["size"])
+        executable = Elf(iso.read_file("SLUS_213.61", 0, iso.files["SLUS_213.61"]["size"]))
     pack = pac_list(data)
+    write_attacks(pack, executable, output)
     parts = write_models(pack, output)
     motions = write_motions(pack, output)
     (output / "boss_arkham_manifest.json").write_text(json.dumps(

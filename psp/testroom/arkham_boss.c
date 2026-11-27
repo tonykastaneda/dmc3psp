@@ -17,6 +17,7 @@
 #include "model_runtime.h"
 #include "model_blend.h"
 #include "boss_arkham_runtime.h"
+#include "boss_arkham_attacks.h"
 
 /* Arkham, class 35 (vtable 0x60a9a0, update 3d1390, alive 3d2220). Frames and distances keep the original 60 Hz /
  * centimetre units; the PS2's 65536-to-a-turn angles are converted where quoted. See docs/ARKHAM_SPEC.md. */
@@ -29,7 +30,7 @@
 #define DANTE_RADIUS 40.0f
 #define LEGIONS 40                    /* FUN_003d4ca0 counts 0x28 */
 #define LEGION_SPEED 8.0f             /* [estimate] "as fast as Dante runs" */
-#define LEGION_RADIUS 70.0f
+#define LEGION_RADIUS 40.0f           /* 3ed200 builds a type-2 sphere with radius40 at +e20. */
 #define VTYPE (GU_TEXTURE_32BITF | GU_NORMAL_32BITF | GU_VERTEX_32BITF | GU_INDEX_16BIT | GU_TRANSFORM_3D)
 
 extern unsigned int enemy_ai_random(void);
@@ -56,7 +57,8 @@ static struct {
     float pos[3], yaw, hp, timer, frame, shell_frame, floor_y, dante[3];
     float zone[5];                    /* +0x1cbc front, +0x1cc0 back, +0x1cc4 left, +0x1cc8 right, +0x1ccc away */
     float summon_clock, hurt_since, landed_x, landed_z, landed_damage;
-    int body_motion, shell_motion;
+    int body_motion, shell_motion, landed_kind, holding, hold_new, hold_end;
+    float hold_grace, hold_drain, hold_total;
     Legion legions[LEGIONS];
     Missile missiles[8];
 } ak;
@@ -83,9 +85,9 @@ static void trace(const char *event) {
     if (!trace_on) return;
     f = fopen(trace_path, "a");
     if (!f) return;
-    fprintf(f, "t=%d f=%d %s state=%#x phase=%d round=%d frame=%.1f hp=%.0f zones=%.0f,%.0f,%.0f,%.0f,%.0f d=%.0f legions=%d\n",
+    fprintf(f, "t=%d f=%d %s state=%#x phase=%d round=%d frame=%.1f hp=%.0f zones=%.0f,%.0f,%.0f,%.0f,%.0f d=%.0f legions=%d damage=%.0f kind=%d held=%d drained=%.0f\n",
             ak.tick, testroom_frame, event, ak.state, ak.phase, ak.round, ak.frame, ak.hp, ak.zone[0], ak.zone[1],
-            ak.zone[2], ak.zone[3], ak.zone[4], flat(ak.pos, ak.dante), legion_count());
+            ak.zone[2], ak.zone[3], ak.zone[4], flat(ak.pos, ak.dante), legion_count(),ak.landed_damage,ak.landed_kind,ak.holding,ak.hold_total);
     fclose(f);
 }
 void arkham_boss_trace(const char *path) {
@@ -117,6 +119,13 @@ static int dante_zone(void) {
     return 4;
 }
 static void set_state(int state);
+static void mouth_point(float out[3]);
+static void start_grab(void) {
+    ak.holding=1;ak.hold_new=1;ak.hold_grace=60;set_state(S_GREEN2);trace("grab_start");
+}
+static void release_grab(void) {
+    if(ak.holding){ak.holding=0;ak.hold_end=1;trace("grab_release");}
+}
 static void decide(float f) {
     int z = dante_zone(), i, p = ak.phase;
     /* The timers fill while Dante is on that side, and empty when he isn't */
@@ -152,6 +161,7 @@ static void decide(float f) {
 static int motion_end(int id) { const Motion *m = motion_get(id); return m ? (int)m->end_frame : 0; }
 static void set_state(int state) {
     int slot = state >= 0 && state < 0x19 ? state_motion[state] : 0;
+    if(ak.holding && state!=S_GREEN2)release_grab();
     ak.state = state;
     ak.step = 0;
     ak.timer = 0.0f;
@@ -171,7 +181,7 @@ static void next_state(void) {
     switch (ak.state) {
     case S_RECOVER: set_state(S_RECOVER2); break;
     case S_RECOVER2: set_state(S_IDLE); break;
-    case S_GREEN: set_state(S_GREEN2); break;
+    case S_GREEN: set_state(S_IDLE); break;
     case S_GREEN2: set_state(S_WIDE); break;
     case S_MISSILES_IN: set_state(S_MISSILES); break;
     case S_MISSILES: set_state(S_RECOVER); break;
@@ -180,21 +190,21 @@ static void next_state(void) {
 }
 
 /* ---- His blows -------------------------------------------------------------------------------------------- */
-static void land(float damage, int heavy) {
+static void land(const ArkhamAttack *attack) {
     if (ak.landed) return;
     ak.landed = 1;
     ak.landed_x = ak.pos[0]; ak.landed_z = ak.pos[2];
-    ak.landed_damage = damage;
-    ak.landed_heavy = heavy;
+    ak.landed_damage = attack->damage;
+    ak.landed_kind = attack->kind;
+    ak.landed_heavy = attack->kind!=0 || attack->reaction>=500;
     trace("landed");
 }
-/* A sweep of the tentacles over one side, on the script's attack frame [the reach is the zone's 700]. Damage: the
- * attack records (0x40 each from 0x5c1c80; damage +4, reaction +0x1c, heavy from 500): the right side's scripts
- * name records 0 and 1 (800, reaction 200); the front and left scripts name none [their 500 is an estimate]. */
-static void sweep(int zone, float at, float damage, int heavy) {
+/* The 700-unit side test remains a collision stand-in. Native handlers 3d6710/6830/6950
+ * consume shell window values4/5/6 and select records2/3/4; scripts do not need op6. */
+static void sweep(int zone, float at, int record) {
     if (ak.hit_done || ak.frame < at) return;
     ak.hit_done = 1;
-    if (dante_zone() == zone) land(damage, heavy);
+    if (dante_zone() == zone) land(&arkham_attacks[record]);
 }
 static void fire_missiles(void) {
     int i, n = 0;
@@ -232,7 +242,7 @@ static void shells_update(float f) {
             for (k = 0; k < 3; ++k) m->vel[k] += (to[k] / d * 14.0f - m->vel[k]) * fminf(1.0f, 0.05f * f);
         }
         m->pos[0] += m->vel[0] * f; m->pos[1] += m->vel[1] * f; m->pos[2] += m->vel[2] * f;
-        if (d < 60.0f + DANTE_RADIUS) { fx_explosion(m->pos); land(1500.0f, 1); m->on = 0; }   /* record 5: 1500, reaction 1000 */
+        if (d < 60.0f + DANTE_RADIUS) { fx_explosion(m->pos); land(&arkham_attacks[5]); m->on = 0; }   /* record 5: 1500, reaction 1000 */
     }
     for (i = 0; i < LEGIONS; ++i) {
         Legion *l = &ak.legions[i];
@@ -248,7 +258,7 @@ static void shells_update(float f) {
          * at 3ed244): 300, reaction 100, light */
         if (d < LEGION_RADIUS + DANTE_RADIUS && fabsf(ak.dante[1] + 100.0f - l->pos[1]) < 150.0f) {
             fx_explosion(l->pos);
-            land(300.0f, 0);
+            land(&arkham_legion_attack);
             l->on = 0;
         }
     }
@@ -277,22 +287,26 @@ static void ai_step(float f) {
         { float d = wrap_angle(angle_to(ak.dante) - ak.yaw), r = 0x200 * UNITS * f; ak.yaw = wrap_angle(ak.yaw + fmaxf(-r, fminf(r, d))); }
         if (ak.timer > 120.0f) set_state(S_IDLE);
         break;
-    case S_FRONT: sweep(0, 45.0f, 500.0f, 1); if (done()) next_state(); break;     /* 0xf: script 0:15, motion 31 */
-    case S_RIGHT: sweep(3, 105.0f, 800.0f, 0); if (done()) next_state(); break;    /* 0xd: 0:13, motion 34, record 0 */
-    case S_RIGHT2: sweep(3, 40.0f, 800.0f, 0); if (done()) next_state(); break;    /* 0xe: 0:14, motion 35, record 1 */
-    case S_LEFT: sweep(2, 105.0f, 500.0f, 1); if (done()) next_state(); break;     /* 0x10: 0:16, motion 32 */
-    case S_LEFT2: sweep(2, 45.0f, 500.0f, 1); if (done()) next_state(); break;     /* 0x11: 0:17, motion 33 */
-    case S_GREEN: case S_GREEN2:
-        if (done()) next_state();   /* 0x12 -> 0x13: the body turns green (0:18, 0:19) */
+    case S_FRONT: sweep(0, arkham_side_events[0], 2); if (done()) next_state(); break;     /* 0xf: script 0:15, motion 31 */
+    case S_RIGHT: sweep(3, 105.0f, 0); if (done()) next_state(); break;    /* 0xd: 0:13, motion 34, record 0 */
+    case S_RIGHT2: sweep(3, 40.0f, 1); if (done()) next_state(); break;    /* 0xe: 0:14, motion 35, record 1 */
+    case S_LEFT: sweep(2, arkham_side_events[1], 3); if (done()) next_state(); break;     /* 0x10: 0:16, motion 32 */
+    case S_LEFT2: sweep(2, arkham_side_events[2], 4); if (done()) next_state(); break;     /* 0x11: 0:17, motion 33 */
+    case S_GREEN: { /* 3d6a70: grab near shell bone9 until event(0,0)=7, motion frame40. */
+        float mouth[3],dx,dy,dz;
+        mouth_point(mouth);dx=ak.dante[0]-mouth[0];dy=ak.dante[1]-mouth[1];dz=ak.dante[2]-mouth[2];
+        if(ak.frame<arkham_side_events[3] && sqrtf(dx*dx+dy*dy+dz*dz)<arkham_hold_range[ak.phase])start_grab();
+        else if(done())next_state();
         break;
-    case S_WIDE:
-        /* 0x14 (0:20, motion 38): the wide blast in front [frame and reach estimated: 20, 900 within 60 deg] */
-        if (!ak.hit_done && ak.frame >= 20.0f) {
-            float a = wrap_angle(angle_to(ak.dante) - ak.yaw);
-            ak.hit_done = 1;
-            if (flat(ak.pos, ak.dante) < 900.0f && fabsf(a) < PI / 3.0f) land(700.0f, 1);
-        }
-        if (done()) next_state();
+    }
+    case S_GREEN2: /* 3d6c70: sixty-frame hold, then continuous phase-dependent HP drain. */
+        if(!ak.holding){set_state(S_WIDE);break;}
+        if(ak.step==0){ak.hold_grace=60;ak.step=1;}
+        if(ak.step==1){if((ak.hold_grace-=f)<0)ak.step=2;}
+        else {float drain=arkham_hold_drain[ak.phase]*f;ak.hold_drain+=drain;ak.hold_total+=drain;}
+        break;
+    case S_WIDE: /* 3d7090: release animation; no separate 700-damage burst. */
+        if(done())next_state();
         break;
     case S_MISSILES:
         /* 0x16 (0:22, motion 40): attack record 5 at 25 and 95: the homing red missiles */
@@ -357,6 +371,19 @@ static void build(const ArkhamMesh *mesh, int motion, float frame, Transform *ou
         if (mesh->parents[i] < 0) out[i] = local;
         else multiply(&out[i], &out[mesh->parents[i]], &local);
     }
+}
+/* Shell bone pointers start at +64c, so +670 is bone9. 3d6f00 holds Dante at its world point. */
+static void mouth_point(float out[3]) {
+    float x,z,c=cosf(ak.yaw),s=sinf(ak.yaw);
+    build(&arkham_parts[PART_SHELL],ak.shell_motion,ak.shell_frame,shell_pose);
+    x=shell_pose[9].p[0];z=shell_pose[9].p[2];
+    out[0]=ak.pos[0]+c*x+s*z;out[1]=ak.pos[1]+shell_pose[9].p[1];out[2]=ak.pos[2]-s*x+c*z;
+}
+int arkham_boss_held_position(float out[3],float *yaw) {
+    float c=cosf(ak.yaw),s=sinf(ak.yaw);
+    if(!ak.holding)return 0;
+    mouth_point(out);out[0]+=c*100-s*110;out[1]-=80;out[2]+=-s*100-c*110;
+    *yaw=ak.yaw+PI;return 1;
 }
 static void skin_part(int part, const Transform *bones) {
     const ArkhamMesh *m = &arkham_parts[part];
@@ -470,6 +497,9 @@ int arkham_boss_hit(int kind, float from_x, float from_z, int mortal) {
     if (!mortal) damage = 0.0f;
     ak.hp = fmaxf(0.0f, ak.hp - damage);
     ak.hurt_since += damage;
+    /* The native hold ends on a cap contact flag or loss of the player's held actor.
+     * A damaging rescue hit supplies the contact signal until full cap flags are wired. */
+    if(ak.holding && damage>0){release_grab();set_state(S_WIDE);}
     /* FUN_003d4540: the phase byte follows his health */
     ak.phase = ak.hp > 9000.0f ? 0 : ak.hp > 3000.0f ? 1 : 2;
     trace("hit");
@@ -503,6 +533,10 @@ void arkham_boss_update(float frames, float px, float py, float pz, int attacks)
         ak.frame = m->looping || ak.state <= S_WALK ? motion_wrap(m, ak.frame) : m->end_frame;
     if ((m = motion_get(ak.shell_motion)) && ak.shell_frame >= m->end_frame && (m->looping || ak.state <= S_WALK))
         ak.shell_frame = motion_wrap(m, ak.shell_frame);
+    if(ak.state==S_GREEN2 && ak.holding) {
+        if((m=motion_get(ak.shell_motion)) && m->end_frame>m->loop_start)
+            while(ak.shell_frame>m->end_frame)ak.shell_frame-=m->end_frame-m->loop_start;
+    }
     if (!ak.dying) shells_update(frames);
     if (trace_on && (ak.tick % 60) == 0) trace("tick");
 }
@@ -592,3 +626,13 @@ int arkham_boss_init(void) {
     return 1;
 }
 int arkham_boss_data_load(void) { return load_data(); }   /* the room load makes it ahead of the spawn (enemy_preload_class) */
+
+int arkham_boss_attack_kind(void){return ak.landed_kind;}
+int arkham_boss_take_hold(void){int value=ak.hold_new;ak.hold_new=0;return value;}
+float arkham_boss_take_drain(void){float value=ak.hold_drain;ak.hold_drain=0;return value;}
+int arkham_boss_take_release(void){int value=ak.hold_end;ak.hold_end=0;return value;}
+int arkham_boss_test_state(int state){
+    if(!ak.active || state<0 || state>0x18)return 0;
+    if(state==S_GREEN2)start_grab();else set_state(state);
+    return 1;
+}

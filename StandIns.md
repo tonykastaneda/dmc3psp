@@ -136,7 +136,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.
 - **Arkham**: one fight runs both rounds; Vergil joins the second as Dante's partner (Dante's input a frame late, as the
   game), but plays Dante's moveset on his body (his own isn't ported), with no coat or sword, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
-  rigid, their count and the summon clock's reload [estimates]; his hits' damage not from records; demo 53 / 328 not
+  rigid; side-hit geometry still uses zones instead of moving caps, and capture release uses a damaging rescue hit instead of the native cap flags/held handle. Damage records, Legion radius/count/clock and mouth hold/drain are decoded (ARKHAM_SPEC.md); demo 53 / 328 not
   played. `arkham_boss.c`, ARKHAM_SPEC.md, PortJobs.
 - **Hell Vanguard**: the model's fade out and in round P312 (the game hides and shows it). VANGUARD_EFFECTS.md.
 
