@@ -579,6 +579,29 @@ def bake_audio(iso_path: Path, timeline, out: Path, demo: int):
     return path
 
 
+LIGHT_RECORD = 80
+
+
+def bake_lights(timeline) -> bytes:
+    """The Light track (FUN_00218fc0 parses a clip; FUN_002569c0 starts it as a light, FUN_0027fb10 runs it): each
+    clip {f32 start, f32 frames (Life / ClipScale: its life counts down by ClipScale a frame), u8 ValidType, IsMinus,
+    Type (1 eases Src to Dst over its life), pad; Src pos[3], force, range, rgb[3]; Dst the same; pad} = 80 bytes."""
+    out = bytearray()
+    clips = sorted((c for t in timeline["tracks"] if t["kind"] == "Light" for c in t["clips"]),
+                   key=lambda c: float(c.get("SetFrame", 0.0)))
+    vec = lambda v, n: [float(x) for x in (v if isinstance(v, list) else [0.0] * n)[:n]] + [0.0] * max(0, n - len(v if isinstance(v, list) else []))
+    for c in clips:
+        scale = float(c.get("ClipScale", 1.0) or 1.0)
+        out += struct.pack("<2f4B", float(c.get("SetFrame", 0.0)), max(float(c.get("Life", 1.0)) / scale, 1.0),
+                           int(c.get("ValidType", 0)) & 0xff, 1 if int(c.get("IsMinus", 0)) else 0,
+                           1 if int(c.get("Type", 0)) == 1 else 0, 0)
+        for side in ("Src", "Dst"):
+            out += struct.pack("<3f2f3f", *vec(c.get(side + "Pos"), 3), float(c.get(side + "Force", 0.0)),
+                               float(c.get(side + "Range", 0.0)), *vec(c.get(side + "Rgb"), 3))
+        out += bytes(LIGHT_RECORD - 12 - 64)
+    return bytes(out)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
@@ -614,10 +637,13 @@ def main():
     fade_at = len(blob)
     for start, life, out, rgba in fades:
         blob += struct.pack("<2fI4B", start, max(life, 1.0), out, *[min(255, v) for v in rgba[:4]])
+    lights = bake_lights(timeline)
+    blob += lights   # right after the fades; their count at +0x3c
     tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))
     struct.pack_into("<3I", blob, 0x30, *fx)   # +0x30 effect bank, effect clips, clip count (0: none)
+    struct.pack_into("<I", blob, 0x3c, len(lights) // LIGHT_RECORD)   # +0x3c Light clips, after the fades
     print(f"  {len(subs)} subtitles" + (f": {subs[0][5][:40]!r} ..." if subs else ""))
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / f"DEMO_{args.demo:03d}.BIN"
