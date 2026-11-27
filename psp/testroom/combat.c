@@ -190,6 +190,10 @@ static const MoveDef moves[MOVE_COUNT] = {
     [MOVE_RG_END] = {S("24:31"), "ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1},
     /* physics: the jump's arc carries on under it (PS2: 30 frames in the air in all, as a plain jump). */
     [MOVE_RG_AIR_BLOCK] = {S("24:5"), "AIR ROYAL BLOCK", MOVE_NONE, 0, 0, 0, 0, -1, 1, 0, 1},
+    /* State 0x15 (FUN_00225a00): facing the attacker, 24:4 to its end, then idle; in the air 24:9 falling (gravity
+     * -1.5, no drift) to the floor. (24:14 after a type-5 block, not reached.) */
+    [MOVE_RG_BREAK] = {S("24:4"), "GUARD BREAK", MOVE_NONE, 0, 0, 0, 0, -1},
+    [MOVE_RG_BREAK_AIR] = {H("s44-09"), "GUARD BREAK", MOVE_NONE, NEXT_LAND, 0, 0, 0, -1, 1},
     [MOVE_TAUNT] = {S("2:0"), "TAUNT", MOVE_NONE, 0, 0, 0, 0, -1},
     [MOVE_DEVIL_ON] = {H("2-50"), "DEVIL TRIGGER", MOVE_NONE, 0, 0, 0, 0, -1},
     /* Ground motions seen on the HD Collection (state 44). Their roots say which way each throws
@@ -1833,6 +1837,21 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
         int cls = kind >= 2 && kind <= 7 ? 1 : 0;
         c->guard_type = table[cls][grade];
         if (c->guard_type != 2 && c->guard_type != 6) return 0;
+        if (c->guard_type == 2) {
+            /* A break (FUN_002e7f10 case 2 -> FUN_004421f0 -> state 0x15): the blow's damage, then the stagger facing
+             * the attacker. [The damage under profile 0x11 (FUN_002e8af0) isn't read: the blow's own.] */
+            if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
+            player->health -= damage;
+            if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
+            if (player->health > 0.0f) {
+                player->yaw = atan2f(from_x - player->x, from_z - player->z);
+                c->action = 0;
+                start_move(c, player->on_ground ? MOVE_RG_BREAK : MOVE_RG_BREAK_AIR, 0);
+                if (!player->on_ground) { player->vy = 0.0f; c->air = 0; }
+                return 1;
+            }
+            damage = 0.0f;   /* taken already: the fatal blow's reaction below */
+        }
     }
     if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f; /* the Seven Hells' fallback records */
     player->health -= damage;

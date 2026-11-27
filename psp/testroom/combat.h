@@ -57,6 +57,7 @@ typedef enum {
     MOVE_TR_WALL_RUN_R, MOVE_TR_WALL_KICK_R,      /* 23:9 -> 23:10 (+0x3c6d 1) */
     /* Not decoded yet: hand-made. */
     MOVE_RG_BLOCK, MOVE_RG_HOLD, MOVE_RG_END, MOVE_RG_AIR_BLOCK,
+    MOVE_RG_BREAK, MOVE_RG_BREAK_AIR,             /* a guard break (state 0x15, FUN_00225a00): 24:4, in the air 24:9 */
     MOVE_TAUNT,                                   /* SELECT: script 2:0 */
     MOVE_QUICKSILVER, MOVE_DOPPELGANGER,          /* R1 + CIR in those styles: 25:0, 26:0 */
     MOVE_DEVIL_ON,                                /* turning Devil Trigger on: 0:50 */
