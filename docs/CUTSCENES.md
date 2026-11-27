@@ -111,6 +111,11 @@ weaker or more neutral (its vertex colour or alpha for this object). Not settled
   time, and every PS2 picture of it (`arkham_face_compare.png` and the rest) is the movie. The movie's faint marks
   are its own render, not a sign that the real-time data is wrong. A fair real-time check of his face is a demo the
   game plays live (demo 5, Mission 3's opening).
+- **Live, the PS2 draws the marks.** Demo 5 (Mission 3's opening, Normal, recorded from PCSX2 at
+  `analysis/ref/cast/m3_open_ps2.mp4`) shows Arkham's red marks on his neck and left cheek, so the live engine draws
+  his overlays (`analysis/testroom/arkham_demo5_compare.png`, the PS2 left, the port right, frames 1260 / 1380). Still
+  different there, not the face's pages: demo 5's sky is orange on the PS2 and dark blue in the port (its stage and
+  ScrEfc), and the port lights his face greyer.
 - To read the PS2's GS state for a draw: a GS dump of the frame (`build/refemu` hotkey Shift+F8, sent as VK 0xA0 +
   F8; uncompressed with `[EmuCore/GS] GSDumpCompression = 0` in the game's own settings file). The Demo Digest's
   "Opening" (mission select, DEMO DIGEST, scene select right once) is a pre-rendered movie of demo 1 (its dump is
