@@ -97,7 +97,8 @@ def build_mesh(model_data: bytes, bone_count: int):
         raw = model_data[0x30 + item["index"] * 48 + 8] if 0x30 + item["index"] * 48 + 8 < len(model_data) else 0
         mode = raw & 0x0f if raw & 0x0f in (2, 3, 4) else 0
         mesh["objects"].append({"texture": item["header_count"], "index_start": start,
-                                "index_count": len(mesh["indices"]) - start, "mode": mode})
+                                "index_count": len(mesh["indices"]) - start, "mode": mode,
+                                "source": item["index"]})   # its MOD object (a demo's .hid keys these, not sub-meshes)
     if len(mesh["positions"]) > 65535:
         raise ValueError("Too many vertices for 16-bit indices")
     return mesh

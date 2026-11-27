@@ -260,6 +260,18 @@ Shots taken by the cutscene's own frame (`demoshot N`) and slot-by-slot hiding (
   `demo59_demoshot_compare.png` (3 of 4; at frame 2300 the PS2 shows the photo on the table and no Dante, the port
   his legs and no photo; at 3580 the object in his hand differs: open).
 
+- **A `.hid` keys the model's own objects, not its draws.** A MOD / SCM object with several sub-meshes is several
+  draws; the channels were applied by draw index, so past the first multi-sub-mesh object they hid the wrong piece
+  (demo 59's `ss506_00`: 9 objects, 11 draws, its object 6, a neon-sign quad, hid a door). Each draw object now
+  carries its source object (`source`) and the clip's channel table is laid out per draw from it.
+- **SCM pieces' blends.** `scm_rig` (a cutscene's animated SCM piece) now reads each object's byte 8 like a MOD's:
+  demo 59's "Devil May Cry" neon sign (`ss506_00` objects 6-8, additive) glows at frame 3800 instead of dark quads.
+- **Demo 59 rechecked:** the phone in Dante's hand (3580) matches the PS2 at 3590-3610, where the PS2 frame really
+  is (the earlier sheet's match landed on a nearby moment of a fast spin; the motion's rotation keys are a clean
+  per-frame spin). The photo at 2300 is in the stage (`st506` object 3, texture 15, on the board at the left) and
+  in place: the port's tighter framing leaves it just outside the frame (with `rawfov 1` its corner shows at the
+  left edge; the PS2 shows it whole). That is the cutscene fov fit (`demo_screen_fov`), not a missing object.
+
 Weapon placement checked against PCSX2 (`analysis/testroom/demo3_weapons_compare.png`, `demo59_weapons_compare.png`):
 Rebellion in demo 3 (overhead, thrown, pointed at the end) matches; demo 59's sword was missing from the desk (now
 held there). Still open in demo 59: the book (in `ss506_00`, slot 8) is missing from the desk at frame 3040 and open in

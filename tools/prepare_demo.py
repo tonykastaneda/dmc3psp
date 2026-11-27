@@ -200,7 +200,10 @@ def scm_rig(data: bytes):
             for f in strip_faces([bool(c[3] & 2) for c in colors]):
                 mesh["indices"].extend(base + v for v in f)
             if len(mesh["indices"]) > start:
-                mesh["objects"].append({"texture": texture, "index_start": start, "index_count": len(mesh["indices"]) - start})
+                blend = data[0x30 + index * 48 + 8] & 0x0f   # its blend, as a MOD object's (demo 59's neon sign: 2)
+                mesh["objects"].append({"texture": texture, "index_start": start, "index_count": len(mesh["indices"]) - start,
+                                        "source": index,   # the SCM object: a .hid keys these, not the sub-meshes
+                                        "mode": blend if blend in (2, 3, 4) else 0})
     skel = {"count": node_count, "parents": parent, "local": [r[:3] for r in records],
             "world": [(0.0, 0.0, 0.0)] * node_count}
     return skel, mesh, order, [r[4:7] for r in records]
@@ -609,7 +612,11 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
             table_at = 0
             if mode == 2:
                 key_at = []
-                for keys in channels:
+                # A .hid keys the model's own objects; the draw objects are their sub-meshes (demo 59's ss506_00: 9
+                # SCM objects, 11 draws, so its object 6, the neon sign, hid a door). One channel per draw object.
+                draws = [channels[o["source"]] if o.get("source", k) < len(channels) else []
+                         for k, o in enumerate(mesh["objects"])]
+                for keys in draws:
                     if keys:
                         key_at.append((len(keys), align(blob)))
                         for frame, shown in keys:
@@ -622,7 +629,7 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
             tables.append(table_at)
         switch_at = align(blob)
         for (start, scale, mode, first, channels), table_at in zip(a["switches"], tables):
-            blob += struct.pack("<3f3I", start, scale, first, mode, table_at, len(channels))
+            blob += struct.pack("<3f3I", start, scale, first, mode, table_at, len(mesh["objects"]) if mode == 2 else 0)
         struct.pack_into("<2I", blob, actor_table + 128 * i + 104, len(a["switches"]), switch_at)
         if a["order"]:
             order_at = align(blob)
