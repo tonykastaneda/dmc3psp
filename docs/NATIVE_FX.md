@@ -22,7 +22,9 @@ Inferred, not decoded:
 
 - (Decoded since) A model element whose texture chunk is the 16-byte `"1"` (0x31) reference is dropped by the game
   (`FUN_001f1760`) unless its spawner hands it a texture (+0x7a2 / +0x79c: Cerberus's shells do); the port's twin /
-  M54 fallback below covers those spawner-given cases.
+  M54 fallback below covers those spawner-given cases. And an element with **+0x211** set takes its textures from
+  model **+0x212** (its geometry stays +0x28's): 54 of the shared pack's model elements do, the Devil Trigger's rune
+  lattice among them. `native_fx.py` / `prepare_demo.py` export that model, `nfx.c` draw_model binds its texture.
 
 - E kind 5 records with `+0x1d` or `+0x56` set are drawn additively (glows); the others alpha-blended.
 - An effect model whose texture chunk is the 16-byte reference takes the textures of a twin model with the same
@@ -301,6 +303,8 @@ the no-end generator rule above, now fixed.
 | Agni & Rudra V0x288, V0x285 | the start of 5:25 (action 57, `FUN_00272c70`) and of 5:23 (actions 58-60, `FUN_00273150`), on Rudra | nfx bank 22 (GDATA 99) |
 | Agni & Rudra V0x37e / V0x37d; G0x1cc / V0x302 | as each blade's attack window opens (+0x24ed 0x80 Agni, 0x40 Rudra; the weapon, `FUN_00296ae0`): in action 56 (5:9); in actions 64 (5:30 / 5:26 / 5:11) and 71 (15:8-10) | yes |
 | Nevan V0x38e, V0x2c1 | as window 0 byte 0 bit 0 turns on (+0x24d1): action 81/82's finishers 6:33 / 6:9 / 6:10 (V0x38e) and its 6:14 / 6:40 swing (V0x2c1) (`FUN_00274c70`), action 88's 6:34 (`FUN_00276ac0`); action 92's 16:4 on its flag 1 (`FUN_00277350`) | nfx bank 23 (GDATA 100) |
-| Beowulf V0x382 | 17 frames into 7:11 (action 115), where the weapon is then (not following it) | nfx bank 24 (GDATA 101) |
-| (the Devil Arms') | the PS2 hangs them on the weapon object's frame (+0x104 of the player's +0x1380 / +0x1384 / +0x1388 slot); the port takes the weapon placement's origin on its bone, the right hand for Beowulf, and turns them by Dante's yaw only | `update_arm_fx` in `main.c` |
-| Devil Trigger | state 0x24 plays motion 0:50 / 0:58; its look isn't an effect call found yet | `fx_devil_burst` / `fx_devil_aura` stand in |
+| Beowulf V0x382 | 17 frames into 7:11 (action 115), where his hips are then (not following them) | nfx bank 24 (GDATA 101) |
+| (where they hang) | the player's +0x1380[n] is his model's bone list (24 a form, the model's +0xb0 call in `FUN_0024fb90`; `FUN_002e2070` / `FUN_002e20c0` add the form's 0 / 24 / 48), +0x104 its matrix: +0x1380 the root, +0x1384 the hips, +0x1388 spine 0, +0x13b8 the pelvis. So V0x90, V0x288 / 0x285 and V0x382 hang on his hips, Cerberus's V0x252 on the root, Nevan's on spine 0. The A&R ones are the weapon object's own +0x108 / +0x104 frames | `update_arm_fx` in `main.c`: the bones; for A&R the weapon placement's origin; turned by Dante's yaw only |
+| Devil Trigger V0xdc, E0x140, V0x3c (bank 0) | as it starts (`FUN_00244b20` -> `FUN_002298f0(1)` -> CEfcPub 0x20 + weapon): V0xdc, the red rune lattice, on his hips tinted the weapon's colour (`FUN_002fd1c0`); while it lasts E0x140 (tinted) and V0x3c looping there. A weapon change in it (`FUN_0021f500`: 4 then 3) ends those and starts them again in the new colour (CEfcPub 0x42 + weapon) without V0xdc; its end (2) ends them | `update_devil_fx`; the port's glow only if they can't start. The PS2 also shows a lattice burst as it ends whose source isn't found |
+| Million Stab V0x90 | its start (action 14, `FUN_00266220`), on his hips | yes |
+| (CEfcPub) | `FUN_002fbec0(id, frame, player)`: ids 0-9, 0x27, 0x28, 0x40, 0x41 are the gun flashes (`FUN_002fbf20`); the others make a CEfcPub object (`FUN_00331f90`, 0xb0 bytes, vtable 0x606cf0: id +0xa0, frame +0x80, owner +0x90) whose first update (`FUN_00332240`) is a 110-case switch on the id starting V / G / E effects (the Devil Trigger's, the Devil Arms' charges, ...); 71 callers in Dante's handlers. Only the Devil Trigger's cases are ported | |

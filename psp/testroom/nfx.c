@@ -663,8 +663,12 @@ static void draw_model(const El *el, const Frame *f, unsigned int color) {
     ScePspFMatrix4 mat;
     Frame turned;
     float s[3];
+    const NfxModel *skin = 0;
     for (i = 0; i < b->model_count; ++i) if (b->models[i].id == id) m = &b->models[i];
-    if (!m || m->texture < 0 || (color >> 24) == 0) return;
+    /* +0x211: the textures are those of model +0x212 (FUN_001f1760), the geometry still +0x28's. */
+    if (e[0x211]) { int t = (int)rd16(e + 0x212); for (i = 0; i < b->model_count; ++i) if (b->models[i].id == t) skin = &b->models[i]; }
+    else skin = m;
+    if (!m || !skin || skin->texture < 0 || (color >> 24) == 0) return;
     for (i = 0; i < 3; ++i) s[i] = curve(e, i, el->age);
     {
         /* Its turn rates (+0x144, degrees a frame): E140, the ice sphere, rolls 10 a frame. */
@@ -680,7 +684,7 @@ static void draw_model(const El *el, const Frame *f, unsigned int color) {
     mat.y.x = f->m[0][1] * s[1]; mat.y.y = f->m[1][1] * s[1]; mat.y.z = f->m[2][1] * s[1]; mat.y.w = 0.0f;
     mat.z.x = f->m[0][2] * s[2]; mat.z.y = f->m[1][2] * s[2]; mat.z.z = f->m[2][2] * s[2]; mat.z.w = 0.0f;
     mat.w.x = f->p[0]; mat.w.y = f->p[1]; mat.w.z = f->p[2]; mat.w.w = 1.0f;
-    bind(&b->textures[m->texture]);
+    bind(&b->textures[skin->texture]);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadMatrix(&mat);
     sceGuColor(color);

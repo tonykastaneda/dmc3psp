@@ -1881,62 +1881,101 @@ static unsigned int weapon_fx_color(const Player *p) {
     return p->melee_weapon == 2 ? 0xff2090ffu : p->melee_weapon == 4 ? 0xffffffffu : 0xff2020ffu;
 }
 
-/* Where the melee weapon (second: Rudra) is in the world: its placement's origin on its bone, the right hand
- * if it's on none (Beowulf). The PS2 hangs these effects on the weapon object's frame (+0x104); its grip is taken. */
-static void arm_point(const Combat *c, const Player *p, int second, float out[3]) {
-    const WeaponPlace *place = combat_weapon_place(c, p, p->melee_weapon, second);
+/* The PS2's effect colour for a melee weapon (FUN_002fd1c0: Air Hike's ring, the Devil Trigger's aura), 0x80 = 1. */
+static void weapon_fx_tint(int weapon, unsigned char rgb[3]) {
+    static const unsigned char tint[5][3] = {{0x80, 0, 0}, {0x60, 0x80, 0x90}, {0xa0, 0x40, 0x10}, {0x70, 0x40, 0xa0}, {0x80, 0x80, 0x80}};
+    memcpy(rgb, tint[weapon >= 0 && weapon < 5 ? weapon : 0], 3);
+}
+
+/* Where an effect hangs on Dante: bone b (< 24, the PS2's player +0x1380[b], the model's bone list), or the melee
+ * weapon (ARM_AGNI / ARM_RUDRA: the A&R weapon object's +0x108 / +0x104 frames, taken as its placement's origin on
+ * its bone). */
+#define ARM_AGNI 100
+#define ARM_RUDRA 101
+static void arm_point(const Combat *c, const Player *p, int at, float out[3]) {
     float l[3];
     int k;
-    if (place->bone < DMC3_BONE_COUNT && !place->owner && place->mode != 255) {
+    const WeaponPlace *place = at >= ARM_AGNI ? combat_weapon_place(c, p, p->melee_weapon, at == ARM_RUDRA) : 0;
+    if (place && place->bone < DMC3_BONE_COUNT && !place->owner && place->mode != 255) {
         const float *bp = pose.world_pos[place->bone];
         const Mat3 *br = &pose.world_rot[place->bone];
         for (k = 0; k < 3; ++k) l[k] = bp[k] + br->m[k][0] * place->pos[0] + br->m[k][1] * place->pos[1] + br->m[k][2] * place->pos[2];
     } else {
-        memcpy(l, pose.world_pos[BONE_R_HAND], sizeof(l));
+        memcpy(l, pose.world_pos[at < DMC3_BONE_COUNT ? at : BONE_R_HAND], sizeof(l));
     }
     model_to_world(p, l, out);
 }
 
 /* The Devil Arms' own effects, from their action handlers (docs/NATIVE_FX.md, "Dante's effects"). when: 0 as the
  * script starts, n > 0 n frames into it, -1 / -0x40 / -0x80 as window 0 byte 0 bit 0 / byte 1 bit 0x40 / 0x80
- * turns on, -2 on its flag 1 (+0x24d5). second: on Rudra (the weapon's +0x104; Agni is +0x108). follow: the PS2
- * gives it the weapon's frame (+0x90 / +0x94) rather than a place. */
-typedef struct { const char *script; short when; unsigned char bank, second, follow; unsigned short id; } ArmFx;
+ * turns on, -2 on its flag 1 (+0x24d5). at: arm_point's. follow: the PS2 gives it the frame (+0x90 / +0x94)
+ * rather than a place. */
+typedef struct { const char *script; short when; unsigned char bank, at, follow; unsigned short id; } ArmFx;
 static const ArmFx arm_fx[] = {
-    {"14:3", 0, NFX_STATIC, 0, 1, 0x90},         /* Cerberus action 45 (FUN_00272210): its start */
-    {"14:4", 40, NFX_ARM_CERBERUS, 0, 1, 0x252}, /* and 40 frames into its spin */
-    {"5:25", 0, NFX_ARM_AGNI, 1, 1, 0x288},      /* Agni & Rudra action 57 (FUN_00272c70) */
-    {"5:23", 0, NFX_ARM_AGNI, 1, 1, 0x285},      /* actions 58-60's last swing (FUN_00273150) */
-    {"5:9", -0x80, NFX_ARM_AGNI, 0, 1, 0x37e},   /* action 56: each blade's swing (FUN_00296ae0) */
-    {"5:9", -0x40, NFX_ARM_AGNI, 1, 1, 0x37d},
-    {"5:30", -0x80, NFX_ARM_AGNI, 0, 1, 0x1cc | 0x8000},   /* action 64 (G0x1cc on Agni, V0x302 on Rudra) */
-    {"5:30", -0x40, NFX_ARM_AGNI, 1, 1, 0x302},
-    {"5:26", -0x80, NFX_ARM_AGNI, 0, 1, 0x1cc | 0x8000},
-    {"5:26", -0x40, NFX_ARM_AGNI, 1, 1, 0x302},
-    {"5:11", -0x80, NFX_ARM_AGNI, 0, 1, 0x1cc | 0x8000},
-    {"5:11", -0x40, NFX_ARM_AGNI, 1, 1, 0x302},
-    {"15:8", -0x80, NFX_ARM_AGNI, 0, 1, 0x1cc | 0x8000},   /* action 71, Swordmaster's */
-    {"15:8", -0x40, NFX_ARM_AGNI, 1, 1, 0x302},
-    {"15:9", -0x80, NFX_ARM_AGNI, 0, 1, 0x1cc | 0x8000},
-    {"15:9", -0x40, NFX_ARM_AGNI, 1, 1, 0x302},
-    {"15:10", -0x80, NFX_ARM_AGNI, 0, 1, 0x1cc | 0x8000},
-    {"15:10", -0x40, NFX_ARM_AGNI, 1, 1, 0x302},
-    {"6:33", -1, NFX_ARM_NEVAN, 0, 1, 0x38e},    /* Nevan action 81/82 (FUN_00274c70): the finishers */
-    {"6:9", -1, NFX_ARM_NEVAN, 0, 1, 0x38e},
-    {"6:10", -1, NFX_ARM_NEVAN, 0, 1, 0x38e},
-    {"6:14", -1, NFX_ARM_NEVAN, 0, 1, 0x2c1},    /* and its other swing */
-    {"6:40", -1, NFX_ARM_NEVAN, 0, 1, 0x2c1},
-    {"6:34", -1, NFX_ARM_NEVAN, 0, 1, 0x38e},    /* action 88 (FUN_00276ac0) */
-    {"16:4", -2, NFX_ARM_NEVAN, 0, 1, 0x38e},    /* action 92 (FUN_00277350), Swordmaster's */
-    {"7:10", 0, NFX_STATIC, 0, 1, 0x90},         /* Beowulf action 115 (FUN_0027abf0): its charge */
-    {"7:11", 17, NFX_ARM_BEOWULF, 0, 0, 0x382},  /* and 17 frames into the blow, where the weapon is */
+    {"3:8", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},          /* Rebellion action 14, Million Stab (FUN_00266220): its start */
+    {"14:3", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* Cerberus action 45 (FUN_00272210): its start */
+    {"14:4", 40, NFX_ARM_CERBERUS, BONE_ROOT, 1, 0x252}, /* and 40 frames into its spin */
+    {"5:25", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x288},      /* Agni & Rudra action 57 (FUN_00272c70) */
+    {"5:23", 0, NFX_ARM_AGNI, BONE_HIPS, 1, 0x285},      /* actions 58-60's last swing (FUN_00273150) */
+    {"5:9", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x37e},    /* action 56: each blade's swing (FUN_00296ae0) */
+    {"5:9", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x37d},
+    {"5:30", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},   /* action 64 (G0x1cc on Agni, V0x302 on Rudra) */
+    {"5:30", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"5:26", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"5:26", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"5:11", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"5:11", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"15:8", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},   /* action 71, Swordmaster's */
+    {"15:8", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"15:9", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"15:9", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"15:10", -0x80, NFX_ARM_AGNI, ARM_AGNI, 1, 0x1cc | 0x8000},
+    {"15:10", -0x40, NFX_ARM_AGNI, ARM_RUDRA, 1, 0x302},
+    {"6:33", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* Nevan action 81/82 (FUN_00274c70): the finishers */
+    {"6:9", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},
+    {"6:10", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},
+    {"6:14", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x2c1},  /* and its other swing */
+    {"6:40", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x2c1},
+    {"6:34", -1, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* action 88 (FUN_00276ac0) */
+    {"16:4", -2, NFX_ARM_NEVAN, BONE_SPINE0, 1, 0x38e},  /* action 92 (FUN_00277350), Swordmaster's */
+    {"7:10", 0, NFX_STATIC, BONE_HIPS, 1, 0x90},         /* Beowulf action 115 (FUN_0027abf0): its charge */
+    {"7:11", 17, NFX_ARM_BEOWULF, BONE_HIPS, 0, 0x382},  /* and 17 frames into the blow, where his hips are then */
 };
+/* The Devil Trigger's look (CEfcPub ids 0x20-0x24 / 0x42-0x46, FUN_002298f0 -> FUN_00332240): as it starts, V0xdc
+ * on his hips tinted the melee weapon's colour; while it lasts, E0x140 (tinted) and V0x3c looping there. A change of
+ * weapon in it ends those and starts them again in the new colour without V0xdc; its end ends them. Returns 0 if
+ * they couldn't start (the port's glow stands in). */
+static int devil_fx_aura[2], devil_fx_weapon = -1;
+static int update_devil_fx(const Player *p) {   /* after the pose, before update_move_fx */
+    float at[3];
+    unsigned char t[3];
+    int k;
+    arm_point(0, p, BONE_HIPS, at);
+    if (!p->devil || p->melee_weapon != devil_fx_weapon) {
+        for (k = 0; k < 2; ++k) { if (devil_fx_aura[k]) nfx_kill(devil_fx_aura[k]); devil_fx_aura[k] = 0; }
+        if (!p->devil) { devil_fx_weapon = -1; return 1; }
+    }
+    weapon_fx_tint(p->melee_weapon, t);
+    if (devil_fx_weapon < 0) {
+        int h = nfx_spawn(NFX_STATIC, 0xdc, at, p->yaw, 0);
+        if (h) nfx_tint(h, t[0], t[1], t[2]);
+    }
+    if (p->melee_weapon != devil_fx_weapon) {
+        devil_fx_aura[0] = nfx_spawn_e(NFX_STATIC, 0x140, at, p->yaw, 1);
+        devil_fx_aura[1] = nfx_spawn(NFX_STATIC, 0x3c, at, p->yaw, 1);
+        if (devil_fx_aura[0]) nfx_tint(devil_fx_aura[0], t[0], t[1], t[2]);
+        devil_fx_weapon = p->melee_weapon;
+    }
+    for (k = 0; k < 2; ++k) if (devil_fx_aura[k]) nfx_move(devil_fx_aura[k], at, p->yaw);
+    return devil_fx_aura[0] || devil_fx_aura[1];
+}
+
 #define ARM_FOLLOW 8
 static char arm_fx_log[256];   /* tests: "script:id frame" of each started, in FOCUS_DONE.TXT */
 static void update_arm_fx(const Combat *c, const Player *p) {
-    static int last_script = -1, last_bits;
+    static int last_script = -1, last_bits, last_move = -1;
     static float last_frame, since;
-    static struct { int handle, second; } follow[ARM_FOLLOW];
+    static struct { int handle, at; } follow[ARM_FOLLOW];
     const char *key = combat_script_key(c->script);
     int restarted = c->script != last_script || c->frame < last_frame, rise, i;
     float prev = since;
@@ -1948,27 +1987,28 @@ static void update_arm_fx(const Combat *c, const Player *p) {
         int go;
         if (strcmp(a->script, key) != 0) continue;
         go = a->when > 0 ? prev < a->when && since >= a->when
-           : a->when == 0 ? restarted
+           : a->when == 0 ? c->script != last_script || c->move != last_move   /* not a held move's loop */
            : a->when == -2 ? c->flag == 1
            : (rise & (a->when == -1 ? 1 : -a->when)) != 0;
         if (go) {
             float at[3];
             int h, k;
-            arm_point(c, p, a->second, at);
+            arm_point(c, p, a->at, at);
             h = nfx_spawn(a->bank, a->id, at, p->yaw, 0);
             if (strlen(arm_fx_log) < sizeof(arm_fx_log) - 24)
                 sprintf(arm_fx_log + strlen(arm_fx_log), "%s:%x%s@%d ", a->script, a->id & 0x7fff, h ? "" : "!", (int)since);
             for (k = 0; h && a->follow && k < ARM_FOLLOW; ++k)
-                if (!nfx_alive(follow[k].handle)) { follow[k].handle = h; follow[k].second = a->second; break; }
+                if (!nfx_alive(follow[k].handle)) { follow[k].handle = h; follow[k].at = a->at; break; }
         }
     }
     for (i = 0; i < ARM_FOLLOW; ++i)
         if (follow[i].handle && nfx_alive(follow[i].handle)) {
             float at[3];
-            arm_point(c, p, follow[i].second, at);
+            arm_point(c, p, follow[i].at, at);
             nfx_move(follow[i].handle, at, p->yaw);
         } else follow[i].handle = 0;
     last_script = c->script;
+    last_move = c->move;
     last_frame = c->frame;
     last_bits = c->window_bits | (c->active ? 0x80 : 0);
 }
@@ -1997,8 +2037,9 @@ static void update_move_fx(const Combat *c, Player *p, float dt) {
          * Enemy Step: V0x14d there (FUN_00228950). The port's seal / burst only if they can't start. */
         int h = nfx_spawn(NFX_STATIC, p->hike_fx == 1 ? 0x83 : 0x14d, feet, p->yaw, 0);
         if (h && p->hike_fx == 1) {
-            unsigned int c = weapon_fx_color(p);
-            nfx_tint(h, (c & 0xff) >> 1, (c >> 8 & 0xff) >> 1, (c >> 16 & 0xff) >> 1);
+            unsigned char t[3];
+            weapon_fx_tint(p->melee_weapon, t);
+            nfx_tint(h, t[0], t[1], t[2]);
         }
         if (!h) { if (p->hike_fx == 1) fx_hike_seal(feet, weapon_fx_color(p)); else fx_jump_burst(feet); }
         p->hike_fx = 0;
@@ -5063,8 +5104,10 @@ int main(int argc, char *argv[]) {
         coat_update(&pose, &player, dt);
         {
             float chest[3] = {player.x, player.y + 110.0f, player.z};
-            if (input.devil) fx_devil_burst(chest);
-            if (player.devil) fx_devil_aura(chest);
+            /* The port's own glow only if the game's (update_devil_fx) couldn't start. */
+            update_devil_fx(&player);
+            if (input.devil && player.devil && !devil_fx_aura[0] && !devil_fx_aura[1]) fx_devil_burst(chest);
+            if (player.devil && !devil_fx_aura[0] && !devil_fx_aura[1]) fx_devil_aura(chest);
         }
         update_move_fx(&combat, &player, dt);
         doppel_trail[doppel_head][0] = player.x; doppel_trail[doppel_head][1] = player.y;

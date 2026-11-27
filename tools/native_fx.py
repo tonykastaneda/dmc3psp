@@ -183,6 +183,8 @@ def write_bank(lines, bank, recs, v_ids, e_ids, p_ids=()):
         kind, tex = rec[1], struct.unpack_from("<H", rec, 4)[0]
         if kind == 5:
             models.setdefault(struct.unpack_from("<H", rec, 0x28)[0], None)
+            if rec[0x211]:   # its textures are model +0x212's (FUN_001f1760); that model is exported for them
+                models.setdefault(struct.unpack_from("<H", rec, 0x212)[0], None)
         elif tex != 0xFFFF:
             textures.setdefault(tex, picture(recs["T", tex]))
     model_tex = {}
@@ -256,8 +258,9 @@ def main():
     # P44 (dust): the Arachne's landings start it from the shared pack (FUN_003fb580 and its kin).
     # V4 / V0x1c: a struck crystal (CStageSetCrystal, FUN_004203a0 / 004203c0). V6: a Royalguard block (FUN_00224db0).
     # V0x83: Air Hike (FUN_00222700); V0x14d: Enemy Step (FUN_00228950); V0x90: Cerberus's and Beowulf's charges start
-    # (FUN_00272210, FUN_0027abf0) and kicks off a wall or an enemy.
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90), ORB_E, (44,)))
+    # (FUN_00272210, FUN_0027abf0) and kicks off a wall or an enemy. V0xdc, E0x140, V0x3c: the Devil Trigger (CEfcPub,
+    # FUN_00332240 ids 0x20-0x24 / 0x42-0x46).
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90, 0xdc, 0x3c), ORB_E + (0x140,), (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,

@@ -44,10 +44,12 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera's own up); fake
   sprite layers face the camera; the sheet's top taken as a sprite's top; Line02 isn't ported.
-- **The Devil Arms' effects** (`update_arm_fx`, NATIVE_FX.md "Dante's effects"): placed at the weapon placement's
-  origin on its bone (the right hand for Beowulf), not the weapon object's own frame, and turned by Dante's yaw only;
+- **The Devil Arms' effects** (`update_arm_fx`, NATIVE_FX.md "Dante's effects"): on their bones' positions, turned by
+  Dante's yaw only (not the bone's frame); A&R's on the weapon placement's origin, not the weapon object's frames;
   Nevan's V0x2c1 / V0x38e start on any 6:14 / 6:40 / 6:9 / 6:10 / 6:33 as the window bit turns on, not only in
-  action 81 / 82's phases.
+  action 81 / 82's phases. Nevan's V0x38e dome reads whiter and more solid than the PS2's (analysis/ref/pfx/nevan_ab.png).
+- **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
+  PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
   flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
