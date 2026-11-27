@@ -102,7 +102,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
 - **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
   the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
-- **Vergil**: gravity 1 [inferred]; effect 0x338 is a hit spark; his drop lands where Dante stands; his hit reaction
+- **Vergil**: effect 0x338 is a hit spark; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
 - **Geryon**: gallop laps 12 [approximation]; both bodies play motion n for action n [inferred]; the cart's missiles'

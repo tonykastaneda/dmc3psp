@@ -11,7 +11,20 @@ void fx_hit_spark(const float p[3]){(void)p;}
 void fx_guard_flash(const float p[3]){(void)p;}
 int main(void){int i,seen=0;
  assert(motion_init()>0);assert(vergil_boss_init());
- vergil_boss_set_variant(0);vergil_boss_spawn(0,0,0);vb.hp=5000;
+ vergil_boss_set_variant(0);vergil_boss_spawn(0,0,0);
+ /* Native uppercut owns Y; Helm Breaker has a fixed downward launch, not a fitted arc. */
+ set_state(S_UPPER);seen=0;
+ {float peak=0,velocity=0;
+  for(i=0;i<240;++i){vergil_boss_update(1,0,0,400,1);
+   if(vb.pos[1]>peak)peak=vb.pos[1];
+   if(vb.state==S_LEAP && vb.step==1){
+    assert(vb.vel[1]<0);if(!seen)velocity=vb.vel[1];else assert(vb.vel[1]==velocity);seen=1;
+   }
+   if(seen && vb.action==0x60)break;
+  }
+  assert(seen && peak>180 && peak<240 && vb.action==0x60 && vb.pos[1]==vb.floor_y);
+ }
+ vergil_boss_spawn(0,0,0);vb.hp=5000;
  for(i=0;i<1000;++i)vergil_boss_update(1,0,0,400,1);
  assert(!vergil_boss_devil() && !vb.dt_unlocked && vergil_boss_variant()==0);
  vergil_boss_set_variant(1);vergil_boss_spawn(0,0,0);assert(vergil_boss_health()==8000);
