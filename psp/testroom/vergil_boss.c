@@ -841,9 +841,11 @@ static int part_visible(int i){
 /* Mission 19's partner Vergil (CPlVergil, ARKHAM_SPEC 1): his body (em035 [1], Dante's 24-bone layout) posed by the
  * bone transforms of a player Pose (main.c's partner, playing Dante's moves a frame late) and drawn where he stands.
  * His coat and Yamato aren't posed [stand-in]. */
+static int load_data(void);   /* the model's buffers, made at the first spawn (below) */
 void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], float x, float y, float z, float yaw) {
     int b, k, j;
     if (vb.active) return;   /* the boss's own buffers are in use */
+    if (!load_data()) return;
     for (b = 0; b < 24; ++b) {
         for (k = 0; k < 3; ++k) { for (j = 0; j < 3; ++j) body_pose[b].m[k][j] = rot[b][k][j]; body_pose[b].p[k] = pos[b][k]; }
     }
@@ -1023,6 +1025,7 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     }
 }
 void vergil_boss_spawn(float x, float y, float z) {
+    if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     memset(&vb, 0, sizeof(vb));
     vb.active = 1;
     vb.variant=boss_variant;
@@ -1059,20 +1062,24 @@ void vergil_boss_push_out(float *x, float *z, float y, float r) {
     *x = vb.pos[0] + dx / d * min;
     *z = vb.pos[2] + dz / d * min;
 }
-int vergil_boss_init(void) {
-    int file, i, j;
-    for (file = 0; file < 4; ++file)
-        for (i = 0; i < 100; ++i) {
-            char name[8];
-            snprintf(name, sizeof(name), "vr%d-%02d", file, i);
-            motion_ids[file][i] = motion_find(name);
-        }
-    if (motion_ids[0][0] < 0 || motion_ids[3][3] < 0) return 0;
+/* Its model's buffers (skinned vertices, indices, swizzled textures) are made at its first spawn, not at boot, and
+ * freed by vergil_boss_data_release when a room is left without it (docs/MEMORY.md): bosses held about 2.7 MB in every mission. */
+static int data_ready;
+static void free_data(void) {
+    int i;
+    for (i = 0; i < VERGIL_PART_COUNT; ++i) { free(vertices[i]); free(indices[i]); vertices[i] = 0; indices[i] = 0; }
+    for (i = 0; i < VERGIL_TEXTURE_COUNT; ++i) { free(textures[i]); textures[i] = 0; }
+    data_ready = 0;
+}
+void vergil_boss_data_release(void) { if (!vb.active) free_data(); }
+static int load_data(void) {
+    int i, j;
+    if (data_ready) return 1;
     for (i = 0; i < VERGIL_PART_COUNT; ++i) {
         const VergilMesh *m = &vergil_parts[i];
         vertices[i] = memalign(16, sizeof(Vertex) * m->vertices);
         indices[i] = memalign(16, sizeof(unsigned short) * m->indices_count);
-        if (!vertices[i] || !indices[i]) return 0;
+        if (!vertices[i] || !indices[i]) { free_data(); return 0; }
         memcpy(indices[i], m->indices, sizeof(unsigned short) * m->indices_count);
         for (j = 0; j < m->vertices; ++j) {
             vertices[i][j].u = m->uvs[j].u;
@@ -1083,10 +1090,22 @@ int vergil_boss_init(void) {
         const Dmc3Texture *t = &vergil_textures[i];
         size_t bytes = (size_t)t->width * t->height;
         textures[i] = memalign(16, bytes);
-        if (!textures[i]) return 0;
+        if (!textures[i]) { free_data(); return 0; }
         memcpy(textures[i], t->rgba, bytes);
-        if (!swizzle_texture8(textures[i], t->width, t->height)) return 0;
+        if (!swizzle_texture8(textures[i], t->width, t->height)) { free_data(); return 0; }
     }
     sceKernelDcacheWritebackAll();
+    data_ready = 1;
+    return 1;
+}
+int vergil_boss_init(void) {
+    int file, i;
+    for (file = 0; file < 4; ++file)
+        for (i = 0; i < 100; ++i) {
+            char name[8];
+            snprintf(name, sizeof(name), "vr%d-%02d", file, i);
+            motion_ids[file][i] = motion_find(name);
+        }
+    if (motion_ids[0][0] < 0 || motion_ids[3][3] < 0) return 0;
     return 1;
 }

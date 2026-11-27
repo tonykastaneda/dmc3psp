@@ -692,7 +692,9 @@ int geryon_boss_take_warp(float out[4]) {
     memcpy(out, dante_below, sizeof(dante_below));
     return 1;
 }
+static int load_data(void);   /* the model's buffers, made at the first spawn (below) */
 void geryon_boss_spawn(float x, float y, float z) {
+    if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     (void)x; (void)y; (void)z;
     memset(&gb, 0, sizeof(gb));
     gb.active = 1;
@@ -743,20 +745,24 @@ void geryon_boss_push_out(float *x, float *z, float y, float r) {
     *x = gb.pos[0] + c * across + s * along;
     *z = gb.pos[2] - s * across + c * along;
 }
-int geryon_boss_init(void) {
-    int body, i, j;
-    for (body = 0; body < 2; ++body)
-        for (i = 0; i < 21; ++i) {
-            char name[8];
-            snprintf(name, sizeof(name), "%s%02d", body ? "gc" : "gh", i);
-            motion_ids[body][i] = motion_find(name);
-        }
-    if (motion_ids[0][0] < 0 || motion_ids[1][0] < 0) return 0;
+/* Its model's buffers (skinned vertices, indices, swizzled textures) are made at its first spawn, not at boot, and
+ * freed by geryon_boss_data_release when a room is left without it (docs/MEMORY.md): bosses held about 2.7 MB in every mission. */
+static int data_ready;
+static void free_data(void) {
+    int i;
+    for (i = 0; i < GERYON_PART_COUNT; ++i) { free(vertices[i]); free(indices[i]); vertices[i] = 0; indices[i] = 0; }
+    for (i = 0; i < GERYON_TEXTURE_COUNT; ++i) { free(textures[i]); textures[i] = 0; }
+    data_ready = 0;
+}
+void geryon_boss_data_release(void) { if (!gb.active) free_data(); }
+static int load_data(void) {
+    int i, j;
+    if (data_ready) return 1;
     for (i = 0; i < GERYON_PART_COUNT; ++i) {
         const GeryonMesh *m = &geryon_parts[i];
         vertices[i] = memalign(16, sizeof(Vertex) * m->vertices);
         indices[i] = memalign(16, sizeof(unsigned short) * m->indices_count);
-        if (!vertices[i] || !indices[i]) return 0;
+        if (!vertices[i] || !indices[i]) { free_data(); return 0; }
         memcpy(indices[i], m->indices, sizeof(unsigned short) * m->indices_count);
         for (j = 0; j < m->vertices; ++j) {
             vertices[i][j].u = m->uvs[j].u;
@@ -777,10 +783,22 @@ int geryon_boss_init(void) {
         const Dmc3Texture *t = &geryon_textures[i];
         size_t bytes = (size_t)t->width * t->height;
         textures[i] = memalign(16, bytes);
-        if (!textures[i]) return 0;
+        if (!textures[i]) { free_data(); return 0; }
         memcpy(textures[i], t->rgba, bytes);
-        if (!swizzle_texture8(textures[i], t->width, t->height)) return 0;
+        if (!swizzle_texture8(textures[i], t->width, t->height)) { free_data(); return 0; }
     }
     sceKernelDcacheWritebackAll();
+    data_ready = 1;
+    return 1;
+}
+int geryon_boss_init(void) {
+    int body, i;
+    for (body = 0; body < 2; ++body)
+        for (i = 0; i < 21; ++i) {
+            char name[8];
+            snprintf(name, sizeof(name), "%s%02d", body ? "gc" : "gh", i);
+            motion_ids[body][i] = motion_find(name);
+        }
+    if (motion_ids[0][0] < 0 || motion_ids[1][0] < 0) return 0;
     return 1;
 }

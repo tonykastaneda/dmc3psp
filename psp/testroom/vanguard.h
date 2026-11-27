@@ -21,4 +21,5 @@ void vanguard_trace(const char *path);
 void vanguard_render_test(int no_texture, int no_lighting);
 void vanguard_note(const char *event, float value);
 
+void vanguard_data_release(void);   /* frees the model's buffers unless one is up (made again at the next spawn) */
 #endif
