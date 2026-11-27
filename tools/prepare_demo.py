@@ -887,7 +887,7 @@ def main():
         blob += struct.pack("<fI4f", start, no, *(arg + [0.0] * (4 - len(arg))))
     fogs = bake_fog(timeline)
     blob += fogs   # right after the Program clips; their count is the high half of +0x3c
-    # Then, after the fogs, the stage's own hide track (its model slot's Hide clips: a cut's .hid keys the stage's SCM objects one by
+    # Then (after the fog records) the stage's own hide track (its model slot's Hide clips: a cut's .hid keys the stage's SCM objects one by
     # one; demo 3 hides the walls in front of its later cameras): u32 count, then {f32 demo frame, u16 object, u16
     # hidden}, by frame. A clip without a .hid shows them all. The stage's batches carry object + 1 (prepare_stage).
     events = stage_hide_events(timeline, files)

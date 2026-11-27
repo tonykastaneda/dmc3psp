@@ -286,9 +286,9 @@ int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
 static int stage_double, sky_off, sky_unfog;
 void stage_test_sky_off(int off) { sky_off = off; }   /* tests: "nosky 1", the sky pass's cost */
 void stage_set_double(int on) { stage_double = on; }
+void stage_set_sky_unfog(int on) { sky_unfog = on; }
 static int stage_near_cull;
 void stage_set_near_cull(int on) { stage_near_cull = on; }
-void stage_set_sky_unfog(int on) { sky_unfog = on; }
 
 void stage_draw(void) {
     const TexEntry *textures;

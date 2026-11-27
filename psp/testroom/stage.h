@@ -21,10 +21,10 @@ const StageInfo *stage_collision_info(void);
 void stage_draw(void);
 /* The GE's colour doubling on the stage's draw (sceGuTexFunc's bit 16): room 012's baked colours are halved for it. */
 void stage_set_double(int on);
-/* A cutscene: stage triangles reaching behind the near plane are dropped, as the PS2 does (near_clip.h). */
-void stage_set_near_cull(int on);
 /* A cutscene's hardware fog stays off the sky dome (its vertices sit past any fog far). */
 void stage_set_sky_unfog(int on);
+/* A cutscene: stage triangles reaching behind the near plane are dropped, as the PS2 does (near_clip.h). */
+void stage_set_near_cull(int on);
 void stage_test_sky_off(int off);
 int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
