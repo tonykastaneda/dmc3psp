@@ -272,9 +272,12 @@ def main():
     summary.append(write_bank(lines, 11, records(read(758)), (0x1ea,), ()))
     # 12 a stage effect pack (GDATA 526; 646 has the same): the crystals' V554 (a type-3 crystal struck, FUN_004203c0).
     summary.append(write_bank(lines, 12, records(read(526)), (554,), ()))
+    # 13 the Nausika's effect pack (GDATA 694): CStageSetNausika's blows (V0x22b / V0x22c, FUN_00493590) and its
+    # aura (V0x352 on a bone, FUN_00492630: not played, see nausika.c).
+    summary.append(write_bank(lines, 13, records(read(694)), (0x22b, 0x22c), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 
