@@ -311,10 +311,15 @@ int pfx_spawn(int bank, const unsigned char *rec, const PfxFrame *place, int own
     return 1;
 }
 
+/* A main instance ends: its owner's timeline is let go (nfx_unref). Its fakes go on their next update. */
+static void end_inst(Inst *s) {
+    if (s->parent < 0 && s->owner) nfx_unref(s->owner);
+    s->active = 0;
+}
 void pfx_kill_root(int root) {
     int i;
     if (!root) return;
-    for (i = 0; i < MAX_INST; ++i) if (inst[i].active && inst[i].root == root) inst[i].active = 0;
+    for (i = 0; i < MAX_INST; ++i) if (inst[i].active && inst[i].root == root) end_inst(&inst[i]);
 }
 
 /* ---- Running --------------------------------------------------------------- */
@@ -442,7 +447,7 @@ void pfx_update(float frames) {
                 for (j = 0; j < MAX_INST; ++j) if (inst[j].active && inst[j].parent == i) start_fake(&inst[j]);
             } else {
                 int j;
-                s->active = 0;
+                end_inst(s);
                 for (j = 0; j < MAX_INST; ++j) if (inst[j].active && inst[j].parent == i) inst[j].active = 0;
             }
             continue;

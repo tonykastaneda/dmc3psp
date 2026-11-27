@@ -35,6 +35,8 @@ const unsigned char *nfx_record(int bank, int kind, int id);
 int nfx_texture_size(int bank, int id, int *width, int *height);
 int nfx_bind_texture(int bank, int id);
 int nfx_frame(int handle, float m[3][3], float p[3]);
+/* pfx.c lets go of the timeline a P child keeps alive (and following its owner) while it plays. */
+void nfx_unref(int handle);
 /* A P record started on its own at pos, turned by yaw (as nfx_spawn), in the world; loop: bursts until nfx_reset. */
 int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop);
 

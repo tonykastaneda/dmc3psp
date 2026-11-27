@@ -259,6 +259,7 @@ static void g_tick(int i, float frames);
 static int owner_emitting(int seq);
 static void frame_local(Frame *f, const float tr[3], const float rot[3], const float sc[3]);
 static void frame_mul(Frame *out, const Frame *a, const Frame *b);
+static void release(int seq);
 static void seq_frame(const Seq *s, Frame *out);
 
 /* ---- P children (pfx.c) ---------------------------------------------------- */
@@ -307,7 +308,14 @@ static void start_p(int bank, int id, int i, const unsigned char *child, const F
     }
     /* +0x98, starting again: its timeline's loop (a G's children play once, as nfx's) */
     root = root_of(&seqs[i]);
-    pfx_spawn(bank, nfx_record(bank, 'P', id), &where, owner, handle_of((int)(root - seqs)), seqs[i].g ? 0 : seqs[i].loop);
+    if (pfx_spawn(bank, nfx_record(bank, 'P', id), &where, owner, handle_of((int)(root - seqs)), seqs[i].g ? 0 : seqs[i].loop)
+        && owner)
+        ++seqs[i].refs;   /* the timeline lasts, and the particles follow it, while they play (the game's +0x90) */
+}
+void nfx_unref(int handle) {
+    int i = (handle & 0xff) - 1;
+    if (handle <= 0 || i < 0 || i >= MAX_SEQ || !seqs[i].active || seqs[i].gen != (unsigned short)(handle >> 8)) return;
+    release(i);
 }
 static int root_at(int i, const float pos[3], float yaw, int loop);
 int nfx_spawn_p(int bank, int p_id, const float pos[3], float yaw, int loop) {
