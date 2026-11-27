@@ -50,9 +50,11 @@ typedef struct {
 
 static Inst inst[MAX_INST];
 static unsigned short generation = 1;
-static int enabled = 1, started;
+static int enabled = 1, started, dropped, peak;
 void pfx_enable(int on) { enabled = on; }
 int pfx_started(void) { return started; }
+int pfx_dropped(void) { return dropped; }
+int pfx_peak(void) { return peak; }
 static unsigned int seed = 0x9e3779b9u;
 
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
@@ -286,7 +288,7 @@ int pfx_spawn(int bank, const unsigned char *rec, const PfxFrame *place, int own
     if (type > 4) return 0;   /* Line02: not ported */
     n = sub_count(rec, p);
     i = new_inst();
-    if (i < 0) return 0;
+    if (i < 0) { ++dropped; return 0; }
     inst[i].bank = (unsigned char)bank; inst[i].type = (unsigned char)type; inst[i].rec = rec; inst[i].p = p;
     inst[i].owner = owner; inst[i].root = root; inst[i].loop = (unsigned char)loop;
     inst[i].place = *place;
@@ -297,6 +299,7 @@ int pfx_spawn(int bank, const unsigned char *rec, const PfxFrame *place, int own
     }
     start_main(&inst[i]);
     ++started;
+    { int live = pfx_live(); if (live > peak) peak = live; }
     for (j = 0; j < n && j < 8; ++j) {
         int f = new_inst();
         if (f < 0) break;

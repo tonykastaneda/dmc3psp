@@ -39,7 +39,7 @@ their id | 0x8000, so the banks and the cutscenes' blobs keep their layout. Its 
 | +0 | Where the children go: 0 the world, fixed where made; 1 / 2 on the emitter, moving with it |
 | +1 | Its path: 0 a line (speed +4 losing +8 a frame, along (0, +0x10, +0x14) degrees, `FUN_001b2ab0`); 1 a model's points (not ported: it stays put); 2 still |
 | +0x18, +0x1c, +0x34 | i32: first delay; interval, plus a random number masked by +0x34 |
-| +0x20, +0x30 | i32 life in frames; +0x30 set: no end (the port: while a looping owner lasts) [inferred] |
+| +0x20, +0x30 | i32 life in frames; +0x30 set: no end. A cutscene's emits until the demo ends (PCSX2: demo 123's G79 burns on for seconds); elsewhere the port ends it with its life unless a looping owner lasts [inferred] |
 | +0x24, +0x26 | The child's kind (0 P, 1 E, 2 G, 3 V) and u16 id |
 | +0x28, +0x2c, +0x59 | The children's frame turned (0, +0x28, +0x2c) degrees; byte +0x59 a random spread on +0x28 |
 | +0x38, +0x3c, +0x40 | Scale +0x38 going to +0x3c over u16 +0x40 frames |
@@ -249,3 +249,11 @@ y, width, height, then an s8 centre. UVs are x / width .. (x + width - 1) / widt
   display-list build 7.2 ms against 6.7 ms without (seconds 1-6 of PERF.TXT); the update didn't move.
   Demo 8 (Lady's missiles, 358 instances started over 22 s): 7.8-8.7 ms against 7.3-8.1 ms with `nopfx 1` in its
   smoke-heavy seconds, no missed frames at 60.
+
+### Checked against the PS2 (PCSX2)
+
+Mission 3's opening (demos 5 and 123) recorded unskipped in PCSX2 (`analysis/ref/pfx/ps2_m3_opening.mp4`, local) and
+the port's demo 123 (`analysis/testroom/demo123b.mp4`), side by side in `analysis/ref/pfx/demo123_ab_strip2.png`: Lady's
+missile shots, the muzzle flash, the missiles' smoke trails and bursts and the burning demons match in place, size and
+colour. The one difference found, the demons' fire (G79 → E275) going out after a second where the PS2's burns on, was
+the no-end generator rule above, now fixed.

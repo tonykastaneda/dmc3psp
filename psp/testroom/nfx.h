@@ -28,6 +28,7 @@ void nfx_update(float frames);
 /* After the world and characters, before the 2D. eye: the camera position. */
 void nfx_draw(const float eye[3]);
 int nfx_live_elements(void);
+int nfx_live_seqs(void);      /* tests: timelines running (of 255) */
 
 /* For pfx.c: bank b's record of kind 'P' or 'A' by id (0 if none); a texture's size and binding (0 if none); a live
  * handle's frame (columns the axes, as pfx's PfxFrame; 0 once it's gone or killed). */

@@ -22,5 +22,7 @@ int pfx_live(void);           /* instances running */
 void pfx_enable(int on);      /* tests ("nopfx 1"): 0 starts no P effects */
 int pfx_live_prims(void);     /* their primitives (sprites, triangles, lines) */
 int pfx_started(void);        /* tests: main instances started since boot */
+int pfx_dropped(void);        /* tests: starts refused, the pool full */
+int pfx_peak(void);           /* tests: most instances at once */
 
 #endif
