@@ -5195,6 +5195,14 @@ int main(int argc, char *argv[]) {
                     if (v >= 0 && !nfx_spawn(NFX_STATIC, v, at, atan2f(-dx, -dz), 0)) fx_guard_flash(chest);
                     if(focus_cmp)vanguard_note("player_guard",player.health);
                 }
+                /* The attacker hears how it was guarded (enemy_guarded): just block / Release's clean counter 2 (3 in
+                 * the air), a block 0 / 1. */
+                {
+                    int gt = combat.guard_type, code = -1;
+                    if (gt == 3 || gt == 10) code = player.on_ground ? 2 : 3;
+                    else if (gt == 0 || gt == 1 || gt == 4 || gt == 11 || gt == 12) code = player.on_ground ? 0 : 1;
+                    enemy_guarded(code);
+                }
             }
             }
             {

@@ -539,5 +539,32 @@ globals are at 0x620170 + (0xXXXX - 0x10000): gp-0x7580 (`iGpffff8a80`) holds 0x
 gp-0x757c (`iGpffff8a84`) 0x5a6bb0, the player's defence profiles (0x54 bytes each, copied to +0x2a7c by
 `FUN_002e8af0`): eight percentages (100), then two values (+0x20 / +0x24) that change by profile: 33 the normal one
 (1), 25 / 20 / 16 a block at style levels 0-2 (6-8), 16 / 13 / 11 the lighter one (9-11, Release's counter), 3 / 2
-Devil Trigger's (12-16), 33 the guard break's (17); then max health 6000 and 60 / 60. The damage component that reads
-them (player+0x2a20, its +0xc) isn't found yet, so how they scale a blow isn't known.
+Devil Trigger's (12-16), 33 the guard break's (17); then max health 6000 and 60 / 60. The damage: player+0x2a20 is
+`CDamage` (vtable 0x6056d0, +0xc `FUN_002f0580`), which hands the blow to the damage component at player+0x2a64
+(vtable 0x605730, +0x14 `FUN_002f17a0`, +0x18 `FUN_002f22c0`): **damage = the record's +4 x profile[record +1] / 100 x
+profile[8 + record +2] / 100 x the attacker's power (+0x68) x the difficulty's factor** (`*0x1d0d73c`: enemy on player
+0.5 / 1 / 1.25 / 2 / 4 for difficulties 0-4; player on enemy 2 / 1 / 0.9 / 0.7 / 0.5), taken from HP (+0x2ad0 +4). So
+Dante takes 33% of a record's damage normally (profile 1). `FUN_004421f0` (t0: 4 the lighter set; t1: 1 a guard break)
+picks the profile for a block (6-8 by style level), the lighter one (9-11), Devil Trigger's by melee weapon (0x61a448:
+12-16), a break 0x11 (0x12 in Devil Trigger). The port takes records whole, so its blocks scale by profile / 33
+(`combat.c` chip_share). **The port's ordinary hits take records whole too: 3x the PS2's at difficulty 1 (not changed
+here).**
+
+## The guarded attacker
+
+When a guard or Release's counter holds, `FUN_002e7f10` / `FUN_00441270` call the attacker's hit sub-object (+0x40)
++0x20 with a code: 0 / 1 a block (on the ground / in the air), 2 / 3 a just block or the counter's clean result, 4 type
+5. `FUN_00259dd0` passes it to the object at +0x114's +0x28. The Hells set +0x114 to their shared AI at +0x2bc0
+(CComEm000, vtable 0x607b20): `FUN_003681a0` on codes 2 / 3 takes their own blocked record as a hit (`FUN_00368bd0` ->
++0x68), a flinch. Beowulf (CEm030) sets it to his +0x130: `FUN_002df7b0` on codes 2 / 3 while his action is 2-4 takes the
+hit, action 8 (`FUN_002df6d0`). Nevan (CEm028, `FUN_003bb540`) calls her +0x13c object's +0x10 [not read]; Lady, the
+Enigma and Cerberus's (`0x32a3a0`) do nothing. The rest, by class (the +0x130 sub-object's +0x28 unless noted):
+- Agni & Rudra (CEm027), Lady (CEm034), the Enigma (CEm013), Cerberus (CEm025), CEm026 / 031 / 035: `0x32a3a0`, nothing.
+- The Fallen (CEm011, `FUN_003493c0`) and CEm012 (`FUN_003d02b0`): codes 2 / 3, unless dying, `FUN_00259f10` -> their
+  +0x114 object's +0x3c [not read].
+- Blood-goyles (CEm014, `FUN_0039d960`), Soul Eaters (CEm016, `FUN_0049c9a0`), CEm017 / 021 (`FUN_00407bc0`): codes 2 / 3 / 4
+  call their +0x358, which only stores the record's +0x2c (+0x438 / +0x468 / +0x3c8); what their AI does with it isn't read.
+- Arachnes (CEm010, `FUN_003f5fa0`): drop their web effects; codes 2 / 4 call +0x2f0 (`FUN_003f7690`: +0x3a4d = 1, +0x3430 =
+  0) and set +0x3a4e [the state those start isn't read].
+- CEm032 (`FUN_003d4800`) calls its +0x13c object's +0x10, as Nevan.
+- The Gigapede (CEm023, `FUN_0038da60`) and CEm029 (`FUN_00384d00`): nothing. Also: the guard timer +0x3c8c restarts on every press of the guard (0x243de8) and is 99 while it's up.

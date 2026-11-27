@@ -389,6 +389,25 @@ static void seek_events(Combat *c) {
  * a continuation keeps the action. */
 /* Royalguard's gauge (FUN_004420a0, config chunk 9): its level, +0x3c86, 0 empty, 1 up to +0x220 (3000), 2 up to
  * +0x224 (6000), 3 above (to +0x228, 9000, at style level 2). */
+/* The share of a blow Dante takes under a defence profile (0x5a6bb0 = gp-0x757c, 0x54 bytes each; FUN_002f17a0 takes
+ * the record's damage x profile[element] / 100 x profile[8 + type] / 100 x the attacker's power x difficulty): +0x20 is
+ * 33 for his own (profile 1), so the port's blows (records taken whole) are scaled by profile / 33. FUN_004421f0 picks
+ * the profile: a block (t0 0) 6 / 7 / 8 = 25 / 20 / 16 by style level, the lighter one (t0 4) 9 / 10 / 11 = 16 / 13 /
+ * 11, in Devil Trigger 12-16 by melee weapon (0x61a448: 3 3 2 3 2); a guard break 0x11 = 33 (0x12 = 11 in it). */
+static float chip_share(const Player *player, int lighter) {
+    static const float dt_share[5] = {3.0f, 3.0f, 2.0f, 3.0f, 2.0f};
+    if (player->devil) return dt_share[player->melee_weapon >= 0 && player->melee_weapon < 5 ? player->melee_weapon : 0] / 33.0f;
+    return (lighter ? 11.0f : 16.0f) / 33.0f;   /* style level 2 */
+}
+extern int combat_dante_can_die;
+/* Takes a chip off his health; 0 if it would empty it (FUN_004421f0 returns 0: the blow lands instead). */
+static int take_chip(Player *player, float damage, float share) {
+    if (player->health - damage * share < 1.0f && combat_dante_can_die) return 0;
+    player->health -= damage * share;
+    if (player->health < 1.0f) player->health = 1.0f;
+    return 1;
+}
+
 static int rg_level(float g) { return g <= 0.0f ? 0 : g <= 3000.0f ? 1 : g <= 6000.0f ? 2 : 3; }
 /* Release (FUN_0027d9f0 / 0027e130) plays its motion by the gauge's level and empties it: actions 191 / 192 / 193 /
  * 195 / 196 / 197 by level 0-3 (action 190 / 194 one motion). Its damage (+0x2a1c: e.g. 191 0.9 x (300 + 0.25 x the
@@ -1382,6 +1401,11 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     unsigned int inputs = read_inputs(c, player, input, dt);
     int action, hits;
     c->guard_frames += dt * MOTION_FPS;
+    /* +0x3c8c restarts on every press of the guard (0x243de8), 99 while it's up (0x243e2c). */
+    if (player->style == STYLE_ROYALGUARD) {
+        if (input->style_action) c->guard_frames = 0.0f;
+        else if (!input->style_held) c->guard_frames = 99.0f;
+    }
     if (c->rg_invuln > 0.0f) c->rg_invuln -= dt * MOTION_FPS;
     c->release_frames = c->release_frames < 0.0f ? 0.0f : c->release_frames + dt * MOTION_FPS;
 
@@ -1867,12 +1891,10 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
     if ((c->action == 190 || c->action == 194) && c->release_frames <= 10.0f) {
         int result = c->release_frames <= 3.0f ? 0 : c->release_frames <= 7.0f ? 1 : 2;
         c->guard_type = 10 + result;
-        if (result) {
-            if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
-            player->health -= damage;
-            if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
-        }
-        return 0;
+        if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
+        /* result 1 the lighter profile (t0 4), 2 the block's (t0 0) */
+        if (!result || take_chip(player, damage, chip_share(player, result == 1))) return 0;
+        c->guard_type = 6;
     }
     if (c->move == MOVE_RG_BLOCK || c->move == MOVE_RG_HOLD || c->move == MOVE_RG_AIR_BLOCK) {
         static const unsigned char table[5][4] = {{0, 4, 3, 5}, {2, 2, 3, 5}, {2, 2, 3, 2}, {6, 6, 3, 5}, {6, 6, 3, 6}};
@@ -1884,15 +1906,21 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
              * (1), +0x180 2 (3, the just block, also +0x1f4 = 10 frames of blows ignored), +0x184 1.25 (4); to 9000. */
             static const float factor[6] = {1.0f, 1.0f, 0.0f, 2.0f, 1.25f, 0.0f};
             float d = damage < 0.0f ? (kind >= 1 ? 800.0f : 700.0f) : damage;
-            c->rg_gauge += d * factor[c->guard_type];
-            if (c->rg_gauge > 9000.0f) c->rg_gauge = 9000.0f;
-            if (c->guard_type == 3) c->rg_invuln = 10.0f;
-            return 0;
+            /* Chip (FUN_00441df0: types 0 / 1 the block's profile, 4 the lighter one, 3 none); one that would empty him
+             * isn't blocked. */
+            if (c->guard_type == 3 || take_chip(player, d, chip_share(player, c->guard_type == 4))) {
+                c->rg_gauge += d * factor[c->guard_type];
+                if (c->rg_gauge > 9000.0f) c->rg_gauge = 9000.0f;
+                if (c->guard_type == 3) c->rg_invuln = 10.0f;
+                return 0;
+            }
+            c->guard_type = 6;   /* the blow lands */
         }
         if (c->guard_type == 2) {
             /* A break (FUN_002e7f10 case 2 -> FUN_004421f0 -> state 0x15): the blow's damage, then the stagger facing
              * the attacker. [The damage under profile 0x11 (FUN_002e8af0) isn't read: the blow's own.] */
             if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
+            if (player->devil) damage *= 11.0f / 33.0f;   /* profile 0x12 in Devil Trigger; 0x11's 33 is his own */
             player->health -= damage;
             if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f;
             if (player->health > 0.0f) {

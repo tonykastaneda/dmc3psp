@@ -62,9 +62,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   action 81 / 82's phases. Nevan's V0x38e dome reads whiter and more solid than the PS2's (analysis/ref/pfx/nevan_ab.png).
 - **Royalguard's judgement** (`combat_player_hit_kind`, NATIVE_FX.md): the blow's guard class (+0x3e) is taken
   from its hit kind (knockdown kinds class 1, others 0) [estimate]; the style level is 2; grade 5 (+0x3c82) is unreachable in the
-  game's own code (set only after a type-5 block, which needs it); the result-1 table (on the record's +0x18) isn't read; a guard break takes the blow's own damage (profile 0x11, `FUN_002e8af0`, isn't read); a normal block's chip damage and Release's
-  counter results 1 / 2 (`FUN_004421f0`'s defence profiles, a table at gp-0x757c, not located: the blow's own damage),
-  the attacker's recoil from the counter, and Release's damage from the gauge (+0x2a1c) aren't carried (the port's blows are in
+  game's own code (set only after a type-5 block, which needs it); the result-1 table (on the record's +0x18) isn't read; a guard break takes the blow's own damage (profile 0x11, `FUN_002e8af0`, isn't read); the guarded attacker's reaction (`enemy_guarded`) is ported for the Hells and Beowulf only: Nevan's (+0x13c
+  object's +0x10) and the other classes' +0x114 handlers aren't read (Lady's and the Enigma's do nothing); and Release's damage from the gauge (+0x2a1c) aren't carried (the port's blows are in
   units of health).
 - **Blade trails** (`fx.c` mtrails): the game's trail models bent through the last 11 weapon frames, type 0 added and types 1 / 2
   alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the rotations blended linearly and renormalised [FUN_00133ab0 not
