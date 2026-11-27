@@ -86,6 +86,41 @@ every face came out bright and neutral. What the game does:
 `analysis/testroom/arkham_face_lit_compare.png` (demo 1's cm027) and `ending_dante_lit_compare.png` (demo 59, from
 the Mission 20 credits state, `analysis/ref/cast/credits_to_ending.mp4`).
 
+**Blocky faces in captures are PPSSPP's setting, not the port.** `demo.c` (and every model draw) asks for bilinear
+(`sceGuTexFilter(GU_LINEAR, GU_LINEAR)`) on full-size pages (no mips, no downscale: `pl103_02`'s face page is 256x128
+as on the disc). The shared `ppsspp.ini` forces Nearest (`TextureFiltering = 2`), which overrides it in every
+`ppsspp_scene.py` capture. `--filter auto` runs one scene with the game's own filtering (`--appendconfig`, the
+shared ini untouched): `analysis/testroom/filt_d1_4130.png` beside `lit_d1_4130.png` (same frame, Nearest). A PSP
+filters as asked, so it shows the smooth one.
+
+**Arkham's cheek marks (cm027) are the right page, too strong.** The reddish streaks on his left cheek (the viewer's
+right) are `pl103_02` object 2: a shell over the left half of his face (0.03-0.2 cm outside the skin), texture 1 (a
+4-bit page of blue-grey veins on black, one CLUT, alpha 0x80), blend 3 (subtractive). There is one variant: the
+package has one `pl103_02.ptx`, its pages one CLUT each, and no hide clip touches slot 12 during cm027; `TexMode` /
+`ClutMode` (Model clip +0x620 / +0x621, `FUN_00219dc0`) are load settings passed to the model object (`FUN_002342b0`,
+vtable +0x24 / +0x28), not a variant pick. The PS2 draws it too: its frame at 208 s shows faint, neutral dark streaks
+under that eye in the same place (`analysis/ref/cast/` and `arkham_face_filter_compare.png`). The port's are stronger
+and hue-shifted (bluish lines subtracted from warm skin leave red-brown), so the subtracted source on the PS2 is
+weaker or more neutral (its vertex colour or alpha for this object). Not settled: the Program track's No 5 / No 6
+(210 200 180 / 30 20 20 in demo 1) look like a colour scale and an ambient, but its parser is the stub `FUN_00217440`
+(returns 1), so the game ignores them [inferred from the parser table at 0x590748].
+- **Why the PS2 differs: its cm027 is a movie.** GS dumps of that frame (PCSX2, Mission 1 on Normal from the 100% save,
+  taken at 184.7 s by matching the picture, and the Demo Digest's Opening) hold no model draws at all: each frame is
+  one 640x512 IMAGE upload. Demo 1 is in no mission's script; Mission 1 opens with movie 319 (M1_INTRO), Capcom's
+  pre-rendered take of the same scene, and the port plays that movie there too. So the PS2 never draws demo 1 in real
+  time, and every PS2 picture of it (`arkham_face_compare.png` and the rest) is the movie. The movie's faint marks
+  are its own render, not a sign that the real-time data is wrong. A fair real-time check of his face is a demo the
+  game plays live (demo 5, Mission 3's opening).
+- **Live, the PS2 draws the marks.** Demo 5 (Mission 3's opening, Normal, recorded from PCSX2 at
+  `analysis/ref/cast/m3_open_ps2.mp4`) shows Arkham's red marks on his neck and left cheek, so the live engine draws
+  his overlays (`analysis/testroom/arkham_demo5_compare.png`, the PS2 left, the port right, frames 1260 / 1380). Still
+  different there, not the face's pages: demo 5's sky is orange on the PS2 and dark blue in the port (its stage and
+  ScrEfc), and the port lights his face greyer.
+- To read the PS2's GS state for a draw: a GS dump of the frame (`build/refemu` hotkey Shift+F8, sent as VK 0xA0 +
+  F8; uncompressed with `[EmuCore/GS] GSDumpCompression = 0` in the game's own settings file). The Demo Digest's
+  "Opening" (mission select, DEMO DIGEST, scene select right once) is a pre-rendered movie of demo 1 (its dump is
+  full-frame IMAGE uploads, no draws), so the dump has to come from Mission 1 itself.
+
 **The rest of the cast** against the PS2 (PCSX2 from `m20_credits_start.p2s` / `m20_vergil_start.p2s`): Lady, the
 credits' Prides and Dante in the ending street (`analysis/testroom/cast_credits_compare.png`) and the ending model in
 demo 59 (black shirt under the coat, as the PS2) show no texture fault; Vergil (demo 57), the Jester (demo 10) and
