@@ -17,7 +17,12 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
   defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth isn't shown; a CnsPos piece's root on its parent bone [inferred]; the field of view taken as vertical
   [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
-  next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs.
+  next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
+  (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
+  read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
+  matched by eye]; IsMinus lights left out; the stage keeps the room's lights.
+- **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
+  and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
   track held until a fight and the stage channel dipping under it [inferred]; tracks loop at their ADX loop points) and
   the system bank's effects (menus, orbs; that it's the game's type 0 is inferred). Dante's own bank and his ten weapons' play from his moves'

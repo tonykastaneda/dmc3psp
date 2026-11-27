@@ -17,6 +17,7 @@
 
 #pragma GCC diagnostic ignored "-Wunused-const-variable"
 #include "model_runtime.h"
+#include "model_blend.h"
 #include "boss_cerberus_runtime.h"
 #include "boss_cerberus_scripts.h"
 
@@ -428,7 +429,8 @@ static int object_visible(int part, int object) {
 }
 static void draw_part(int part) {
     const CerberusMesh *m = &cerberus_parts[part];
-    int i, bound = -1;
+    int i, bound = -1, was = sceGuGetStatus(GU_BLEND);
+    unsigned int blend = 0;
     for (i = 0; i < m->objects_count; ++i) {
         const Dmc3ModelObject *o = &m->objects[i];
         if (!object_visible(part, i)) continue;
@@ -440,8 +442,10 @@ static void draw_part(int part) {
             sceGuTexImage(0, t->width, t->height, t->width, textures[bound]);
             sceGuTexFlush();
         }
+        if (o->blend != blend) { model_object_blend(o->blend, was); blend = o->blend; }
         sceGumDrawArray(GU_TRIANGLES, VTYPE, (int)o->index_count, indices[part] + o->index_start, vertices[part]);
     }
+    if (blend) model_object_blend(0, was);
 }
 static void chain_transforms(int chain) {
     static const int body_bones[3] = {11, 9, 10};
@@ -500,15 +504,15 @@ void cerberus_boss_draw(void) {
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     draw_part(PART_BODY);
-    draw_part(PART_BODY_ICE);
     draw_part(PART_COLLAR);
     for (i = 0; i < 3; ++i) {
         draw_part(PART_HEAD0 + i);
-        if (cb.head_alive[i]) {
-            draw_part(PART_HEAD_ICE0 + i);
-            draw_part(PART_SMALL0 + i);
-        }
+        if (cb.head_alive[i]) draw_part(PART_SMALL0 + i);
     }
+    /* The ice armour is additive (its MOD objects' byte 8 is 2), so it goes on after what it covers. */
+    draw_part(PART_BODY_ICE);
+    for (i = 0; i < 3; ++i)
+        if (cb.head_alive[i]) draw_part(PART_HEAD_ICE0 + i);
     for (i = 0; i < 5; ++i) {
         if (cb.chains_detached && i > 0) continue;
         /* GE reads vertex memory asynchronously: each queued chain needs its
