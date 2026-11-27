@@ -7,7 +7,8 @@
  *   2 CPtclPoly01: a flat ring growing outwards, 8 segments of a quarter turn    FUN_001bda50 / FUN_001bdc40
  *   3 CPtclSprt00: 12 sprites cut from a sheet by an A record                    FUN_001bc050 / FUN_001bca90
  *   4 CPtclLine01: 12 streaks, two lines each, along their velocity              FUN_001f66d0 / FUN_001f6e40
- *   0 CPtclLine00 and 5 CPtclLine02 aren't ported (none of the ported banks use them).
+ *   0 CPtclLine00: 24 streaks, one line each                                    FUN_001b55c0 / FUN_001b5cb0
+ *   5 CPtclLine02 isn't ported (no pack the port loads uses it).
  * An instance is one burst: its particles all start together (from a hollow box, FUN_001b4990), move, slow and fall
  * for the block's life, then it ends (or starts again, as the game's +0x98, while a looping owner lasts). */
 #include "pfx.h"
@@ -233,6 +234,15 @@ static void start_main(Inst *s) {
         s->count = 16; s->colours = 3;
         s->hw = rdf(p + 0xd0); s->hh = rdf(p + 0xd4);
         break;
+    case 0:   /* single-line streaks: head and a tail +0xd4 behind it */
+        s->count = 24; s->colours = 2;
+        for (i = 0; i < s->count; ++i) {
+            float n[3], a = s16f(p + 0xd4, 16.0f);
+            emit_point(p, 0xe2, 0xea, 0xd6, 0xdc, 1, s->pos[i], s->vel[i]);
+            normal_of(s->vel[i], n);
+            for (k = 0; k < 3; ++k) s->pos[i][k] += n[k] * a;
+        }
+        break;
     case 4:   /* streaks */
         s->count = 12; s->colours = 2;
         for (i = 0; i < s->count; ++i) {
@@ -273,7 +283,7 @@ int pfx_spawn(int bank, const unsigned char *rec, const PfxFrame *place, int own
     if (!enabled || !rec || rd32(rec) != 2) return 0;
     p = rec + 0x10 + rd32(rec + 0x10);
     type = p[1];
-    if (type < 1 || type > 4) return 0;   /* Line00 / Line02: not ported */
+    if (type > 4) return 0;   /* Line02: not ported */
     n = sub_count(rec, p);
     i = new_inst();
     if (i < 0) return 0;
@@ -388,6 +398,12 @@ static void tick_main(Inst *s, float dt) {
         keys_step(s, dt, 3);
         s->hw += rdf(p + 0xd8) * dt;
         s->hh += rdf(p + 0xdc) * dt;
+        break;
+    case 0:
+        keys_step(s, dt, 2);
+        gravity(s, rdf(p + 0xd0) * dt, p[0xe8] == 1, g);
+        for (i = 0; i < s->count; ++i)
+            for (k = 0; k < 3; ++k) { s->pos[i][k] += s->vel[i][k] * dt; s->vel[i][k] += g[k]; }
         break;
     case 4:
         keys_step(s, dt, 2);
@@ -536,7 +552,18 @@ static void draw_untextured(const Inst *s, const Inst *m, const PfxFrame *f) {
     int i, k, n = 0, prim;
     for (k = 0; k < 4; ++k) col[k] = psp_colour(s->col + 4 * k);
     if (!((col[0] | col[1] | col[2] | col[3]) >> 24)) return;
-    if (m->type == 4) {
+    if (m->type == 0) {
+        /* one line a streak: head (c0) to tail (c1), +0xd4 behind along the speed */
+        prim = GU_LINES;
+        v = sceGuGetMemory(sizeof(ColVertex) * 2 * m->count);
+        for (i = 0; i < m->count; ++i) {
+            float nrm[3], tail[3], a = s16f(m->p + 0xd4, 16.0f);
+            normal_of(m->vel[i], nrm);
+            for (k = 0; k < 3; ++k) tail[k] = m->pos[i][k] - nrm[k] * a;
+            v[n].color = col[0]; apply(f, m->pos[i], &v[n].x); ++n;
+            v[n].color = col[1]; apply(f, tail, &v[n].x); ++n;
+        }
+    } else if (m->type == 4) {
         /* two lines a streak: head (c0) to tail (c1), head (c1) to front (c0) (FUN_001f6e40's four points) */
         prim = GU_LINES;
         v = sceGuGetMemory(sizeof(ColVertex) * 4 * m->count);

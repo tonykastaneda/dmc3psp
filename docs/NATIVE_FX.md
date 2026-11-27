@@ -13,7 +13,7 @@ path). Times are 60 Hz frames and distances are centimetres.
 | E kind 2 | yes | Quad in its frame's XZ plane, turning about its normal (+0x148). E153's frost lies flat at rotation 0. |
 | E kind 5 | yes | MOD mesh (+0x28 names the M entry): scale curves, colour keys and turn rates (+0x144). |
 | G (generator) | yes | An emitter (`FUN_001b1970` / `FUN_001b1cd0`); see Generators below. |
-| P (particle program) | yes | `pfx.c`: Poly00, Poly01, Sprt00, Line01 and their fake layers; see P effects below. Line00 and Line02 no. |
+| P (particle program) | yes | `pfx.c`: Line00, Poly00, Poly01, Sprt00, Line01 and their fake layers; see P effects below. Line02 no. |
 
 The layouts are those already used for em008: scale curves at `+0x88/+0x8e/+0xa8/+0xb4`, colour keys from
 `+0x174` (20 bytes each, 0x80 = 1.0), life `+0x80` (0 = while the owner lasts) and spread `+0x5c`.
@@ -104,7 +104,7 @@ placed is the port's choice:
 
 ## Not done
 
-- P classes Line00 and Line02 (none of the exported banks use them).
+- P class Line02 (no pack the port loads uses it).
 - Element velocities and gravity: elements stay where they're placed.
 - The GS blend mode per element.
 - The 16-byte texture references.
@@ -142,7 +142,7 @@ Classes (vtables in SLUS_213.61; RTTI names from the decompilation's `rtti.txt`;
 
 | +1 | Class | Make / vtable | Start / tick | Primitives |
 | --- | --- | --- | --- | --- |
-| 0 | CPtclLine00 | `001b5290` / `00601620` | `001b55c0` / `001b5cb0` | 24 line points (not ported) |
+| 0 | CPtclLine00 | `001b5290` / `00601620` | `001b55c0` / `001b5cb0` | 24 streaks of one line |
 | 1 | CPtclPoly00 | `001ba100` / `006016c0` | `001ba340` / `001bb310` | 16 triangles |
 | 2 | CPtclPoly01 | `001bd810` / `00601800` | `001bda50` / `001bdc40` | 16 triangles: a ring |
 | 3 | CPtclSprt00 | `001bbe10` / `00601760` | `001bc050` / `001bca90` | 12 sprites |
@@ -203,6 +203,9 @@ Ring (class 2): radii f32 +0xd0 (outer) and +0xd4 (inner), growing by +0xd8 / +0
 
 Streaks (class 4): gravity +0xd0 (world with +0xea), speed +0xd8, base +0xde, box +0xe4, inner box +0xec, no drag.
 Two lines a particle: head to +0xd4 behind it, head to +0xd6 ahead. Two colours.
+
+Single streaks (class 0): gravity +0xd0 (world with +0xe8), the tail +0xd4 behind the head, speed +0xd6, base +0xdc,
+box +0xe2, inner box +0xea, no drag; one line a particle, head to tail. Two colours.
 
 Sub-records (fakes): translation, rotation, scale at +0 / +0x10 / +0x20, rates at +0x30 / +0x36 / +0x3c, colour keys
 at +0x48 (flags +0x98). A sprite fake takes its parent's T and A.
