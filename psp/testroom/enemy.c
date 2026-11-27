@@ -35,6 +35,7 @@ int model_blend_off;
 #include "agni_rudra_scripts.h"
 #include "agni_rudra.h"
 #include "chess_knight_runtime.h"
+#include "chess_runtime.h"
 #include "nfx.h"
 #include "beowulf_scripts.h"
 #include "soul_eater_scripts.h"
@@ -321,6 +322,7 @@ static void jester_spawn(void);
 static void jester_update(float f, float px, float py, float pz);
 static void jester_hit(HitKind kind);
 static JesterProjectiles jester_world;   /* his emitters and what they throw (jester.c) */
+static int bishop_test_state(int state);
 static void bishop_spawn_glue(void);
 static void bishop_update_glue(float f,float px,float py,float pz);
 static void bishop_hit_glue(HitKind kind,float from_x,float from_z);
@@ -501,6 +503,7 @@ static int kind_health(int kind) {
     case ENEMY_JESTER: return ENEMY_HEALTH * 1500 / 250;
     case ENEMY_ARACHNE: return ENEMY_HEALTH * 1400 / 250;  /* its parameter block 0x5c3870 +0x2c (FUN_003f2f10 copies it) */
     case ENEMY_NEVAN: return ENEMY_HEALTH * NEVAN_MAX / 250;   /* 0x5bc300 +0x2c (class 31, FUN_003b356c) */
+    case ENEMY_BISHOP: return ENEMY_HEALTH * 1000 / 250; /* 5c0bd0+2c */
     case ENEMY_KNIGHT: return ENEMY_HEALTH * 1000 / 250; /* 5c07f0+2c */
     case ENEMY_PAWN: return ENEMY_HEALTH * 300 / 250;   /* pawn.inc's PAWN_HEALTH */
     case ENEMY_FALLEN: return ENEMY_HEALTH * 1300 / 250;   /* 0x5c32a0 +0x2c (class 11, copied by FUN_00342450) */
@@ -2715,8 +2718,7 @@ static void evaluate_pose(void) {
     int i, k;
     {
         const Motion *motion = motion_get(e->motion);
-        /* Bishop's stationary idle intentionally has no motion channels. A
-         * reused slot must still skin its bind pose, not sample NULL. */
+        /* Some kinds have no exported clip. A reused slot must still skin its bind pose. */
         if (motion) motion_sample(motion, e->frame, &a);
         else memset(&a,0,sizeof(a));
     }
@@ -4130,7 +4132,7 @@ static int ar_room = -1;
 void enemy_set_room(int room) { ar_room = room; chess_reset(&chess_master); memset(chess_actors,0,sizeof chess_actors); }
 static int ar_arena(void) { return ar_room == 121 || ar_room == 414 || ar_room == 435; }
 static int ar_side = 1;     /* +0x2de7 at the wake (FUN_00481350): 1 with Dante nearer z 4000 than 2200, else 2 */
-void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state)) ar_force = state; }
+void enemy_ar_force(int state) { if(!vergil_boss_test_state(state) && !arkham_boss_test_state(state) && !bishop_test_state(state)) ar_force = state; }
 void enemy_dante_attack(int action, int gun) { ar_dante_action = gun ? 0 : action; }
 void enemy_dante_yaw(float yaw) { ar_dante_yaw = yaw; }
 
@@ -6175,50 +6177,73 @@ static void bishop_play(int m, int restart) {
         e->motion = id; e->frame = 0.0f; e->done = 0;
     }
 }
+static int bishop_orb_fx[ENEMY_MAX][BISHOP_ORBS],bishop_body_fx[ENEMY_MAX];
+static float chess_heal_fraction[ENEMY_MAX];
+static int bishop_test_state(int state) {
+    if(!e->active || e->kind!=ENEMY_BISHOP || (state!=0 && state!=2 && state!=3 && state!=4))return 0;
+    BishopBrain *b=&bishop_brain[e-enemies];bishop_force(b,enemy_chess_actor(),state,ai_unit);
+    bishop_play(b->want,1);b->restart=0;return 1;
+}
 static void bishop_spawn_glue(void) {
-    BishopBrain *b = &bishop_brain[e - enemies];
-    e->motion = -1;
-    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
-    bishop_spawn(b, e->health);
-    bishop_play(b->want, 1);
-    b->restart = 0;
-    e->fade = 0.0f;
+    BishopBrain *b=&bishop_brain[e-enemies];ChessPiece *p=enemy_chess_actor();
+    int i;for(i=0;i<BISHOP_ORBS;++i){nfx_kill(bishop_orb_fx[e-enemies][i]);bishop_orb_fx[e-enemies][i]=0;}
+    nfx_kill(bishop_body_fx[e-enemies]);bishop_body_fx[e-enemies]=0;
+    e->motion=-1;memcpy(b->pos,e->pos,sizeof b->pos);b->yaw=e->yaw;b->floor_y=e->floor_y;
+    bishop_spawn(b,e->health);p->est=37;p->alternate_percent=chess_alternate_chance(37,0);
+    bishop_play(b->want,1);b->restart=0;e->fade=0;e->plan=P_WATCH;e->action=0;
 }
-static void bishop_update_glue(float f, float px, float py, float pz) {
-    BishopBrain *b = &bishop_brain[e - enemies];
-    const Motion *m;
-    float g;
-    if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
-    if (e->motion >= 0) {
-        m = motion_get(e->motion);
-        e->frame += f;
-        if (e->frame >= m->end_frame) {
-            e->done = 1;
-            e->frame = bishop_loops(b->want) ? motion_wrap(m, e->frame) : m->end_frame;
-        }
-    }
-    b->pos[0] = e->pos[0]; b->pos[1] = e->pos[1]; b->pos[2] = e->pos[2]; b->yaw = e->yaw;
-    b->frame = e->frame; b->done = e->done;
-    bishop_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH);
-    e->pos[0] = b->pos[0]; e->pos[2] = b->pos[2]; e->yaw = b->yaw;
-    if (floor_under(e->pos[0], e->pos[1] + 100.0f, e->pos[2], &g)) e->pos[1] = e->floor_y = g;
-    if (b->restart || bishop_motion_id[b->want] != e->motion) { bishop_play(b->want, b->restart); b->restart = 0; }
-    if(b->cast){float from[3]={b->pos[0],b->pos[1]+180,b->pos[2]},to[3]={b->target[0],b->target[1]+30,b->target[2]};
-        if(b->cast==1)fx_guard_flash(to);else {fx_tracer(from,to,0xff6070ffu,8);fx_explosion(to);}}
-    if (b->land) {land_attack(1);landed_damage=700;}
-    if (b->remove) e->active = 0;
+static void bishop_shatter(void) {
+    int i;float at[3]={e->pos[0],e->pos[1]+170,e->pos[2]};
+    e->plan=P_DEATH;e->timer=0;enemy_chess_actor()->busy=0;
+    nfx_spawn(NFX_CHESS,0x1fb,e->pos,e->yaw,0);nfx_spawn(NFX_CHESS,0x20c,at,e->yaw,0);
+    nfx_kill(bishop_body_fx[e-enemies]);bishop_body_fx[e-enemies]=0;
+    for(i=0;i<BISHOP_ORBS;++i){nfx_kill(bishop_orb_fx[e-enemies][i]);bishop_orb_fx[e-enemies][i]=0;bishop_brain[e-enemies].orbs[i].stage=0;}
+    died();trace_row(0);
 }
-static void bishop_hit_glue(HitKind kind, float from_x, float from_z) {
-    BishopBrain *b = &bishop_brain[e - enemies];
-    float at[3] = {e->pos[0], e->pos[1] + 60.0f, e->pos[2]};
-    fx_hit_spark(at);
-    if (e->plan == P_DEATH) return;
-    if (bishop_hit(b, !(kind == HIT_LIGHT || kind == HIT_AIR || kind == HIT_PISTOL), from_x, from_z, mortal)) {
-        e->plan = P_DEATH;
-        died();
+static void bishop_update_glue(float f,float px,float py,float pz) {
+    BishopBrain *b=&bishop_brain[e-enemies];ChessPiece *p=enemy_chess_actor();
+    const Motion *m;float g;int i,was=e->action;
+    if(e->fade>0){e->fade-=e->fade_rate*f;if(e->fade<0)e->fade=0;}
+    m=motion_get(e->motion);
+    if(m){e->frame+=f;float end=b->want==BISHOP_M_IDLE?1:m->end_frame;
+        if(e->frame>=end){e->done=1;e->frame=end;}}
+    memcpy(b->pos,e->pos,sizeof b->pos);b->yaw=e->yaw;
+    if(floor_under(e->pos[0],e->pos[1]+100,e->pos[2],&g))e->floor_y=g;
+    b->floor_y=e->floor_y;b->frame=e->frame;b->done=e->done;b->blocked=0;
+    for(i=0;i<ENEMY_MAX;++i)if(i!=e-enemies && chess_actors[i].active &&
+       ((enemies[i].kind==ENEMY_KNIGHT && (enemies[i].action==3 || enemies[i].action==8)) ||
+        (enemies[i].kind==ENEMY_BISHOP && enemies[i].action>=3)))b->blocked=1;
+    bishop_think(b,p,f,px,py,pz,ai_unit,attacks_on && e->plan!=P_DEATH);
+    memcpy(e->pos,b->pos,sizeof e->pos);e->yaw=b->yaw;e->action=b->action;e->health=(short)b->health;
+    if(b->health<=0 && e->plan!=P_DEATH)bishop_shatter();
+    if(b->restart || bishop_motion_id[b->want]!=e->motion){bishop_play(b->want,b->restart);b->restart=0;}
+    if(b->cast==1) {nfx_kill(bishop_body_fx[e-enemies]);bishop_body_fx[e-enemies]=0;}
+    if(b->cast==3)bishop_body_fx[e-enemies]=nfx_spawn(NFX_CHESS,0x1f8,e->pos,e->yaw,1);
+    if(b->cast==5)nfx_spawn(NFX_CHESS,0x240,e->pos,e->yaw,0);
+    if(b->cast==4)bishop_body_fx[e-enemies]=nfx_spawn(NFX_CHESS,0x1ef,e->pos,e->yaw,1);
+    if((!b->action || b->cast==5) && bishop_body_fx[e-enemies]){nfx_kill(bishop_body_fx[e-enemies]);bishop_body_fx[e-enemies]=0;}
+    if(bishop_body_fx[e-enemies])nfx_move(bishop_body_fx[e-enemies],e->pos,e->yaw);
+    for(i=0;i<BISHOP_ORBS;++i){BishopOrb *o=&b->orbs[i];int *fx=&bishop_orb_fx[e-enemies][i];
+        if(!o->stage){nfx_kill(*fx);*fx=0;continue;}
+        if(o->event==1 || o->event==3){nfx_kill(*fx);*fx=nfx_spawn(NFX_CHESS,o->event==1?0x1f9:0x1e1,o->pos,o->yaw,1);}
+        if(o->event==2)nfx_tint(*fx,128,128,128);
+        nfx_move(*fx,o->pos,o->yaw);
+        if(stage_intersects_bounds(o->pos,(const float[3][3]){{1,0,0},{0,1,0},{0,0,1}},(const float[2][3]){{-40,-40,-40},{40,40,40}})){o->stage=0;nfx_kill(*fx);*fx=0;}
     }
-    bishop_play(b->want, b->restart);
-    b->restart = 0;
+    if(b->heal)for(i=0;i<ENEMY_MAX;++i)if(chess_actors[i].active && enemies[i].plan!=P_DEATH){
+        Enemy *a=&enemies[i];float dx=a->pos[0]-e->pos[0],dy=a->pos[1]-e->pos[1],dz=a->pos[2]-e->pos[2];
+        if(dx*dx+dy*dy+dz*dz<800*800){float heal=3*f*ENEMY_HEALTH/250.0f;
+            if(a->kind==ENEMY_BISHOP){BishopBrain *to=&bishop_brain[i];to->health=fminf(to->max_health,to->health+heal);a->health=(short)to->health;}
+            else {chess_heal_fraction[i]+=heal;if(chess_heal_fraction[i]>=1){a->health+= (int)chess_heal_fraction[i];chess_heal_fraction[i]-=(int)chess_heal_fraction[i];if(a->health>kind_health(a->kind))a->health=kind_health(a->kind);}}}}
+    if(b->land){land_attack(chess_bishop_attack[1]>=500);landed_damage=chess_bishop_attack[0];landed_kind=(int)chess_bishop_attack[2];}
+    if(b->remove)e->active=0;
+    if(was!=e->action)trace_row(0);
+}
+static void bishop_hit_glue(HitKind kind,float from_x,float from_z) {
+    BishopBrain *b=&bishop_brain[e-enemies];float at[3]={e->pos[0],e->pos[1]+60,e->pos[2]};
+    if(e->plan==P_DEATH)return;fx_hit_spark(at);
+    if(bishop_hit(b,!(kind==HIT_LIGHT || kind==HIT_AIR || kind==HIT_PISTOL),from_x,from_z,mortal))bishop_shatter();
+    e->health=(short)b->health;bishop_play(b->want,b->restart);b->restart=0;
 }
 
 

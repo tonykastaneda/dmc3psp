@@ -1329,3 +1329,8 @@ grenade 1000, rocket 1500 [inferred]), her flinches and knock-back gauge.
 See [CHESS.md](CHESS.md) for CEm017Master43f160, the six EST dispatches, native
 wait tables, concurrent-turn capacity, Queen response, Rook/King castling commands
 and King-death cascade. `chess.h` documents the shared actor interface.
+
+Knight36: model127[7], motions[8], native leap/plunge/recovery and bone-sphere
+strike, HP1000, hits1000/700. Bishop37: model127[12], motions[13], diagonal slide,
+four orbiting then diagonal orbs (800 each), healing within800 and shatter death,
+HP1000. Detailed handlers, script/cap tables and PPSSPP evidence: CHESS.md.

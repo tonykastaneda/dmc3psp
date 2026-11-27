@@ -86,3 +86,53 @@ strike110/160 PNGs under analysis/testroom. The trace confirms motion741..744
 Forced heavy hits at300 exercise the death path; final live count is0. Existing
 Bishop spell stand-ins and Queen/King fallbacks also participate in these scenes,
 so total HUD damage is not attributed entirely to the Knight.
+
+## Bishop (EST37)
+
+The pre-existing stationary aimed-spell placeholder is replaced by native
+435510's states: diagonal movement2 (435890), four orbs3 (435cb0), healing4
+(435e90). Model127[12], motions[13], scripts[14]. The casting MOT has equal
+frame92 keys in six Hermite channels; export now accepts these for this clip
+only and preserves the original blob/tangent discontinuities. Clip0 is the
+180-frame cast and clip1 is the150-frame heal, not a death animation. Idle
+holds clip0 at frame1, as its motion script requests. HP1000 is5c0bd0+2c.
+
+At rank0, waiting chooses healing with5% weight (row5c0c30), otherwise movement.
+Movement rises2/frame for20 frames, chooses one of40a4c0's diagonal projections
+with50% odds, quantizes direction to an eighth-turn (40a300), and slides at10
+(40a340) for100..150 frames or until aligned. It drops with gravity3.2, then
+attacks if a projected diagonal is within60 and no attacking actor blocks the
+gate (4357c0). The port approximates that global bit1 actor gate from current
+chess attack states; full native collision flags are not wired.
+
+The cast creates four CEm017Shl00 actors immediately, waits80 then20 then220
+native frames. Their initializer43fc60 sets fixed headings -135,-45,45,135
+degrees, radius40, centre(0,0,20), speed20 at rank0 and900-frame life. Update
+43ff70 orbits them100 units from the Bishop and100 above his feet for160frames,
+turning4.5degrees per remaining frame. After40 stationary frames they fly on
+their diagonal headings. Collision runs during the last75 orbit frames and
+thereafter; contact removes the orb. Table5c0b50 has two records, both800 damage,
+reaction400,kind0. Constructor selects1; orbit->ready selects0/reset hit id.
+The implementation retains16 projectiles per Bishop, allowing independent waves
+instead of replacing previous shots; wall contact uses a40-unit bounds probe
+in place of the native collision sphere. Native V1f9/V1e1 visuals follow shots;
+V1f8 is the casting body effect. Effect attachment matrices remain approximate.
+
+Healing starts after motion60, affects live chessmen within800 in3D, and adds
+3HP/native frame on ordinary difficulty (native DMD uses0.5, not connected to
+this fixed-rank port). It stops on damage or motion end, waits10frames, and
+returns idle. Healing preserves fractional HP through the port's hit-unit
+conversion. V1ef/V240 mark its start/end. Death uses the same immediate shatter
+and60-frame removal as the other ordinary pieces, not the healing clip.
+
+`python tools/tests/run_bishop_logic.py` checks hover/diagonal movement, four
+orb phase clocks and speed/contact, coexisting waves, healing and death lifetime.
+
+PPSSPP: Mission18 room401 unforced `chess_bishop_native` runs1000frames,
+with trace movement2->cast3 at521, orb contact at630 and return idle682.
+Focused final scenes `chess_bishop_checked_orbs` and `_heal` force the selected
+Bishop's native state at30. Inspected orbs60/130 and heal75 PNGs: four-orb cast
+and authored healing circle are visible. Orb scene ends9200HP (one800 hit).
+Heal trace usesbi01 at31, returns idle110; forced wounds at20 and forced deaths
+at210 exercise its health/death path. Both end with0 live actors. Screenshots
+are under analysis/testroom; host tests also pass against the final build.

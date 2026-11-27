@@ -23,7 +23,7 @@ def generate(iso_path, output):
         lines+=['},']
     lines+=['};','static const float chess_alternate_odds[6][4] = {']
     for at,stride in zip(odds,strides):lines+=['{'+','.join('%0.6ff'%elf.real(at+rank*stride) for rank in range(4))+'},']
-    lines+=['};']
+    lines+=['};', 'static const float chess_bishop_attack[3] = {%ff,%ff,%d};' % (elf.real(0x5c0b54),elf.real(0x5c0b6c),elf.word(0x5c0b68))]
     output.parent.mkdir(parents=True,exist_ok=True);output.write_text('\n'.join(lines)+'\n')
     from prepare_vergil import compile_scripts
     caps=[]
