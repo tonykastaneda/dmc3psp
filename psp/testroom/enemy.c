@@ -6310,8 +6310,9 @@ static void lady_hit_glue(HitKind kind) {
  * [estimate]; the hand rises out of the floor by its arming frame (55) and sinks at its end [estimate: its motions,
  * [28], aren't played]. The cross and the bomb play the game's effects (em037 [10], NFX_JESTER): the cross V0x3f9 once
  * and V0x3f8 looping on its frame (0054d610: at him, facing Dante turned 45 degrees, turning with it), V0x3fa as it
- * ends (0054dc70); the bomb V0x417 in flight (0054e710) and V0x41c as it goes off (0054edc0). Stand-ins for the parts
- * that are P particles (not ported): the bomb's burst is a mote, and so is the trap's warning ring. */
+ * ends (0054dc70); the bomb V0x417 in flight (0054e710: P486-P489 with it) and V0x41c as it goes off (0054edc0: P531
+ * and E1616); the P particles are pfx.c's. Stand-in: the trap's warning ring is motes (its G0x1c8, V763, isn't in this
+ * pack). */
 #include "jester_props_runtime.h"
 int jester_projectiles_init(void) { return 1; }
 static void jester_prop_draw(int which, const float pos[3], float yaw, float pitch, float roll) {
@@ -6380,8 +6381,7 @@ void jester_projectiles_draw(const JesterProjectiles *w) {
         const JesterShot *p = &w->shots[i];
         if (!p->active) continue;
         if (p->kind == 0) {
-            if (p->phase == 2) fx_mote(p->pos, still, 420.0f, 520.0f, 0.06f, 0xff2080ffu);
-            else jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f);
+            if (p->phase != 2) jester_prop_draw(JESTER_PROP_BOMB, p->pos, p->yaw, p->phase ? p->age * 0.15f : 0.0f, 0.0f);
         } else {
             /* Out of the floor over 35-55, down again over its last 20 (of 180). */
             float up = p->age < 35.0f ? 0.0f : p->age < 55.0f ? (p->age - 35.0f) / 20.0f

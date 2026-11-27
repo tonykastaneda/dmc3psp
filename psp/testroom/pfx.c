@@ -49,6 +49,8 @@ typedef struct {
 
 static Inst inst[MAX_INST];
 static unsigned short generation = 1;
+static int enabled = 1;
+void pfx_enable(int on) { enabled = on; }
 static unsigned int seed = 0x9e3779b9u;
 
 static float frand(void) { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f; }
@@ -267,7 +269,7 @@ static int new_inst(void) {
 int pfx_spawn(int bank, const unsigned char *rec, const PfxFrame *place, int owner, int root, int loop) {
     const unsigned char *p;
     int i, j, n, type;
-    if (!rec || rd32(rec) != 2) return 0;
+    if (!enabled || !rec || rd32(rec) != 2) return 0;
     p = rec + 0x10 + rd32(rec + 0x10);
     type = p[1];
     if (type < 1 || type > 4) return 0;   /* Line00 / Line02: not ported */

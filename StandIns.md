@@ -34,7 +34,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (Nevan's bats, the Jester's
-  throws, Geryon's missiles, Vergil's 0x338, Cerberus's unported
+  trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
   particle programs, the Vanguard's P312 dissolve). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera matrix and `FUN_001b2dc0`'s half turn); fake
@@ -68,7 +68,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
-  shown, his idle's turn rate [inferred], the bomb and the hand trap are his own models but rigid (the hand's motions aren't played: it rises and sinks by an estimate), the cross and the bomb play the game's effects but the bomb's burst and the trap's ring (P particles) are motes, a bullet's stun value 8
+  shown, his idle's turn rate [inferred], the bomb and the hand trap are his own models but rigid (the hand's motions aren't played: it rises and sinks by an estimate), the cross and the bomb play the game's effects (the bomb's with its P particles) but the trap's ring (G0x1c8 → V763) is motes, a bullet's stun value 8
   [estimate], the arena clamp is the stand-in's. `enemy.c` The Jester, `jester.c`, PortJobs.
 - **Agni & Rudra**: the opening (state 64) is ported; Rudra's 60-frame delay reads +0x2ee0 as his place in the pair
   (inference). The pedestal climb (63 → 59 / 60) is decoded but not used; the guard stances (FUN_003a1a50, needs Dante's hit

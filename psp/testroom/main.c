@@ -61,6 +61,7 @@ int testroom_frame;
 #include "bullets.h"
 #include "fx.h"
 #include "nfx.h"
+#include "pfx.h"
 #include "hud.h"
 #include "orbs.h"
 #include "rebellion_runtime.h"
@@ -2079,6 +2080,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
         else if (strncmp(line, "smlayout ", 9) == 0) sm_test_layout(atoi(line + 9));   /* tests: Secret Mission 10's crystals */
         else if (strncmp(line, "breakall ", 9) == 0) cmp_breakall_at = atoi(line + 9);   /* tests: every prop in the room breaks */
+        else if (strncmp(line, "nopfx ", 6) == 0) pfx_enable(!atoi(line + 6));   /* tests: no P effects, for comparisons */
         else if (strncmp(line, "fxtest ", 7) == 0) {
             if (cmp_fxtest_count < 16 && sscanf(line + 7, "%d %d %d %d", &cmp_fxtest[cmp_fxtest_count][0], &cmp_fxtest[cmp_fxtest_count][1],
                                               &cmp_fxtest[cmp_fxtest_count][2], &cmp_fxtest[cmp_fxtest_count][3]) == 4) ++cmp_fxtest_count;

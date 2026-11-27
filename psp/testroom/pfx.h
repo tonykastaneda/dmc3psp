@@ -19,6 +19,7 @@ void pfx_kill_root(int root);
 void pfx_update(float frames);
 void pfx_draw(const float eye[3]);
 int pfx_live(void);           /* instances running */
+void pfx_enable(int on);      /* tests ("nopfx 1"): 0 starts no P effects */
 int pfx_live_prims(void);     /* their primitives (sprites, triangles, lines) */
 
 #endif
