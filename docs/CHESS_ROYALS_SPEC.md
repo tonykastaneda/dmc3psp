@@ -40,11 +40,24 @@ Queen and King do with those commands.
 |---|---|---|
 | Model (MOD) | [2], 64544 bytes | [7], 61296 bytes |
 | Motions (PAC) | [3], 3 motions | [8], 1 motion |
-| Clip table (u16: count 192 / 222, 6, then frame marks 30, 40, 50, 60, 76 …) [inferred: motion n → frame span] | [4] | [9] |
-| 16-byte header | [5] `06 00 00 00 06 02 01 00 …` | [10] `06 01 00 00 06 01 01 00 …` |
-| Collision spheres [inferred, 0x40-byte rows] | [6]: 5 rows (radius 80, 70, 120, 230 / 30) | [11]: 3 rows (radius 100, 246 high) |
+| Motion scripts (CEm017's 14 state scripts, read with `tools/prepare_vergil.py`'s `compile_scripts`, as codex's Knight) | [4] | [9] |
+| Capsule list ((kind, bone, row) u8 / u8 / u16) | [5]: 4 | [10]: 2 |
+| Capsules (80-byte rows: centre at +16, radius at +32) | [6]: kind 6 (body) bone 0 (0, 80, 0) r 80, kind 6 bone 2 (0, −5, −5) r 70; kind 1 (hit) bone 1 (0, 120, 50) r 120 and (0, 230, 30) r 70 | [11]: kind 6 bone 1 (0, 100, 0) r 100 and (0, 246, 0) r 100. No hit capsules |
 | Hit record (+0xf90) | 0x5bfff0: type 2, **damage 1500**, then 10, 300, 60, 4 / 5, 750 … hit stop (+0x2c) 7 | 0x5bfc50: type 2, **damage 2500**, then 10, 600, 60, 4, 1200 … hit stop 7 |
 | Param block (+0x11c) | 0x5c0030: profile 100 / 100 / 95 / 100 / 105 / 95 / 100 / 4.5 / 100, +0x24 = 50, **max HP (+0x2c) 1800** | 0x5bfc90: the same profile, +0x24 = 20, **max HP 2300** |
+
+The motion scripts give each motion id the MOT it plays:
+
+| Motion id | Queen | King |
+|---|---|---|
+| 0-2, 5, 6, 10-13 | MOT 0, held (finishes at frame 1) | MOT 0, looping |
+| 3 | MOT 0, played through (her wind-up) | MOT 0, played through (the attack) |
+| 4, 8 | MOT 1, played through (8: the charge's end) | MOT 0 |
+| 7 | **MOT 2 with attack record 0 and hit capsules 2 and 3** for the whole motion: her charge hits | MOT 0 |
+| 9 | MOT 0, played through | MOT 0 |
+
+So the Queen hurts only while charging, for 1500, through the two spheres on bone 1. The King hurts only with his
+blast.
 
 ## Common to both: actions, timers and rank
 
@@ -92,7 +105,7 @@ Queen and King do with those commands.
      (angle + 0x1000) >> 13).
   4. The velocity is 10 cm a frame along an axis or 7.07 / 7.07 on a diagonal (`FUN_0040a340`), × (1 + rank / 4).
   5. She glides for `FUN_00409690`'s 100 + 50 × rand frames. The master's command 0x14 cuts it short. Then she lands.
-- **The charge (action 3, 0x437ab0)** comes on the master's 0x14. +0x110 bit 0 (value 1) is set throughout [inferred: her body hits].
+- **The charge (action 3, 0x437ab0)** comes on the master's 0x14. (+0x110 bit 0 is set throughout; the hits themselves come from motion 7's script, above.)
   1. She rises for 0x5c2d00[rank] frames (as above). +0x490 = 3.
   2. She takes the four points again and picks the **nearest** one. She turns toward its 8-way heading (+0x480) at
      the action's turn speed.
@@ -170,8 +183,7 @@ Queen and King do with those commands.
 - The models, motions and clip tables are [2]–[4] and [7]–[9] of GDATA 128. The effects are G ids from em021's [1]
   PNST.
 - The pieces' timing, moves and attacks above are exact. Still to check against PCSX2:
-  - the clip table's reading (which frames motions 3, 7 and 8 are);
-  - the collision rows;
-  - which bone +0x504 +0x104 is.
+  - which bone +0x504 +0x104 is (the Queen's effects' anchor);
+  - the motions' look against the PS2.
 - The decision tables mean their turns come from the master (`chess.c`): 0x14 starts their attacks; the King also
   starts his own attack by distance and by hurt.

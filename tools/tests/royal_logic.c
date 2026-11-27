@@ -73,6 +73,11 @@ static void queen_tests(void) {
         if (q.body.events & QUEEN_EV_WINDUP) windup = n;
         if (q.body.events & QUEEN_EV_CHARGE) { charge = n; x0 = q.body.pos[0]; z0 = q.body.pos[2]; }
         if (q.body.events & QUEEN_EV_CHARGE_END) end = n;
+        if (q.hitting) {
+            float ahead[3] = {q.body.pos[0] + sinf(q.body.yaw) * 60.0f, 0.0f, q.body.pos[2] + cosf(q.body.yaw) * 60.0f};
+            CHECK(queen_reaches(&q, ahead[0], q.body.pos[1], ahead[2]), "her charge reaches 60 ahead");
+            CHECK(!queen_reaches(&q, ahead[0] + 400.0f, q.body.pos[1], ahead[2]), "not 400 aside");
+        } else CHECK(n > end || !queen_reaches(&q, q.body.pos[0], q.body.pos[1], q.body.pos[2]), "no hits off the charge");
     }
     CHECK(windup > 0 && charge - windup == 60, "wind-up %d frames", charge - windup);
     CHECK(end - charge == 75, "charge lasts %d frames (50 + 50 x 0.5)", end - charge);

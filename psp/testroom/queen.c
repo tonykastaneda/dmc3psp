@@ -75,7 +75,6 @@ static void queen_move(QueenBrain *q, float f, float dx, float dz, int *command,
 
 static void queen_charge(QueenBrain *q, float f, float dx, float dz, float (*unit)(void)) {
     RoyalBody *b = &q->body;
-    q->hitting = 1;
     switch (b->sub) {
     case 0:
         royal_motion(b, 0);
@@ -130,6 +129,7 @@ static void queen_charge(QueenBrain *q, float f, float dx, float dz, float (*uni
         }
         break;
     case 6:
+        q->hitting = 1;   /* motion 7's script: attack record 0 on hit capsules 2 and 3 */
         q->accel -= f * 0.3f;
         if (q->accel < -1.0f) q->accel = -1.0f;
         q->speed += q->accel * f;
@@ -192,4 +192,21 @@ int queen_think(QueenBrain *q, float f, float dx, float dy, float dz, int comman
     default: royal_start(b, ROYAL_WAIT); break;
     }
     return command;
+}
+
+int queen_reaches(const QueenBrain *q, float x, float y, float z) {
+    /* em021 [6] rows 2 and 3, kind 1 on bone 1: (0, 120, 50) r 120 and (0, 230, 30) r 70. Bone 1 is taken at her
+     * root, turned by her yaw [stand-in: the bone's pose isn't followed]. */
+    static const float caps[2][4] = {{0.0f, 120.0f, 50.0f, 120.0f}, {0.0f, 230.0f, 30.0f, 70.0f}};
+    const RoyalBody *b = &q->body;
+    float s = sinf(b->yaw), c = cosf(b->yaw);
+    int k;
+    if (!q->hitting) return 0;
+    for (k = 0; k < 2; ++k) {
+        float cx = b->pos[0] + caps[k][0] * c + caps[k][2] * s, cy = b->pos[1] + caps[k][1];
+        float cz = b->pos[2] - caps[k][0] * s + caps[k][2] * c;
+        float ex = x - cx, ey = y + 90.0f - cy, ez = z - cz;   /* Dante's middle */
+        if (ex * ex + ey * ey + ez * ez <= caps[k][3] * caps[k][3]) return 1;
+    }
+    return 0;
 }

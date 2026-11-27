@@ -21,9 +21,11 @@ typedef struct {
     float speed, accel;          /* +0x68, +0x78 */
     float lane;                  /* G0x242's length: half the charge time left */
     int charges;                 /* +0x490 */
-    int hitting;                 /* +0x110 bit 0: her body hits for QUEEN_DAMAGE */
+    int hitting;                 /* the charge (motion 7): her hit capsules are live, QUEEN_DAMAGE */
 } QueenBrain;
 
 void queen_spawn(QueenBrain *q, float hp, int rank);
 /* command: the master's +0x488 (chess.h); returns it, cleared if she took it. */
 int queen_think(QueenBrain *q, float f, float dante_x, float dante_y, float dante_z, int command, float (*unit)(void));
+/* Dante (feet at x, y, z) in her live hit capsules. */
+int queen_reaches(const QueenBrain *q, float x, float y, float z);
