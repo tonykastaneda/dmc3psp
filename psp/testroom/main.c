@@ -1293,8 +1293,10 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
          * for the 3D pass (credits_fight.c) and the stage's colours doubled (stage_set_double). */
         unsigned int clear = mission_mode ? 0xff000000u : CLEAR_COLOR;
         int fog = credits_fight_fog(&clear);
-        if (fog) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
+        int haze = !fog && demo_fog();   /* a cutscene's GFG; the credits fog keeps its own colour and clear */
+        if (fog || haze) sceGuEnable(GU_FOG); else sceGuDisable(GU_FOG);
         stage_set_double(fog);
+        stage_set_sky_unfog(haze);
         sceGuClearColor(clear);
     }
     sceGuClearDepth(0);
@@ -1524,6 +1526,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
 scene_done:
     if (!demo_active()) draw_hud(hud);
     else {
+        sceGuDisable(GU_FOG);   /* bars, fade and subtitles are 2D; the demo path skips the disable above */
         /* The cutscene's subtitle: its height from the PS2's 448 lines, centred (the PS2's x was set for its own font). */
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
@@ -2501,6 +2504,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "noblend ", 8) == 0) { extern int model_blend_off; model_blend_off = atoi(line + 8); }
         else if (strncmp(line, "nearclip ", 9) == 0) { extern int near_clip_off; near_clip_off = !atoi(line + 9); }
         else if (strncmp(line, "rawfov ", 7) == 0) demo_raw_fov = atoi(line + 7);   /* tests: 1 passes channel 12 raw */
+        else if (strncmp(line, "nofog ", 6) == 0) demo_no_fog = atoi(line + 6);     /* tests: 1 leaves GFG off */
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {

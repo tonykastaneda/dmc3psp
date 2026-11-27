@@ -81,7 +81,7 @@ every face came out bright and neutral. What the game does:
 - The VU1 microcode that shades with them isn't read: the port takes a light's strength as 1 − d² / Force² (a 0
   force: whole) and its colour / 128 [inferred], at each actor's centre, as a PSP directional light toward it.
 
-`prepare_demo.bake_lights` bakes the clips (80 bytes each, after the fades; their count at the header's +0x3c) and
+`prepare_demo.bake_lights` bakes the clips (80 bytes each, after the fades; their count is the low 16 bits of the header's +0x3c, and the high 16 bits are the GFG fog clips) and
 `demo.c` demo_lights sets them per actor, with an ambient of 0x30 [stand-in, by eye]. Checked against PCSX2:
 `analysis/testroom/arkham_face_lit_compare.png` (demo 1's cm027) and `ending_dante_lit_compare.png` (demo 59, from
 the Mission 20 credits state, `analysis/ref/cast/credits_to_ending.mp4`).
@@ -152,9 +152,30 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   25) and No 6 (their ambient: 30 20 20 in demos 1-5) [inferred from their values] scale the demo's lights and set
   the ambient (`demo_program_colour`), replacing the by-eye 0x30 ambient where a demo sets them. Arkham's face in demo
   5 is now warm like the PS2's. The world's ValidType 3 lights stay off characters: tried, they darkened him.
-- Not ported: the ScrEfc screen effects (FCS / DOF depth-of-field blur, GFG fog, SGA glow, BGA / BGO, ATF): a
-  full-screen blur pass is too costly for the PSP in a demo, so the PS2's soft backgrounds and haze aren't there;
-  demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
+- **ScrEfc fog (GFG).** A clip is a depth ramp: MinAlpha/128 at StartZ, MaxAlpha/128 at EndZ (128 = 1, as a fade's
+  alpha), colour the clip's MaxColor (ABGR). Demo 5 frames 0-1501 (so 180, 300 and 1260) are Type 1, StartZ 7000,
+  EndZ 9000, MinAlpha 0, MaxAlpha 20, MaxColor R87 G47 B22; frames 1501-5395 are 9000-11000, MaxAlpha 20, R130 G80
+  B40. Demo 59 has no GFG. `demo_fog` calls sceGuFog. Hardware fog is full colour at its far, so that far is where
+  the same line would hit 1 (the first clip: near 7000, far 19800) [inferred: the draw that would clamp past EndZ
+  was not the function read, so past EndZ the haze keeps thickening until that far]. The sky pass turns fog off;
+  the dome sits far beyond it and would become a flat colour. The credits fight's fog is unchanged and wins if
+  both would apply. A bin from before this has fog count 0 (the high half of +0x3c) until `prepare_demo` is run
+  again; that does not rebake `DSTG`. Checked on demo 5 (`fog5_180.png`, `fog5_300.png`, `fog5_1260.png`,
+  `fog5_1380.png`) and demo 59 (`fog59_700.png`, `fog59_3700.png`) against cl2's PS2 stills. The display-list build
+  matched a `nofog 1` run of demo 5 within 2 us (about 4.6 ms on the close shot, 6.4-7.2 ms on the wider ones).
+  Frame 300's distant left moved toward that brown; frame 1260 sits inside StartZ, so it stays sharp where the PS2
+  still is the FCS blur. Demo 59 frame 700 has no fog clip and stays on the previous picture.
+- **Not ported: ScrEfc blur and glow.** FCS is a focus band (Distance, OutStartZ/OutEndZ, InStartZ/InEndZ, Color,
+  Power, Range). Demo 5 frame 180 is the opening clip, Power 0. Frame 300 is Power 1, Distance 800, out of focus
+  from 500 to 1000. Frame 1260 is Power 2, Distance 260, out of focus from 300 to 800. DOF is StartZ, EndZ, Color,
+  Power: demo 59 only at 2915 (0-300, Power 2) and 3309 (800-1100, Power 3), so frame 700 has none, and its FCS
+  ends at frame 300. SGA is a feedback bloom (Color, Alpha, Scale, DirNum, DirOffset, Feedback, Attenuate, and an
+  8x16 kernel), not a tint. Demo 5 has it only on frames 0-271 (frame 180: grey, Alpha 48, Scale 16, DirNum 4,
+  Feedback 4, Attenuate 0.85); frames 300 and 1260 have none. Demo 59 has it the whole cut (frame 700: R140 G132
+  B128, Alpha 64, Scale 8, DirNum 4, DirOffset 23, Feedback 5, Attenuate 0.9) plus a BGA of the same family
+  (Alpha 38, Feedback 4). Nothing in the renderer samples the frame at a reduced size, and a blur of the 480x272
+  frame is the pass that does not fit under about 1.5 ms, so neither glow nor blur is drawn. ATF is not part of this.
+- Demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
 
 **Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm
 in front of Dante's chest while it looks at enemies metres away. With the near plane at a third of the eye-to-target

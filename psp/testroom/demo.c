@@ -24,7 +24,8 @@
 
 typedef struct { char magic[4]; unsigned int frames, camera, textures, texture_count, actors, actor_count, reserved;
                  unsigned int subtitles, subtitle_count, fades, fade_count, fx_bank, fx_clips, fx_count,
-                 light_count; /* the Light clips, right after the fades */ } DemoHeader;
+                 light_count; /* low 16: Light clips, right after the fades. High 16: ScrEfc GFG clips,
+                                  * after the Program colour clips (0 in a bin baked before fog). */ } DemoHeader;
 /* A Light clip (tools/prepare_demo.py bake_lights): its start and frames, ValidType, IsMinus, Type 1 (eased Src to Dst). */
 typedef struct { float start, frames; unsigned char valid, minus, ease, pad;
                  float src_pos[3], src_force, src_range, src_rgb[3], dst_pos[3], dst_force, dst_range, dst_rgb[3], pad2; } DemoLight;
@@ -653,18 +654,24 @@ static int object_shown(const DemoHideClip *h, unsigned int k) {
  * Returns 0 (the room's lights stay) when the demo has no Light clips. */
 #define DEMO_AMBIENT 0xff303030u   /* [stand-in, by eye] when the demo's Program track sets no No 6 */
 typedef struct { float start; unsigned int no; float arg[4]; } DemoProgram;
+/* ScrEfc GFG, after the Program clips: depth fog from MinAlpha/128 at StartZ to MaxAlpha/128 at EndZ. */
+typedef struct { float start, life, z0, z1; unsigned int color; unsigned char min_a, max_a, type, pad; } DemoFog;
+static unsigned int demo_light_n(void) { return head->light_count & 0xffffu; }
+static const DemoProgram *demo_programs(unsigned int *count) {
+    const unsigned char *p = blob + head->fades + head->fade_count * sizeof(DemoFade) + demo_light_n() * sizeof(DemoLight);
+    *count = *(const unsigned int *)p;
+    return (const DemoProgram *)(p + 4);
+}
 /* The Program track's colour clips in force now (prepare_demo: No 5 the characters' colour scale, 128 = 1.0; No 6
  * their ambient) [inferred from their values: demo 5 sets 128 128 128 and 30 20 20, demo 1 210 200 180]. */
 static void demo_program_colour(float scale[3], float ambient[3], int *has_ambient) {
-    const unsigned int *count;
     const DemoProgram *p;
-    unsigned int i;
+    unsigned int i, count;
     int k;
     for (k = 0; k < 3; ++k) { scale[k] = 1.0f; ambient[k] = 0.0f; }
     *has_ambient = 0;
-    count = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) + head->light_count * sizeof(DemoLight));
-    p = (const DemoProgram *)(count + 1);
-    for (i = 0; i < *count && p[i].start <= demo_clock; ++i) {
+    p = demo_programs(&count);
+    for (i = 0; i < count && p[i].start <= demo_clock; ++i) {
         for (k = 0; k < 3; ++k) {
             if (p[i].no == 5) scale[k] = p[i].arg[k] / 128.0f;
             else ambient[k] = p[i].arg[k] / 128.0f;
@@ -683,10 +690,10 @@ static int demo_lights(const float c[3]) {
     struct { float dir[3], rgb[3], rank; } pick[4];
     float scale[3], ambient[3];
     int i, k, n = 0, special = -1, has_ambient;
-    if (!head->light_count) return 0;
+    if (!demo_light_n()) return 0;
     demo_program_colour(scale, ambient, &has_ambient);
     l = (const DemoLight *)(blob + head->fades + head->fade_count * sizeof(DemoFade));
-    for (i = 0; i < (int)head->light_count; ++i) {
+    for (i = 0; i < (int)demo_light_n(); ++i) {
         const DemoLight *x = &l[i];
         float t, pos[3], force, range, rgb[3], d[3], d2, rank, strength, len;
         int cls = x->valid & 0xfb;
@@ -747,8 +754,60 @@ static int demo_lights(const float c[3]) {
 #define DEMO_FRAME_H 326.0f
 #define DEMO_SHOWN 0.712f
 int demo_raw_fov;
+int demo_no_fog;
 float demo_screen_fov(float fov) {
     return 2.0f * atanf(tanf(fov * 0.0087266f) * 272.0f / DEMO_FRAME_H) * 57.29578f;
+}
+
+/* ScrEfc GFG on this frame. Strength is MinAlpha/128 at StartZ and MaxAlpha/128 at EndZ (128 = 1, as a fade's
+ * alpha). sceGuFog reaches full colour at its far, so that far is where the same line would hit 1 [inferred:
+ * the GS draw that would clamp past EndZ isn't what was read]. A flat strength uses a very long ramp. The sky
+ * pass is left unfogged. "nofog 1" skips it. */
+int demo_fog(void) {
+    const DemoFog *f;
+    unsigned int i, nprog, at;
+    float a0, a1, z0, z1, span, slope, near, far;
+    if (demo_no_fog || !playing || !head || !(head->light_count >> 16)) return 0;
+    f = (const DemoFog *)(demo_programs(&nprog) + nprog);
+    at = 0xffffffffu;
+    for (i = 0; i < (head->light_count >> 16); ++i)
+        if (demo_clock >= f[i].start && demo_clock < f[i].start + f[i].life) at = i;
+    if (at == 0xffffffffu) return 0;
+    a0 = (float)f[at].min_a * (1.0f / 128.0f);
+    a1 = (float)f[at].max_a * (1.0f / 128.0f);
+    if (a0 < 0.0f) a0 = 0.0f;
+    if (a1 < 0.0f) a1 = 0.0f;
+    if (a0 > 1.0f) a0 = 1.0f;
+    if (a1 > 1.0f) a1 = 1.0f;
+    if (a0 <= 0.0f && a1 <= 0.0f) return 0;
+    z0 = f[at].z0;
+    z1 = f[at].z1;
+    if (z1 < z0) {
+        float swap = z0;
+        z0 = z1;
+        z1 = swap;
+        swap = a0;
+        a0 = a1;
+        a1 = swap;
+    }
+    span = z1 - z0;
+    if (span < 1.0f) span = 1.0f;
+    slope = (a1 - a0) / span;
+    if (slope < 0.00002f) {
+        float level = a0 > a1 ? a0 : a1;
+        if (level <= 0.0f) return 0;
+        if (level >= 0.999f) { near = 0.0f; far = 1.0f; }
+        else {
+            slope = (1.0f - level) / 200000.0f;
+            near = z0 - level / slope;
+            far = near + 1.0f / slope;
+        }
+    } else {
+        near = z0 - a0 / slope;
+        far = near + 1.0f / slope;
+    }
+    sceGuFog(near, far, (f[at].color & 0x00ffffffu) | 0xff000000u);
+    return 1;
 }
 
 void demo_letterbox(void) {

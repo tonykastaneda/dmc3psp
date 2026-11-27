@@ -279,9 +279,10 @@ static int chunk_hidden(const Chunk *c) {
 }
 
 int stage_last_chunks_drawn(void) { return stage_chunks_drawn; }
-static int stage_double, sky_off;
+static int stage_double, sky_off, sky_unfog;
 void stage_test_sky_off(int off) { sky_off = off; }   /* tests: "nosky 1", the sky pass's cost */
 void stage_set_double(int on) { stage_double = on; }
+void stage_set_sky_unfog(int on) { sky_unfog = on; }
 
 void stage_draw(void) {
     const TexEntry *textures;
@@ -328,6 +329,7 @@ void stage_draw(void) {
                 sceGuDisable(GU_DEPTH_TEST);
                 sceGuEnable(GU_BLEND);
                 sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+                if (sky_unfog) sceGuDisable(GU_FOG);   /* the dome is past the fog far; leave the texture */
                 sky = 1;
             }
             bind_texture(&textures[b->texture]);
@@ -348,6 +350,7 @@ void stage_draw(void) {
             sceGuDepthMask(GU_FALSE);   /* a glow batch turned depth writes off */
             sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
             sceGuDisable(GU_BLEND);
+            if (sky_unfog) sceGuEnable(GU_FOG);
         }
     }
     for (i = 0; i < header->batches; ++i) {

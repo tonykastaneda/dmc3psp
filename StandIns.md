@@ -25,9 +25,12 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   [stand-in]: channel 12's raw angle (`FUN_001ac750`, the screen height cancels) frames wider than the PS2 stills
   (demo 5 frames 300 and 1260, demo 59 frame 700; `sky5_300.png`, `sky5_1260.png`, `sky59_700.png`) and the fit
   matches them (`fit5_300.png`, `fit5_1260.png`, `fit59_700.png`). Test line `rawfov 1` passes the raw angle.
-  Not ported: the ScrEfc screen effects (depth-of-field blur, fog, glow), so
-  backgrounds are sharper and less hazy than the PS2's. Demo 3's over-the-shoulder shot shows holes where the near
-  plane cuts Dante.
+  Cutscene fog is the ScrEfc GFG track through sceGuFog (`demo_fog`): MinAlpha/128 at StartZ to MaxAlpha/128 at
+  EndZ, colour MaxColor. The far distance is extended so the factor at EndZ equals that fraction, because hardware
+  fog reaches full colour at its far [inferred]. The sky dome is left unfogged. Not ported: SGA glow (a feedback
+  bloom: Scale, DirNum, Feedback, Attenuate, an 8x16 kernel) and the FCS / DOF full-screen blur. There is no
+  reduced-resolution framebuffer pass, and that blur does not fit under about 1.5 ms, so backgrounds stay sharper
+  than the PS2's where those clips run. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
   and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
