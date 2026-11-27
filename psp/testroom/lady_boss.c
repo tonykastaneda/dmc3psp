@@ -10,13 +10,17 @@
  * - Her magazine holds 50 (0x61a514); a shot takes one (FUN_0044d3e0); empty, she reloads (mode 0x2d, action 0x2b).
  *   After 3 bursts she pauses (mode 0x2c, action 0x2a), and the count starts again.
  * - Her health is 4000 (0x5cbe40 +0x2c); her attack records are at 0x5cbc40 (80, 500, 1500, 1000, 500, 30, 500, 50).
- * Stand-ins: what mode 0x1a is (here she throws a grenade or fires Kalina Ann by turns), the escape (0x1d: a long
- * leap back with a grenade left), where she moves to (0x28: her spots 0x5cc1d0 / 0x5cc290 aren't read: she steps
- * to keep 500-800 from him), the shots in a burst (3) and which record each weapon uses (the pistols 80, the second
- * gun 500, a grenade 1000, the rocket 1500 [inferred]), her line of sight (always clear), her flinches. */
+ * The walk, waypoint rings, special gate, grapple and ledge states below are decoded from the same class.
+ * The grapple uses its hook and skinned cable, the held launcher frame, and the captured firing direction.
+ * Remaining stand-ins (weapon choices/events, empty motion fallbacks and flinches) are listed in StandIns.md. */
 #include <math.h>
+#include <string.h>
+#include <pspgu.h>
+#include <pspgum.h>
 #include "lady_boss.h"
 #include "fx.h"
+#include "stage.h"
+#include "lady_wire_runtime.h"
 
 /* Action a's motion (FUN_0044afc0): 0-0x0e PAC [2] slot a, 0x0f-0x29 [3] a-0x0f, 0x2a-0x2d [4] a-0x2a, 0x2e-0x52
  * [5] a-0x2e, 0x53 on [6] a-0x53. The idle, strafes, grenade, Kalina Ann, escape and flinches are the stand-in's
@@ -36,7 +40,7 @@ const char *const lady_motion_names[LADY_M_COUNT] = {
 enum { L_IDLE, L_GUN, L_GUN2, L_TURN, L_SHOOT, L_SHOOT2, L_MOVE, L_PAUSE, L_RELOAD, L_GRENADE, L_KALINA, L_ESCAPE,
        L_FLINCH, L_KNOCK, L_DOWN, L_POSE, L_BIG, L_VOLLEY, L_LEDGE };
 static const unsigned char action_motion[] = {LADY_M_WALK, LADY_M_GUN, LADY_M_GUN2, LADY_M_TURN, LADY_M_SHOT,
-    LADY_M_SHOT2, LADY_M_RUN, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_ESCAPE,
+    LADY_M_SHOT2, LADY_M_RUN, LADY_M_PAUSE, LADY_M_RELOAD, LADY_M_GRENADE, LADY_M_KALINA, LADY_M_GRENADE,
     LADY_M_FLINCH, LADY_M_KNOCK, LADY_M_KNOCK, LADY_M_POSE, LADY_M_AIM, LADY_M_KALINA, LADY_M_LEDGE_SHOT};
 
 /* Her waypoints (FUN_00448df0 / FUN_00448920 / FUN_00445590): two rings of 16 about the room's middle (0x5cc350), the
@@ -135,6 +139,7 @@ void lady_spawn(LadyBrain *b, int health) {
     b->ring = 1; b->spot = 0; b->side = 0; b->volleys = 0;
     b->token = 0.0f;
     b->air = b->ledge = 0; b->speed = b->clock = 0.0f;
+    b->wire = 0;
     b->land = 0;
     b->gauge = 0.0f;
     b->magazine = MAGAZINE;
@@ -142,6 +147,7 @@ void lady_spawn(LadyBrain *b, int health) {
     b->last_mode = -1;
     b->home[0] = b->pos[0]; b->home[1] = b->pos[1]; b->home[2] = b->pos[2];
     for (i = 0; i < LADY_SHOTS; ++i) b->shots[i].on = 0;
+    b->ally = b->has_target = 0;
     act(b, L_IDLE);
 }
 
@@ -261,10 +267,171 @@ static int special(LadyBrain *b, int sight) {
     return 1;
 }
 
+/* 0044d080's held Kalina Ann: T(-8.4,-1,-1.3), Rz(pi), attached to body bone 9
+ * (5c9520). 0044b780 transforms its local +X as a direction. 00446330 fires
+ * from 5c9610 (87.8,0,4.28); 0049f020 attaches the cable to its second bone,
+ * model [20] bone 2 at (65.2,0,4.3). Body matrices are in her own space. */
+void lady_wire_pose(LadyBrain *b, const float rot[3][3], const float pos[3]) {
+    static const float muzzle[3] = {-8.4f-87.8f,-1.0f,-1.3f+4.28f};
+    static const float attach[3] = {-8.4f-65.2f,-1.0f,-1.3f+4.3f};
+    float sn = sinf(b->yaw), cs = cosf(b->yaw), m[3], a[3], d[3];
+    int i;
+    for (i = 0; i < 3; ++i) {
+        m[i] = pos[i] + rot[i][0]*muzzle[0] + rot[i][1]*muzzle[1] + rot[i][2]*muzzle[2];
+        a[i] = pos[i] + rot[i][0]*attach[0] + rot[i][1]*attach[1] + rot[i][2]*attach[2];
+        d[i] = -rot[i][0];
+    }
+    b->wire_muzzle[0] = b->pos[0] + cs*m[0] + sn*m[2];
+    b->wire_muzzle[1] = b->pos[1] + m[1];
+    b->wire_muzzle[2] = b->pos[2] + cs*m[2] - sn*m[0];
+    b->wire_attach[0] = b->pos[0] + cs*a[0] + sn*a[2];
+    b->wire_attach[1] = b->pos[1] + a[1];
+    b->wire_attach[2] = b->pos[2] + cs*a[2] - sn*a[0];
+    /* The firing direction is captured once; it must not follow her climb pose. */
+    if (!b->wire) {
+        b->wire_dir[0] = cs*d[0] + sn*d[2];
+        b->wire_dir[1] = d[1];
+        b->wire_dir[2] = cs*d[2] - sn*d[0];
+    }
+}
+
+static void wire_update(LadyBrain *b, float frames) {
+    /* 0049ec80: the hook advances by the passed velocity until a shell-hit
+     * collision marks it caught; 0049edf0 leaves it at that collision. */
+    while (frames > 0.0f && b->wire == 1) {
+        float f = fminf(frames, 1.0f), next[3], t;
+        int i;
+        for (i = 0; i < 3; ++i) next[i] = b->wire_pos[i] + b->wire_dir[i]*50.0f*f;
+        if (stage_loaded() && stage_raycast(b->wire_pos, next, &t)) {
+            for (i = 0; i < 3; ++i) b->wire_pos[i] += (next[i]-b->wire_pos[i])*t;
+            b->wire = 2;
+        } else memcpy(b->wire_pos, next, sizeof next);
+        frames -= f;
+    }
+}
+
+/* ---- The ally (Mission 20's ending street): variant 1 sends every mode of FUN_00444c90 to 0x30, and her modes are
+ * 0x2f-0x33 (FUN_004480f0, 00448350, 00448650, 00448710, 00448010). She aims at FUN_0044c8b0's pick (the caller's
+ * target: the nearest enemy to her), shoots every 20 frames (0x61a568), the rocket once her counter (+0x4838) reaches
+ * 100 (0x61a570), and regroups behind Dante. Her shots fly at the target and only it can take them [stand-in]. */
+#define ALLY_FIRE 20.0f           /* 0x61a568 */
+#define ALLY_ROCKET 100.0f        /* 0x61a570 */
+#define ALLY_ROCKET_STEP 10.0f    /* what fills +0x4838 isn't decoded: a tenth a burst [estimate] */
+#define ALLY_REGROUP 600.0f       /* 0x61a468; Dante between 300 and 600 (0x61a46c / 0x61a470, 0x61a45c / 0x61a460) */
+#define ALLY_SPOT_NEAR 100.0f     /* 0x61a464 */
+#define ALLY_RUN_TURN (5461.0f / 65536.0f * 6.2831853f)   /* FUN_004480f0's 5461 a frame */
+#define ALLY_BURST_SHOTS 3        /* 0x85's shots [estimate: its events aren't read] */
+enum { A_REGROUP = 0x2f, A_AIM = 0x30, A_SHOOT = 0x31, A_ROCKET = 0x32, A_WAIT = 0x33 };
+
+void lady_make_ally(LadyBrain *b) {
+    b->ally = 1;
+    b->mode = A_AIM; b->step = 0;
+    b->shot_clock = b->rocket = b->regroup = 0.0f;
+}
+
+static void ally_mode(LadyBrain *b, int m) { b->mode = m; b->step = 0; }
+
+/* Like shots_update, against her target: what reaches it hurts it (the caller applies ally_hit). */
+static void ally_shots(LadyBrain *b, float f) {
+    int i;
+    for (i = 0; i < LADY_SHOTS; ++i) {
+        LadyShot *s = &b->shots[i];
+        float dx, dy, dz;
+        if (!s->on) continue;
+        s->pos[0] += s->vel[0] * f; s->pos[1] += s->vel[1] * f; s->pos[2] += s->vel[2] * f;
+        s->life -= f;
+        dx = b->target[0] - s->pos[0]; dy = b->target[1] + 100.0f - s->pos[1]; dz = b->target[2] - s->pos[2];
+        if (b->has_target && dx * dx + dz * dz < (s->kind == 2 ? 120.0f * 120.0f : 60.0f * 60.0f) && fabsf(dy) < 140.0f) {
+            if (s->kind == 2) fx_explosion(s->pos);
+            if (b->ally_hit < 2) { b->ally_hit = s->kind == 2 ? 2 : 1; b->ally_hit_damage = s->kind == 2 ? record_damage[3] : record_damage[0]; }
+            s->on = 0;
+            continue;
+        }
+        if (s->life <= 0.0f) { if (s->kind == 2) fx_explosion(s->pos); s->on = 0; }
+    }
+}
+
+static void ally_think(LadyBrain *b, float f, float px, float py, float pz) {
+    float dx = px - b->pos[0], dz = pz - b->pos[2], d = sqrtf(dx * dx + dz * dz);
+    float *t = b->target;
+    b->land = 0; b->ally_hit = 0;
+    b->timer += f;
+    b->regroup += f;
+    ally_shots(b, f);
+    switch (b->mode) {
+    case A_AIM:   /* FUN_00448350 */
+        if (b->step == 0) { play(b, LADY_M_WALK); b->step = 1; }   /* action 0x45 */
+        if (!b->has_target) { ally_mode(b, A_WAIT); break; }
+        {
+            float off = face(b, t[0], t[2], TURN, f);
+            /* Within her cone (0x61a500: +-45 degrees, reach 10000): action 0x49, her aim (its slot isn't one of the
+             * port's motions: the drawn guns, 0x30's, stand in). */
+            if (b->step == 1 && fabsf(off) < 45.0f * DEG) { play(b, LADY_M_GUN); b->step = 2; }
+        }
+        if (b->step == 2) {
+            b->shot_clock += f;
+            if (b->shot_clock >= ALLY_FIRE) {
+                b->shot_clock = 0.0f;
+                ally_mode(b, b->rocket >= ALLY_ROCKET ? A_ROCKET : A_SHOOT);
+            } else if (b->regroup > ALLY_REGROUP && d > 300.0f && d < 600.0f) ally_mode(b, A_REGROUP);
+        }
+        break;
+    case A_SHOOT:   /* FUN_00448650: action 0x85, turning to the target, till it's played */
+        if (b->step == 0) { play(b, LADY_M_POSE); b->step = 1; b->volleys = 0; }
+        if (b->has_target) face(b, t[0], t[2], TURN, f);
+        if (b->volleys < ALLY_BURST_SHOTS && b->frame >= 6.0f + 6.0f * b->volleys) {   /* [estimate] */
+            if (b->has_target) fire(b, 0, t[0], t[1], t[2], 0.0f);
+            ++b->volleys;
+        }
+        if (b->done) { b->rocket += ALLY_ROCKET_STEP; ally_mode(b, A_AIM); }
+        break;
+    case A_ROCKET:   /* FUN_00448710: action 0x56 (0x57 / 0x58 by the target's height, FUN_0044ad40) */
+        if (b->step == 0) {
+            float up = atan2f(t[1] - b->pos[1], sqrtf((t[0] - b->pos[0]) * (t[0] - b->pos[0]) + (t[2] - b->pos[2]) * (t[2] - b->pos[2])));
+            play(b, LADY_M_BIG + (up > 15.0f * DEG ? 1 : up < -15.0f * DEG ? 2 : 0));
+            b->step = 1;
+        }
+        if (b->has_target) face(b, t[0], t[2], TURN, f);
+        if (b->step == 1 && b->frame > 20.0f) {   /* the shot's frame, as her boss's [estimate] */
+            float at[3] = {b->pos[0] + sinf(b->yaw) * 80.0f, b->pos[1] + 130.0f, b->pos[2] + cosf(b->yaw) * 80.0f};
+            fx_explosion(at);
+            if (b->has_target) fire(b, 2, t[0], t[1], t[2], 0.0f);
+            b->step = 2;
+        }
+        if (b->done && b->step >= 2) { b->rocket = 0.0f; ally_mode(b, A_AIM); }
+        break;
+    case A_WAIT:   /* FUN_00448010: the guns drawn (action 0x30); a target -> 0x30; Dante 300-600 away -> 0x2f */
+        if (b->step == 0) { play(b, LADY_M_GUN); b->step = 1; }
+        if (b->has_target) ally_mode(b, A_AIM);
+        else if (d > 300.0f && d < 600.0f) ally_mode(b, A_REGROUP);
+        break;
+    case A_REGROUP:   /* FUN_004480f0: run to 100 behind Dante (his yaw), then turn her back to him */
+        if (b->step == 0) { play(b, LADY_M_RUN); b->step = 1; }
+        if (b->step == 1) {
+            float spot[3] = {px - sinf(b->dante_yaw) * 100.0f, py, pz - cosf(b->dante_yaw) * 100.0f};
+            float sx = spot[0] - b->pos[0], sz = spot[2] - b->pos[2];
+            face_point(b, spot, ALLY_RUN_TURN, f);
+            move(b, 530.0f / 30.0f * 0.5f, 0.0f, f);   /* her run, as her boss's [estimate] */
+            if (sx * sx + sz * sz < ALLY_SPOT_NEAR * ALLY_SPOT_NEAR) { play(b, LADY_M_GUN); b->step = 2; }
+        } else {
+            float away[3] = {2.0f * b->pos[0] - px, py, 2.0f * b->pos[2] - pz};
+            float want = atan2f(away[0] - b->pos[0], away[2] - b->pos[2]) - b->yaw;
+            while (want > 3.14159265f) want -= 6.2831853f;
+            while (want < -3.14159265f) want += 6.2831853f;
+            face_point(b, away, ALLY_RUN_TURN, f);
+            if (fabsf(want) < ALLY_RUN_TURN * f + 0.001f) { b->regroup = 0.0f; ally_mode(b, A_AIM); }
+        }
+        break;
+    default: ally_mode(b, A_AIM); break;
+    }
+}
+
 void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int sight) {
+    if (b->ally) { ally_think(b, f, px, py, pz); return; }
     float dx = px - b->pos[0], dz = pz - b->pos[2], d = sqrtf(dx * dx + dz * dz), off;
     b->land = 0;
     b->timer += f;
+    wire_update(b, f);
     shots_update(b, f, px, py, pz, attacks);
     if (b->gauge > 0.0f) b->gauge -= 0.01f * f;
     off = atan2f(dx, dz) - b->yaw;
@@ -401,16 +568,18 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
             while (want > 3.14159265f) want -= 6.2831853f;
             while (want < -3.14159265f) want += 6.2831853f;
             face_point(b, b->to, TURN, f);
-            if (b->done && fabsf(want) < TURN * f + 0.001f) { play(b, LADY_M_WIRE); b->step = 2; }
+            if (b->done && fabsf(want) < TURN * f + 0.001f) {
+                memcpy(b->wire_pos, b->wire_muzzle, sizeof b->wire_pos);
+                b->wire = 1;
+                play(b, LADY_M_WIRE); b->step = 2;
+            }
         } else if (b->step == 2) {
             if (b->done) { play(b, LADY_M_ZIP); b->speed = 20.0f; b->clock = 120.0f; b->air = 1; b->step = 3; }
         } else if (b->step == 3) {
-            /* Her wire, a stand-in: a thin line from her up to an anchor above where she lets go (the game's wire
-             * actor, 0049e4f0, and its direction, 0044b780, aren't read; the anchor at y 1400 is an estimate). */
-            float from[3] = {b->pos[0], b->pos[1] + 160.0f, b->pos[2]}, to[3] = {b->pos[0], 1400.0f, b->pos[2]};
-            fx_tracer(from, to, 0xffb0b0b0u, 3.0f);
             b->speed += 1.0f * f;
-            b->pos[1] += b->speed * f;
+            b->pos[0] += b->wire_dir[0] * b->speed * f;
+            b->pos[1] += b->wire_dir[1] * b->speed * f;
+            b->pos[2] += b->wire_dir[2] * b->speed * f;
             if (b->pos[1] >= 1200.0f) {
                 float h = (float)b->health / (float)(b->max_health > 0 ? b->max_health : 1);
                 if (h >= 0.33f && h < 0.66f) {
@@ -433,12 +602,20 @@ void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*uni
                     b->pos[0] = b->to[0]; b->pos[2] = b->to[2];
                 }
                 play(b, LADY_M_ZIP_FALL); b->step = 4;
-            } else if ((b->clock -= f) < 0.0f) { play(b, LADY_M_ZIP_FALL); b->step = 4; }
+                /* 0049f500 collapses the cable to the relocated hook on release. */
+                memcpy(b->wire_pos, b->pos, sizeof b->wire_pos);
+                b->wire = 2;
+            } else if (b->wire && b->pos[1] > b->wire_pos[1]) { play(b, LADY_M_ZIP_FALL); b->step = 4; }
+            else if ((b->clock -= f) < 0.0f) { play(b, LADY_M_ZIP_FALL); b->step = 4; }
             else if (b->done) play(b, LADY_M_ZIP);
         } else if (b->step == 4) {
-            float floor = b->ledge ? 501.0f : b->floor_y;   /* the ledges aren't in the port's collision: y 501 (0x5cc360) */
+            float floor = b->floor_y;   /* stage_floor includes the authored STAY crosspiece under her */
             b->pos[1] -= 20.0f * f;
-            if (b->pos[1] <= floor) { b->pos[1] = floor; b->air = b->ledge ? 3 : 0; play(b, LADY_M_ZIP_LAND); b->step = 5; }
+            if (b->pos[1] <= floor) {
+                b->pos[1] = floor; b->ledge = floor > 491.0f;
+                b->air = b->ledge ? 3 : 0; b->wire = 0;
+                play(b, LADY_M_ZIP_LAND); b->step = 5;
+            }
         } else if (b->done) {
             if (b->pos[1] > 501.0f - 10.0f) { b->last_mode = 0x1e; act(b, L_LEDGE); }
             else act(b, L_IDLE);
@@ -491,6 +668,7 @@ int lady_hit(LadyBrain *b, int heavy, int mortal) {
             for (i = 0; i < LADY_SHOTS; ++i) b->shots[i].on = 0;
             act(b, L_DOWN);
             b->air = 0;
+            b->wire = 0;
             return 1;
         }
     }
@@ -514,4 +692,64 @@ void lady_draw_fx(const LadyBrain *b) {
             if (blink) fx_mote(s->pos, still, 40.0f, 10.0f, 0.04f, 0xff2020ffu);
         } else fx_mote(s->pos, still, 60.0f, 40.0f, 0.04f, 0xff40a0ffu);
     }
+}
+
+/* 0049f020: five cable bones at quarters of the span, their X axes scaled by
+ * the first segment's length / 70. Preserve the original skin weights. */
+void lady_draw_wire(const LadyBrain *b) {
+    float axis[3][3], delta[3], length, segment;
+    int model, batch, i, j, k;
+    if (!b->wire) return;
+    for (k = 0; k < 3; ++k) delta[k] = b->wire_pos[k] - b->wire_attach[k];
+    length = sqrtf(delta[0]*delta[0]+delta[1]*delta[1]+delta[2]*delta[2]);
+    if (length < 0.01f) return;
+    for (k = 0; k < 3; ++k) axis[0][k] = delta[k]/length;
+    axis[2][0] = -axis[0][2]; axis[2][1] = 0; axis[2][2] = axis[0][0];
+    segment = sqrtf(axis[2][0]*axis[2][0]+axis[2][2]*axis[2][2]);
+    if (segment < 0.001f) { axis[2][0] = 0; axis[2][2] = 1; }
+    else { axis[2][0] /= segment; axis[2][2] /= segment; }
+    axis[1][0] = axis[2][1]*axis[0][2]-axis[2][2]*axis[0][1];
+    axis[1][1] = axis[2][2]*axis[0][0]-axis[2][0]*axis[0][2];
+    axis[1][2] = axis[2][0]*axis[0][1]-axis[2][1]*axis[0][0];
+    sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity();
+    sceGuEnable(GU_TEXTURE_2D); sceGuDisable(GU_LIGHTING);
+    sceGuDisable(GU_BLEND); sceGuDisable(GU_CULL_FACE);
+    sceGuEnable(GU_ALPHA_TEST); sceGuAlphaFunc(GU_GREATER, 0x20, 0xff);
+    sceGuDepthMask(GU_FALSE);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexMode(GU_PSM_T8, 0, 0, 0); sceGuClutMode(GU_PSM_8888, 0, 0xff, 0);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR); sceGuTexScale(1, 1); sceGuTexOffset(0, 0);
+    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+    segment = length * 0.25f;
+    for (model = 0; model < 2; ++model) {
+        const LadyWireModel *m = &lady_wire_models[model];
+        for (batch = 0; batch < m->count; ++batch) {
+            const LadyWireBatch *part = &m->batches[batch];
+            LadyWireVertex *vertices = sceGuGetMemory(part->count * sizeof(*vertices));
+            for (i = 0; i < part->count; ++i) {
+                const LadyWireSkin *skin = &part->skin[i];
+                const float *v = &skin->v.x;
+                float out[3] = {0,0,0};
+                vertices[i] = skin->v;
+                for (j = 0; j < 3; ++j) {
+                    int bone = skin->bones[j];
+                    float w = skin->weights[j]/31.0f, local[3];
+                    if (!skin->weights[j]) continue;
+                    for (k = 0; k < 3; ++k) local[k] = v[k]-m->rest[bone][k];
+                    if (model) local[0] *= segment/70.0f;
+                    for (k = 0; k < 3; ++k) {
+                        float base = model ? b->wire_attach[k]+delta[k]*(float)bone*0.25f : b->wire_pos[k];
+                        out[k] += w*(base+axis[0][k]*local[0]+axis[1][k]*local[1]+axis[2][k]*local[2]);
+                    }
+                }
+                vertices[i].x = out[0]; vertices[i].y = out[1]; vertices[i].z = out[2];
+            }
+            sceGuClutLoad(32, part->palette);
+            sceGuTexImage(0, part->width, part->height, part->width, part->pixels);
+            sceGuTexFlush();
+            sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF|GU_COLOR_8888|GU_VERTEX_32BITF|GU_TRANSFORM_3D,
+                            part->count, 0, vertices);
+        }
+    }
+    sceGuEnable(GU_CULL_FACE); sceGuEnable(GU_BLEND); sceGuEnable(GU_LIGHTING);
 }

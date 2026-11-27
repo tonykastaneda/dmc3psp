@@ -261,6 +261,32 @@ void hud_draw(const Player *player) {
     end();
 }
 
+/* The counter (FUN_00313a40): id100.pac's ORBS mesh, parts 3-5 (the ones at part 3, rightmost), each a 24x40 texel
+ * cell of its texture moved to the digit's corner from 0x5f5b50 (FUN_001a3ab0); unused places hidden (FUN_001a2090).
+ * Placed by the PCSX2 capture of the ending street (analysis/ref/credits): the ones' right edge at 409 of 480, the
+ * glyphs 7-21 high. */
+void hud_draw_kills(int count) {
+    static const unsigned char corner[10][2] = {{0,0},{24,0},{48,0},{72,0},{96,0},{0,40},{24,40},{48,40},{72,40},{96,40}};
+    const HudTexture *t = &hud_textures[hud_meshes[HUD_ORBS].texture];
+    const float w = 9.5f, h = 16.0f, right = 409.5f, top = 6.0f;
+    int places = count < 10 ? 1 : count < 100 ? 2 : 3, i;
+    if (count > 999) count = 999;
+    if (count < 0) count = 0;
+    begin();
+    sceGuTexImage(0, t->width, t->height, t->width, t->rgba);
+    sceGuTexFlush();
+    for (i = 0; i < places; ++i, count /= 10) {
+        HudDrawVertex *v = sceGuGetMemory(sizeof(HudDrawVertex) * 2);
+        int d = count % 10;
+        v[0].u = corner[d][0]; v[0].v = corner[d][1];
+        v[0].x = right - (i + 1) * w; v[0].y = top; v[0].z = 0.0f;
+        v[1].u = corner[d][0] + 24.0f; v[1].v = corner[d][1] + 40.0f;
+        v[1].x = right - i * w; v[1].y = top + h; v[1].z = 0.0f;
+        sceGuDrawArray(GU_SPRITES, GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_2D, 2, 0, v);
+    }
+    end();
+}
+
 void hud_draw_boss(const char *name, float health, float maximum) {
     static char last_name[64];
     static DamageTrail trail;

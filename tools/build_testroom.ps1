@@ -98,9 +98,19 @@ if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "SFX_W9.BIN")
 }
 
 # The Jester's bomb and hand (tools/prepare_jester_props.py).
-if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "jester_props_runtime.h"))) {
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "jester_props_runtime.h")) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\prepare_jester_props.py")).LastWriteTime -gt
+    (Get-Item -LiteralPath (Join-Path $Generated "jester_props_runtime.h")).LastWriteTime) {
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_jester_props.py"), $Iso.FullName, "--output", $Generated)
+}
+
+# Lady's grapple hook and cable, including the cable's native skin weights.
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "lady_wire_runtime.h")) -or
+    (Get-Item (Join-Path $Root "tools\prepare_lady_wire.py")).LastWriteTime -gt
+    (Get-Item (Join-Path $Generated "lady_wire_runtime.h")).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\prepare_lady_wire.py"), $Iso.FullName, "--output", $Generated)
 }
 
 # The missions' music (tools/gen_music.py): the rooms' BGM table and BGM_nnn.BIN tracks.
@@ -289,6 +299,11 @@ if ($Regenerate -or -not (Test-Path -LiteralPath $MessagesHeader) -or
     $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\gen_messages.py'), $Iso.FullName, '--header', $MessagesHeader)
 }
+# Mission 20's staff roll (tools/prepare_staffroll.py): STAFF_00-35.BIN beside the EBOOT, from the player's disc.
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build 'STAFF_35.BIN'))) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter '*.iso' | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root 'tools\prepare_staffroll.py'), $Iso.FullName, '--output', $Build)
+}
 # Cached stage files can predate the collision-grid extent fix. Regenerate only
 # those whose grids omit native collision vertices; fresh files pass read-only.
 Invoke-Native $Python @((Join-Path $Root "tools\audit_stage_grids.py"), "--repair")
@@ -298,7 +313,7 @@ $CFlags = @(
     "-I$(Join-Path $SDK 'include')", "-I$Generated", "-I$Source"
 )
 $ObjectFiles = @()
-foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music", "sfx", "pfx")) {
+foreach ($name in @("main", "player", "camera", "skeleton", "motion", "coat", "cloth", "combat", "stage", "enemy", "vanguard", "cerberus_boss", "bullets", "hud", "fx", "nfx", "menu", "movie", "orbs", "leviathan_boss", "mission8", "vergil_boss", "mission6", "nausika", "agni_rudra", "nevan_boss", "mission7", "jester", "dullahan", "mission10", "mission11", "geryon_boss", "mission12", "mission14", "fallen", "mission15", "lady_boss", "doppelganger_boss", "mission17", "bishop", "mission13", "arkham_boss", "mission19", "mission18", "secret_missions", "needles", "messages", "blocks", "spheres", "wagon", "demo", "music", "sfx", "credits_fight", "pfx")) {
     $obj = Join-Path $Objects "$name.o"
     Invoke-Native "psp-gcc.exe" ($CFlags + @("-c", (Join-Path $Source "$name.c"), "-o", $obj))
     $ObjectFiles += $obj

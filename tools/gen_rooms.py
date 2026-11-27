@@ -660,7 +660,16 @@ def main():
             opened = {n for m, r, item, numbers in ITEM_OPENS if r == name for n in numbers}
             tags.update({s["index"]: gimmicks.STORY_TAG + s["number"] - 100 for s in gimmicks.parse_game(game)
                          if s["kind"] == "COLLISION" and s["number"] in opened})
+            # Lady's five perch crosspieces are STAY boxes, not HITS floors.
+            # Enable their own authored colliders, not all STAY camera volumes.
+            perch_sets = (47, 51, 55, 59, 63) if name == "115" else ()
             rooms[name]["boxes"] = gimmicks.collision_boxes(game, tags)
+            if perch_sets:
+                authored = gimmicks.collision_boxes(game, tags, stay_numbers=perch_sets)
+                # Negative tag: permanent structural box whose top is walkable.
+                # Keep existing boxes' behaviour unchanged in other rooms.
+                rooms[name]["boxes"] += [(-1, c, h, a) for tag, c, h, a in authored
+                                         if (tag, c, h, a) not in rooms[name]["boxes"]]
             rooms[name]["items"] = parse_items(data)
             rooms[name]["catapults"] = sorted((s for s in gimmicks.parse_game(game) if s["kind"] == "CATAPULT"),
                                               key=lambda s: s["pos"][1])

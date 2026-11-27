@@ -26,8 +26,10 @@ typedef struct {
     int ring, spot, side;        /* her waypoint ring (+0x4859: 1 the floor's, 0 the middle's), its point (+0x47e4), +0x4858 */
     float to[3];                 /* where she's going (+0x47f0) */
     int volleys;                 /* mode 0x1c's shots left (+0x4848) */
-    float token;                 /* frames until her next special (the manager +0x130's gate isn't read) */
+    float token;                 /* her special gate gauge (+0x130; 0x5cc100) */
     float speed, clock;          /* the grapple's rise (+0x4824 / +0x4828) and its clock (+0x482c) */
+    float wire_muzzle[3], wire_attach[3], wire_dir[3], wire_pos[3];
+    int wire;                   /* 0 absent, 1 flying, 2 caught; actor 0049e4f0 */
     int air;                     /* out: off the floor, pos[1] hers (2: the hop, which her motion's root travel moves;
                                     3: on a ledge) */
     int ledge;                   /* she let go over a ledge (0x5cc360) */
@@ -35,13 +37,24 @@ typedef struct {
     int land;                    /* out: hurt Dante this frame (1 light, 2 heavy) */
     float land_damage;           /* out: its attack record's damage */
     LadyShot shots[LADY_SHOTS];
+    /* The ally of Mission 20's ending street (spawn variant 1 -> +0x485e, FUN_00442610; modes 0x2f-0x33,
+     * docs/CREDITS_FIGHT.md 5). in: ally, has_target, target (FUN_0044c8b0's pick), dante_yaw. */
+    int ally, has_target, mode;
+    float target[3], dante_yaw;
+    float shot_clock, rocket, regroup;   /* +0x483c, +0x4838, +0x4840 */
+    int ally_hit;                        /* out: a shot reached her target this frame (1 light, 2 heavy) */
+    float ally_hit_damage;               /* out: its record's damage */
 } LadyBrain;
 
 void lady_spawn(LadyBrain *b, int health);
+void lady_make_ally(LadyBrain *b);   /* variant 1: the ending street's ally (lady_think then runs her ally modes) */
 /* sight: Dante's in her line of sight (FUN_00449450, a ray from her to him). */
 void lady_think(LadyBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int sight);
 int lady_hit(LadyBrain *b, int heavy, int mortal);   /* 1 if she's beaten */
 int lady_loops(int motion);
 void lady_draw_fx(const LadyBrain *b);
+/* Kalina Ann is attached to body bone 9 by 0x5c9520 while grappling. */
+void lady_wire_pose(LadyBrain *b, const float rot[3][3], const float pos[3]);
+void lady_draw_wire(const LadyBrain *b);
 
 #endif
