@@ -1457,7 +1457,6 @@ static int boss_step(float f, float px, float py, float pz, int attacks) {
             for (i = 0; i < 3; ++i) if (cb.head_alive[i]) test_body_caps(&cb.heads[i], head_pose[i], px, py, pz);
         }
     }
-    skin_visible_parts();
     return cb.landed;
 }
 int cerberus_boss_update(float frames, float px, float py, float pz, int attacks) {
@@ -1467,6 +1466,9 @@ int cerberus_boss_update(float frames, float px, float py, float pz, int attacks
         boss_step(f, px, py, pz, attacks);
         frames -= f;
     }
+    /* The skin once a frame, for the draw (it was made after every step: twice a frame below 60 fps, and most of
+     * the boss's time; the steps' collision reads the poses, not the skin). */
+    skin_visible_parts();
     return cb.landed;
 }
 
