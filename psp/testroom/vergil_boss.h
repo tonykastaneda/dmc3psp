@@ -20,6 +20,9 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal);
 void vergil_boss_draw(void);
 /* Mission 19's partner: his body posed by a player Pose's model-space bone transforms (24 bones), at (x, y, z), yaw. */
 void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], float x, float y, float z, float yaw);
+/* Yamato in his hand (he's attacking) or in its scabbard; and a fresh start for his coat's chains. */
+void vergil_boss_partner_drawn(int drawn);
+void vergil_boss_partner_reset(void);
 int vergil_boss_dying(void);
 int vergil_boss_hidden(void);   /* mid-teleport: not there to be hit */
 float vergil_boss_health(void);

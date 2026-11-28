@@ -25,8 +25,9 @@ value under 700).
   `FUN_00489590` / `FUN_00489670`, the Doppelganger's, delayed `0x594bd8`[level]: 1, 30, 60 frames).
   **In the port** (`main.c` partner, `vergil_boss_draw_partner`): as the second round begins (9000) a second Player /
   Combat beside Dante takes Dante's input a frame late and hits Arkham as Dante's blows do. Stand-ins: Dante's moveset
-  (Vergil's player moveset, `CPlVergil` / pl001, isn't ported) on Vergil's body (em035 [1], Dante's bone layout), no coat
-  or Yamato, untouchable, his shots not fired.
+  (Vergil's player moveset, `CPlVergil` / pl001, isn't ported) on Vergil's body (em035 [1], Dante's bone layout),
+  untouchable, his shots not fired. He wears the boss's coat (its .clt chains, as VERGIL_SPEC) and scabbard, and
+  Yamato is in his right hand while a move plays or the sword is out, else sheathed (the boss's attach records).
 - The phase byte `+0x15d1` follows his health (`3d4540`): over 9000 → 0, over 3000 → 1, else 2.
 
 ## 2. The states (`+0x1424`, `3d2220`'s switch; `3d3760` sets one and starts its script)

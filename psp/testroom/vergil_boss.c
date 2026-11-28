@@ -930,16 +930,38 @@ static int part_visible(int i){
 }
 /* Mission 19's partner Vergil (CPlVergil, ARKHAM_SPEC 1): his body (em035 [1], Dante's 24-bone layout) posed by the
  * bone transforms of a player Pose (main.c's partner, playing Dante's moves a frame late) and drawn where he stands.
- * His coat and Yamato aren't posed [stand-in]. */
+ * His coat swings as the boss's does; Yamato sits in its scabbard on bone 13, in his right hand (bone 9, the boss's
+ * drawn record 0x5dc0a0) while he attacks. His moves are still Dante's [stand-in: CPlVergil's moveset isn't ported]. */
 static int load_data(void);   /* the model's buffers, made at the first spawn (below) */
+static int partner_drawn, partner_fresh = 1;
+void vergil_boss_partner_drawn(int drawn) { partner_drawn = drawn; }
+void vergil_boss_partner_reset(void) { partner_fresh = 1; }
 void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], float x, float y, float z, float yaw) {
+    static const int parts[] = {PART_BODY, PART_COAT, PART_SCABBARD, PART_YAMATO};
+    MotionSample rest;
+    Transform at;
     int b, k, j;
     if (vb.active) return;   /* the boss's own buffers are in use */
     if (!load_data()) return;
+    if (partner_fresh) {
+        partner_fresh = 0;
+        vb.cloth_clock = 0.0f;
+        demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY);
+        demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY + 1);
+    }
+    vb.cloth_clock += 1.0f;   /* a draw a 60 Hz frame */
     for (b = 0; b < 24; ++b) {
         for (k = 0; k < 3; ++k) { for (j = 0; j < 3; ++j) body_pose[b].m[k][j] = rot[b][k][j]; body_pose[b].p[k] = pos[b][k]; }
     }
-    skin_part(PART_BODY);
+    memset(&rest, 0, sizeof(rest));
+    build_skeleton(&vergil_parts[PART_COAT], &rest, 0, 0.0f, &body_pose[3], coat_pose, 0);
+    run_cloth(0, &vergil_parts[PART_COAT], coat_pose, &body_pose[3]);
+    attach(13, 19.0f, -0.5f, 11.0f, 0.0f, 3.84f, 0.0f, &at);
+    build_skeleton(&vergil_parts[PART_SCABBARD], &rest, 0, 0.0f, &at, scabbard_pose, 0);
+    run_cloth(1, &vergil_parts[PART_SCABBARD], scabbard_pose, &at);
+    if (partner_drawn) attach(9, -7.5f, -2.0f, 0.0f, 0.0f, 0.0f, 0.0f, &at);
+    build_skeleton(&vergil_parts[PART_YAMATO], &rest, 0, 0.0f, &at, yamato_pose, 0);
+    for (b = 0; b < 4; ++b) skin_part(parts[b]);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     {
@@ -958,7 +980,7 @@ void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], flo
     sceGuTexMode(GU_PSM_T8, 0, 0, 1);
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
-    draw_part(PART_BODY);
+    for (b = 0; b < 4; ++b) draw_part(parts[b]);
     sceGuDisable(GU_ALPHA_TEST);
 }
 
