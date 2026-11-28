@@ -40,7 +40,7 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK, OP_WINDOW4 };
 enum {
     S_THINK = 0x17, S_DEATH = 0x18, S_STRAFE = 0x1d, S_IDLE = 0x1f, S_TAUNT = 0x20,
     S_COMBO_A = 0x21, S_COMBO_B = 0x22, S_COMBO_C = 0x25, S_UPPER = 0x29, S_DASH = 0x2d, S_BEHIND = 0x31,
-    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_FORCE_A=0x23, S_FORCE_B=0x24, S_JUDGMENT=0x30, S_ROUND_TRIP=0x3a, S_DIVE=0x3b, S_RETREAT=0x2e, S_CUT_RANDOM=0x3f, S_CUT_RING=0x40, S_STORM=0x3c, S_DT=0x39
+    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_BRACE = 0x32, S_FLINCH = 0x36, S_FLINCH_BACK = 0x37, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_FORCE_A=0x23, S_FORCE_B=0x24, S_JUDGMENT=0x30, S_ROUND_TRIP=0x3a, S_DIVE=0x3b, S_RETREAT=0x2e, S_CUT_RANDOM=0x3f, S_CUT_RING=0x40, S_STORM=0x3c, S_DT=0x39
 };
 
 typedef struct { float m[3][3], p[3]; } Transform;
@@ -64,6 +64,10 @@ static struct {
     int tick, variant, dt, dt_unlocked, m13_chain, m20_low, m20_temp_dt, repeats, waves, cut_index, sword, sword_hit;
     float dt_left,dt_cooldown, cut[3], dive_height, retreat_speed, retreat_distance;
     float sword_pos[3], sword_dir[3], sword_age, sword_spin, sword_wait, sword_rehit;
+    /* The damage component (+0xb864, vtable 0x605730): the stun and flinch gauges (+0xb818 / +0xb81c) and the frames
+     * since the last blow (+0x10). The flinch budget (4e52f0): frames flinching (+0xbb0c) against its limit (+0xbb10),
+     * points taken while flinching (+0xbb14) against theirs (+0xbb18). The brace's clock (+0xbb08). */
+    float stun_gauge, flinch_gauge, since_blow, flinch_time, flinch_limit, flinch_points, flinch_cap, brace_time;
 } vb;
 
 static int motion_ids[4][100];
@@ -126,6 +130,13 @@ static const float gauge_bands[3][2] = {{350.0f, 20.0f}, {400.0f, 4.0f}, {500.0f
 #define DASH_NEAR 300.0f              /* DAT_0061aa3c */
 #define BLOCK_HOLD 15.0f              /* 0x5dfad0[rank 0] */
 #define LEAP_SPEED 45.0f              /* DAT_0061a8f0 */
+/* Hit reactions (docs/VERGIL_SPEC.md, "Hit reactions"). */
+#define STUN_FULL 60.0f               /* param block 0x5dca50 +0x30 */
+#define FLINCH_FULL 60.0f             /* +0x34 */
+#define GAUGE_REFILL 180.0f           /* FUN_002f1750: both refill once 180 frames pass without a blow */
+#define FLINCH_LIMIT 600.0f           /* gp-0x576c (0x61aa04): frames of flinching a window allows */
+#define FLINCH_CAP 12.0f              /* gp-0x5764 (0x61aa0c): points taken while flinching before the brace */
+#define BRACE_REACT 60.0f             /* DAT_0061aa20: frames into the brace before a lunge is answered */
 
 static float wrap_angle(float a) {
     while (a > PI) a -= 2.0f * PI;
@@ -676,7 +687,23 @@ static void ai_step(float f) {
         else if(vb.step==1 && act==ACT_DONE){vb.step=2;vb.dt=1;vb.dt_unlocked=1;vb.dt_left=vb.variant==2?660:840;vb.timer=vb.variant==2?60:240;set_action(0x57);}
         else if(vb.step==2 && (vb.timer-=f)<=0){if(vb.variant==2)vb.dt_left=600;set_state(S_THINK);}
         break;
-    case S_FLINCH:                                  /* [approximation] the hit reaction isn't decoded */
+    case S_FLINCH:                                  /* FUN_004db5d0: reaction 0x11 or 2, 50/50 */
+    case S_FLINCH_BACK:                             /* FUN_004db750: reaction 3 (a blow from behind) */
+        if (vb.step == 0) {
+            vb.step = 1;
+            set_action(vb.state == S_FLINCH_BACK ? 3 : (unit_random() < 0.5f ? 0x11 : 2));
+        } else if (act == ACT_DONE) { set_state(S_THINK); break; }
+        /* FUN_004e5540: the flinch's clock runs; past 12 points of blows he braces instead. */
+        vb.flinch_time += f;
+        if (vb.flinch_points > vb.flinch_cap) set_state(S_BRACE);
+        break;
+    case S_BRACE:                                   /* FUN_004daf90: action 0x3d (vr3-40), facing Dante */
+        if (vb.step == 0) { vb.step = 1; vb.brace_time = 0.0f; set_action(0x3d); break; }
+        vb.yaw = angle_to_dante();                  /* FUN_00359c00 at 16384 a frame: a quarter turn, so at once */
+        vb.brace_time += f;
+        if (vb.brace_time > BRACE_REACT && dante_lunges()) { react(); break; }
+        vb.stun_gauge = STUN_FULL;                  /* he holds both gauges full while braced */
+        vb.flinch_gauge = FLINCH_FULL;
         if (act == ACT_DONE) set_state(S_THINK);
         break;
     case S_DEATH:
@@ -940,7 +967,33 @@ int vergil_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *d
     return 1;
 }
 static int interruptible(void) {
-    return vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT || vb.state == S_APPROACH || vb.state == S_FLINCH;
+    return vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT || vb.state == S_APPROACH || vb.state == S_FLINCH || vb.state == S_FLINCH_BACK;
+}
+/* FUN_004e51e0 (with FUN_004e52f0) on a reaction code: 0 none, 1 the brace (state 0x32), 2 a flinch. */
+static int reaction_gate(int melee) {
+    if (!melee) return 0;                           /* +0xbb52: only a blow with byte 2 = 0, not a shot */
+    /* +0xb9a0: 0x27 (the upper slash), 0x5f (the dive), 0x6f (the storm's dive) take blows without reacting. */
+    if (vb.action == 0x27 || vb.action == 0x5f || vb.action == 0x6f) return 0;
+    if (vb.dt) return 0;                            /* Devil Trigger's form doesn't flinch */
+    if (vb.state == 0x44 || vb.state == S_BRACE) return 0;
+    if (vb.flinch_time > vb.flinch_limit) return 1; /* the flinch has gone on too long */
+    if (vb.state == S_FLINCH || vb.state == S_FLINCH_BACK) return 2;
+    /* The body script's window 1 byte 4 = 1 marks a stretch he can be flinched in (the finishers' tails, 0x47,
+     * the recovery of the dive): it opens a new budget, 600 frames and 12 points. */
+    if (vb.body.window4 == 1) {
+        vb.flinch_time = 0.0f; vb.flinch_limit = FLINCH_LIMIT;
+        vb.flinch_points = 0.0f; vb.flinch_cap = FLINCH_CAP;
+        return 2;
+    }
+    return 1;                                       /* anywhere else (standing, strafing, mid-attack): the brace */
+}
+/* FUN_004dee00 on the codes of FUN_0032a540 / FUN_0032a800: 1 and 3 (from behind) play reaction 3 (unless he's
+ * already in it), the rest 0x11 or 2. */
+static void reaction(int behind, int melee) {
+    int gate = reaction_gate(melee);
+    trace(gate == 2 ? "react_flinch" : gate == 1 ? "react_brace" : "react_none");
+    if (gate == 1) set_state(S_BRACE);
+    else if (gate == 2) set_state(behind && vb.state != S_FLINCH_BACK ? S_FLINCH_BACK : S_FLINCH);
 }
 int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     float at[3] = {vb.pos[0], vb.pos[1] + 110.0f, vb.pos[2]}, damage, toward;
@@ -951,6 +1004,12 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     if (vb.state == S_GUARD && vb.action == 0x51 && fabsf(wrap_angle(toward - vb.yaw)) < PI / 2.0f) {
         vb.blocked = 1;
         trace("blocked");
+        return 0;
+    }
+    /* FUN_004e6d20 by the action's hit mode (+0xb9a3, set in FUN_004e0fc0): 2 for 0x56 / 0x57 / 0x61 / 0x62 (the
+     * Devil Trigger change) turns the blow aside (effect 0x32d), 1 for 0x75 takes nothing. */
+    if (vb.action == 0x56 || vb.action == 0x57 || vb.action == 0x61 || vb.action == 0x62 || vb.action == 0x75) {
+        trace("deflected");
         return 0;
     }
     /* As Cerberus's: a light hit 42, a heavy one 84, x1.1; Easy x2. Guns: the param block's 20% [inferred]. */
@@ -976,11 +1035,25 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     if(vb.variant>=1 && kind!=HIT_PISTOL && interruptible() && ++vb.m13_chain>=3){
         vb.m13_chain=0;set_state(vb.variant==2?S_BEHIND:S_BEOWULF_WARP);return 0;
     }
-    /* Flinches only between attacks [approximation: CEm035's reaction table 0x5dcc90 isn't decoded]. */
-    if (kind != HIT_PISTOL && interruptible()) {
-        set_state(S_FLINCH);
-        vb.step = 1;
-        set_action(kind == HIT_LIGHT || kind == HIT_AIR ? ((vb.tick & 1) ? 3 : 2) : 0x12);
+    {
+        /* FUN_002f17a0: each blow takes its record's +0xc from the stun gauge and +0x14 from the flinch gauge (by the
+         * weapon's share: guns 20). Dante's records aren't decoded, so a light blow takes 20 / 30 and a heavy one
+         * 60 / 60 [estimates]. The stun gauge emptying (FUN_0032a540) comes first and refills both; the flinch gauge
+         * (FUN_0032a800) refills itself. Either sends a reaction code by where the blow came from; a blow that
+         * empties neither does nothing to him (his +0x30, FUN_004e6b20, only reacts in the air). */
+        int heavy = kind == HIT_HEAVY || kind == HIT_LAUNCH || kind == HIT_SLAM;
+        float share = kind == HIT_PISTOL ? 0.2f : 1.0f, stun = (heavy ? 60.0f : 20.0f) * share;
+        int behind = fabsf(wrap_angle(toward - vb.yaw)) >= PI / 2.0f;
+        int code = 0;
+        /* FUN_004e6d20: while he flinches, a blow adds 1 to the budget's points, 2 if its +0xc is 60 or more. */
+        if (vb.state == S_FLINCH || vb.state == S_FLINCH_BACK) vb.flinch_points += stun >= 60.0f ? 2.0f : 1.0f;
+        vb.since_blow = 0.0f;
+        vb.stun_gauge -= stun;
+        vb.flinch_gauge -= (heavy ? 60.0f : 30.0f) * share;
+        if (vb.stun_gauge <= 0.0f) { vb.stun_gauge = STUN_FULL; vb.flinch_gauge = FLINCH_FULL; code = 1; }
+        else if (vb.flinch_gauge <= 0.0f) { vb.flinch_gauge = FLINCH_FULL; code = 1; }
+        vergil_boss_note("gauges", vb.stun_gauge, vb.flinch_gauge, (float)code, (float)behind);
+        if (code) reaction(behind, kind != HIT_PISTOL);
     }
     return 0;
 }
@@ -999,6 +1072,8 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     if(vb.variant==1 && vb.dt_unlocked && !vb.dt && vb.hp>0 && vb.hp<max_health()*.75f && (vb.dt_cooldown-=frames)<=0 && vb.state==S_THINK){vb.dt_unlocked=0;}
 
     vb.dante[0] = px; vb.dante[1] = py; vb.dante[2] = pz;
+    /* FUN_002f1750: 180 frames without a blow refill both gauges. */
+    if ((vb.since_blow += frames) > GAUGE_REFILL) { vb.stun_gauge = STUN_FULL; vb.flinch_gauge = FLINCH_FULL; }
     if (attacks && !vb.dying){ai_step(frames);if(vb.variant==2)m20_roundtrip(frames);}
     vb.action_time += frames;
     script_tick(&vb.body, frames*(vb.variant==2 && vb.dt?1.2f:1.0f), &dx, &dy, &dz);
@@ -1043,6 +1118,7 @@ void vergil_boss_spawn(float x, float y, float z) {
     vb.centre[1] = y;
     vb.yaw = PI;
     vb.hp = max_health();
+    vb.stun_gauge = STUN_FULL; vb.flinch_gauge = FLINCH_FULL;   /* the budget starts at 0 / 0 (FUN_004d27d0) */
     vb.body.motion = vb.body.previous_motion = -1;
     vb.last_wander = -1;
     vb.state = S_THINK;
