@@ -108,7 +108,9 @@ See CUTSCENES.md (Sound): each real-time demo streams its own SDATA track (`<pac
 
 ## Not yet
 
-- **Sound effects**: the enemies' and the rooms' banks (types 2-6 and 7) and the calls that play them.
+- **Sound effects**: the enemies' banks (types 2-6, folded into type 2 by FUN_0033e820) and type 7 (the event
+  scripts' se kind 2, FUN_0033ee90), and the calls that play them. The scripts' se kinds map to types as FUN_0020be20
+  does: 0 -> 8 (the room's bank, played with the op's bank), 1 -> 0, 2 -> 7, 3 -> 2, 4 -> 1.
 - The deferred states' exact handling (commands 12-16).
 - The title's and Game Over's music (Continue.adx, SDATA 27, by its name; the port's Game Over is a 2.5 s pause before
   the restart).

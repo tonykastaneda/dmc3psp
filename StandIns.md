@@ -36,9 +36,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
   track held until a fight and the stage channel dipping under it [inferred]; tracks loop at their ADX loop points) and
   the system bank's effects (menus, orbs; that it's the game's type 0 is inferred). Dante's own bank and his ten weapons' play from his moves'
-  events, his footsteps and the crest switches' and seals' sounds the room's own bank (type 8); the enemies' banks
-  (types 2-6), the event scripts' sounds (ops 71 / 72, type 7), the other gimmicks' sounds and the sounds' distance
-  falloff (FUN_0033d8d0) aren't in yet. MUSIC.md. GAME_FLOW.md.
+  events, his footsteps and the crest switches' and seals' sounds the room's own bank (type 8); the event scripts'
+  se / se_3d play in the blocks messages.c runs when they're the room's (kind 0), the system's (1) or Dante's (4)
+  bank (not placed); the enemies' banks (types 2-6), the scripts' type 7 sounds and the blocks messages.c doesn't
+  keep, the other gimmicks' sounds and the sounds' distance falloff (FUN_0033d8d0) aren't in yet. MUSIC.md. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
   `main.c` ~4296, EVENT_SCRIPTS.md.
