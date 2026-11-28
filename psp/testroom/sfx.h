@@ -11,5 +11,7 @@ void sfx_motion(int motion, float from, float to);
 /* The room's footstep bank (by room number, -1 none) and the material of the floor under Dante (0: no steps). */
 void sfx_room(int room);
 void sfx_floor(int material);
-void sfx_step_stats(int out[3]);   /* tests: steps played, the last one's material, steps on no material */
+/* The room's bank (the game's type 8): the table's id, played with a bank (its program offset; the crest switch's 0x20). */
+void sfx_play_room(int id, int bank, float pan, float volume);
+void sfx_step_stats(int out[5]);   /* tests: steps played, the last one's material, steps unplayable, room sounds played, unplayable */
 #endif

@@ -59,7 +59,7 @@ static float spin;
 #define SW_WINDOW 120.0f
 #define SW_DRAIN 2.0f
 #define SW_RADIUS 60.0f
-typedef struct { float x, y, z, yaw; float charge, wing, flames, window, spin, spin2, lit_left; int lit; } Switch;
+typedef struct { float x, y, z, yaw; float charge, wing, flames, window, spin, spin2, lit_left; int lit; GimSwitchSound sound; } Switch;
 static Switch sw[2];
 static const float sw_place[2][4] = {{3288.0f, 140.0f, 2500.0f, -90.0f}, {1512.0f, 140.0f, 2500.0f, 90.0f}};
 static int barrier_on;
@@ -171,6 +171,7 @@ static void switches_update(float frames) {
                 s->wing = fmaxf(s->wing - drain, 0.0f);
                 if (s->charge <= 100.0f) s->flames = fmaxf(s->flames - drain, 0.0f);
             }
+            gim_switch_sounds(&s->sound, s->charge, s->window, 0, frames);
             if (s->charge >= SW_CHARGE && s->flames >= SW_FLAMES) { s->lit = 1; s->lit_left = lit_time(); }
         } else {
             /* FUN_003055c0: the lit timer; at its end the flag is cleared and the switch resets (FUN_00305fd0). */
@@ -247,6 +248,7 @@ void m6_hit(float x, float y, float z, float yaw, float reach, int heavy) {
             if (s->charge > 100.0f) s->wing = fminf(s->wing + amount, 201.0f);
         } else s->flames = fminf(s->flames + amount, SW_FLAMES + 1.0f);
         s->window = SW_WINDOW;
+        gim_switch_hit_sound(&s->sound);
         {
             float at[3] = {s->x, s->y, s->z};
             fx_hit_spark(at);

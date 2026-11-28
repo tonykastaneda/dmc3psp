@@ -35,7 +35,10 @@ typedef struct {
     int id_count, sample_count, *cached_at;   /* cached_at: per sample, its place in the pool (-1 not there) */
     unsigned int body_at;
     SceUID fd;
+    unsigned char map[64];   /* SFX2 (a room's bank): program offset p's block of ROOM_IDS ids, 255 none */
+    int mapped;
 } Bank;
+#define ROOM_IDS 180
 static const char *const bank_files[SFX_BANKS] = {"SFX_SYS.BIN", "SFX_DANTE.BIN", "SFX_W0.BIN", "SFX_W1.BIN",
     "SFX_W2.BIN", "SFX_W3.BIN", "SFX_W4.BIN", "SFX_W5.BIN", "SFX_W6.BIN", "SFX_W7.BIN", "SFX_W8.BIN", "SFX_W9.BIN"};
 static Bank banks[SFX_BANKS + 1];   /* + the room's footsteps (SFX_ST<room>.BIN, sfx_room) */
@@ -143,7 +146,11 @@ static int bank_open(Bank *b, const char *game_dir, const char *file) {
     snprintf(path, sizeof path, "%s%s", game_dir, file);
     b->fd = sceIoOpen(path, PSP_O_RDONLY, 0);
     if (b->fd < 0) return 0;
-    if (sceIoRead(b->fd, &h, sizeof h) != (int)sizeof h || memcmp(h.magic, "SFX1", 4) != 0) return 0;
+    if (sceIoRead(b->fd, &h, sizeof h) != (int)sizeof h) return 0;
+    if (memcmp(h.magic, "SFX2", 4) == 0) {
+        if (sceIoRead(b->fd, b->map, sizeof b->map) != (int)sizeof b->map) return 0;
+        b->mapped = 1;
+    } else if (memcmp(h.magic, "SFX1", 4) != 0) return 0;
     b->id_count = (int)h.ids; b->sample_count = (int)h.samples; b->body_at = h.body;
     b->ids = malloc(sizeof(SfxId) * b->id_count);
     b->samples = malloc(sizeof(SfxSample) * b->sample_count);
@@ -235,14 +242,30 @@ void sfx_floor(int material) { floor_material = material; }
 /* FUN_0033ef00: a step of kind 0-3 plays rand(2) + 2 kind, kinds 4 and 5 ids 8 and 9, on the program of the floor's
  * material (none on material 0). */
 static int steps_played, steps_missing, step_material;
-void sfx_step_stats(int out[3]) { out[0] = steps_played; out[1] = step_material; out[2] = steps_missing; }
+static int room_played, room_missing;
+void sfx_step_stats(int out[5]) {
+    out[0] = steps_played; out[1] = step_material; out[2] = steps_missing; out[3] = room_played; out[4] = room_missing;
+}
+/* The room bank's index for the table's id played with a bank (program offset), -1 if it has none. */
+static int room_index(int id, int program) {
+    const Bank *b = &banks[BANK_ROOM];
+    int at;
+    if (!b->mapped || program < 0 || program >= 64 || b->map[program] == 255 || id < 0 || id >= ROOM_IDS) return -1;
+    at = b->map[program] * ROOM_IDS + id;
+    return at < b->id_count && b->ids[at].sample != 0xffff ? at : -1;
+}
+/* FUN_0033e630 / 0033e820 with type 8: the room's bank. */
+void sfx_play_room(int id, int bank, float pan, float volume) {
+    int at = room_index(id, bank);
+    if (at >= 0) { ++room_played; sfx_play_bank(BANK_ROOM, at, pan, volume); } else ++room_missing;
+}
 static void footstep(int kind) {
-    int id;
+    int at;
     if (floor_material <= 0 || kind < 0 || kind > 5) { ++steps_missing; return; }
     ++steps_played; step_material = floor_material;   /* tests: missing below counts those the bank can't play */
-    id = floor_material * 10 + (kind < 4 ? (int)(sceKernelGetSystemTimeLow() >> 4 & 1) + 2 * kind : kind + 4);
-    if (id >= banks[BANK_ROOM].id_count || banks[BANK_ROOM].ids[id].sample == 0xffff) { ++steps_missing; return; }
-    sfx_play_bank(BANK_ROOM, id, 0.0f, 1.0f);
+    at = room_index(kind < 4 ? (int)(sceKernelGetSystemTimeLow() >> 4 & 1) + 2 * kind : kind + 4, floor_material);
+    if (at < 0) { ++steps_missing; return; }
+    sfx_play_bank(BANK_ROOM, at, 0.0f, 1.0f);
 }
 
 void sfx_volume(float v) { master = v; }

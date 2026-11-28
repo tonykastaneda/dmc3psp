@@ -28,4 +28,9 @@ int gim_key_item(const float at[3]);
 void gim_items_end_frame(void);
 void gim_items_reset(void);
 
+/* A crest switch's sounds (FUN_00306000 / 00305820): the hit, the hum by its charge, the run-down. */
+typedef struct { float hum; int down_armed; } GimSwitchSound;
+void gim_switch_hit_sound(GimSwitchSound *s);
+void gim_switch_sounds(GimSwitchSound *s, float charge, float window, int lit, float frames);
+
 #endif

@@ -91,11 +91,16 @@ motion's 0x33 event (0x37 on a bone) plays a step through `FUN_0033ef00(manager,
 play id `rand(2) + 2 kind` (`FUN_0033f280` is a random pick), 4 and 5 ids 8 and 9, and the call's bank is the byte
 under the character (`**(this + 0xc0)`): the floor's material, which offsets the program (none for material 0). The
 material is the collision triangle's byte 0 (HITS, 56-byte records): room 000's floors are 9 and 10, and its head's
-programs 1, 9 and 10 hold steps. In the port, `tools/gen_sfx.py` writes each room's `SFX_ST<room>.BIN` (id material x
-10 + step, only the samples used; 155 banks for 167 rooms), `prepare_stage.py` keeps each collision triangle's
+programs 1, 9 and 10 hold steps. The same type-8 bank carries the room's gimmick sounds,
+played with a bank that offsets the program: the crest switch plays 0x14 as it's struck (`FUN_00306000`), hums 0x17 /
+0x18 / 0x19 by its charge and 0x1a as its window runs out (`FUN_00305820`), all with bank 0x20; the seals' fades play
+the system bank's 5 and 6 (`FUN_0031d270`, `FUN_0031c8b0`). In the port, `tools/gen_sfx.py` writes each room's
+`SFX_ST<room>.BIN` ("SFX2": a map from a call's bank, 0-63, to a block of the table's 180 ids resolved with that
+program offset, then the SFX1 layout; 155 banks for 167 rooms, 30 MB in all), `prepare_stage.py` keeps each collision triangle's
 material, and `sfx.c` plays Dante's steps from his motions' events (his moves', his walk's and run's) on the
 material under him (`stage_floor_material`). Checked in PPSSPP: running in rooms 000, 100 and 201 plays a step at each
-event on materials 9, 1 and 3, none missing. Enemies' steps aren't hooked (their motions' events aren't read).
+event on materials 9, 1 and 3, none missing, and charging Mission 3's switch plays its hit, hum and run-down (88 sounds,
+none missing). Enemies' steps aren't hooked (their motions' events aren't read), nor the other gimmicks' sounds.
 
 ## Cutscenes
 

@@ -3030,6 +3030,7 @@ static int seal_index = -1, sw_lit;
 static int sw_log_state = -1;
 static float sw_log_at;
 static float sw_charge, sw_wing, sw_flames, sw_window, sw_spin, sw_spin2, seal_alpha, seal_time;
+static GimSwitchSound sw_sound;
 static unsigned int seal_open_bits;
 static const RoomSwitchSeal *room_seal(void) { return seal_index >= 0 ? &room_switch_seals[seal_index] : 0; }
 static void seal_enter(int room) {
@@ -3049,6 +3050,7 @@ static void seal_enter(int room) {
     sw_wing = open ? 200.0f : 0.0f;
     sw_flames = open ? SWITCH_FLAMES : 0.0f;
     sw_window = 0.0f;
+    memset(&sw_sound, 0, sizeof sw_sound);
     seal_alpha = open ? 0.0f : 1.0f;
     if (!open) stage_add_box(w->box[0], w->box[1], w->box[2], w->box[3], w->box[4], w->box[5], w->box[6], SEAL_TAG);
 }
@@ -3070,6 +3072,7 @@ static void switch_hit(const Player *player, float reach, int kind) {
         sw_flames = fminf(sw_flames + amount, SWITCH_FLAMES + 1.0f);
     }
     sw_window = SWITCH_WINDOW;
+    gim_switch_hit_sound(&sw_sound);
     {
         float at[3] = {w->hit[0], w->hit[1], w->hit[2]};
         fx_hit_spark(at);
@@ -3088,10 +3091,12 @@ static void seal_update(float frames) {
             sw_wing = fmaxf(sw_wing - drain, 0.0f);
             if (sw_charge <= 100.0f) sw_flames = fmaxf(sw_flames - drain, 0.0f);
         }
+        gim_switch_sounds(&sw_sound, sw_charge, sw_window, sw_lit, frames);
         if (sw_charge >= SWITCH_CHARGE && sw_flames >= SWITCH_FLAMES) {
             sw_lit = 1;
             seal_open_bits |= 1u << seal_index;
             stage_hide_group(SEAL_TAG);   /* FUN_0031d420: the wall goes as the fade starts */
+            sfx_play(6, 0.0f, 1.0f);      /* FUN_0031c8b0: the fade out's sound (system bank) */
         }
     }
     if (focus_cmp) {
@@ -3755,7 +3760,16 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         { unsigned int t0_ = sceKernelGetSystemTimeLow(); int end_ = credits_fight_update(dt*60); PROF_ADD(9, t0_); if(end_ && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;} }
     }
     if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
-    fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
+    {
+        int was = fight_seal_on;
+        fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
+        /* FUN_0031d270 / 0031c8b0: a seal fading in plays the system bank's 5, fading out 6 (once for the room's). */
+        if (fight_seal_on != was) {
+            int k, any = 0;
+            for (k = 0; k < rooms[mission_room].door_count; ++k) any |= door_seal(k) >= 0;
+            if (any) sfx_play(fight_seal_on ? 5 : 6, 0.0f, 1.0f);
+        }
+    }
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
@@ -5648,7 +5662,7 @@ int main(int argc, char *argv[]) {
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
                     { char cl[320]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
-                    { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); { int st[3]; sfx_step_stats(st); fprintf(report, "footsteps played=%d material=%d missing=%d\n", st[0], st[1], st[2]); }
+                    { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); { int st[5]; sfx_step_stats(st); fprintf(report, "footsteps played=%d material=%d missing=%d room_sounds=%d room_missing=%d\n", st[0], st[1], st[2], st[3], st[4]); }
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
                     { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }

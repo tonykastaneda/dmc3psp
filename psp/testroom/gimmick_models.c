@@ -162,3 +162,21 @@ void gim_items_end_frame(void) {
 }
 
 void gim_items_reset(void) { memset(key_fx, 0, sizeof key_fx); }
+
+/* ---- A crest switch's sounds (CStageSetSwitch; the room's bank, type 8, played with bank 0x20). A hit plays 0x14 and
+ * re-arms the run-down (+0x823); when the 120-frame window runs out, 0x1a once. While not lit it hums by its charge
+ * (timer +0x840): none at 0, up to 100 0x17 every 25 frames, up to 200 0x18 every 15, above 0x19 every 5. */
+#include "sfx.h"
+void gim_switch_hit_sound(GimSwitchSound *s) {
+    sfx_play_room(0x14, 0x20, 0.0f, 1.0f);
+    s->down_armed = 1;
+}
+void gim_switch_sounds(GimSwitchSound *s, float charge, float window, int lit, float frames) {
+    if (lit) return;
+    if (window <= 0.0f && s->down_armed) { sfx_play_room(0x1a, 0x20, 0.0f, 1.0f); s->down_armed = 0; }
+    s->hum -= frames;
+    if (charge <= 0.0f || s->hum > 0.0f) return;
+    if (charge <= 100.0f) { sfx_play_room(0x17, 0x20, 0.0f, 1.0f); s->hum = 25.0f; }
+    else if (charge <= 200.0f) { sfx_play_room(0x18, 0x20, 0.0f, 1.0f); s->hum = 15.0f; }
+    else { sfx_play_room(0x19, 0x20, 0.0f, 1.0f); s->hum = 5.0f; }
+}
