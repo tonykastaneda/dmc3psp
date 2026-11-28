@@ -523,3 +523,38 @@ def spin_parts(game_text, pnst):
             parts.append((tag, tuple(p), turning[s["index"]][bone], tris))
             tag += 1
     return parts, rest
+
+
+# Props whose model's bones move apart (124's stair, STAY 112, model 5: four steps rising by its motions 1 and 2):
+# each bone's objects baked under their own tag (BONE_TAG + bone - 1) for the runtime to raise (mission6.c).
+BONE_SETS = {420: (112,)}
+BONE_TAG = 300
+
+
+def bone_parts(game_text, pnst, numbers):
+    """([(tag, [(tri, texture)])], {set index: [(tri, texture)] of its other objects}) for the STAY sets numbered."""
+    found = models(pnst)
+    parts, rest = [], {}
+    for s in parse_game(game_text):
+        if s["kind"] != "STAY" or s["number"] not in numbers or s["model"] not in found or found[s["model"]][:4] != b"SCM ":
+            continue
+        r, sc, p = _rotation(s["rot"]), s["scale"], s["pos"]
+        by_bone = {}
+        for obj in parse_scm(found[s["model"]], True)["objects"]:
+            for m in obj["submeshes"]:
+                for f in m["faces"]:
+                    vs = []
+                    for i in f:
+                        v = m["positions"][i]
+                        x, y, z = v[0] * sc[0], v[1] * sc[1], v[2] * sc[2]
+                        vs.append((p[0] + r[0][0] * x + r[0][1] * y + r[0][2] * z,
+                                   p[1] + r[1][0] * x + r[1][1] * y + r[1][2] * z,
+                                   p[2] + r[2][0] * x + r[2][1] * y + r[2][2] * z) + tuple(m["uvs"][i]) + tuple(m["colors"][i]))
+                    by_bone.setdefault(obj["node"], []).append((tuple(vs), m["texture"]))
+        rest[s["index"]] = by_bone.pop(0, []) + by_bone.pop(None, [])
+        for bone, tris in sorted(by_bone.items()):
+            if 1 <= bone <= 8:
+                parts.append((BONE_TAG + bone - 1, tris))
+            else:
+                rest[s["index"]] += tris
+    return parts, rest

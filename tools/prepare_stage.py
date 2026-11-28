@@ -638,6 +638,9 @@ def main() -> None:
             block_tags[bs["number"]] = gen_rooms.BLOCK_TAG + bs["number"] if motion else 0
     spin_parts, spin_rest = (gimmicks.spin_parts(game_text, stage[5]) if args.slot in gimmicks.SPIN_SLOTS and len(stage) > 5
                              else ([], {}))
+    bone_parts, bone_rest = (gimmicks.bone_parts(game_text, stage[5], gimmicks.BONE_SETS[args.slot])
+                             if args.slot in gimmicks.BONE_SETS and len(stage) > 5 else ([], {}))
+    spin_rest.update(bone_rest)
     for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra, static_efm=680 <= args.slot <= 732) if len(stage) > 5 else []):
         if s["index"] in spin_rest:
             tris = spin_rest[s["index"]]   # its turning parts are baked below under their own tags
@@ -674,6 +677,8 @@ def main() -> None:
     # Crest switches and seals from their own models, each part under its own tag (psp/testroom/gimmick_models.c).
     if len(stage) > 5 and not args.scm:
         gim_batches, _ = gimmicks.switches_and_seals(game_text, stage[5])
+        for tag, tris in bone_parts:
+            gim_batches.append((None, "BONES", tag, tris))
         for tag, pivot, rate, tris in spin_parts:
             gim_batches.append((None, "SPIN", tag, tris))
         needle = gimmicks.needle_model(game_text, stage[5])
