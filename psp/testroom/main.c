@@ -3060,6 +3060,7 @@ static void switch_hit(const Player *player, float reach, int kind) {
     const RoomSwitchSeal *w = room_seal();
     float dx, dz, dy, d, amount;
     if (!w || sw_lit) return;
+    if (mission_choice.mission == 9 && room_number(mission_room) == 203) return;   /* the beam's reset panel (sm_hit) */
     dx = w->hit[0] - player->x; dz = w->hit[2] - player->z; dy = w->hit[1] - player->y;
     d = sqrtf(dx * dx + dz * dz);
     if (d > reach + w->hit[3] || dy < -w->hit[3] || dy > w->hit[3] + 200.0f) return;
@@ -3092,6 +3093,9 @@ static void seal_update(float frames) {
             if (sw_charge <= 100.0f) sw_flames = fmaxf(sw_flames - drain, 0.0f);
         }
         gim_switch_sounds(&sw_sound, sw_charge, sw_window, sw_lit, frames);
+        if (mission_choice.mission == 9 && room_number(mission_room) == 203 && sm_crystal_solved(203)) {
+            sw_charge = SWITCH_CHARGE; sw_flames = SWITCH_FLAMES;   /* flag 34: the beam reached its end */
+        }
         if (sw_charge >= SWITCH_CHARGE && sw_flames >= SWITCH_FLAMES) {
             sw_lit = 1;
             seal_open_bits |= 1u << seal_index;
@@ -3581,6 +3585,12 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     gimmicks_enter(room);
     sfx_room(room_number(room));   /* its footsteps */
     seal_enter(room);
+    if (mission_choice.mission == 9 && room_number(room) == 203) {
+        /* 203's light beam: CRYSTAL 102 ("no 0", at its set's place), struck back by crest switch 100 (secret_missions.c's
+         * CStageSetCrystal); its end crystal lit is flag 34, seal 101's (seal_update). */
+        static const float origin[3] = {2050.0f, 375.0f, 5677.0f}, reset[3] = {2451.0f, 345.0f, 7185.0f};
+        sm_crystal_room(203, origin, reset, 0);
+    }
     msg_prev_room = mission_room != ROOM_NONE ? room_number(mission_room) : -1;   /* op 1e */
     music_room(mission_choice.mission, atoi(rooms[room].file + 5));   /* its on-enter BGM (event op 0x70) */
     msg_room_fought = 0;

@@ -157,7 +157,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 7**: 114's jump pads' arc; 105's hanging ball (CStageSetHang decoded: its drop, 1320-frame clock, 1200 HP and five shell stages; stand-ins: its
   EFM model as blocks, its swing a damped pendulum, the switch lit again to restart it [inferred]); 127's door
   into 114 lands on the ground floor; 144 has no rain.
-- **Mission 9**: 203's light beam (CRYSTAL 102) isn't decoded (the reset panel drops seal 101); 205's / 207's bladed
+- **Mission 9**: 203's light beam runs CStageSetCrystal's layout 0 (crystals drawn as glows, the beam a line); 205's / 207's bladed
   pillars' 700 damage [estimate] and the blades don't turn; Mission Clear as Nevan falls (not door 1 / demo 24);
   206's item 31; 204 / 205 / 207 run group 0 by the walkthrough [inferred].
 - **Mission 11**: the wagon ride's camera moves (ops 0x7c / 0x7d), clock and lights, the truck's enemy part, and the track's chaining (three baked copies) are the port's (GAME_FLOW); 214's slide blocks (300 × zure a hit, stone boxes, don't stop Dante); Mission Clear as

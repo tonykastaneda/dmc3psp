@@ -271,8 +271,10 @@ In the port (rooms 201-210 are GDATA 516-552): the route plays from 201 to Missi
 script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run their group 0, a guess from the walkthrough
 (the script has no section for them). Stand-ins and estimates:
 
-- **203's light beam** (CRYSTAL 102) isn't decoded: lighting the reset panel (crest switch 100, damage as Mission 3's)
-  takes down seal 101 on the door to 204 instead of smashing the right crystals.
+- **203's light beam** (CRYSTAL 102, "no 0") runs Secret Mission 10's CStageSetCrystal code with layout 0 laid out
+  from the set's place (2050, 375, 5677): smash relays (two: those at (2850, 6477) and (2450, 6077)) until the beam
+  reaches the end crystal, which takes down seal 101 on the door to 204 (flag 34); a hit on crest switch 100 puts the
+  crystals back. Crystals are glows and the beam a line (their models aren't converted).
 - **205's and 207's bladed pillars** hurt on touch from their COLLISION cylinders (`atk`, `platk`; `parse_hazards`),
   once a second; the 700 damage is an estimate and the blades don't turn.
 - Mission Clear comes as Nevan falls (`CLEAR_ROOMS`), not by 210's door 1 and demo 24. 206's item 31 isn't in.

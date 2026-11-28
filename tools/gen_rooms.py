@@ -322,8 +322,8 @@ ITEM_GATES += [(19, "405", "408", 57)]   # area 1's floor is the slope at 4185
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
 SWITCH_SEALS = [(3, "003", 100, 200, "004", 1)]
-# Mission 9's 203: the light-beam puzzle (CRYSTAL 102, flag 34) isn't decoded. Its reset panel, crest switch 100,
-# stands in: lit, it takes down seal 101 on the door to 204 (door_attach_seal [101, 1, 1, 1]).
+# Mission 9's 203: seal 101 on the door to 204 (door_attach_seal [101, 1, 1, 1]) goes when the light-beam puzzle
+# (CRYSTAL 102) is solved, flag 34 (main.c: secret_missions.c's crystal code); crest switch 100 is its reset panel.
 SWITCH_SEALS += [(9, "203", 100, 101, "204", 1)]
 SWITCH_HIT = ((0.0, 0.0, -20.0), 60.0)                  # sphere: local centre, radius (CStageSetSwitch +0x7c0)
 SEAL_BOX = ((0.0, 0.0, -50.0), (200.0, 180.0, 50.0))   # local centre, half sizes (CStageSetSeal +0xfc0, layout inferred)
