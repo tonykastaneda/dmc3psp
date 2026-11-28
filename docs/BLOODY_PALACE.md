@@ -106,6 +106,10 @@ The level label and portal legend use the menu font. Arena STAY 100/101/102 name
 water/lightning/fire for +1/+10/+100. Their effect bank is **GDATA 830**, shared by st423–432. Bank 19 in `nfx.c`
 plays these through the native effect runtime; the generated closure has 23 V/G, 27 E, seven P, 17 textures,
 and ten models, with no missing G children. `bp_native_portals_280.png` is the first PPSSPP visual check.
+Boss exits: EventTbl21's clear block turns on gimmick 200 (gimmick_cmd0c [200, 0]) with camera 0. In 433, 436, 448
+and 449 set 200 is a STAY with effect V487 (byte-identical in their packs; native bank 29 from GDATA 870) and two SE
+sets, the room bank's 83 once and 82 every 90 frames (bank 40): the port starts them as the exit opens. The other boss
+rooms' exits are seals or plain doors and keep the item glow. The camera (cam_play 0) isn't played.
 Arrival rewards use the event's positions and decoded recovery amounts; their mote visuals, simplified falling
 and 120 cm collection radius are stand-ins. Taking a boss exit does not grant an additional arrival reward.
 

@@ -2771,6 +2771,19 @@ static int m8_clears_seen;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
 static int bp_portal_fx[3];
+/* The Palace's boss exits that warp (433, 436, 448, 449): their set 200, a STAY with V487 (one in every such room's
+ * pack: native bank 29) and two SE sets, the room bank's 83 once and 82 every 90 frames (bank 40), switched on by the
+ * clear's gimmick_cmd0c [200, 0] (EventTbl21). */
+static int bp_warp_fx;
+static float bp_warp_sound;
+static int bp_warp_at(int room, float at[3]) {
+    switch (room) {
+    case 433: at[0] = 2500.0f; at[1] = 2.0f; at[2] = 2500.0f; return 1;
+    case 436: at[0] = 2500.0f; at[1] = 105.0f; at[2] = 2500.0f; return 1;
+    case 448: case 449: at[0] = 3502.0f; at[1] = 500.0f; at[2] = 3513.0f; return 1;
+    }
+    return 0;
+}
 #define ROOMS_MAX 256
 static unsigned char rooms_cleared[ROOMS_MAX / 8];   /* this mission: a room's fight doesn't come back */
 static int room_is_cleared(int r) { return r >= 0 && r < ROOMS_MAX && (rooms_cleared[r >> 3] >> (r & 7) & 1); }
@@ -3442,7 +3455,7 @@ static void mission_gimmicks_draw(void) {
         int i;
         for (i=0;i<rooms[mission_room].door_count;++i) if (bp_portal_ready(i)) {
             const RoomDoor *d=&rooms[mission_room].doors[i];
-            if (i>=3 || !bp_portal_fx[i]) key_glow(d->box);
+            if ((i>=3 || !bp_portal_fx[i]) && !bp_warp_fx) key_glow(d->box);
         }
         {
             float at[3],up[3]={0,12,0};
@@ -3620,6 +3633,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
         }
     }
     memset(bp_portal_fx,0,sizeof bp_portal_fx);
+    bp_warp_fx = 0; bp_warp_sound = 0.0f;
     if (bp_active()) {
         int number=room_number(room);
         vergil_boss_set_variant(number==444?2:number==443?1:0);
@@ -3782,6 +3796,15 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             const RoomDoor *d=&rooms[mission_room].doors[i];
             float at[3]={d->box[0],d->box[1]+17.0f,d->box[2]};
             bp_portal_fx[i]=nfx_spawn(NFX_PALACE,portal_v[i],at,0,1);
+        }
+    }
+    if (bp_active()) {
+        float at[3];
+        int ready = 0;
+        for (i = 0; i < rooms[mission_room].door_count; ++i) ready |= bp_portal_ready(i);
+        if (ready && bp_warp_at(room_number(mission_room), at)) {
+            if (!bp_warp_fx) { bp_warp_fx = nfx_spawn(NFX_BP_WARP, 487, at, 0.0f, 1); sfx_play_room(83, 40, 0.0f, 1.0f); bp_warp_sound = 0.0f; }
+            if ((bp_warp_sound += dt * 60.0f) >= 90.0f) { bp_warp_sound = 0.0f; sfx_play_room(82, 40, 0.0f, 1.0f); }
         }
     }
     if(mission_choice.mission==20 && room_number(mission_room)==12){

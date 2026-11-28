@@ -268,7 +268,9 @@ Known to differ from the game (each one is still to do):
   lock-on point, or 2000 cm ahead (shotgun 1000, Spiral 1500). Not in: aim pitch
   columns, the gun-stance walk after a shot (`player+0x3c60`), charged shot types,
   damage, and Artemis' and Kalina Ann's real shells (their speeds are estimates).
-  Shotgun spread and tracers are stand-ins for the game's effects. Air and
+  The Shotgun's shell (`FUN_002ee930`) throws 6 / 8 / 10 pellets by level (0x5a2348): one straight to 2000 cm
+  along the aim, the rest on a ring round that point (a random start angle, evenly spaced, each 250-500 cm out
+  across the aim, 500-1000 for shell type 2); the port fires level 0's. Air and
   Gunslinger fire counts are approximate.
 - **Hit detection and damage**: his attack caps are GDATA 0's chunk 6 (252 caps of 4 bytes: kind, bone, u16 shape)
   and chunk 7 (the shapes, 0x50 bytes: u32 type, place at +0x10 in the bone's frame, radius at +0x20, or +0x30 for

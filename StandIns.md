@@ -47,9 +47,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   the rest in proportion to their parameter blocks. `enemy.c`, `vergil_boss.c`, `geryon_boss.c`.
 - **Hit detection on Dante's moves**: his moves hit with their own attack caps (GDATA 0 chunks 6 / 7, switched on by
   the scripts' ops 0x10-0x1F), but the ordinary enemies' bodies are the port's 48 cm cylinder (their hurt caps aren't
-  read), bosses and the big enemies still take the old 260 cm reach, and the attack records (ops 6 / 7: damage, hit
-  kind) aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; shotgun spread and tracers
-  are stand-in effects. MOVESET_RE.md, `combat.c`.
+  read), bosses and the big enemies still take the old 260 cm reach; the attack records' damage (ops 6 / 7, the bank's
+  records at 0x5a7240) reaches the ordinary enemies that count health (his attack power, +0x2a18, taken as 1), but
+  not the bosses or the enemies with their own health code, and the records' other fields (reaction kind, hit stop)
+  aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; the Shotgun's pellets are its
+  shell's (FUN_002ee930) at level 0 only (the gun's level isn't carried), with no tracers. MOVESET_RE.md, `combat.c`.
 - **The held guard** loops from 24:30's start (frame 10), as the guard state replaying the script would [inferred:
   FUN_00224850 isn't decoded]. `combat.c`.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
@@ -66,7 +68,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   action 81 / 82's phases. Nevan's V0x38e dome reads whiter and more solid than the PS2's (analysis/ref/pfx/nevan_ab.png).
 - **Royalguard's judgement** (`combat_player_hit_kind`, NATIVE_FX.md): the blow's guard class (+0x3e) is taken
   from its hit kind (knockdown kinds class 1, others 0) [estimate]; the style level is 2; grade 5 (+0x3c82) is unreachable in the
-  game's own code (set only after a type-5 block, which needs it); the result-1 table (on the record's +0x18) isn't read; a guard break takes the blow's own damage (profile 0x11, `FUN_002e8af0`, isn't read); the guarded attacker's reaction (`enemy_guarded`) is ported for the Hells and Beowulf only: Nevan's (+0x13c
+  game's own code (set only after a type-5 block, which needs it); the guarded attacker's reaction (`enemy_guarded`) is ported for the Hells and Beowulf only: Nevan's (+0x13c
   object's +0x10) and the other classes' +0x114 handlers aren't read (Lady's and the Enigma's do nothing); and Release's damage from the gauge (+0x2a1c) aren't carried (the port's blows are in
   units of health).
 - **Blade trails** (`fx.c` mtrails): the game's trail models bent through the last 11 weapon frames, type 0 added and types 1 / 2
@@ -198,7 +200,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   collection within 120 cm; Lady's extra defeat pickups are omitted. The transient Level label uses a widened substitute serif font; native position, fade and slide timing are restored. Arena camera
   initialization starts its collision sweep at Dante's head: the default safe point lies beneath the raised arena.
   Boss entrance/defeat camera sequences are skipped; boss behaviors retain their documented story-mode stand-ins.
-  Boss exits use an item glow in place of their room-specific warp effects; unmapped EST enemy classes retain
+  Boss exits 433 / 436 / 448 / 449 show their warp (set 200: V487 and its sounds); the others (seals) keep the item
+  glow; unmapped EST enemy classes retain
   the shared enemy mapper's fallback (including some rare ordinary-floor sets and the unported chess pieces).
   Best floor uses the port's BP_BEST.TXT sidecar and a selected-row menu label, not the PS2 memory-card/ranking UI.
   The task's requested kill-time countdown is omitted: EventTbl21 and PCSX2 show no survival timer in this PS2 mode.

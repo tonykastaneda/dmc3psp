@@ -94,6 +94,7 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
  * docs/VANGUARD_SPEC.md. */
 #define DANTE_BULLET_DAMAGE 10.0f
 float enemy_bullet_damage = DANTE_BULLET_DAMAGE;   /* bullets.c sets the shot's record's damage (its kind) */
+float enemy_melee_damage = -1.0f;   /* combat.c: the sword's attack record's damage (-1: the port's 1 / 2 units) */
 /* Bosses' health from their classes' parameter blocks (+0x2c, the value FUN_002f0560 starts the health with). */
 #define NEVAN_MAX 7000
 #define BEOWULF_MAX 10000
@@ -1937,6 +1938,10 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
              * ENEMY_HEALTH): kept until it makes a whole one. It still flinches it as a light hit. */
             e->bullet_hp += enemy_bullet_damage;
             if (e->bullet_hp >= 250.0f / ENEMY_HEALTH) { e->bullet_hp -= 250.0f / ENEMY_HEALTH; --e->health; }
+        } else if (enemy_melee_damage >= 0.0f) {
+            /* Dante's attack record's damage (combat.c), carried as a bullet's is (250 a Pride's ENEMY_HEALTH). */
+            e->bullet_hp += enemy_melee_damage;
+            while (e->bullet_hp >= 250.0f / ENEMY_HEALTH) { e->bullet_hp -= 250.0f / ENEMY_HEALTH; --e->health; }
         } else e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->air = 0;
