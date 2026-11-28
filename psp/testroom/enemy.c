@@ -379,6 +379,9 @@ static void pawn_hit(HitKind kind);
 static int ar_init(void);
 static void ar_rudra_spawn(void);
 static void ar_spawn(void);
+/* EST 47 / 48 (the Palace's rooms 428-432): classes 29 / 30, FUN_002acf40 -> FUN_0039ee10(.., 0x10, 2, 1 / 2), one brother
+ * alone (+0x2dd5 1 Agni, 2 Rudra) holding both swords (+0x2f40 = 2). enemy_add_class sets this for the spawn. */
+static int ar_solo_spawn, ar_solo[2];
 static void ar_update(float f, float px, float py, float pz);
 static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z);
 static float ar_health_total(float *maximum);
@@ -731,7 +734,9 @@ int enemy_add_class(int spawn_class, float x, float z) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (!enemies[i].active) {
             e = &enemies[i];
+            ar_solo_spawn = spawn_class == 47 || spawn_class == 48;
             spawn_one(kind, x, z);
+            ar_solo_spawn = 0;
             if (hp && e->active) e->health = (short)(ENEMY_HEALTH * hp / 250);
             e = selected;
             return 1;
@@ -931,7 +936,8 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 40) return ENEMY_KING;
     if (spawn_class == 36) return ENEMY_KNIGHT;
     if (spawn_class == 38) return ENEMY_ROOK;
-    if (spawn_class == 45) return ENEMY_AGNI;
+    if (spawn_class == 45 || spawn_class == 47) return ENEMY_AGNI;
+    if (spawn_class == 48) return ENEMY_RUDRA;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
     if (spawn_class == 58) return ENEMY_VERGIL;
@@ -4812,16 +4818,19 @@ static void ar_statue(int which) {
     ar_brains[which].set = which;   /* each his own sword until the pedestal */
 }
 
-static void ar_rudra_spawn(void) { ar_statue(1); }
+static void ar_rudra_spawn(void) { ar_statue(1); ar_solo[1] = ar_solo_spawn; }
 
 /* The one spawn (class 27) brings both: Agni here, Rudra beside him. In the arena they stand where FUN_0039fa30
  * puts them: Agni (+0x2dd4 = 0) at (2900, 2125), Rudra at (2120, 2125). */
 static void ar_spawn(void) {
     Enemy *agni = e;
     int k, arena = ar_arena();
+    ar_solo[0] = ar_solo_spawn;
+    if (ar_solo_spawn) { ar_statue(0); return; }   /* EST 47: Agni alone */
     if (arena) { agni->pos[0] = 2900.0f; agni->pos[2] = 2125.0f; }
     else agni->pos[0] += 180.0f;
     ar_statue(0);
+    ar_solo[1] = 0;
     for (k = 0; k < ENEMY_MAX; ++k) {
         Enemy *o = &enemies[k];
         if (o->active) continue;
@@ -4891,6 +4900,9 @@ static void ar_update(float f, float px, float py, float pz) {
             float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
             fx_dust(at); fx_explosion(at);
             ar_brain_reset(b, e->kind == ENEMY_AGNI ? 0 : 1);
+            /* Alone from the start (EST 47 / 48): both swords and the survivor's brain, never the pair's. He stands as a
+             * statue and wakes as the pair do [estimate: FUN_0039ee10's flag 0x10 isn't traced]. */
+            if (ar_solo[e->kind == ENEMY_AGNI ? 0 : 1]) { b->set = 2; b->paired = 0; ar_pair_survivor(b); }
             ar_formation_time = 0.0f;
             ar_side = fabsf(4000.0f - pz) <= fabsf(2200.0f - pz) ? 1 : 2;
             ar_go(AR_OPENING);   /* +0x2de7: the pair's opening first (FUN_003aedd0) */
