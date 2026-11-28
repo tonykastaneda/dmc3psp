@@ -316,6 +316,56 @@ static void stage_hide_apply(int clear) {
         stage_set_object_hidden(k + 1, want[k]);   /* every frame: a stage reload clears them */
 }
 
+/* The ScrEfc screen passes (prepare_demo bake_screen_effects): "SFX1", u32 count, then these, right after the stage's
+ * hide events. A bin from before them has none. */
+typedef struct { float start, life; unsigned char kind, power, alpha, feedback; unsigned int color; float a, b, c, d; } DemoScreenFx;
+static const DemoScreenFx *screen_effects(unsigned int *count) {
+    const unsigned int *programs, *events;
+    const unsigned char *at;
+    *count = 0;
+    if (!head) return 0;
+    programs = (const unsigned int *)(blob + head->fades + head->fade_count * sizeof(DemoFade) +
+                                      (head->light_count & 0xffffu) * sizeof(DemoLight));
+    events = programs + 1 + *programs * 6 + (head->light_count >> 16) * 6;
+    at = (const unsigned char *)(events + 1 + *events * 2);
+    if (memcmp(at, "SFX1", 4) != 0) return 0;
+    memcpy(count, at + 4, 4);
+    return (const DemoScreenFx *)(at + 8);
+}
+
+/* This frame's blur and glow (post_fx.c). FCS: what's beyond OutStartZ half blurred, beyond OutEndZ fully, Power
+ * passes; its in-focus band nearer than Distance (InStartZ / InEndZ) isn't blurred [inferred: the GS passes aren't
+ * read]. DOF: StartZ to EndZ the same way. SGA / BGA: the bright part blurred Feedback times (at most 3) and added in
+ * Color at Alpha; Scale, DirNum, DirOffset and Attenuate (the PS2's directional smear) aren't modelled. "nopost 1"
+ * turns it off. */
+int demo_no_post;
+int demo_post_fx(PostFx *fx, float near, float far) {
+    unsigned int n, i;
+    const DemoScreenFx *e = screen_effects(&n);
+    memset(fx, 0, sizeof(*fx));
+    fx->near = near; fx->far = far;
+    if (demo_no_post || !playing || !e) return 0;
+    for (i = 0; i < n; ++i) {
+        if (demo_clock < e[i].start || demo_clock >= e[i].start + e[i].life) continue;
+        if ((e[i].kind == 1 || e[i].kind == 2) && e[i].power > 0) {
+            fx->blur = 1;
+            fx->blur_passes = e[i].power;
+            fx->blur_from = e[i].kind == 1 ? e[i].b : e[i].a;
+            fx->blur_to = e[i].kind == 1 ? e[i].c : e[i].b;
+            if (fx->blur_to < fx->blur_from) fx->blur_to = fx->blur_from;
+        } else if (e[i].kind == 3 || e[i].kind == 4) {
+            float alpha = (float)e[i].alpha / 128.0f;
+            if (alpha > fx->glow_alpha) {
+                fx->glow = 1;
+                fx->glow_alpha = alpha;
+                fx->glow_color = e[i].color;
+                fx->glow_passes = e[i].feedback;
+            }
+        }
+    }
+    return fx->blur || fx->glow;
+}
+
 void demo_stop(void) {
     stage_hide_apply(1);
     sound_stop();
@@ -631,6 +681,22 @@ static void pose(Actor *a, int depth) {
                          &a->world_pos[0][0], &a->world_rot[0].m[0][0],
                          parents, &local[0][0], d->bones, blob + d->pad[0], d->pad[1], demo_clock,
                          caps, ncaps);
+        {   /* its ClothSim1D rope, between two models' bones (FUN_00235be0) */
+            int s0, b0, s1, b1, n, found = 0, ends;
+            float e0[3], e1[3];
+            if ((ends = demo_rope_ends(blob + d->pad[0], d->pad[1], &s0, &b0, &s1, &b1, e0, e1)) != 0) {
+                found = (ends >> 1) & 3;   /* a stage node's end comes baked */
+                for (n = 0; n < actor_count; ++n) {
+                    const Actor *o = &actors[n];
+                    if (!o->d) continue;
+                    if (o->d->slot == s0 && b0 >= 0 && b0 < o->d->bones) { memcpy(e0, o->world_pos[b0], sizeof e0); found |= 1; }
+                    if (o->d->slot == s1 && b1 >= 0 && b1 < o->d->bones) { memcpy(e1, o->world_pos[b1], sizeof e1); found |= 2; }
+                }
+                if (found == 3)
+                    demo_rope_apply((int)(a - actors), blob + d->pad[0], d->pad[1], e0, e1,
+                                    &a->world_pos[0][0], &a->world_rot[0].m[0][0], d->bones, demo_clock);
+            }
+        }
     }
 }
 
