@@ -29,8 +29,8 @@ after 120 frames it's 0 again). `342da0` puts Dante's distance in a band `+0x134
 | 0x18, 0x19, 0x1b-0x1d | 0x17-0x1b | 1:1-1:4 | Reactions (101-104) |
 | 0x1e | 0x1a | 1:5, motion 104 | Down to the ground: mode 1, effect 0x33f |
 | 0x1f | 0xe | 0:5, motion 304 | Rising: mode 2, then 0 |
-| 0x20 | 0xf | 3:1, motion 301 | Turns 0x71c, attack record 0 on frame 33 (caps 8 frames): the throw |
-| 0x22 / 0x23 | 0x11 / 0x12 | 3:2, motion 303 | Records 2, 2, 5 on frames 25, 60, 90 (caps 10 frames each) |
+| 0x20 | 0xf | 3:1, motion 301 | Turns 0x71c, attack record 0 on frame 33 (caps 8 frames): the spear thrust |
+| 0x22 / 0x23 | 0x11 / 0x12 | 3:2, motion 303 | Records 2, 2, 5 on frames 25, 60, 90 (caps 34, 29 and 20 frames) |
 | 0x24 | 8 → 0x13 | 3:2 | The same, after action 8 |
 | 0x27 | 0x15 | 3:4, motion 308 | 13 frames turning 0x100 a frame, then a dash from 20 a frame slowing by 1; record 4 on frame 35 |
 | 0x14, 0x15 | 0x1f | 2:1, motion 202 | Death |
@@ -53,15 +53,14 @@ difference (the PS2's y points down), pauses 5 frames at the point, and turns 0x
 
 Sections 1-2 at rank 0, with the model and motions from em011 (`tools/prepare_skinned_model.py`, "faBNN" = script
 id B*100+NN). Approximations:
-- **The hover point** is placed off the line from Dante to the Fallen, not off Dante's facing.
-- **The gauge** uses the distance columns only: 15 a frame within 300, 10 within 700, 0.5 within 1500, else 0.167.
-  One Fallen attacks at a time, then they all rest 180 frames.
+The hover point follows Dante's yaw. The gauge uses the distance columns only: 15 a frame within 300, 10 within
+700, 0.5 within 1500, else 0.167. The Fallen reserve an attack slot from the same manager as the Hells (`003442c0`).
 - **Damage taken** (the class's damage handler isn't decoded): in the air, hits from the front land on the closed
   wings and do nothing; 8 of them (a heavy counts 2) bring him down (state 0x1e). On the ground, or from behind, he
-  takes the hit. After 600 frames on the ground he rises (0x1f). Health 1500 by the port's scale [estimate].
-- **His attacks:** the lunge (0x27) and the slashes hit what's within 200-240 in front of him; the throw (0x20) is a
-  straight shot at Dante's chest (a Blood-goyle's bullet in flight). Damage is the generic enemies' (the records
-  aren't read).
+  takes the hit. After 600 frames on the ground he rises (0x1f). The health parameter is 1300 (`0x5c32a0+0x2c`).
+- **His attacks:** the thrust, lunge and slashes use four radius-40 spheres at 80, 160, 240 and 320 along bone 9
+  (caps 10–13, `0x5af870` / `0x5af8b0`), with their script windows and damage records. The separate higher-rank
+  action 0x16 launches CEm011Shl00 at 50 cm per frame (`00347610`, `0045a1c0`). This action is unported.
 - **Walls:** he doesn't pass through them; the appearing motion plays where the EST puts him.
 - The cloth wings are rigid.
 

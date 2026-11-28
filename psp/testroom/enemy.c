@@ -7070,10 +7070,7 @@ static void soul_hit_glue(HitKind kind) {
 #include "fallen.h"
 extern int testroom_frame;
 static FallenBrain fallen_brain[ENEMY_MAX];
-static int fallen_spear[ENEMY_MAX];             /* its spear's arrow slot + 1 (0: none) */
-static float fallen_spear_at[ENEMY_MAX][3];
 static int fallen_motion_id[FALLEN_M_COUNT] = {-2};
-static float fallen_rest;   /* FUN_003442c0: the enemy manager lets one attack, then rests 3 s */
 static void fallen_play(int m, int restart) {
     int id;
     if (fallen_motion_id[0] == -2) { int k; for (k = 0; k < FALLEN_M_COUNT; ++k) fallen_motion_id[k] = motion_find(fallen_motion_names[k]); }
@@ -7099,16 +7096,11 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     FallenBrain *b = &fallen_brain[e - enemies];
     const Motion *m;
     float g;
-    int token = fallen_rest <= 0.0f, had = token;
+    int token = attack_slots_available(&attack_slots), had = token;
     /* The brain keeps its own position: take back where the walls left it (body_move), or each frame it puts the
      * body back where they stopped it and the sweep runs the whole way again (6 m, 25 ms a frame, Mission 15's 222).
      * Not while it comes in through the wall (0xe), which isn't walled (below). */
     if (!fallen_appearing(b)) { b->pos[0] = e->pos[0]; b->pos[2] = e->pos[2]; }
-    {
-        int k;   /* the clock runs once a frame: on the first Fallen's turn */
-        for (k = 0; k < ENEMY_MAX && !(enemies[k].active && enemies[k].kind == ENEMY_FALLEN); ++k) {}
-        if (&enemies[k] == e && fallen_rest > 0.0f) fallen_rest -= f;
-    }
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
     if (e->motion >= 0) {
         m = motion_get(e->motion);
@@ -7120,14 +7112,15 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     }
     if (floor_under(b->pos[0], b->pos[1] + 100.0f, b->pos[2], &g)) b->floor_y = g;
     b->frame = e->frame; b->done = e->done;
-    fallen_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, &token);
-    if (had && !token) fallen_rest = 180.0f;   /* this one attacked */
+    fallen_think(b, f, px, py, pz, se_dante_yaw, ai_unit, attacks_on && e->plan != P_DEATH, &token);
+    if (had && !token) attack_slots_take(&attack_slots, ATTACK_TOKEN_SECONDS);   /* FUN_003442c0 */
     {
         static int last_state[ENEMY_MAX];   /* tests: each change of state, in VERGIL_LOG.TXT */
         int k = (int)(e - enemies);
-        if (last_state[k] != b->state || b->land || b->spear || (testroom_frame % 60) == 0) {
+        if (last_state[k] != b->state || (testroom_frame % 60) == 0) {
             char line[128];
-            snprintf(line, sizeof(line), "fallen %d state %#x mode %d land %d spear %d hp %d gauge %.0f rest %.0f atk %d", k, b->state, b->mode, b->land, b->spear, b->health, b->gauge, fallen_rest, attacks_on);
+            snprintf(line, sizeof(line), "fallen %d state %#x mode %d hp %d gauge %.0f atk %d",
+                     k, b->state, b->mode, b->health, b->gauge, attacks_on);
             vergil_boss_note(line, b->pos[0], b->pos[1], b->pos[2], py);
             last_state[k] = b->state;
         }
@@ -7137,20 +7130,26 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     e->air = fallen_flying(b);
     if (fallen_appearing(b)) e->placed = 1;   /* through the wall: a placement, not a walled move */
     if (b->restart || fallen_motion_id[b->want] != e->motion) { fallen_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* its attack record's damage */
-    if (b->spear) {
-        /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
-        float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
-        float to[3] = {px, py + 100.0f, pz};
-        { int k = straight_projectile(from, to, 25.0f, 120.0f); if (k >= 0) { arrows[k].damage = 900.0f; fallen_spear[e - enemies] = k + 1; } }   /* record 0 (0x5c2dd0): 900 */
-        nfx_spawn(NFX_FALLEN, 0x367, from, e->yaw, 0);
-    }
-    /* Its spear's effects (CEm011Shl00, FUN_0045a330; em011's pack, nfx bank 10): V0x367 as it's let go, V0x368 where it
-     * ends (it hits, or flies 2000 out). */
-    {
-        int k = fallen_spear[e - enemies] - 1;
-        if (k >= 0 && arrows[k].active) memcpy(fallen_spear_at[e - enemies], arrows[k].pos, sizeof(float) * 3);
-        else if (k >= 0) { nfx_spawn(NFX_FALLEN, 0x368, fallen_spear_at[e - enemies], e->yaw, 0); fallen_spear[e - enemies] = 0; }
+    if (b->attack_frames > 0.0f && attacks_on) {
+        /* FUN_003421f0 installs caps 10..13: four radius-40 spheres along bone 9's +Z. */
+        static const float damage[] = {900, 0, 500, 0, 700, 800};   /* 0x5c2dd0, records 0/2/4/5 */
+        static const int kind[] = {0, 0, 0, 0, 2, 3};
+        evaluate_pose();
+        for (int k = 1; k <= 4; ++k) {
+            float local[3] = {0.0f, 0.0f, 80.0f * k}, at[3], dx, dy, dz;
+            royal_bone_world(9, local, at);
+            dx = at[0] - px;
+            dy = at[1] - fminf(py + DANTE_HIGH, fmaxf(py + DANTE_LOW, at[1]));
+            dz = at[2] - pz;
+            if (dx * dx + dy * dy + dz * dz < (40.0f + DANTE_RADIUS) * (40.0f + DANTE_RADIUS)) {
+                land_attack(0);   /* the four records' reaction strength is 300 */
+                landed_damage = damage[b->attack_record];
+                landed_kind = kind[b->attack_record];
+                giga_note("fallen_record", b->attack_record, landed_damage);
+                b->attack_frames = 0.0f;
+                break;
+            }
+        }
     }
     if (b->remove) e->active = 0;
 }
