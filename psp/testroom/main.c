@@ -91,6 +91,7 @@ int testroom_frame;
 #include "mission14.h"
 #include "mission18.h"
 #include "secret_missions.h"
+#include "shadow.h"
 #include "credit.h"   /* DO NOT REMOVE: the owner's credit on the Options screen */
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
@@ -178,6 +179,7 @@ static void perf_add(unsigned int gap, unsigned int update, unsigned int skin) {
     if (stage_loaded()) p->chunks_sum += (unsigned int)stage_last_chunks_drawn();
 }
 static Pose pose;
+static int blob_shadow;   /* tests: "blobshadow 1" draws his round shadow, not the hulls (shadow.c) */
 static AnimState anim;
 /* Mission 19's partner, Vergil (EventTbl19 op 0x7e after demo 53: FUN_0025e540 makes a second player, CPlVergil;
  * docs/ARKHAM_SPEC.md 1). With no second pad he replays Dante's input a frame late (FUN_0021fe30 in mode 3:
@@ -1377,7 +1379,9 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             float h = player->y - floor_y, k = 1.0f - h / 500.0f;
             float shown;
             if (stage_shown_floor(player->x, floor_y, player->z, &shown)) floor_y = shown;   /* on what's drawn */
-            if (k > 0.0f) fx_draw_shadow(player->x, floor_y, player->z, 42.0f, (unsigned int)(170.0f * k));
+            /* The game's own hulls (shadow.c), his round one without them or with "blobshadow 1" (tests). */
+            if (k > 0.0f && (blob_shadow || !dante_shadow_draw(player, &pose, (const float (*)[3])dmc3_bone_rest, floor_y, (unsigned int)(128.0f * k))))
+                fx_draw_shadow(player->x, floor_y, player->z, 42.0f, (unsigned int)(170.0f * k));
         }
     }
         enemy_draw_shadows();   /* every enemy and boss gets the same soft shadow */
@@ -2447,6 +2451,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
+        else if (strncmp(line, "blobshadow ", 11) == 0) blob_shadow = atoi(line + 11);
         else if (strncmp(line, "killuntil ", 10) == 0) cmp_kill_until = atoi(line + 10);   /* killevery stops at this frame */
         else if (strncmp(line, "royalcmd ", 9) == 0) { if (cmp_royal_count < 8 && sscanf(line + 9, "%d %d", &cmp_royal_at[cmp_royal_count][0], &cmp_royal_at[cmp_royal_count][1]) == 2) ++cmp_royal_count; }
         else if (strncmp(line, "smlayout ", 9) == 0) sm_test_layout(atoi(line + 9));   /* tests: Secret Mission 10's crystals */

@@ -152,7 +152,8 @@ def main():
     flat, table = [], []
     for mission, room, kind, body in blocks:
         table.append((mission, room, kind, len(flat), len(body)))
-        flat += [(op, *(args + [0, 0, 0, 0])[:4]) for op, args in body]
+        # MsgOp holds shorts: the few wider values (the Palace's ops 0x73 / 0x74 colours, which messages.c skips) are clamped.
+        flat += [(op, *(max(-32768, min(32767, v)) for v in (args + [0, 0, 0, 0])[:4])) for op, args in body]
     lines += [f"#define MSG_OP_COUNT {len(flat)}", "static const MsgOp msg_ops[] = {"]
     lines += ["    " + " ".join("{%d,%d,%d,%d,%d}," % t for t in flat[k:k + 8]) for k in range(0, len(flat), 8)] + ["};"]
     lines += [f"#define MSG_BLOCK_COUNT {len(table)}", "static const MsgBlock msg_blocks[] = {"]
