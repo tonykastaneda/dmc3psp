@@ -51,7 +51,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (the Jester's
-  trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
+  trap ring, Geryon's missiles, Cerberus's unported
   particle programs). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera's own up); fake
@@ -77,8 +77,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Enemies
 
-- **Seven Hells**: the Lust, Wrath and Greed decide with the Pride's table (the Wrath doesn't explode); the attack
-  token's manager (FUN_00369180) isn't read: "no one else attacks for 3 s". ENEMY_AI.md, GAME_FLOW.md.
+- **Seven Hells**: the Lust, Wrath and Greed decide with the Pride's table (the Wrath doesn't explode). ENEMY_AI.md, GAME_FLOW.md.
 - **Abyss**: the Pride's hit-script list (its block's +0x14 pairs aren't read); its scythe is the largest of [3]-[5]
   [inferred]. `gen_enemy_ai.py`, `prepare_skinned_model.py`.
 - **Damned Chessmen**: the shared chess master is ported (docs/CHESS.md), at fixed difficulty 0. Knight 36, Bishop 37
@@ -119,8 +118,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   the landings' effects (0x2c, 0x2e5) are dust; the slam hurting within 300 as record 12 [estimate], its effects at
   the hand's floor point [estimate]. `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
-  (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
-  aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
+  (FUN_003ba660) charges the bats about her (+0x1b7: their touch takes record 7, 500, not 0's 300), which the port
+  doesn't keep, so it does nothing; Shl03-05's shapes beyond their numbers; the teleport's darkening is a draw colour
+  toward black [inferred: the material words' GS meaning], its G0xe / G0x93 100 up from her [estimate: her bone +0x724];
+  her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
 - **Beowulf**: which of Dante's blows are his kind-4 records (the port's heavy, slam, launch [inferred]); a feather heads
   out from his centre 200 up [inferred] and its burst isn't drawn; the run stops at once, not at its next stride's event; his charge (4) from the
@@ -133,19 +134,21 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
 - **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
   the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
-- **Vergil**: effect 0x338 is a hit spark; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
-  isn't decoded (flinches only between attacks, CEm035's table 0x5dcc90 unread); his coat and Yamato's sheath drawn
-  rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
+- **Vergil**: his effects (0x338, the slashes) play from his pack but follow his bones by position only (no bone
+  rotation) [approximation]; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
+  is decoded (gauges, flinch windows, the brace), but Dante's blows take estimated amounts from his gauges (Dante's
+  attack records aren't decoded); his coat and cord swing as their .clt chains, with Dante's body capsules [inferred];
+  his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
 - **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
   path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
   runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
-- **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority); which dark sixth he comes up in [inferred]; his coat
-  rigid (its cloth em031_01.clt isn't run); his sword's offset [inferred]; the crests' lighting is a glow.
+- **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority), and so is where he rises when lit (3c4c40); the underground travel is a jump; his coat's
+  chain (em031_01.clt) gets Dante's body capsules [inferred]; his sword's offset [inferred]; the crests' lighting is a glow.
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.
 - **Arkham**: one fight runs both rounds; Vergil joins the second as Dante's partner (Dante's input a frame late, as the
-  game), but plays Dante's moveset on his body (his own isn't ported), with no coat or sword, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
-  rigid; side-hit geometry still uses zones instead of moving caps, and capture release uses a damaging rescue hit instead of the native cap flags/held handle. Damage records, Legion radius/count/clock and mouth hold/drain are decoded (ARKHAM_SPEC.md); demo 53 / 328 not
-  played. `arkham_boss.c`, ARKHAM_SPEC.md, PortJobs.
+  game), but plays Dante's moveset on his body (his own isn't ported), with his coat and Yamato, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn
+  in their tail chain's settled pose (its settling and 3ed840's states 4 / 5 not shown), their own AI (3e9cd0) not
+  ported; side-hit geometry still uses zones instead of moving caps, and capture release uses a damaging rescue hit instead of the native cap flags/held handle. Damage records, Legion radius/count/clock and mouth hold/drain are decoded (ARKHAM_SPEC.md). `arkham_boss.c`, ARKHAM_SPEC.md, PortJobs.
 - **Hell Vanguard**: the model's fade out and in round P312 (the game hides and shows it). VANGUARD_EFFECTS.md.
 
 ## Missions and rooms

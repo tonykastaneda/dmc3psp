@@ -9,14 +9,16 @@ int main(void) {
         for(i=0;i<count;++i) assert(attack_slots_take(&s,3));
         assert(!attack_slots_available(&s) && !attack_slots_take(&s,3));
         attack_slots_update(&s,2.5f); assert(!attack_slots_available(&s));
-        attack_slots_update(&s,0.5f); assert(attack_slots_available(&s));
+        attack_slots_update(&s,0.5f); assert(!attack_slots_available(&s));
+        attack_slots_update(&s,1.0f/60); assert(attack_slots_available(&s));
     }
     attack_slots_reset(&s,99); assert(s.limit==10);
-    attack_slots_reset(&s,0); assert(s.limit==1);
+    attack_slots_reset(&s,0); assert(!attack_slots_take(&s,3));
+    attack_slots_reset(&s,1);
     assert(attack_slots_take(&s,1)); assert(!attack_slots_available(&s));
-    attack_slots_update(&s,1); assert(attack_slots_take(&s,3));
+    attack_slots_update(&s,1.1f); assert(attack_slots_take(&s,3));
     attack_slots_reset(&s,2); assert(attack_slots_take(&s,1));
-    assert(attack_slots_take(&s,3)); attack_slots_update(&s,1);
+    assert(attack_slots_take(&s,3)); attack_slots_update(&s,1.1f);
     assert(attack_slots_take(&s,3) && !attack_slots_available(&s));
     puts("Palace attack-slot capacity, cooldown and reset checks passed");
     return 0;

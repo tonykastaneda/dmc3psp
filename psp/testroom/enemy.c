@@ -79,9 +79,7 @@ enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't at
 };
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 
-/* How long after one enemy is let attack before another may. The game passes 3.0 to a manager this
- * port hasn't read (FUN_00369180). Measured on the HD Collection in Turbo: 49 swings from 4 enemies,
- * never under 3.0 real seconds apart, so it doesn't scale with game speed. */
+/* FUN_00369180 reserves the first free manager slot for its caller's duration. */
 #define ATTACK_TOKEN_SECONDS 3.0f
 #include "attack_slots.h"
 /* The game's value comes from a mission object not read yet. 0 gives what Mission 2 on Easy shows
@@ -187,6 +185,7 @@ typedef struct {
     unsigned char cloth_ready;
     float cloth_frames;
     float veil;                     /* 0 opaque; above, drawn blended with alpha 1 - veil (Nevan's fades) */
+    float shade;                    /* 0 her colours; 1 black (Nevan's teleport, nevan_boss.c) */
     float bullet_hp;                /* Ebony & Ivory's damage not yet a whole unit of health (enemy_hit) */
     /* The Soul Eater (CEm016): its sight gauge (+0x4bc: 30 out of Dante's view, down while he looks), how shown it is
      * (+0x4c4, 0-30), its hover over him (+0x4b4) and when that's re-rolled (+0x4b8), its local velocity (+0x60), its
@@ -224,7 +223,7 @@ static int landed_heavy;
 static float landed_damage = -1.0f;
 static int landed_by = -1;   /* the enemy whose blow last landed (enemy_guarded) */
 static int landed_kind = -1;   /* the attack record's kind (+0x18), -1 unknown */
-static AttackSlots attack_slots = {1,{0}};
+static AttackSlots attack_slots = {.limit = 1};
 void enemy_set_attack_slot_limit(int limit) { attack_slots_reset(&attack_slots,limit); }
 static int mortal;
 static int dummy_kind;
@@ -628,6 +627,7 @@ static void spawn_one_body(int kind, float x, float z) {
     e->cloth_ready = 0;
     e->cloth_frames = 0.0f;
     e->veil = 0.0f;
+    e->shade = 0.0f;
     e->bullet_hp = 0.0f;
     e->active = 1;
     if (kind == ENEMY_ENIGMA) { enigma_spawn(); return; }
@@ -1616,10 +1616,9 @@ static void plan_set(int p) {
 
 /* Pick from the game's lists: which list by whether it may attack, which row by how far Dante is. */
 static void decide(float distance) {
-    int attack = attack_slots_available(&attack_slots), band = 0, column = 0, i;
+    int attack = attack_slots_take(&attack_slots, ATTACK_TOKEN_SECONDS), band = 0, column = 0, i;
     const EnemyAiRow *row;
     float r, total = 0.0f;
-    if (attack) attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
     e->gauge = 0.0f;
     const EnemyAiClass *ai = ai_class();
     while (band < ai->band_count - 1 && distance >= ai->bands[band]) ++band;
@@ -2579,7 +2578,7 @@ void enemy_update(float dt, float px, float py, float pz) {
     }
     chess_update(&chess_master,chess_actors,ENEMY_MAX,0,ai_unit); /* existing AI uses rank0 */
     ++trace_tick;
-    attack_slots_update(&attack_slots,dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f));
+    attack_slots_update(&attack_slots, dt);   /* 00425850 subtracts the simulation frame step / 60. */
     for (i = 0; i < ENEMY_MAX; ++i) {
         float was_x, was_y, was_z;
         e = &enemies[i];
@@ -2869,6 +2868,11 @@ static void draw_one(void) {
         sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
         sceGuColor(((unsigned int)(a * 255.0f) << 24) | 0x00ffffffu);
     }
+    if (e->shade > 0.001f) {   /* toward black (nevan_boss.c) */
+        unsigned int k = (unsigned int)(255.0f * (1.0f - (e->shade > 1.0f ? 1.0f : e->shade)));
+        float a = translucent ? 1.0f - (e->veil > 1.0f ? 1.0f : e->veil) : 1.0f;
+        sceGuColor(((unsigned int)(a * 255.0f) << 24) | k << 16 | k << 8 | k);
+    }
     if (e->kind == ENEMY_GOYLE && (e->action == 15 || e->action == 16 || e->action == 17 || e->action == 19) && e->plan != P_DEATH) {
         /* Stone: grey. */
         sceGuDisable(GU_TEXTURE_2D);
@@ -2936,6 +2940,7 @@ static void draw_one(void) {
         sceGuColor(0xffffffffu);
         if (!blend_was) sceGuDisable(GU_BLEND);
     }
+    if (e->shade > 0.001f) sceGuColor(0xffffffffu);
 }
 
 void enemy_draw(void) {
@@ -6106,6 +6111,7 @@ static void nevan_update_glue(float f, float px, float py, float pz) {
     b->pos[1] = e->pos[1];
     e->hidden = (unsigned char)b->hidden;
     e->veil = 1.0f - b->alpha;   /* her fades (FUN_003b5870's +0x5161), blended */
+    e->shade = b->shade;
     if (b->restart || nevan_motion_id[b->want] != e->motion) { nevan_play(b->want, b->restart); b->restart = 0; }
     if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }
     nevan_draw_fx(b);

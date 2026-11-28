@@ -77,6 +77,15 @@ void demo_cloth_reset(void) {
     }
 }
 
+void demo_cloth_reset_slot(int actor) {
+    if (actor < 0 || actor >= CLOTH_ACTORS) return;
+    slots[actor].script = -1;
+    slots[actor].mode = -1;
+    slots[actor].inited = 0;
+    slots[actor].has_owner = 0;
+    slots[actor].prev = -1.0f;
+}
+
 /* One chain's bytes, or 0 when the script runs out. Advances p past it. */
 static const unsigned char *next_chain(const unsigned char **p, const unsigned char *end, unsigned int *bones) {
     const unsigned char *at;

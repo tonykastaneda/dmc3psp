@@ -76,6 +76,11 @@ def write_models(pack, output):
                   f"{{{t['width']},{t['height']},dg_texture_{i}}}" for i, t in enumerate(textures)) + "};",
               "static const unsigned int *const doppel_palettes[] = {" + ",".join(
                   f"dg_palette_{i}" for i in range(len(textures))) + "};"]
+    # The coat's chain (em031_01.clt in [4]: tails 3-4 and 6-7), baked for demo_cloth.c as prepare_vergil's are.
+    from prepare_vergil import clt_block
+    block = clt_block(bytes(pack[4]).decode("latin1"), parse_skeleton(pack[2])["count"])
+    lines += ["static const unsigned char doppel_coat_cloth[] __attribute__((aligned(4))) = {" +
+              ",".join(map(str, block)) + "};"]
     (output / "boss_doppel_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     return manifest
 

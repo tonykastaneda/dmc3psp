@@ -187,8 +187,38 @@ def write_models(pack, output):
               f"#define VERGIL_CAP_COUNT {len(caps)}",
               "static const VergilCap vergil_caps[] = {" + ",".join(
                   "{%d,%d,%s}" % (k, b, ",".join(map(c_float, values))) for k, b, *values in caps) + "};"]
+    # The coat's and the scabbard cord's chains (pl001_02.clt in [4], on the coat's rig [3]; wp005.clt in [30], on the
+    # scabbard's [28]), baked in demo_cloth.c's block format: one script, one clip from frame 0, ClothMode 1.
+    for name, chunk, model in (("coat", 4, 3), ("cord", 30, 28)):
+        block = clt_block(bytes(pack[chunk]).decode("latin1"), parse_skeleton(pack[model])["count"])
+        lines += [f"static const unsigned char vergil_{name}_cloth[] __attribute__((aligned(4))) = {{" +
+                  ",".join(map(str, block)) + "};"]
     (output / "boss_vergil_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     return caps, manifest
+
+
+AXIS_CODE = {"Y": 0, "X": 1, "NY": 2, "NX": 3, "Z": 4, "NZ": 5}   # as prepare_demo.py's
+
+
+def clt_block(text, bone_count):
+    """A .clt as demo_cloth.c reads a cutscene's (prepare_demo.pack_cloth_block): u32 scripts, u32 clips, the
+    script's chains ({gravity y, spring, max speed, stiffness, limit, bone count} then the bones and their axis
+    codes), then one clip {start 0, end, script 0, mode 1, no reset, level 0}."""
+    from prepare_skinned_model import parse_cloths
+    chains = []
+    for cloth in parse_cloths(text):
+        pairs = [(b, AXIS_CODE[a]) for b, a in zip(cloth["bones"], cloth["axes"]) if 0 <= b < bone_count and a in AXIS_CODE]
+        if not pairs:
+            continue
+        tail = bytes(b for b, _ in pairs) + bytes(a for _, a in pairs)
+        tail += bytes((-len(tail)) % 4)
+        chains.append(struct.pack("<4fiI", cloth.get("Gravity", [0.0, -0.2, 0.0])[1], cloth.get("SpringForce", [0.05])[0],
+                                  cloth.get("MaxSpeed", [50.0])[0], cloth.get("Stiffness", [0.3])[0],
+                                  int(cloth.get("LimitLength", [1])[0]), len(pairs)) + tail)
+    if not chains:
+        raise ValueError("a .clt with no chains")
+    return (struct.pack("<2I", 1, 1) + struct.pack("<I", len(chains)) + b"".join(chains) +
+            struct.pack("<2f4i", 0.0, 1.0e9, 0, 1, 0, 0))
 
 
 def write_motions(pack, output):

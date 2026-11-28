@@ -5392,6 +5392,7 @@ int main(int argc, char *argv[]) {
                 partner_anim = anim;
                 memset(&partner_input, 0, sizeof partner_input);
                 partner_on = 1;
+                vergil_boss_partner_reset();
                 enemy_test_note("partner joins", 0, arkham_boss_health());
                 if (!demo_active() && demo_queue_at >= demo_queue_len) {   /* demo 53 (Vergil joins), then 421 start 0 */
                     demo_queue_len = demo_queue_at = 0;
@@ -5409,6 +5410,7 @@ int main(int argc, char *argv[]) {
                 anim_pose(&partner_anim, &partner, &partner_combat, &partner_pose, time);
                 pose_evaluate(&partner_pose);
                 combat_take_shots(&partner_combat);   /* his shots aren't fired */
+                vergil_boss_partner_drawn(partner_combat.move != MOVE_NONE || partner_combat.sword_out > 0.0f);
                 partner_input = input;
             }
         } else partner_on = 0;
