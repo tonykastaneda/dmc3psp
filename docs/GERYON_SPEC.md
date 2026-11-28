@@ -81,8 +81,13 @@ Sections 3-5 at rank 0. Approximations:
   script window timing (below), not the earlier twelve-motion-loop substitute. The full remaining horse/cart
   scripts are not yet executed.
 - **Phase 0:** think → the charge (every third) or the cast (0x12 → 8: the spheres) → the charge. The charge runs
-  the whole bridge line (400 to 5600) or to 1000 past Dante, then 7 turns him round. The shockwave comes when Dante
-  has stayed within 500 for 90 frames [inferred trigger].
+  the whole bridge line (400 to 5600) or to 1000 past Dante, then 7 turns him round. The shockwave is his answer to
+  being hurt (`385130`, the reaction-code handler): his damage component's gauges (param block `0x5d6bf0`: stun
+  800 at +0x30, flinch 500 at +0x34; shares Rebellion 100, guns 20 / 35; refilled after 180 frames without a blow)
+  send codes; a stun code (2-5, 7) starts 0xd → 0xe at once, a flinch code plays 0x14 (motion 15) the first time and
+  the shockwave the second (+0x978); none while +0x8fc has 0x4000000 [not read]. `384d20` also starts 0xd on a
+  blow of kind 3 / 4 / 5 / 7 with its argument 6 [not read]. Dante's blows take 20 / 30 (light) or 60 / 60 (heavy)
+  from the gauges [estimates: his records aren't decoded].
 - **Phase 1:** gallop laps → turn (5 / 6) → alternately the straight run or the spheres (then hidden 120 frames,
   back on the ring behind Dante, then two volleys of 4 missiles). The missiles rise 30 frames and home at 18 a
   frame; the spheres drift at Dante at 7 a frame and hurt (they don't stop time).

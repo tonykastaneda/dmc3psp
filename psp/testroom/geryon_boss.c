@@ -48,10 +48,12 @@ enum { PART_HORSE, PART_CART, PART_MISSILE, PART_SPHERE, PART_SMALL };
 enum {
     A_IDLE = 0, A_WALK = 1, A_THINK = 3, A_CHARGE = 4, A_TURN_L = 5, A_TURN_R = 6, A_TURN_BACK = 7,
     A_SPHERES = 8, A_HIDE = 9, A_MISSILES = 0x0b, A_SHOCK = 0x0e, A_GALLOP_L = 0x10, A_GALLOP_R = 0x11,
-    A_CAST = 0x12, A_DEATH = 0x13
+    A_CAST = 0x12, A_DEATH = 0x13, A_SHOCK_START = 0x0d, A_FLINCH = 0x14
 };
+#define STUN_FULL 800.0f     /* param block 0x5d6bf0 +0x30 */
+#define FLINCH_FULL 500.0f   /* +0x34 */
 /* What the port's states are doing (the PS2 keeps this in the action and its sub-step +6). */
-enum { S_IDLE, S_CHARGE, S_TURN_BACK, S_SPHERES, S_HIDDEN, S_MISSILES, S_SHOCK, S_GALLOP, S_TURN, S_LEAVE, S_SWITCH, S_DEATH };
+enum { S_IDLE, S_CHARGE, S_TURN_BACK, S_SPHERES, S_HIDDEN, S_MISSILES, S_SHOCK, S_GALLOP, S_TURN, S_LEAVE, S_SWITCH, S_DEATH, S_FLINCH };
 
 typedef struct { float m[3][3], p[3]; } Transform;
 typedef struct { float u, v, nx, ny, nz, x, y, z; } Vertex;
@@ -61,7 +63,9 @@ typedef struct { int on, kind; float pos[3], vel[3], life, rise; } Shell;   /* k
 #define SHELLS 12
 static struct {
     int active, dying, hidden, phase, state, action, think_count, laps, side, warp_ready, rank;
-    float pos[3], yaw, hp, timer, near_time, floor_y, axis_dir, leave_yaw;
+    float pos[3], yaw, hp, timer, floor_y, axis_dir, leave_yaw;
+    float stun_gauge, flinch_gauge, since_blow;   /* the damage component's gauges (+0x30 / +0x34 full) */
+    int flinches;                                 /* +0x978: flinch codes since the last shockwave */
     float dante[3], centre[3];
     Player horse, cart;
     Shell shells[SHELLS];
@@ -180,9 +184,11 @@ static void tick(Player *p, float frames) {
     }
 }
 static void set_action(int action, int loop) {
+    /* Script 20 (0x14) plays motion 15; the port's death (its 0x13) plays gh19. */
+    int motion = action == A_FLINCH ? 15 : action;
     gb.action = action;
-    play(&gb.horse, action < 21 ? motion_ids[0][action] : -1, loop);
-    play(&gb.cart, action < 21 ? motion_ids[1][action] : -1, loop);
+    play(&gb.horse, motion < 21 ? motion_ids[0][motion] : -1, loop);
+    play(&gb.cart, motion < 21 ? motion_ids[1][motion] : -1, loop);
 }
 static void set_state(int state) {
     gb.state = state;
@@ -294,14 +300,12 @@ static void start_charge(void) {
 /* Phase 0's think (4bfb20): at rank 0 every third pick (+0x975 % 3 == 0) is the charge, else 0x12, the cast
  * that leads to 8. A Dante who stays close gets the shockwave (0xe, effect 0x322) [inferred trigger]. */
 static void think_bridge(void) {
-    if (gb.near_time > 90.0f) { gb.near_time = 0.0f; set_action(A_SHOCK, 0); set_state(S_SHOCK); return; }
     if ((gb.think_count++ % 3) == 0) start_charge();
     else { set_action(A_CAST, 0); set_state(S_SPHERES); }
 }
 /* Phase 1's think (4c0c50), once its script is over (the spheres' check came as it started, go_think): the gallop
  * round the centre. */
 static void think_ground(void) {
-    if (gb.near_time > 90.0f) { gb.near_time = 0.0f; set_action(A_SHOCK, 0); set_state(S_SHOCK); return; }
     gb.side = !gb.side;   /* +0x97a: the gallops alternate */
     gb.laps = GALLOP_WINDOWS; gb.gallop_clip=0; gb.window_time=0;
     set_action(gb.side ? A_GALLOP_R : A_GALLOP_L, 1);
@@ -329,8 +333,8 @@ static void contact(float frames) {
 static void ai_step(float f) {
     float d = flat_distance(gb.pos, gb.dante);
     gb.timer += f;
-    if (d < 500.0f && fabsf(gb.dante[1] - gb.pos[1]) < 300.0f) gb.near_time += f;
-    else gb.near_time = fmaxf(0.0f, gb.near_time - f);
+    /* FUN_002f1750: 180 frames without a blow refill both gauges. */
+    if ((gb.since_blow += f) > 180.0f) { gb.stun_gauge = STUN_FULL; gb.flinch_gauge = FLINCH_FULL; }
     switch (gb.state) {
     case S_IDLE:
         if (!gb.horse.done) break;   /* 255b70: action 3's script is over */
@@ -378,8 +382,15 @@ static void ai_step(float f) {
         if (gb.timer >= 150.0f && gb.timer - f < 150.0f) fire_missiles(4);
         if (gb.horse.done || gb.timer > 360.0f) go_think();
         break;
+    case S_FLINCH:   /* 0x14 (4c0a20): its script to its end, then think */
+        if (gb.horse.done) go_think();
+        break;
     case S_SHOCK:
-        /* 0xe: effect 0x322 at 600 around him [the frame is inferred: 30]. */
+        /* 0xd (4c0690) to its script's end, then 0xe: effect 0x322 at 600 around him [the frame is inferred: 30]. */
+        if (gb.action == A_SHOCK_START) {
+            if (gb.horse.done) { set_action(A_SHOCK, 0); gb.timer = 0.0f; }
+            break;
+        }
         if (gb.timer >= 30.0f && gb.timer - f < 30.0f) {
             float at[3] = {gb.pos[0], gb.pos[1] + 50.0f, gb.pos[2]};
             fx_hit_spark(at);
@@ -626,6 +637,22 @@ int geryon_boss_hit(int kind, float from_x, float from_z, int mortal) {
         set_state(S_DEATH);
         return 1;
     }
+    {
+        /* The damage component (FUN_002f17a0) on his gauges: stun 800, flinch 500, the weapon's share (guns 20).
+         * Dante's records aren't decoded: a light blow takes 20 / 30, a heavy one 60 / 60 [estimates, as Vergil's].
+         * FUN_00385130 on the reaction codes: a stun (2-5, 7) starts 0xd, the shockwave, at once; a flinch (0, 1,
+         * ...) plays 0x14 the first time and the shockwave the second (+0x978). */
+        int heavy = kind == HIT_HEAVY || kind == HIT_LAUNCH || kind == HIT_SLAM;
+        float share = kind == HIT_PISTOL ? 0.2f : 1.0f;
+        int code = 0;
+        gb.since_blow = 0.0f;
+        gb.stun_gauge -= (heavy ? 60.0f : 20.0f) * share;
+        gb.flinch_gauge -= (heavy ? 60.0f : 30.0f) * share;
+        if (gb.stun_gauge <= 0.0f) { gb.stun_gauge = STUN_FULL; gb.flinch_gauge = FLINCH_FULL; code = 2; }
+        else if (gb.flinch_gauge <= 0.0f) { gb.flinch_gauge = FLINCH_FULL; code = 1; }
+        if (code == 1 && ++gb.flinches < 2) { set_action(A_FLINCH, 0); set_state(S_FLINCH); trace("flinch"); }
+        else if (code) { gb.flinches = 0; set_action(A_SHOCK_START, 0); set_state(S_SHOCK); trace("shockwave"); }
+    }
     return 0;
 }
 
@@ -733,6 +760,7 @@ void geryon_boss_spawn(float x, float y, float z) {
     /* Facing back down the bridge, toward Dante's end (the yaw from (400, 400) to (5600, 5600), turned). */
     gb.yaw = wrap_angle(atan2f(bridge_b[0] - bridge_a[0], bridge_b[2] - bridge_a[2]) + PI);
     gb.hp = MAX_HEALTH;
+    gb.stun_gauge = STUN_FULL; gb.flinch_gauge = FLINCH_FULL;
     gb.horse.motion = gb.horse.previous = gb.cart.motion = gb.cart.previous = -1;
     if (start_on_ground) {
         /* As S_SWITCH leaves him, without the bridge or Dante's warp. */
