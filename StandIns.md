@@ -16,9 +16,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
   defeats that stay in their room, with English subtitles (at the PS2's x, the font scaled so the widest line spans the PS2's width), fades and their own sound (voices and music), but: cloth steps in world space (ClothSim1D's ropes run as decoded, the floor factor taken as 0; ClothMode 1 rides the hips, because bone 0 stays at the origin; a coat gets Dante's own capsules (bones 0-22 match) though whether cutscenes apply capsules isn't read; a chain that never sets the key trails the pose); a CnsPos piece's root on its parent bone [inferred]; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
-  (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
-  read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
-  matched by eye]; IsMinus lights left out. The stage is the baked SCM colour: no stage clip sets Light, so it keeps
+  (`demo.c` demo_lights) as the VU1 microcode does it (read: strength, colour / 128 up to 2.0 via colour doubling, ambient 32 / 128 from FUN_00215280); an IsMinus light takes half its colour off the ambient [estimate: the PSP has no negative light]; Program No 6 taken as the same ambient [inferred]. The stage is the baked SCM colour: no stage clip sets Light, so it keeps
   flag 2 and ValidType 3 stays idle, and the class-2 lights are not multiplied onto the bake (demos 3, 5 and 59;
   docs/CUTSCENES.md).
 - **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
