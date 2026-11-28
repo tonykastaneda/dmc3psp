@@ -59,6 +59,23 @@ static void blur_pass(void *from, void *to) {
         sprite(off[i][0] * 0.75f, off[i][1] * 0.75f, Q_W + off[i][0] * 0.75f, Q_H + off[i][1] * 0.75f, 0, 0, Q_W, Q_H, 0);
 }
 
+/* The quarter-size copy of the frame: a 4 x 4 box average. One bilinear sample per quarter pixel reads only the
+ * middle 2 x 2 of its 4 x 4, so detail (demo 5's stonework) aliases into stripes and doubled edges; four samples a
+ * pixel off each way diagonally, a quarter each, cover the whole 4 x 4. */
+static void shrink(void *frame) {
+    static const float off[4][2] = {{-1.0f, -1.0f}, {1.0f, -1.0f}, {-1.0f, 1.0f}, {1.0f, 1.0f}};
+    int i;
+    target(Q_A, Q_STRIDE, Q_W, Q_H);
+    sceGuClearColor(0);
+    sceGuClear(GU_COLOR_BUFFER_BIT);
+    source(frame, 512, FB_STRIDE);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_FIX, GU_FIX, 0x404040, 0xffffff);
+    for (i = 0; i < 4; ++i)
+        sprite(off[i][0], off[i][1], SCR_W + off[i][0], SCR_H + off[i][1], 0, 0, Q_W, Q_H, 0);
+    sceGuDisable(GU_BLEND);
+}
+
 /* The depth buffer's value for a view distance d (main.c: sceGuDepthRange(65535, 0), sceGumPerspective). */
 static float depth_at(float d, float n, float f) {
     float ndc;
@@ -85,11 +102,7 @@ void post_fx_draw(void *draw_buffer, const PostFx *fx) {
     sceGuColor(0xffffffffu);
     sceGuDepthMask(GU_TRUE);
 
-    /* The quarter-size copy (the bilinear filter averages as it shrinks). */
-    target(a, Q_STRIDE, Q_W, Q_H);
-    sceGuDisable(GU_BLEND);
-    source(draw_buffer, 512, FB_STRIDE);
-    sprite(0, 0, SCR_W, SCR_H, 0, 0, Q_W, Q_H, 0);
+    shrink(draw_buffer);   /* into Q_A */
 
     if (fx->blur) {
         passes = fx->blur_passes < 1 ? 1 : fx->blur_passes > 3 ? 3 : fx->blur_passes;
@@ -106,10 +119,7 @@ void post_fx_draw(void *draw_buffer, const PostFx *fx) {
         sprite(0, 0, Q_W, Q_H, 0, 0, SCR_W, SCR_H, depth_at(fx->blur_to, fx->near, fx->far));
         sceGuDisable(GU_DEPTH_TEST);
         if (fx->glow) {   /* the glow is taken from the blurred frame then: a fresh copy */
-            target(Q_A, Q_STRIDE, Q_W, Q_H);
-            sceGuDisable(GU_BLEND);
-            source(draw_buffer, 512, FB_STRIDE);
-            sprite(0, 0, SCR_W, SCR_H, 0, 0, Q_W, Q_H, 0);
+            shrink(draw_buffer);
             a = Q_A; b = Q_B;
         }
     }
