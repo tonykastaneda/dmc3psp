@@ -559,3 +559,5 @@ scene (`demo_fade`, `fx_screen_tint`).
    cut, and hide what the hide tracks hide. Hand control back by the `09 D` section as the game does.
 3. Decode `.cam` (find its reader from `FUN_002186e0`'s set-up) and `.hid`; then messages (subtitles), fades and
    sounds.
+
+**Boss entrances wait for their area** (2026-11-27). The ROOM blocks play a boss's entrance once counter 0 is 0 and `sw_in_area [a]` holds (Mission 3 room 6 area 0, 5/121 area 1, 9/210 0, 11/217 0, 12/228 0, 16/115 area 1, read with tools/event_dump.py). The port now checks that EVE area (messages.c `msg_in_area`) each frame and holds the room's script, so the boss doesn't spawn, until the demo has played (main.c `room_entrance_waiting`; tests with `nodemo` aren't held). Checked: Mission 3 room 6, `ent6_150.png` (in the room, no demo), demo 6 after walking into the area, `ent6c_5500.png` (the fight after it). Subtitles: the PS2's x is (640 - its widest line) / 2, so the port sizes its font to span the same and starts there, lifted when the larger font would leave the screen.
