@@ -105,6 +105,9 @@ PSP_HEAP_SIZE_KB(-1024);
 /* Verified in PPSSPP screenshots and by the skeleton (toes at z=+9.9): the
  * MOD front is +Z, so no extra rotation is needed. */
 #define MODEL_YAW_OFFSET 0.0f
+/* The frame being drawn (relative VRAM) and a cutscene's near plane, for post_fx.c's pass in the draw. */
+static void *frame_draw_buffer;
+static float demo_view_near = 25.0f;
 
 /* HUD font: the PSPSDK debug font (8x8, MSB = leftmost pixel) baked into a
  * 128x128 RGBA texture, 16x16 glyphs. Drawn through the GU, not by CPU writes
@@ -1326,6 +1329,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             float use = demo_raw_fov ? fov : demo_screen_fov(fov);
             if (near < 4.0f) near = 4.0f;
             if (near > 25.0f) near = 25.0f;
+            demo_view_near = near;   /* post_fx's depth bands */
             sceGumPerspective(use, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
         }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
@@ -1534,6 +1538,10 @@ scene_done:
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
         unsigned int fade = demo_fade();
+        {   /* ScrEfc blur and glow over the 3D (post_fx.c) */
+            PostFx fx;
+            if (demo_post_fx(&fx, demo_view_near, 60000.0f)) post_fx_draw(frame_draw_buffer, &fx);
+        }
         demo_letterbox();                 /* the cinema bars, under the fade and the subtitles */
         if (fade) fx_screen_tint(fade);   /* the Fade track */
         if (line) {
@@ -2532,6 +2540,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "nearclip ", 9) == 0) { extern int near_clip_off; near_clip_off = !atoi(line + 9); }
         else if (strncmp(line, "rawfov ", 7) == 0) demo_raw_fov = atoi(line + 7);   /* tests: 1 passes channel 12 raw */
         else if (strncmp(line, "nofog ", 6) == 0) demo_no_fog = atoi(line + 6);     /* tests: 1 leaves GFG off */
+        else if (strncmp(line, "nopost ", 7) == 0) demo_no_post = atoi(line + 7);   /* tests: 1 no ScrEfc blur / glow */
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
@@ -4445,6 +4454,7 @@ int main(int argc, char *argv[]) {
     FollowCamera camera;
     PlayerInput input;
     void *draw_buffer = (void *)0;
+    frame_draw_buffer = draw_buffer;
     unsigned int last_time, previous_buttons = 0, boot_start;
     int previous_l = 0, moves_total = 0, moves_finished = 0, moves_failed = -1, moves_fallbacks = 0;
     int inputs_total = 0, inputs_ok = 0, inputs_failed = -1, focus = 0;
@@ -5970,6 +5980,7 @@ int main(int argc, char *argv[]) {
         testroom_frame = frames;
         if (!(focus_cmp && cmp_enemy_audit && cmp_audit_fast)) sceDisplayWaitVblankStart();
         draw_buffer = sceGuSwapBuffers();
+        frame_draw_buffer = draw_buffer;
         if (focus_pending) { focus_hold(focus_pending); focus_pending = NULL; }
     }
 

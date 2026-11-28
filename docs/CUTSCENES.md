@@ -202,8 +202,21 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   8x16 kernel), not a tint. Demo 5 has it only on frames 0-271 (frame 180: grey, Alpha 48, Scale 16, DirNum 4,
   Feedback 4, Attenuate 0.85); frames 300 and 1260 have none. Demo 59 has it the whole cut (frame 700: R140 G132
   B128, Alpha 64, Scale 8, DirNum 4, DirOffset 23, Feedback 5, Attenuate 0.9) plus a BGA of the same family
-  (Alpha 38, Feedback 4). Nothing in the renderer samples the frame at a reduced size, and a blur of the 480x272
-  frame is the pass that does not fit under about 1.5 ms, so neither glow nor blur is drawn. ATF is not part of this.
+  (Alpha 38, Feedback 4). ATF is not part of this.
+- **ScrEfc blur and glow, on the GE (2026-11-27, `post_fx.c`).** `prepare_demo` bakes the FCS / DOF / SGA / BGA clips
+  into an "SFX1" block after the stage hide events; `demo_post_fx` picks this frame's. The pass: the frame copied to a
+  120 x 68 buffer (VRAM past the depth buffer, 0x160000 and 0x16c000) with the bilinear filter; a blur pass redraws
+  it into the other buffer four times a texel off diagonally at a quarter each; the clip's Power passes (FCS / DOF)
+  or Feedback passes (SGA / BGA, at most 3). The blur goes back as screen sprites drawn at the depth value of a view
+  distance with the depth test, so only what's farther is covered: half beyond OutStartZ (DOF StartZ), all beyond
+  OutEndZ (EndZ). The glow is the copy less a level of 0x70 (GU_REVERSE_SUBTRACT), blurred and added in Color at Alpha.
+  Not modelled [inferred / approximations]: FCS's near band (InStartZ / InEndZ) and Range, SGA's Scale, DirNum,
+  DirOffset and Attenuate (its directional smear), the threshold (the port's). Cost: the display-list build grows
+  about 20 us (demo 5, PPSSPP), 60 FPS kept; PPSSPP doesn't time the GE, and by its fill (about 330 Mpx/s textured and
+  blended) the blur is about 0.95 ms (two screen-size layers, three quarter-size passes) and the glow about 0.55 ms
+  [estimate], 1.5 ms with both (demo 59's first 300 frames). Checked: demo 5 frames 300 and 1260 (`post5_*.png`
+  against `post5off_*`, test line `nopost 1`): the backgrounds behind Vergil and Arkham soft, the faces sharp; frame
+  180's glow is faint. Not compared with PCSX2 yet.
 - Demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
 
 **Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm

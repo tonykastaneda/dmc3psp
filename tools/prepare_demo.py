@@ -854,6 +854,27 @@ def bake_fog(timeline) -> bytes:
     return bytes(out)
 
 
+SCREEN_KINDS = {"FCS": 1, "DOF": 2, "SGA": 3, "BGA": 4}
+
+
+def bake_screen_effects(timeline) -> bytes:
+    """ScrEfc FCS / DOF / SGA / BGA clips: {f32 start, life (Life / ClipScale), u8 kind (1 FCS, 2 DOF, 3 SGA, 4 BGA),
+    Power, Alpha, Feedback, u32 Color, f32 a, b, c, d}. FCS: Distance, OutStartZ, OutEndZ, Range; DOF: StartZ, EndZ;
+    SGA: Scale, Attenuate, DirNum, DirOffset."""
+    clips = sorted((c for t in timeline["tracks"] if t["kind"] == "ScrEfc" for c in t["clips"]
+                    if str(c.get("Id", "")) in SCREEN_KINDS), key=lambda c: float(c.get("SetFrame", 0.0)))
+    out = bytearray(b"SFX1" + struct.pack("<I", len(clips)))
+    for c in clips:
+        kind = SCREEN_KINDS[str(c["Id"])]
+        life = max(float(c.get("Life", 1.0)) / (float(c.get("ClipScale", 1.0) or 1.0)), 1.0)
+        f = lambda key: float(c.get(key, 0.0) or 0.0)
+        vals = {1: (f("Distance"), f("OutStartZ"), f("OutEndZ"), f("Range")), 2: (f("StartZ"), f("EndZ"), 0.0, 0.0),
+                3: (f("Scale"), f("Attenuate"), f("DirNum"), f("DirOffset")), 4: (0.0, 0.0, 0.0, 0.0)}[kind]
+        out += struct.pack("<2f4BI4f", f("SetFrame"), life, kind, int(f("Power")) & 0xFF, int(f("Alpha")) & 0xFF,
+                           int(f("Feedback")) & 0xFF, int(c.get("Color", 0) or 0) & 0xFFFFFFFF, *vals)
+    return bytes(out)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
@@ -913,6 +934,8 @@ def main():
     blob += struct.pack("<I", len(events))
     for frame, obj, hidden in events:
         blob += struct.pack("<f2H", frame, obj, hidden)
+    # Then the ScrEfc screen passes: "SFX1", u32 count, then 32-byte records by start (post_fx.c, demo_post_fx).
+    blob += bake_screen_effects(timeline)
     tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))

@@ -26,10 +26,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   raw angle, as `FUN_001ac750` builds it, matches the PS2 once its frames are matched by picture, not by drifting time.)
   Cutscene fog is the ScrEfc GFG track through sceGuFog (`demo_fog`): MinAlpha/128 at StartZ to MaxAlpha/128 at
   EndZ, colour MaxColor. The far distance is extended so the factor at EndZ equals that fraction, because hardware
-  fog reaches full colour at its far [inferred]. The sky dome is left unfogged. Not ported: SGA glow (a feedback
-  bloom: Scale, DirNum, Feedback, Attenuate, an 8x16 kernel) and the FCS / DOF full-screen blur. There is no
-  reduced-resolution framebuffer pass, and that blur does not fit under about 1.5 ms, so backgrounds stay sharper
-  than the PS2's where those clips run. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
+  fog reaches full colour at its far [inferred]. The sky dome is left unfogged. FCS / DOF blur and SGA / BGA glow are a
+  quarter-size GE pass (post_fx.c): the blur's depth bands and the glow's threshold are the port's, FCS's near band and
+  SGA's directional smear (Scale, DirNum, Attenuate) aren't modelled, and its look isn't compared with the PS2 yet. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
   and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
