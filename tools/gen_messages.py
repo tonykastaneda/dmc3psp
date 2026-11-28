@@ -127,7 +127,7 @@ def main():
         afs = AfsArchive(iso, "GDATA.AFS")
         read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
         texts = parse_messages(read(MSG_SLOT))
-        for mission in range(1, 21):
+        for mission in range(1, 22):   # 21: the Bloody Palace (its rooms' cameras: the portals' reveal, the bosses' entrances and exits)
             for room, kind, body in message_blocks(script_ops(read(EVENT_SLOT + mission))):
                 name = f"{room:03d}"
                 if name not in gen_rooms.SLOTS:
