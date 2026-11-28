@@ -133,8 +133,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Vergil**: his effects (0x338, the slashes) play from his pack but follow his bones by position only (no bone
   rotation) [approximation]; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   is decoded (gauges, flinch windows, the brace), but Dante's blows take estimated amounts from his gauges (Dante's
-  attack records aren't decoded); his coat and Yamato's sheath drawn
-  rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
+  attack records aren't decoded); his coat and cord swing as their .clt chains, with Dante's body capsules [inferred];
+  his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
 - **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
   path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
   runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.

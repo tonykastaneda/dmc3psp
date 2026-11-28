@@ -107,7 +107,12 @@ All of section 4 at rank 0, variant 0. Approximations:
   front during the guard are blocked.
 - **Damage taken:** Cerberus's per-hit values (42 light, 84 heavy, × 1.1; Easy × 2), guns 20%.
 - **Air movement:** vertical root motion and the fixed downward Helm Breaker vector now follow the decoded update below; floor collision still uses the port's room-floor query.
-- **Cloth:** the coat is rigid on body bone 3; the scabbard's cord hangs straight down.
+- **Cloth:** the coat (pl001_02.clt, [4]: two chains on its 39-bone rig hung from body bone 3) and the scabbard's
+  cord (wp005.clt, [30]: bones 3-6, axis X) run as the game's chains through `demo_cloth.c` (the cutscene cloth,
+  slots 60 / 61), baked by `prepare_vergil.py`. They run in his model space, as riding the owner's root each frame
+  (FUN_00230150) amounts to, with demo.c's body capsules for Dante's 24-bone layout (FUN_00230130's own capsules for
+  CEm035 aren't read [inferred the same]). The M13 / M20 forms' cloth isn't run. Cost in PPSSPP (room 144, Vergil
+  fighting): about 0.2 ms a frame.
 - **Effects:** em035.pac entry 57 is his effect pack, exported as nfx bank 27 (`tools/native_fx.py`). V0x338 plays
   on the body's second bone as he vanishes and, turned half round, as he appears (`4dac60`, `4ddbf0`); the slashes
   `4e0fc0` starts with an action ride his root bone until the next action: 0x1a V0x2fc, 0x1b V0x2fd, 0x1c V0x2fe,

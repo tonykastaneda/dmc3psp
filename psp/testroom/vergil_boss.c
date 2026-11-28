@@ -1,5 +1,6 @@
 #include "vergil_boss.h"
 
+#include "demo_cloth.h"
 #include "enemy.h"
 #include "fx.h"
 #include "motion.h"
@@ -69,6 +70,8 @@ static struct {
      * since the last blow (+0x10). The flinch budget (4e52f0): frames flinching (+0xbb0c) against its limit (+0xbb10),
      * points taken while flinching (+0xbb14) against theirs (+0xbb18). The brace's clock (+0xbb08). */
     float stun_gauge, flinch_gauge, since_blow, flinch_time, flinch_limit, flinch_points, flinch_cap, brace_time;
+    float cloth_clock;   /* 60 a second, for the coat's and the cord's chains */
+    int posed_tick;      /* the tick the update last posed him in */
 } vb;
 
 static int motion_ids[4][100];
@@ -787,6 +790,41 @@ static void attach(int bone, float x, float y, float z, float rx, float ry, floa
     offset.p[0] = x; offset.p[1] = y; offset.p[2] = z;
     multiply(out, &body_pose[bone], &offset);
 }
+/* A piece's chains (demo_cloth.c, the game's chain step) in his model space: the game rides its chains with the
+ * owner's root each frame (FUN_00230150), so only the body's own motion and gravity swing them, which model space
+ * gives directly. The body capsules are the ones demo.c gives a coat on Dante's 24-bone body (FUN_00230130). */
+static void run_cloth(int which, const VergilMesh *mesh, Transform *pose, const Transform *base) {
+    static const struct { int bone; float a[3], b[3], r; } src[] = {
+        {3, {0.0f, 20.0f, 10.0f}, {0.0f, -40.0f, 10.0f}, 15.0f},
+        {2, {0.0f, -5.0f, 0.0f}, {0.0f, -15.0f, 0.0f}, 18.0f},
+        {15, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {16, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {19, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {20, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+    };
+    float wp[40 * 3], wr[40 * 9], local[40 * 3], bp[3], br[9];
+    ClothCapsule caps[6];
+    int i, k, n = mesh->bone_count < 40 ? mesh->bone_count : 40;
+    for (i = 0; i < 6; ++i) {
+        transform_point(&body_pose[src[i].bone], src[i].a, caps[i].a);
+        transform_point(&body_pose[src[i].bone], src[i].b, caps[i].b);
+        caps[i].radius = src[i].r;
+    }
+    for (i = 0; i < n; ++i) {
+        memcpy(wp + i * 3, pose[i].p, sizeof(float) * 3);
+        memcpy(wr + i * 9, pose[i].m, sizeof(float) * 9);
+        local[i * 3] = mesh->local[i].x; local[i * 3 + 1] = mesh->local[i].y; local[i * 3 + 2] = mesh->local[i].z;
+    }
+    memcpy(bp, base->p, sizeof(bp));
+    memcpy(br, base->m, sizeof(br));
+    demo_cloth_apply(DEMO_CLOTH_GAMEPLAY + which, bp, br, 0, 0, wp, wr, mesh->parents, local, n,
+                     which ? vergil_cord_cloth : vergil_coat_cloth,
+                     which ? sizeof(vergil_cord_cloth) : sizeof(vergil_coat_cloth), floorf(vb.cloth_clock), caps, 6);
+    for (i = 0; i < n; ++i) {
+        memcpy(pose[i].p, wp + i * 3, sizeof(float) * 3);
+        for (k = 0; k < 3; ++k) memcpy(pose[i].m[k], wr + i * 9 + k * 3, sizeof(float) * 3);
+    }
+}
 static void evaluate_poses(void) {
     static MotionSample current, previous;
     Transform at;
@@ -795,10 +833,11 @@ static void evaluate_poses(void) {
     if (vb.body.fade > 0.0f && vb.body.previous_motion >= 0)
         motion_sample(motion_get(vb.body.previous_motion), vb.body.previous_frame, &previous);
     build_skeleton(&vergil_parts[vb.variant==2 && vb.dt?PART_M20_DT_BODY:PART_BODY], &current, vb.body.fade > 0.0f ? &previous : 0, vb.body.fade, 0, body_pose, 1);
-    /* The coat hangs from body bone 3 (its cloth is bound to the bone list's entry 3, as Dante's is);
-     * drawn rigid [approximation: no cloth]. */
+    /* The coat hangs from body bone 3 (its cloth is bound to the bone list's entry 3, as Dante's is) and swings
+     * as pl001_02.clt's chains. */
     memset(&current, 0, sizeof(current));
     build_skeleton(&vergil_parts[PART_COAT], &current, 0, 0.0f, &body_pose[3], coat_pose, 0);
+    if (!vb.dt) run_cloth(0,&vergil_parts[PART_COAT], coat_pose, &body_pose[3]);
     {int b;for(b=0;b<11;++b)beowulf_pose[b]=body_pose[vergil_beowulf_bodymap[b]];}
     if(vb.variant==2 && vb.dt){
         /* Native DT attachments; cloth uses authored rest poses until its drivers are ported. */
@@ -809,21 +848,8 @@ static void evaluate_poses(void) {
     /* Scabbard in the left hand (0x5dc010: bone 13); Yamato in it (0x5dbfe0) or drawn in the right (0x5dc0a0). */
     attach(13, 19.0f, -0.5f, 11.0f, 0.0f, 3.84f, 0.0f, &at);
     build_skeleton(&vergil_parts[PART_SCABBARD], &current, 0, 0.0f, &at, scabbard_pose, 0);
-    {
-        /* Its cord (bones 2-6, cloth wp005.clt) runs along -x from the knot at bone 2: hang it straight down
-         * from there [approximation: no cloth]. Rz(90) takes -x to -y. */
-        const VergilMesh *m = &vergil_parts[PART_SCABBARD];
-        int i, k;
-        for (i = 3; i < m->bone_count && i < 7; ++i) {
-            float d[3] = {m->rest[i].x - m->rest[2].x, m->rest[i].y - m->rest[2].y, m->rest[i].z - m->rest[2].z};
-            identity(&scabbard_pose[i]);
-            scabbard_pose[i].m[0][0] = 0.0f; scabbard_pose[i].m[0][1] = -1.0f;
-            scabbard_pose[i].m[1][0] = 1.0f; scabbard_pose[i].m[1][1] = 0.0f;
-            for (k = 0; k < 3; ++k)
-                scabbard_pose[i].p[k] = scabbard_pose[2].p[k] + scabbard_pose[i].m[k][0] * d[0] +
-                                        scabbard_pose[i].m[k][1] * d[1] + scabbard_pose[i].m[k][2] * d[2];
-        }
-    }
+    /* Its cord (bones 3-6 off the knot at bone 2) swings as wp005.clt's chain. */
+    run_cloth(1, &vergil_parts[PART_SCABBARD], scabbard_pose, &at);
     if (vb.yamato_drawn) attach(9, -7.5f, -2.0f, 0.0f, 0.0f, 0.0f, 0.0f, &at);
     build_skeleton(&vergil_parts[PART_YAMATO], &current, 0, 0.0f, &at, yamato_pose, 0);
     if(vb.variant==2){
@@ -939,7 +965,7 @@ void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], flo
 void vergil_boss_draw(void) {
     int i;
     if (!vb.active || vb.hidden) return;
-    evaluate_poses();
+    if (vb.posed_tick != vb.tick) evaluate_poses();   /* the update's pose, chains and all, when it's this tick's */
     for (i = 0; i < VERGIL_PART_COUNT; ++i) if(part_visible(i))skin_part(i);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
@@ -1121,6 +1147,7 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     vb.pos[2] += -s * dx + c * dz;
     vb.pos[1] += dy;
     action_effects_follow();
+    vb.cloth_clock += frames;
     /* 4e27a0: fixed downward step, not accelerated gravity. +b9a0 suppresses it
      * for uppercut/Helm Breaker (27/5f) and airborne M20 entry (6f); 55 is hidden travel. */
     if (vb.action!=0x27 && vb.action!=0x5f && vb.action!=0x6f && vb.action!=0x55)
@@ -1140,6 +1167,7 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     if (vb.state==S_UPPER || vb.state==S_LEAP) trace("air");
     if (!vb.hidden && !vb.dying) {
         evaluate_poses();
+        vb.posed_tick = vb.tick;
         test_attack_caps(px, py, pz);
     }
 }
@@ -1147,6 +1175,9 @@ void vergil_boss_spawn(float x, float y, float z) {
     if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     memset(&vb, 0, sizeof(vb));
     slash_fx[0] = slash_fx[1] = 0;
+    vb.posed_tick = -1;
+    demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY);
+    demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY + 1);
     vb.active = 1;
     vb.variant=boss_variant;
     vb.pos[0] = x; vb.pos[1] = vb.floor_y = y; vb.pos[2] = z;

@@ -9,6 +9,10 @@
  * piece on Dante still gets his body capsules so the chains can't hang through him. */
 
 void demo_cloth_reset(void);
+/* Forget one slot's chains (they hang at rest again on its next apply): a gameplay user (vergil_boss.c, slots
+ * DEMO_CLOTH_GAMEPLAY and up) starting over. */
+void demo_cloth_reset_slot(int actor);
+#define DEMO_CLOTH_GAMEPLAY 60
 
 /* base is the piece's root (a CnsPos bone for a coat), used when a free bone hangs off the root. owner is the
  * parent model's root, the ride target when ClothMode is 1. Worlds are the posed bones, overwritten for the
