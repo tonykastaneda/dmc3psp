@@ -8,4 +8,8 @@ void sfx_volume(float v);
 void sfx_play_bank(int bank, int id, float pan, float volume);
 /* Dante's motion sound events passed this frame: from < 0 when the motion just began. */
 void sfx_motion(int motion, float from, float to);
+/* The room's footstep bank (by room number, -1 none) and the material of the floor under Dante (0: no steps). */
+void sfx_room(int room);
+void sfx_floor(int material);
+void sfx_step_stats(int out[3]);   /* tests: steps played, the last one's material, steps on no material */
 #endif

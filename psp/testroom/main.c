@@ -3574,6 +3574,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     stage_load(path);
     breakables_enter(room);
     gimmicks_enter(room);
+    sfx_room(room_number(room));   /* its footsteps */
     seal_enter(room);
     msg_prev_room = mission_room != ROOM_NONE ? room_number(mission_room) : -1;   /* op 1e */
     music_room(mission_choice.mission, atoi(rooms[room].file + 5));   /* its on-enter BGM (event op 0x70) */
@@ -5326,6 +5327,23 @@ int main(int argc, char *argv[]) {
         if (motions_loaded > 0) {
             anim_battle_weapon = dummy_ready && enemy_alive_count() > 0 ? player.melee_weapon : -1;
             anim_update(&anim, &player, dt);
+            {   /* Footsteps of his walk and run (their motions' 0x33 events, gen_sfx.py) on the floor's material. */
+                static int loco_m = -1;
+                static float loco_f;
+                int m = -1;
+                float f = 0.0f;
+                sfx_floor(player.on_ground ? stage_floor_material(player.x, player.y, player.z, 30.0f) : 0);
+                if (player.on_ground && !combat.action && anim.move_blend > 0.5f) {
+                    m = anim.run_blend > 0.5f ? MOTION_RUN : MOTION_WALK;
+                    f = m == MOTION_RUN ? anim.run_frame : anim.walk_frame;
+                }
+                if (m >= 0) {
+                    if (m != loco_m) sfx_motion(m, f - 0.5f, f);
+                    else if (f >= loco_f) sfx_motion(m, loco_f, f);
+                    else { sfx_motion(m, loco_f, 1.0e6f); sfx_motion(m, -1.0f, f); }   /* it looped */
+                }
+                loco_m = m; loco_f = f;
+            }
             {   /* the idle's root step (FUN_002e2d70), in his facing */
                 float s = sinf(player.yaw), c = cosf(player.yaw);
                 player.x += c * anim.idle_root_step[0] + s * anim.idle_root_step[1];
@@ -5630,7 +5648,7 @@ int main(int argc, char *argv[]) {
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
                     { char cl[320]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
-                    { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
+                    { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); { int st[3]; sfx_step_stats(st); fprintf(report, "footsteps played=%d material=%d missing=%d\n", st[0], st[1], st[2]); }
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
                     { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }

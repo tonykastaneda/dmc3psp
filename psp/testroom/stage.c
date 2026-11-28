@@ -43,7 +43,7 @@ static int batch_blend(unsigned int flags) {
  * the camera just enough to win against their base surface. */
 #define DECAL_DEPTH_OFFSET 64
 
-typedef struct { unsigned int offset, walls, floors, wall_grid, floor_grid; } HitsHeader;
+typedef struct { unsigned int offset, walls, floors, wall_grid, floor_grid, materials; } HitsHeader;   /* materials: 0 none */
 
 static unsigned char *blob;
 static const Header *header;
@@ -790,6 +790,33 @@ int stage_walkable_below(float x, float z) {
 }
 
 static int shown_floor(float x, float y, float z, float step, float *out);
+/* The material (HITS byte 0) of the collision floor stage_floor would pick at (x, z) under y + step; 0 if none. */
+int stage_floor_material(float x, float y, float z, float step) {
+    const Cell *cell;
+    const unsigned int *idx;
+    unsigned int k;
+    float best = -1.0e30f;
+    int material = 0;
+    if (!header || !hits->materials) return 0;
+    cell = grid_cell(hits->floor_grid, x, z);
+    idx = grid_indices(hits->floor_grid);
+    if (!cell) return 0;
+    for (k = 0; k < cell->count; ++k) {
+        unsigned int i = hits->walls + idx[cell->first + k];
+        const float *t = hit_tri(i);
+        float x0 = t[0], z0 = t[2], x1 = t[3], z1 = t[5], x2 = t[6], z2 = t[8];
+        float d = (z1 - z2) * (x0 - x2) + (x2 - x1) * (z0 - z2), a, b, c, h;
+        if (d > -1e-6f && d < 1e-6f) continue;
+        a = ((z1 - z2) * (x - x2) + (x2 - x1) * (z - z2)) / d;
+        b = ((z2 - z0) * (x - x2) + (x0 - x2) * (z - z2)) / d;
+        c = 1.0f - a - b;
+        if (a < 0.0f || b < 0.0f || c < 0.0f) continue;
+        h = a * t[1] + b * t[4] + c * t[7];
+        if (h <= y + step && h > best) { best = h; material = blob[hits->materials + i]; }
+    }
+    return material;
+}
+
 int stage_floor(float x, float y, float z, float step, float *out) {
     int found = 0;
     unsigned int k;

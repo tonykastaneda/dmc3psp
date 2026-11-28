@@ -288,7 +288,7 @@ def parse_hits(data: bytes):
         r = base + 56 * i
         v = struct.unpack_from("<9f", data, r + 4)
         n = struct.unpack_from("<4f", data, r + 40)
-        tris.append(v + n)
+        tris.append(v + n + (data[r],))   # byte 0: the surface's material (a footstep's program in the room's bank)
     return tris
 
 
@@ -783,9 +783,13 @@ def main() -> None:
     # Collision: walls and floors in their own XZ grids over the same extent.
     hits_offset = align(blob)
     for t in hit_walls + hit_floors:
-        blob += struct.pack("<13f", *t)
+        blob += struct.pack("<13f", *t[:13])
     wall_grid = write_grid(blob, build_grid(hit_walls, gx0, gz0, GRID_CELL, gw, gh, margin=60.0))
     hfloor_grid = write_grid(blob, build_grid(hit_floors, gx0, gz0, GRID_CELL, gw, gh, margin=1.0))
+    align(blob)
+    # Each collision triangle's material (HITS record byte 0), walls then floors: footsteps pick their sound by it.
+    materials_offset = align(blob)
+    blob += bytes(int(t[13]) & 0xFF if len(t) > 13 else 0 for t in hit_walls + hit_floors)
     align(blob)
 
     ground = [b for b in batches if not (len(b) > 5 and b[5])] or batches   # the stage's bounds leave its sky out
@@ -793,7 +797,7 @@ def main() -> None:
     all_y = [v[1] for b in ground for t in b[2] for v in t]
     all_z = [v[2] for b in ground for t in b[2] for v in t]
     struct.pack_into("<4I", blob, 0x80, hits_offset, len(hit_walls), len(hit_floors), wall_grid)
-    struct.pack_into("<I", blob, 0x90, hfloor_grid)
+    struct.pack_into("<2I", blob, 0x90, hfloor_grid, materials_offset)
     struct.pack_into("<4s7I4f6f6I2f2I", blob, 0, b"STG1", 3,
                      len(textures), len(batches), first, len(floor), gw, gh,
                      sx, sy, sz, math.radians(syaw),
