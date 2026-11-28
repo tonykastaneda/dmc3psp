@@ -83,6 +83,7 @@ int testroom_frame;
 #include "devil_runtime.h"
 #include "mission6.h"
 #include "needles.h"
+#include "gimmick_models.h"
 #include "messages.h"
 #include "blocks.h"
 #include "spheres.h"
@@ -3029,6 +3030,7 @@ static int seal_index = -1, sw_lit;
 static int sw_log_state = -1;
 static float sw_log_at;
 static float sw_charge, sw_wing, sw_flames, sw_window, sw_spin, sw_spin2, seal_alpha, seal_time;
+static GimSwitchSound sw_sound;
 static unsigned int seal_open_bits;
 static const RoomSwitchSeal *room_seal(void) { return seal_index >= 0 ? &room_switch_seals[seal_index] : 0; }
 static void seal_enter(int room) {
@@ -3048,6 +3050,7 @@ static void seal_enter(int room) {
     sw_wing = open ? 200.0f : 0.0f;
     sw_flames = open ? SWITCH_FLAMES : 0.0f;
     sw_window = 0.0f;
+    memset(&sw_sound, 0, sizeof sw_sound);
     seal_alpha = open ? 0.0f : 1.0f;
     if (!open) stage_add_box(w->box[0], w->box[1], w->box[2], w->box[3], w->box[4], w->box[5], w->box[6], SEAL_TAG);
 }
@@ -3057,6 +3060,7 @@ static void switch_hit(const Player *player, float reach, int kind) {
     const RoomSwitchSeal *w = room_seal();
     float dx, dz, dy, d, amount;
     if (!w || sw_lit) return;
+    if (mission_choice.mission == 9 && room_number(mission_room) == 203) return;   /* the beam's reset panel (sm_hit) */
     dx = w->hit[0] - player->x; dz = w->hit[2] - player->z; dy = w->hit[1] - player->y;
     d = sqrtf(dx * dx + dz * dz);
     if (d > reach + w->hit[3] || dy < -w->hit[3] || dy > w->hit[3] + 200.0f) return;
@@ -3069,6 +3073,7 @@ static void switch_hit(const Player *player, float reach, int kind) {
         sw_flames = fminf(sw_flames + amount, SWITCH_FLAMES + 1.0f);
     }
     sw_window = SWITCH_WINDOW;
+    gim_switch_hit_sound(&sw_sound);
     {
         float at[3] = {w->hit[0], w->hit[1], w->hit[2]};
         fx_hit_spark(at);
@@ -3087,10 +3092,15 @@ static void seal_update(float frames) {
             sw_wing = fmaxf(sw_wing - drain, 0.0f);
             if (sw_charge <= 100.0f) sw_flames = fmaxf(sw_flames - drain, 0.0f);
         }
+        gim_switch_sounds(&sw_sound, sw_charge, sw_window, sw_lit, frames);
+        if (mission_choice.mission == 9 && room_number(mission_room) == 203 && sm_crystal_solved(203)) {
+            sw_charge = SWITCH_CHARGE; sw_flames = SWITCH_FLAMES;   /* flag 34: the beam reached its end */
+        }
         if (sw_charge >= SWITCH_CHARGE && sw_flames >= SWITCH_FLAMES) {
             sw_lit = 1;
             seal_open_bits |= 1u << seal_index;
             stage_hide_group(SEAL_TAG);   /* FUN_0031d420: the wall goes as the fade starts */
+            sfx_play(6, 0.0f, 1.0f);      /* FUN_0031c8b0: the fade out's sound (system bank) */
         }
     }
     if (focus_cmp) {
@@ -3212,6 +3222,18 @@ static void breakables_enter(int room) {
         if (room_story[i].room == room && mission_choice.mission >= room_story[i].first && mission_choice.mission <= room_story[i].last)
             stage_hide_group(room_story[i].tag);
 }
+/* The room's crest switches and seals drawn from their models (gimmick_models.c). */
+static void gimmicks_enter(int room) {
+    int i;
+    gim_clear();
+    gim_spins_clear();
+    for (i = 0; i < ROOM_SPIN_COUNT; ++i)
+        if (room_spins[i].room == room) gim_spin_add(room_spins[i].tag, room_spins[i].x, room_spins[i].z, room_spins[i].rate);
+    for (i = 0; i < ROOM_GIMMICK_COUNT; ++i)
+        if (room_gimmicks[i].room == room)
+            gim_add(room_gimmicks[i].kind, room_gimmicks[i].number, room_gimmicks[i].tag, room_gimmicks[i].attached,
+                    room_gimmicks[i].door, room_gimmicks[i].o, room_gimmicks[i].r);
+}
 static void crystals_update(float dt) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
@@ -3278,6 +3300,16 @@ static int shop_closed;   /* the shop had its own frames: the game's clock start
  * holds them all shut then), fading in over half a second and out once it's over. Drawn as Mission 3's seal is. */
 static float fight_seal_alpha;
 static int fight_seal_on;
+/* The SEAL set standing in door i (or in another door record with the same box: the later missions' copies). */
+static int door_seal(int i) {
+    const RoomDoor *d = &rooms[mission_room].doors[i];
+    int j, n = gim_seal_at_door(i);
+    for (j = 0; n < 0 && j < rooms[mission_room].door_count; ++j) {
+        const RoomDoor *e = &rooms[mission_room].doors[j];
+        if (e->box[0] == d->box[0] && e->box[1] == d->box[1] && e->box[2] == d->box[2]) n = gim_seal_at_door(j);
+    }
+    return n;
+}
 static void fight_seals_draw(void) {
     int i;
     float shimmer = 0.85f + 0.15f * sinf(seal_time * 0.21f);
@@ -3294,6 +3326,10 @@ static void fight_seals_draw(void) {
         int k;
         if (mission_choice.mission < d->low || mission_choice.mission > d->high || d->next == ROOM_NONE) continue;
         if (d->box[4] > 1000.0f) continue;   /* a fall into another room (112's pit), not a door */
+        if (door_seal(i) >= 0) {
+            /* The door's own seal (its SEAL set's board, red): drawn after the stand-in pass below. */
+            continue;
+        }
         /* The board spans the box's long side, across its middle. */
         if (d->box[3] >= d->box[5]) { x0 = d->box[0] - d->box[3] * 0.5f; x1 = d->box[0] + d->box[3] * 0.5f; z0 = z1 = d->box[2]; }
         else { z0 = d->box[2] - d->box[5] * 0.5f; z1 = d->box[2] + d->box[5] * 0.5f; x0 = x1 = d->box[0]; }
@@ -3311,13 +3347,30 @@ static void fight_seals_draw(void) {
     }
     sceGuDisable(GU_BLEND);
     sceGuDepthMask(GU_FALSE);
+    for (i = 0; i < rooms[mission_room].door_count; ++i) {
+        const RoomDoor *d = &rooms[mission_room].doors[i];
+        int n = door_seal(i);
+        if (n < 0 || mission_choice.mission < d->low || mission_choice.mission > d->high || d->next == ROOM_NONE) continue;
+        gim_seal_draw(n, 0, fight_seal_alpha * shimmer);
+    }
 }
 
 static void seal_draw(void) {
     const RoomSwitchSeal *w = room_seal();
     int i;
     if (!w) return;
-    {
+    if (gim_has_switch(w->sw_number)) {
+        /* The switch's own model, posed as FUN_00306160 does; a lit flame (effect 0x181, red RGB 0x80 0x30 0x30) as a
+         * glow at Rz(-45 i) (0, 85 + 23, 8) [stand-in for the effect]. */
+        float push[8], a = w->disc[3] * 0.0174533f, ux = sinf(a), uz = cosf(a), sx = uz, sz = -ux;
+        for (i = 0; i < 8; ++i) push[i] = sw_flames >= SWITCH_PER_FLAME * (i + 1) ? 23.0f : 0.0f;
+        gim_switch_pose(w->sw_number, sw_spin, sw_spin2, push, 0);
+        for (i = 0; i < 8; ++i) {
+            float b = 45.0f * i * 0.0174533f, r = 108.0f, still[3] = {0.0f, 0.0f, 0.0f};
+            float at[3] = {w->disc[0] + ux * 8.0f + sx * sinf(b) * r, w->disc[1] + cosf(b) * r, w->disc[2] + uz * 8.0f + sz * sinf(b) * r};
+            if (push[i] > 0.0f) fx_mote(at, still, 26.0f + 4.0f * sinf(seal_time * 0.3f + i), 2.0f, 0.05f, 0xff3030ffu);
+        }
+    } else {
         float a = w->disc[3] * 0.0174533f, ux = sinf(a), uz = cosf(a);   /* the disc's normal; its plane is (side, up) */
         float sx = uz, sz = -ux, px = w->disc[0] + ux * 8.0f, py = w->disc[1], pz = w->disc[2] + uz * 8.0f;
         draw_box(w->disc[0], py - 22.0f, py + 22.0f, w->disc[2], 22.0f, 22.0f, w->disc[3], 0xff505860u, 0xff30363cu);
@@ -3333,7 +3386,11 @@ static void seal_draw(void) {
                      w->disc[3], lit ? 0xff3050ffu : 0xff202028u, lit ? 0xff2030c0u : 0xff101018u);
         }
     }
-    if (seal_alpha > 0.0f) {
+    if (seal_alpha > 0.0f && gim_has_seal(w->seal_number)) {
+        /* CStageSetSeal: its own board, tinted by the colour (1 blue), alpha up to 0x40, shimmering [the shimmer's
+         * the port's: FUN_0031c390's random walk isn't ported]. */
+        gim_seal_draw(w->seal_number, w->colour, seal_alpha * (0.85f + 0.15f * sinf(seal_time * 0.21f)));
+    } else if (seal_alpha > 0.0f) {
         /* CStageSetSeal: the board tinted by the colour (1 blue: RGB 0x30 0x40 0x80), alpha up to 0x40, shimmering. */
         float c = cosf(w->board[6]), sn = sinf(w->board[6]), hw = w->board[3], y0 = w->board[4], y1 = w->board[5];
         float x0 = w->board[0] - c * hw, z0 = w->board[2] + sn * hw, x1 = w->board[0] + c * hw, z1 = w->board[2] - sn * hw;
@@ -3359,7 +3416,8 @@ static void seal_draw(void) {
         sceGuDepthMask(GU_FALSE);
     }
 }
-/* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
+/* The port's glow (a key item's if its effect can't start, the Bloody Palace's portals): a soft core and sparks
+ * rising off it. */
 static void key_glow(const float *p) {
     float core[3] = {p[0], p[1] + 70.0f, p[2]}, still[3] = {0.0f, 0.0f, 0.0f};
     fx_mote(core, still, 70.0f + 12.0f * sinf(goal_spin * 0.15f), 60.0f, 0.05f, 0xffa0f0ffu);
@@ -3370,6 +3428,8 @@ static void key_glow(const float *p) {
         fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
     }
 }
+/* A key item (CItemKey) lies as the game's effect V160 (gimmick_models.c). */
+static void key_item_draw(const float *p) { if (!gim_key_item(p)) key_glow(p); }
 static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
@@ -3396,7 +3456,19 @@ static void mission_gimmicks_draw(void) {
     if (l) {
         /* The lift and its switch are the room's own models (baked into the stage, the lift raised there). */
         stage_set_lift(lift_y - l->low);
+        /* Its switch, from its own model: flames out and spinning once struck [the port's lit state, not the
+         * switch's charge: the lift's switch takes one hit here]. */
+        {
+            static float lift_sw_spin;
+            float push[8];
+            int k, n;
+            if (lift_on) lift_sw_spin += 1.0f;
+            for (k = 0; k < 8; ++k) push[k] = lift_on ? 23.0f : 0.0f;
+            for (k = 0; (n = gim_switch_number(k)) >= 0; ++k)
+                gim_switch_pose(n, fmodf(lift_sw_spin * 60.0f, 180.0f), fmodf(lift_sw_spin * 20.0f, 180.0f), push, 0);
+        }
     }
+    gim_spins_update(1.0f);   /* a draw a frame */
     seal_draw();
     fight_seals_draw();
     if (mission_choice.mission == 6) m6_draw();
@@ -3420,12 +3492,13 @@ static void mission_gimmicks_draw(void) {
     }
     info = &missions[mission_choice.mission - 1];
     goal_spin += 1.0f;
-    if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) key_glow(info->goal);
+    if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) key_item_draw(info->goal);
     {
         int i;
         for (i = 0; i < ROOM_KEY_ITEM_COUNT; ++i)
-            if (key_item_shown(&room_key_items[i])) key_glow(&room_key_items[i].x);
+            if (key_item_shown(&room_key_items[i])) key_item_draw(&room_key_items[i].x);
     }
+    gim_items_end_frame();
     sceGuEnable(GU_TEXTURE_2D);
 }
 
@@ -3509,10 +3582,24 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     enemy_set_count(0, player->x, player->z);
     orbs_clear();
     nfx_reset();
+    gim_items_reset();
     path_in_game_dir(path, sizeof(path), rooms[room].file);
     stage_load(path);
     breakables_enter(room);
+    gimmicks_enter(room);
+    sfx_room(room_number(room));   /* its footsteps */
     seal_enter(room);
+    if (room_number(room) == 144) {
+        /* The room's STE record (its data's STE chunk: type 2, id 0x71, at its place): G113 of its own pack, the rain. */
+        static const float rain_at[3] = {3555.0f, 4300.0f, 3545.0f};
+        nfx_spawn(NFX_ROOM144, 113 | 0x8000, rain_at, 0.0f, 1);
+    }
+    if (mission_choice.mission == 9 && room_number(room) == 203) {
+        /* 203's light beam: CRYSTAL 102 ("no 0", at its set's place), struck back by crest switch 100 (secret_missions.c's
+         * CStageSetCrystal); its end crystal lit is flag 34, seal 101's (seal_update). */
+        static const float origin[3] = {2050.0f, 375.0f, 5677.0f}, reset[3] = {2451.0f, 345.0f, 7185.0f};
+        sm_crystal_room(203, origin, reset, 0);
+    }
     msg_prev_room = mission_room != ROOM_NONE ? room_number(mission_room) : -1;   /* op 1e */
     music_room(mission_choice.mission, atoi(rooms[room].file + 5));   /* its on-enter BGM (event op 0x70) */
     msg_room_fought = 0;
@@ -3584,6 +3671,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     m19_enter(mission_mode && mission_choice.mission == 19 ? room_number(room) : -1, room_is_cleared(room) || item_state[57] != 0);   /* 404's hourglass */
     wagon_enter(mission_mode ? room_number(room) : -1, m10_previous == 240);   /* 216's ride (wagon.c): backward from 240 */
     enemy_set_room(mission_mode ? room_number(room) : -1);   /* Agni & Rudra's room places (enemy.c) */
+    needles_set_level(mission_difficulty());   /* [inferred] stands in for the value the game picks the level by */
     needles_enter(mission_mode ? room_number(room) : -1,
                   mission_choice.mission == 6 ? m6_skill_rearm() : room_number(room) == 610);
     if (mission_mode && mission_choice.mission == 7) m7_enter(room_number(room), item_state[45] != 0, s[1]);   /* mission7.c */
@@ -3632,6 +3720,13 @@ static void hazards_update(float dt, Player *player) {
     }
 }
 
+/* After the boss: EventTbl09 clears Mission 9 at 210's door 1 (demo 24), EventTbl11 Mission 11 as Dante crosses 217's
+ * area 0 again (demo 30). The demos play at the clear (mission_clear_demos). */
+static int boss_exit_reached(int mission, const Player *player) {
+    if (enemy_alive_count() > 0) return 0;
+    if (mission == 9) return fabsf(player->x - 744.0f) < 160.0f && fabsf(player->z - 3390.0f) < 120.0f;   /* door 1's box */
+    return player->x > 1911.0f && player->x < 4011.0f && player->z > 1629.0f && player->z < 1729.0f;    /* area 0 */
+}
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
@@ -3692,7 +3787,16 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         { unsigned int t0_ = sceKernelGetSystemTimeLow(); int end_ = credits_fight_update(dt*60); PROF_ADD(9, t0_); if(end_ && !(focus_cmp && cmp_enemy_audit==2)){enemy_kill_all();return 1;} }
     }
     if (mission_choice.mission == 7 && m7_fight_on()) done = 0;   /* 136's return ambush (mission7.c) */
-    fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
+    {
+        int was = fight_seal_on;
+        fight_seal_on = !done || enemy_alive_count() > 0 || (mission_choice.mission==13 && mission13_busy());
+        /* FUN_0031d270 / 0031c8b0: a seal fading in plays the system bank's 5, fading out 6 (once for the room's). */
+        if (fight_seal_on != was) {
+            int k, any = 0;
+            for (k = 0; k < rooms[mission_room].door_count; ++k) any |= door_seal(k) >= 0;
+            if (any) sfx_play(fight_seal_on ? 5 : 6, 0.0f, 1.0f);
+        }
+    }
     fight_seal_alpha += ((fight_seal_on ? 1.0f : 0.0f) - fight_seal_alpha) * fminf(1.0f, dt * 4.0f);
     const RoomLift *lift = room_lift();
     door_prompt_time = 0.0f;
@@ -4038,7 +4142,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
         return 0; /* The timed ending, not the arena's dummy exit, clears M20. */
     }
-    if (info->clear_room == mission_room && (mission_choice.mission != 12 || !item_is(34, 0)) && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
+    if (info->clear_room == mission_room && (mission_choice.mission != 12 || !item_is(34, 0)) && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && ((mission_choice.mission != 9 && mission_choice.mission != 11) || mission_clear_wait > 0.0f || boss_exit_reached(mission_choice.mission, player)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
@@ -5264,6 +5368,23 @@ int main(int argc, char *argv[]) {
         if (motions_loaded > 0) {
             anim_battle_weapon = dummy_ready && enemy_alive_count() > 0 ? player.melee_weapon : -1;
             anim_update(&anim, &player, dt);
+            {   /* Footsteps of his walk and run (their motions' 0x33 events, gen_sfx.py) on the floor's material. */
+                static int loco_m = -1;
+                static float loco_f;
+                int m = -1;
+                float f = 0.0f;
+                sfx_floor(player.on_ground ? stage_floor_material(player.x, player.y, player.z, 30.0f) : 0);
+                if (player.on_ground && !combat.action && anim.move_blend > 0.5f) {
+                    m = anim.run_blend > 0.5f ? MOTION_RUN : MOTION_WALK;
+                    f = m == MOTION_RUN ? anim.run_frame : anim.walk_frame;
+                }
+                if (m >= 0) {
+                    if (m != loco_m) sfx_motion(m, f - 0.5f, f);
+                    else if (f >= loco_f) sfx_motion(m, loco_f, f);
+                    else { sfx_motion(m, loco_f, 1.0e6f); sfx_motion(m, -1.0f, f); }   /* it looped */
+                }
+                loco_m = m; loco_f = f;
+            }
             {   /* the idle's root step (FUN_002e2d70), in his facing */
                 float s = sinf(player.yaw), c = cosf(player.yaw);
                 player.x += c * anim.idle_root_step[0] + s * anim.idle_root_step[1];
@@ -5561,16 +5682,16 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
                 if (report) {
-                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d pfx_dropped=%d pfx_peak=%d nfx_seqs=%d\narm_fx %s\n%s", cmp_frames, enemy_poses_done(), pfx_started(), pfx_dropped(), pfx_peak(), nfx_live_seqs(), arm_fx_log, enemy_giga_log());
+                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d pfx_dropped=%d pfx_peak=%d nfx_seqs=%d nfx_elements=%d\narm_fx %s\n%s", cmp_frames, enemy_poses_done(), pfx_started(), pfx_dropped(), pfx_peak(), nfx_live_seqs(), nfx_live_elements(), arm_fx_log, enemy_giga_log());
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
-                    { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }
+                    { char nl[160]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); if (mission_choice.mission == 7) { m7_status(nl, sizeof nl); fprintf(report, "%s\n", nl); } if (mission_choice.mission == 11) { m11_status(nl, sizeof nl); fprintf(report, "%s\n", nl); } }
                     { char ml[128]; msg_status(ml, sizeof ml); fprintf(report, "%s\n", ml); }
                     { char bl[96]; blocks_status(bl, sizeof bl); fprintf(report, "%s\n", bl); }
                     { char hl[96]; m19_status(hl, sizeof hl); fprintf(report, "%s\n", hl); }
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
                     { char cl[320]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
-                    { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u));
+                    { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); { int st[5]; sfx_step_stats(st); fprintf(report, "footsteps played=%d material=%d missing=%d room_sounds=%d room_missing=%d\n", st[0], st[1], st[2], st[3], st[4]); }
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
                     { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }

@@ -13,14 +13,15 @@
  * got (item_state 1), a fight over, the room, the room before and the mission. Flags and counters are its own,
  * set only by these blocks' own set_flag / counter ops: those the rest of the port keeps in C (a seal lit, a
  * trial done) aren't seen here, so a block gated on one of those reads them as clear. Everything else in a
- * block (enemy groups, doors, sounds, effects, gimmicks, items given or taken) is skipped: the missions' own
- * code does those. */
+ * block (enemy groups, doors, effects, gimmicks, items given or taken) is skipped: the missions' own code does
+ * those. Its sounds (se / se_3d) play when they're the room's, the system's or Dante's bank's. */
 #include <stdio.h>
 #include <string.h>
 
 #include "camera.h"
 #include "messages.h"
 #include "messages_runtime.h"
+#include "sfx.h"
 
 #define FLAG_MAX 256
 #define COUNTER_MAX 32
@@ -178,6 +179,13 @@ static int run(int b, const MsgEnv *env) {
         case 0x5b: if (env->warp) env->warp((float)o->a, (float)o->b, (float)o->c, (float)o->d); break;
         case 0x76: if (env->player) camera_follow_turn(env->player, (float)o->a); break;
         case 0x77: camera_follow_set((float)o->a, (float)o->b, (float)o->c, (float)o->d); break;
+        case 0x71: case 0x72:
+            /* se_3d / se [kind, id, bank, ...] (FUN_0020be20): kind 0 the room's bank (type 8, the bank its program
+             * offset), 1 the system bank, 4 Dante's; 2 (type 7) and 3 (type 2) aren't in the port. Not placed. */
+            if (o->a == 0) sfx_play_room(o->b, o->c, 0.0f, 1.0f);
+            else if (o->a == 1) sfx_play(o->b, 0.0f, 1.0f);
+            else if (o->a == 4) sfx_play_bank(SFX_BANK_DANTE, o->b, 0.0f, 1.0f);
+            break;
         default: state_op(o); break;
         }
         ++pc;

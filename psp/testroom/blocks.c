@@ -1,4 +1,4 @@
-/* Secret Mission 12's blocks (st611, "Final Ascension"): the room's STAY and DUMMY sets with a hit box, models
+/* Secret Mission 12's blocks (st611, "Final Ascension"), and Mission 17's God-cubes in 128 (the same sets): the room's STAY and DUMMY sets with a hit box, models
  * 0-32. Each moving one plays its own looping motion from the room's model pack (PNST slot 10N+1: a MOT of 1200
  * frames on one bone; decoded by tools/gimmicks.py set_motion, written by tools/gen_rooms.py write_blocks into a
  * local generated header): lifts, slides, spins and blocks swinging round the tower's middle. prepare_stage.py
@@ -18,7 +18,7 @@
 #include "blocks_runtime.h"
 
 #define LOOP_FRAMES 1200.0f
-static int on;
+static int on, room_on = -1;   /* the room whose blocks run (611, or Mission 17's 128) */
 static float clock_;
 static float now_c[BLOCK_SET_COUNT][3], yaw_now[BLOCK_SET_COUNT];   /* each box's middle and yaw this frame */
 static float move_now[BLOCK_SET_COUNT][3], turn_now[BLOCK_SET_COUNT][3];
@@ -50,6 +50,7 @@ static void pose_all(void) {
     for (i = 0; i < BLOCK_SET_COUNT; ++i) {
         const BlockSet *b = &block_sets[i];
         float rel[3], turned[3];
+        if (b->room != room_on) continue;
         memset(move_now[i], 0, sizeof move_now[i]); memset(turn_now[i], 0, sizeof turn_now[i]);
         for (k = 0; k < b->count; ++k) {
             const BlockChannel *c = &block_channels[b->first + k];
@@ -65,7 +66,9 @@ static void pose_all(void) {
 }
 
 void blocks_enter(int room) {
-    on = room == 611;
+    int i;
+    on = 0; room_on = room;
+    for (i = 0; i < BLOCK_SET_COUNT; ++i) if (block_sets[i].room == room) on = 1;
     clock_ = 0.0f;
     riding = -1;
     if (on) pose_all();
@@ -92,6 +95,7 @@ void blocks_update(float dt, float *x, float *y, float *z, int on_ground) {
     riding = -1;
     for (k = 0; on_ground && k < BLOCK_SET_COUNT; ++k) {
         const BlockSet *b = &block_sets[k];
+        if (b->room != room_on) continue;
         float dx = *x - now_c[k][0], dz = *z - now_c[k][2], c = cosf(yaw_now[k]), s = sinf(yaw_now[k]);
         float lx = c * dx - s * dz, lz = s * dx + c * dz, top = now_c[k][1] + b->half[1];
         if (fabsf(lx) <= b->half[0] && fabsf(lz) <= b->half[2] && fabsf(*y - top) < 40.0f) riding = k;
@@ -104,6 +108,7 @@ int blocks_floor(float x, float y, float z, float step, float *out) {
     if (!on) return 0;
     for (i = 0; i < BLOCK_SET_COUNT; ++i) {
         const BlockSet *b = &block_sets[i];
+        if (b->room != room_on) continue;
         float dx = x - now_c[i][0], dz = z - now_c[i][2], c = cosf(yaw_now[i]), s = sinf(yaw_now[i]);
         float lx = c * dx - s * dz, lz = s * dx + c * dz, top = now_c[i][1] + b->half[1];
         if (fabsf(lx) > b->half[0] || fabsf(lz) > b->half[2]) continue;

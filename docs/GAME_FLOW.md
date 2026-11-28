@@ -115,8 +115,9 @@ to 111 after 104, 110's to 111 never (it's entered from 112), and 112's to 113 i
 
 The lift and its switch are the room's own models (`tools/gimmicks.py` bakes a lift room's LIFT and SWITCH
 sets into its stage; the lift's batches are tagged 254 and drawn raised to its height). The
-Astronomical Board lies as a glow with sparks rising off it: key items (`CItemKey`, vtable `0x60d820`) are an
-effect with a pick-up range of 200 cm, not a model. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
+Astronomical Board lies as the game's own glint: key items (`CItemKey`, vtable `0x60d820`) are an effect, V160 from
+static_effect.pac (FUN_00428600: `FUN_00208580(3, 0xa0)`, looping; a 4-frame white flash and a flat streak growing
+over 30 frames), with a pick-up range of 200 cm (FUN_004289d0), not a model. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
 in the stage collision), the room gets a pad at that height. 112's stairs don't collapse: the pit is open,
 and falling in is what takes Dante to 104.
 
@@ -189,9 +190,13 @@ script's time. The barrier is drawn as a purple mist and makes the enemies take 
 a wall shuts the corridor during the fight. 122's rubble (STAY 100) and its walls go when the second Essence
 is placed (`STORY_WALLS` in `gen_rooms.py`). Stand-ins and estimates:
 
-- **125's spike trap** (`CStageSetNeedle`) isn't decoded. Rows of spikes come down the corridor from the left
-  wall, the right wall, the floor or the ceiling, from the walkthrough's description; their speed and spacing
-  are estimates. The trap lives in `psp/testroom/needles.c`, shared with Mission 17's 131 and Secret Mission 11.
+- **125's spike trap** (`CStageSetNeedle`, vtable 0x60b420, update FUN_003df400) runs as the game's code does
+  (`psp/testroom/needles.c`, shared with Mission 17's 131 and Secret Mission 11): rows of three spiked panels (the
+  set's own model) thrust from the ceiling, the floor or a wall (type 0 one row of a random kind; types 1 and 2 a
+  ceiling-or-floor row with a wall row), each panel drawing back, thrusting (sound 0xf), holding and pulling in, then
+  the row steps 600 cm down the corridor; a row starts every 70-150 frames by the level. Its hit is a box on each
+  panel, live while it thrusts and holds (attack 0 of 0x5bbb80, 1000). The level is taken from the difficulty
+  [inferred]: the game picks it by a value it reads through game +4 that isn't decoded.
 - **The barrier's effect** (each enemy's vfunc +0x114, through a sub-object) isn't decoded: "no damage" is the walkthrough's
   reading. Where 124's switches and corridor wall stand depends on the pillars' joint 1, which isn't read.
   The pillars don't rise.
@@ -219,9 +224,13 @@ Normal 4 Lusts and 3 Greeds) -> back up -> 138 Moonlight Mile -> 142 (demo 17) -
   taken in 105.)
 - 114's six super jump pads (CATAPULT) throw Dante to the next pad, the last to the top door [approximation: the arc].
   137's and 100's lifts run as one elevator, both ways, and take their door at the end of the run.
-- 105: the crest switch brings the ball down; break its shell (it rises and regrows if left alone) and the Skull shows
-  [approximation: CStageSetHang isn't decoded; hit counts are estimates, drawn as stand-in blocks].
-- 142's area 0 (demo 17) leads to 144. No cutscenes, and 144 has no rain.
+- 105: the crest switch brings the ball down (CStageSetHang, HANG 200: 20 cm a frame to 1200 below its root, then
+  1320 frames before it rises at 10 a frame and the switch must be struck again); its shell takes 1200 of damage in
+  five stages and breaks below 0, and the Skull shows. Stand-ins: the ball's EFM model drawn as blocks, its swing a
+  plain pendulum, Dante's damage 42 / 84 (`psp/testroom/mission7.c`).
+- 142's area 0 (demo 17) leads to 144. 144's rain is its STE record (its data's STE chunk: type 2, id 0x71, at
+  (3555, 4300, 3545)): G113 of the room's own effect pack (GDATA 502, native bank 28) with its particles P201 / P202.
+  Other rooms' STE effects aren't read.
 - Approximation: 127's door into 114 lands on the ground floor (start 0), not the 9000 balcony Dante drops from.
 - Damned Pawns (`pawn.inc`): their hops and strike as decoded; turns now use the shared chess master (`chess.c`, docs/CHESS.md), at the port's fixed rank0.
   Hell Greeds (`greed.inc`): the coffin's flight and summon as decoded; when they summon is an estimate.
@@ -264,11 +273,14 @@ In the port (rooms 201-210 are GDATA 516-552): the route plays from 201 to Missi
 script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run their group 0, a guess from the walkthrough
 (the script has no section for them). Stand-ins and estimates:
 
-- **203's light beam** (CRYSTAL 102) isn't decoded: lighting the reset panel (crest switch 100, damage as Mission 3's)
-  takes down seal 101 on the door to 204 instead of smashing the right crystals.
+- **203's light beam** (CRYSTAL 102, "no 0") runs Secret Mission 10's CStageSetCrystal code with layout 0 laid out
+  from the set's place (2050, 375, 5677): smash relays (two: those at (2850, 6477) and (2450, 6077)) until the beam
+  reaches the end crystal, which takes down seal 101 on the door to 204 (flag 34); a hit on crest switch 100 puts the
+  crystals back. Crystals are glows and the beam a line (their models aren't converted).
 - **205's and 207's bladed pillars** hurt on touch from their COLLISION cylinders (`atk`, `platk`; `parse_hazards`),
-  once a second; the 700 damage is an estimate and the blades don't turn.
-- Mission Clear comes as Nevan falls (`CLEAR_ROOMS`), not by 210's door 1 and demo 24. 206's item 31 isn't in.
+  once a second; the 700 damage is an estimate. Their blades turn as the pillar model's own looping motion has them
+  (four rings, two and four turns either way every 240 frames; `gimmicks.spin_parts`, `gimmick_models.c`).
+- With Nevan beaten, Mission Clear (and demo 24) comes at 210's door 1 (`boss_exit_reached` in main.c). 206's item 31 isn't in.
 - **Arachnes** (em010, GDATA 121, pack 5 in the table at 0x58e740) have their own model, motions and class (`enemy.c` The Arachne, ENEMY_SPECS H):
   they run at Dante, lunge and leap. Which motion is which is read from their root paths; their class's decision
   tables, the web shot and the spiderlings aren't in. Health is an estimate.
@@ -339,8 +351,8 @@ In the port: the route plays from 212 to Mission Clear in PPSSPP. Stand-ins and 
   charge on all fours, a leaping rush, a stomp that sends a pillar rolling at Dante, and a volley of light feathers
   after his body flashes; super armour, a gauge staggers him. Which motion is which is read from their root paths;
   timings, health and damage are estimates, and the pillars are glows that can't be broken.
-- **Soul Eaters** (class 16, em016) are their own port (ENEMY_SOUL). Mission Clear comes as Beowulf falls, not by
-  demo 30 at the shiny object.
+- **Soul Eaters** (class 16, em016) are their own port (ENEMY_SOUL). With Beowulf beaten, Mission Clear (and demo
+  30) comes as Dante crosses 217's area 0 again.
 
 ### Mission 13: "Chaos' warm welcome"
 
@@ -514,11 +526,9 @@ route above, start to Mission Clear.
 - 131's red pod throws Dante to its door (the Mission 7 catapults' code).
 - 143's area 0 takes Dante to 139; area 1 is the goal (walk up the slope to it and press O) once 139 is cleared.
 - The Abyss are their own port (ENEMY_ABYSS, its own decision table).
-- 131's spikes (NEEDLE 100, type 1) are Mission 6's stand-in (`psp/testroom/needles.c`): the set's code
-  (FUN_003df400 and after, about 4 KB driving the needles' own models and motions) isn't decoded. The rows start at
+- 131's spikes (NEEDLE 100, type 1) run as 125's (`psp/testroom/needles.c`), rows in pairs. The rows start at
   area 0 (x 185-1160, and its doorway) and stop at area 1 (x 8348-8648), once a mission (flag 1); they come down the
-  corridor (z 2491 +- 600) toward Dante as he walks toward the red pod, each from one wall, the floor or the ceiling,
-  1,000 damage a hit. Speed and spacing are Mission 6's estimates.
+  corridor toward Dante as he walks toward the red pod, 1,000 damage a hit.
 - No cutscenes; demo 48's item 35 isn't given in the mission itself: Doppelganger is owned from Mission 18 on.
 
 ### Mission 18: "Invading hell"
@@ -549,8 +559,11 @@ In the port (`psp/testroom/mission18.c`): the route plays from 400 to Mission Cl
 runs its boss from its existing file. Stand-ins and estimates:
 
 - The gates are doors (`EXTRA_DOORS`, Mission 18 only): a box 400 across and 800 high round each GATE's place.
-- **The bingo board's rule** (CStageSetBingo) isn't decoded: the board is read as 3 x 3 in door order (0 1 2 / 3 4 5 /
-  6 7 8), and a full row, column or diagonal opens the mirror (a glow; stepping into it ends the mission).
+- **The bingo board's rule** is CStageSetBingo's (vtable 0x613d90, FUN_004ed320 / 004ed8b0): cell c lights with flag c
+  (door c - 1's boss beaten); twelve links each join two cells (0x5dfd00) and light when both are; any of seven
+  patterns of links (0x5dfdc0) all lit opens the mirror: cells {3 4 5 6}, {1 3 5}, {1 2 3 8 9}, {1 2 4 5 7},
+  {2 3 4 6 7 8 9}, {1 2 3 4 6 7} or {2 3 4 5 7 8 9}, so three bosses (doors 0, 2 and 4) are the fewest. The mirror is a
+  glow; stepping into it ends the mission.
 - 419's heart is spawned as Mission 8 does it (`enemy_add_kind(ENEMY_LEVIATHAN, ...)`); in 417 Geryon starts in his
   ground phase (`geryon_boss_start_on_ground`, added for this). The bosses' arenas are their missions' rooms again, so
   their code runs unchanged.
@@ -660,7 +673,7 @@ port). The award, a Blue Orb Fragment, is only named.
 | 8 | 607 | Beat every enemy | 5 Arachnes, 2 Hell Vanguards |
 | 9 | 608 | Let no enemy escape the wagons | Dante's cart and the enemies' track from the room's TRUCK set (100: em_base 10000, 1325, 11625; its hit box). The timetable is CStageSetTruck's code, not decoded: the port runs the walkthrough's eight wagons (Wraths, with a Pride or a Lust on some), one at a time, 35 m ahead to 35 m behind at 2.5 m a second [estimate]. Any rider left when its wagon leaves fails it; all eight emptied clears it. The cart's cage (walls 0x18260001) stops Dante, not his shots: the port can't tell those walls apart, so in 608 shots pass every wall. Wagons are glows |
 | 10 | 609 | Solve the crystal puzzle | CStageSetCrystal, decoded: one of layouts 2-7 at random (the set's "no 2"), read from the game's executable at build time (`tools/gen_rooms.py` `write_crystals`). The beam leaves the start crystal on its heading, cell by cell on a 20 x 20 grid of 2 m cells; relays turn it, the cover stops it, the end crystal clears the mission. Melee smashes relays and the cover; striking crest switch 100 puts every crystal back. Crystals are glows, the beam a line |
-| 11 | 610 | Avoid the spikes and reach the Blue Orb | Its area 2. The spikes (NEEDLE 100, type 2) are Mission 6's stand-in, as in 131, the same room (`psp/testroom/needles.c`): no script runs them, so they start as Dante comes in and stop at area 1; restarted each time the mission's entered. The real set's code isn't decoded |
+| 11 | 610 | Avoid the spikes and reach the Blue Orb | Its area 2. The spikes (NEEDLE 100, type 2, level 4) run as 131's, the same room (`psp/testroom/needles.c`): no script runs them, so they start as Dante comes in and stop at area 1; restarted each time the mission's entered |
 | 12 | 611 | Reach the Blue Orb Fragment | Its area 0. The blocks (`psp/testroom/blocks.c`): the room's 32 STAY and DUMMY sets with hit boxes, 24 of them moving by their own 1200-frame motions from the room's model pack (PNST 10N+1, decoded by `tools/gimmicks.py` `set_motion`: lifts, slides, spins, blocks swinging round the tower's middle), drawn from the room's own models and posed each frame. Their tops are floors and carry Dante; their sides don't stop him, and a block spinning about x or z keeps a flat top [port]. The motion starts at 0 as he comes in. The sets' own code isn't decoded |
 
 ## Regression sweep (2026-11-14, master 98e84b6 with Missions 1-20)

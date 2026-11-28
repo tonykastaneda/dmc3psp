@@ -43,7 +43,7 @@ static int batch_blend(unsigned int flags) {
  * the camera just enough to win against their base surface. */
 #define DECAL_DEPTH_OFFSET 64
 
-typedef struct { unsigned int offset, walls, floors, wall_grid, floor_grid; } HitsHeader;
+typedef struct { unsigned int offset, walls, floors, wall_grid, floor_grid, materials; } HitsHeader;   /* materials: 0 none */
 
 static unsigned char *blob;
 static const Header *header;
@@ -53,6 +53,23 @@ void stage_hide_group(int number) { if (number > 0 && number < 256) group_hidden
 static unsigned char object_hidden[512];   /* by a batch's pad[1] (SCM object + 1; 256 + a prop's index): a cutscene's hide tracks */
 void stage_set_object_hidden(int number, int hidden) { if (number > 0 && number < 512) object_hidden[number] = (unsigned char)(hidden != 0); }
 #define LIFT_TAG 254   /* tools/gimmicks.py: a lift's batches */
+/* Crest switches' parts and seals' boards (tools/gimmicks.py switches_and_seals): tags GIM_TAG0.. Each can be posed by a
+ * world-space matrix, hidden, or drawn only on request (a seal, tinted and faded by gimmick_models.c). */
+#define GIM_TAG0 256
+#define GIM_TAGS 64
+static struct { unsigned char mode; ScePspFMatrix4 m; } gim[GIM_TAGS];   /* mode: 0 as baked, 1 posed, 2 hidden, 3 on request */
+static int gim_tag(int tag) { return tag >= GIM_TAG0 && tag < GIM_TAG0 + GIM_TAGS ? tag - GIM_TAG0 : -1; }
+void stage_set_group_matrix(int tag, const float m[12]) {
+    int g = gim_tag(tag);
+    if (g < 0) return;
+    if (!m) { gim[g].mode = 0; return; }
+    gim[g].m.x.x = m[0]; gim[g].m.x.y = m[4]; gim[g].m.x.z = m[8];  gim[g].m.x.w = 0.0f;
+    gim[g].m.y.x = m[1]; gim[g].m.y.y = m[5]; gim[g].m.y.z = m[9];  gim[g].m.y.w = 0.0f;
+    gim[g].m.z.x = m[2]; gim[g].m.z.y = m[6]; gim[g].m.z.z = m[10]; gim[g].m.z.w = 0.0f;
+    gim[g].m.w.x = m[3]; gim[g].m.w.y = m[7]; gim[g].m.w.z = m[11]; gim[g].m.w.w = 1.0f;
+    gim[g].mode = 1;
+}
+void stage_set_group_mode(int tag, int mode) { int g = gim_tag(tag); if (g >= 0) gim[g].mode = (unsigned char)mode; }
 static float lift_raise;
 static struct {float x,z,yaw,raise;int active;float pivot[3],move[3],turn[3],pivot2[3],scale[3];} group_pose[256];
 void stage_set_group_pose(int tag,float px,float pz,float yaw,float raise) {
@@ -147,6 +164,7 @@ int stage_load(const char *path) {
     memset(group_hidden, 0, sizeof(group_hidden));
     memset(object_hidden, 0, sizeof(object_hidden));
     memset(group_pose,0,sizeof(group_pose));
+    memset(gim, 0, sizeof(gim));
     lift_raise = 0.0f;
     stage_clear_boxes();   /* main.c adds the new room's */
     SceUID fd = sceIoOpen(path, PSP_O_RDONLY, 0);
@@ -367,14 +385,17 @@ void stage_draw(void) {
         if (b->flags & BATCH_SKY) continue;   /* drawn above */
         if (b->pad[0] && b->pad[0] < 256 && group_hidden[b->pad[0]]) continue;   /* a broken prop */
         if (b->pad[1] && b->pad[1] < 512 && object_hidden[b->pad[1]]) continue;   /* hidden by the cutscene */
+        int g = gim_tag((int)b->pad[0]);
+        if (g >= 0 && gim[g].mode >= 2) continue;   /* hidden, or drawn on request (stage_draw_group) */
         int posed=b->pad[0]<256 && group_pose[b->pad[0]].active;
-        int lift = b->pad[0] == LIFT_TAG || posed;
+        int lift = b->pad[0] == LIFT_TAG || posed || (g >= 0 && gim[g].mode == 1);
         for (k = 0; k < b->chunk_count; ++k) visible += chunk_visible[b->chunk_first + k];
         if (!visible && !lift) continue;   /* a lift isn't where its chunks were baked */
         if (lift) {
             ScePspFVector3 up = {0.0f, lift_raise, 0.0f};
             sceGumMatrixMode(GU_MODEL); sceGumLoadIdentity();
-            if (posed && group_pose[b->pad[0]].active == 2) {
+            if (g >= 0) sceGumLoadMatrix(&gim[g].m);
+            else if (posed && group_pose[b->pad[0]].active == 2) {
                 int tag = b->pad[0];
                 ScePspFVector3 at = {group_pose[tag].pivot[0] + group_pose[tag].move[0], group_pose[tag].pivot[1] + group_pose[tag].move[1],
                                      group_pose[tag].pivot[2] + group_pose[tag].move[2]};
@@ -454,6 +475,108 @@ void stage_draw(void) {
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+}
+
+/* One gimmick tag's batches on their own (a seal's board): the texture times the vertex colour, blended as
+ * src * src_fix + dst * dst_fix (fixed colours 0xBBGGRR), without depth writes, posed if it has a matrix. */
+void stage_draw_group(int tag, unsigned int src_fix, unsigned int dst_fix) {
+    const TexEntry *textures;
+    const Batch *batches;
+    const Chunk *chunks;
+    const unsigned char *vertices;
+    unsigned int i, k;
+    int g = gim_tag(tag);
+    if (!header || g < 0) return;
+    textures = (const TexEntry *)(blob + header->tex_table);
+    batches = (const Batch *)(blob + header->batch_table);
+    vertices = blob + header->vertex_offset;
+    chunks = (const Chunk *)(blob + header->chunk_table);
+    sceGumMatrixMode(GU_MODEL);
+    if (gim[g].mode == 1) sceGumLoadMatrix(&gim[g].m); else sceGumLoadIdentity();
+    sceGuDisable(GU_LIGHTING);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_DEPTH_TEST);
+    sceGuDepthMask(GU_TRUE);
+    sceGuDisable(GU_ALPHA_TEST);
+    if (stage_double) sceGuEnable(GU_FRAGMENT_2X); else sceGuDisable(GU_FRAGMENT_2X);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+    sceGuEnable(GU_BLEND);
+    sceGuBlendFunc(GU_ADD, GU_FIX, GU_FIX, src_fix, dst_fix);
+    /* A seal's board stands a few cm in front of its door (202's: 5 cm at z 3740): pulled toward the eye like a decal,
+     * twice as far, so the door's own decals don't win at the PSP's depth precision. */
+    sceGuDepthOffset(DECAL_DEPTH_OFFSET * 2);
+    for (i = 0; i < header->batches; ++i) {
+        const Batch *b = &batches[i];
+        if ((int)b->pad[0] != tag) continue;
+        bind_texture(&textures[b->texture]);
+        for (k = 0; k < b->chunk_count; ++k) {
+            const Chunk *c = &chunks[b->chunk_first + k];
+            sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                            (int)c->count, 0, vertices + (size_t)c->first * 24);
+        }
+    }
+    sceGumLoadIdentity();
+    sceGuDepthOffset(0);
+    sceGuDisable(GU_FRAGMENT_2X);
+    sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
+    sceGuDisable(GU_BLEND);
+    sceGuDepthMask(GU_FALSE);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuDisable(GU_TEXTURE_2D);   /* main.c's gimmick pass draws untextured after it */
+}
+
+/* One gimmick tag's batches drawn once more, placed by a world matrix (3 x 4 row-major): the spike traps' panels. Opaque
+ * batches as the stage's; alpha-tested ones tested, blended ones blended. */
+void stage_draw_group_at(int tag, const float m[12]) {
+    const TexEntry *textures;
+    const Batch *batches;
+    const Chunk *chunks;
+    const unsigned char *vertices;
+    ScePspFMatrix4 w;
+    unsigned int i, k;
+    if (!header) return;
+    textures = (const TexEntry *)(blob + header->tex_table);
+    batches = (const Batch *)(blob + header->batch_table);
+    vertices = blob + header->vertex_offset;
+    chunks = (const Chunk *)(blob + header->chunk_table);
+    w.x.x = m[0]; w.x.y = m[4]; w.x.z = m[8];  w.x.w = 0.0f;
+    w.y.x = m[1]; w.y.y = m[5]; w.y.z = m[9];  w.y.w = 0.0f;
+    w.z.x = m[2]; w.z.y = m[6]; w.z.z = m[10]; w.z.w = 0.0f;
+    w.w.x = m[3]; w.w.y = m[7]; w.w.z = m[11]; w.w.w = 1.0f;
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadMatrix(&w);
+    sceGuDisable(GU_LIGHTING);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_DEPTH_TEST);
+    if (stage_double) sceGuEnable(GU_FRAGMENT_2X); else sceGuDisable(GU_FRAGMENT_2X);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+    sceGuColor(0xffffffff);
+    for (i = 0; i < header->batches; ++i) {
+        const Batch *b = &batches[i];
+        if ((int)b->pad[0] != tag) continue;
+        bind_texture(&textures[b->texture]);
+        if (b->flags & BATCH_ALPHA) sceGuEnable(GU_ALPHA_TEST); else sceGuDisable(GU_ALPHA_TEST);
+        if (batch_blend(b->flags)) { sceGuEnable(GU_BLEND); sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0); sceGuDepthMask(GU_TRUE); }
+        else { sceGuDisable(GU_BLEND); sceGuDepthMask(GU_FALSE); }
+        for (k = 0; k < b->chunk_count; ++k) {
+            const Chunk *c = &chunks[b->chunk_first + k];
+            sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                            (int)c->count, 0, vertices + (size_t)c->first * 24);
+        }
+    }
+    sceGumLoadIdentity();
+    sceGuDisable(GU_FRAGMENT_2X);
+    sceGuDisable(GU_BLEND);
+    sceGuDepthMask(GU_FALSE);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuDisable(GU_TEXTURE_2D);   /* main.c's gimmick pass draws untextured after it */
 }
 
 /* ---- collision (the stage's HITS triangles) ---- */
@@ -719,6 +842,33 @@ int stage_walkable_below(float x, float z) {
 }
 
 static int shown_floor(float x, float y, float z, float step, float *out);
+/* The material (HITS byte 0) of the collision floor stage_floor would pick at (x, z) under y + step; 0 if none. */
+int stage_floor_material(float x, float y, float z, float step) {
+    const Cell *cell;
+    const unsigned int *idx;
+    unsigned int k;
+    float best = -1.0e30f;
+    int material = 0;
+    if (!header || !hits->materials) return 0;
+    cell = grid_cell(hits->floor_grid, x, z);
+    idx = grid_indices(hits->floor_grid);
+    if (!cell) return 0;
+    for (k = 0; k < cell->count; ++k) {
+        unsigned int i = hits->walls + idx[cell->first + k];
+        const float *t = hit_tri(i);
+        float x0 = t[0], z0 = t[2], x1 = t[3], z1 = t[5], x2 = t[6], z2 = t[8];
+        float d = (z1 - z2) * (x0 - x2) + (x2 - x1) * (z0 - z2), a, b, c, h;
+        if (d > -1e-6f && d < 1e-6f) continue;
+        a = ((z1 - z2) * (x - x2) + (x2 - x1) * (z - z2)) / d;
+        b = ((z2 - z0) * (x - x2) + (x0 - x2) * (z - z2)) / d;
+        c = 1.0f - a - b;
+        if (a < 0.0f || b < 0.0f || c < 0.0f) continue;
+        h = a * t[1] + b * t[4] + c * t[7];
+        if (h <= y + step && h > best) { best = h; material = blob[hits->materials + i]; }
+    }
+    return material;
+}
+
 int stage_floor(float x, float y, float z, float step, float *out) {
     int found = 0;
     unsigned int k;

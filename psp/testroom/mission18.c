@@ -5,8 +5,7 @@
  * ("the next trial shall be revealed to the one who unites the light") opens the mirror, GATE 501 at (4150, 4125,
  * 1225), to 406, where demo 50 ends the mission.
  *
- * The board's own rule (CStageSetBingo) isn't decoded: the port reads it as a 3 x 3 board in door order (0 1 2 / 3 4 5
- * / 6 7 8), and any full row, column or diagonal opens the mirror. The mirror is a glow. */
+ * The board's rule is CStageSetBingo's (bingo() below). The mirror is a glow. */
 #include <math.h>
 #include <stdio.h>
 #include "mission18.h"
@@ -34,10 +33,22 @@ void m18_cleared(int room) {
     if (room >= 412 && room <= 420) beaten |= 1u << (room - 412);
 }
 
+/* CStageSetBingo (vtable 0x613d90; FUN_004ed320 / 004ed8b0): cell c (1-9) is lit by flag c; twelve links (0x5dfd00)
+ * each join two cells and light once both are; the mirror's flag is set (sound 0x97) when every link of one of seven
+ * patterns (0x5dfdc0: a count, then link numbers) is lit. */
 static int bingo(void) {
-    static const unsigned short lines[8] = {0007, 0070, 0700, 0111, 0222, 0444, 0421, 0124};
-    int i;
-    for (i = 0; i < 8; ++i) if ((beaten & lines[i]) == lines[i]) return 1;
+    static const unsigned char links[12][2] = {{4, 6}, {3, 6}, {3, 8}, {9, 8}, {2, 9}, {2, 7}, {4, 7}, {4, 5}, {3, 5},
+                                               {1, 3}, {1, 5}, {1, 2}};
+    static const signed char patterns[7][8] = {{4, 0, 1, 7, 8}, {3, 8, 9, 10}, {5, 2, 3, 4, 9, 11}, {5, 5, 6, 7, 10, 11},
+                                               {7, 0, 1, 2, 3, 4, 5, 6}, {6, 0, 1, 5, 6, 9, 11}, {7, 2, 3, 4, 5, 6, 7, 8}};
+    unsigned int lit = 0;
+    int i, k;
+    for (i = 0; i < 12; ++i)
+        if ((beaten >> (links[i][0] - 1) & 1) && (beaten >> (links[i][1] - 1) & 1)) lit |= 1u << i;
+    for (i = 0; i < 7; ++i) {
+        for (k = 1; k <= patterns[i][0] && (lit >> patterns[i][k] & 1); ++k) {}
+        if (k > patterns[i][0]) return 1;
+    }
     return 0;
 }
 

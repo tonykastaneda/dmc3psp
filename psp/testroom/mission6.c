@@ -14,10 +14,10 @@
  *     then goes out. All beaten: the barrier's gone and the Essence of Fighting (item 40) is there.
  * 127 The Dark Corridor: its area 0 plays demo 15, which clears the mission.
  *
- * Stand-ins: the Essences lie as a glow (as Mission 4's Astronomical Board); the switches are drawn as Mission 3's
- * is; the barrier is a purple mist on each enemy and makes them take no damage (the walkthrough: "lighting the two
+ * The Essences lie as the game's key-item glint (V160, gimmick_models.c); the switches are their own models.
+ * Stand-ins: the barrier is a purple mist on each enemy and makes them take no damage (the walkthrough: "lighting the two
  * structures removes the barriers"; what the barrier does in the game, through each enemy's vfunc +0x114, isn't
- * decoded). The pillars don't rise, and the cameras, messages and the demo aren't in. */
+ * decoded). The cameras, messages and the demo aren't in. */
 #include <math.h>
 #include <string.h>
 #include <pspgu.h>
@@ -28,6 +28,7 @@
 #include "enemy.h"
 #include "fx.h"
 #include "stage.h"
+#include "gimmick_models.h"
 
 #define STORY_TAG 128            /* tools/gimmicks.py: STAY set n >= 100 is stage tag 128 + n - 100 */
 #define RUBBLE_TAG (STORY_TAG + 0)
@@ -49,6 +50,50 @@ static float caption_time;
 static const char *caption;
 static float spin;
 
+/* ---- 124's pillars (STAY 110, 111: model 4) and stair (STAY 112: model 5, four steps), from EventTbl06 block 1:
+ * gimmick_cmd2c [110, 1] as the fight starts, then (a camera and 60 frames on) [111, 1] and [112, 1]; cleared,
+ * [110 / 111 / 112, 2]. Motion 1 raises a pillar 300 over frames 2-120 and the steps 425 / 500 / 600 / 750 over
+ * 20-140 / 50-170 / 69-200 / 90-235; motion 2 lowers them (1-120; 30-148 / 70-190 / 100-230 / 130-275). The keys
+ * are Hermite: the port eases each with a smoothstep. The switches ride on the pillars (their joint 1). The camera's
+ * length before 111 rises isn't read (60 frames here [estimate]). */
+#define PILLAR_TAG(n) (128 + (n) - 100)   /* tools/gimmicks.py story_tag */
+#define STEP_TAG 300                       /* tools/gimmicks.py BONE_TAG: 112's steps, bones 1-4 */
+static float rise_clock = -1.0f, lower_clock = -1.0f;
+static float ease(float t, float t0, float t1) {
+    float u = t <= t0 ? 0.0f : t >= t1 ? 1.0f : (t - t0) / (t1 - t0);
+    return u * u * (3.0f - 2.0f * u);
+}
+/* How high pillar p (0: 110, 1: 111) is now, 0-300. */
+static float pillar_rise(int p) {
+    float up, t;
+    if (rise_clock < 0.0f) return 0.0f;
+    t = rise_clock - (p ? 120.0f : 0.0f);
+    up = 300.0f * ease(t, 2.0f, 120.0f);
+    if (lower_clock >= 0.0f) up *= 1.0f - ease(lower_clock, 1.0f, 120.0f);
+    return up;
+}
+static float step_rise(int b) {
+    static const float top[4] = {425, 500, 600, 750}, up0[4] = {20, 50, 69, 90}, up1[4] = {140, 170, 200, 235};
+    static const float dn0[4] = {30, 70, 100, 130}, dn1[4] = {148, 190, 230, 275};
+    float h;
+    if (rise_clock < 0.0f) return 0.0f;
+    h = top[b] * ease(rise_clock - 120.0f, up0[b], up1[b]);
+    if (lower_clock >= 0.0f) h *= 1.0f - ease(lower_clock, dn0[b], dn1[b]);
+    return h;
+}
+static void pillars_pose(void) {
+    static const float pivot[3] = {0.0f, 0.0f, 0.0f}, still[3] = {0.0f, 0.0f, 0.0f};
+    int k;
+    for (k = 0; k < 2; ++k) {
+        float move[3] = {0.0f, pillar_rise(k), 0.0f};
+        stage_set_group_motion(PILLAR_TAG(110 + k), pivot, move, still);
+    }
+    for (k = 0; k < 4; ++k) {
+        float m[12] = {1, 0, 0, 0, 0, 1, 0, step_rise(k), 0, 0, 1, 0};
+        stage_set_group_matrix(STEP_TAG + k, m);
+    }
+}
+
 /* ---- 124's crest switches (CStageSetSwitch, docs/BAR_CRANK_SPEC.md section 3). Attached to pillars 110 (3400, 0,
  * 2500) and 111 (1400, 0, 2500, turned 180), at their joint 1 (-112, -160, 0) facing the room's middle. The joint's
  * height isn't read: 140 above the floor, as room 3's switch. */
@@ -58,7 +103,7 @@ static float spin;
 #define SW_WINDOW 120.0f
 #define SW_DRAIN 2.0f
 #define SW_RADIUS 60.0f
-typedef struct { float x, y, z, yaw; float charge, wing, flames, window, spin, spin2, lit_left; int lit; } Switch;
+typedef struct { float x, y, z, yaw; float charge, wing, flames, window, spin, spin2, lit_left; int lit; GimSwitchSound sound; } Switch;
 static Switch sw[2];
 static const float sw_place[2][4] = {{3288.0f, 140.0f, 2500.0f, -90.0f}, {1512.0f, 140.0f, 2500.0f, 90.0f}};
 static int barrier_on;
@@ -104,6 +149,7 @@ int m6_enter(int room) {
         restart = next == 4;
     }
     wisdom_from_self = 0;
+    if (room == 124) { rise_clock = warrior_done ? -1.0f : 0.0f; lower_clock = -1.0f; }   /* block 1 starts as he comes in */
     if (room == 124 && !warrior_done) {
         /* Block 1: the switches go dark (thread 2 clears flags 32-34), the barrier goes up, group 0 comes. */
         for (i = 0; i < 2; ++i) {
@@ -170,6 +216,7 @@ static void switches_update(float frames) {
                 s->wing = fmaxf(s->wing - drain, 0.0f);
                 if (s->charge <= 100.0f) s->flames = fmaxf(s->flames - drain, 0.0f);
             }
+            gim_switch_sounds(&s->sound, s->charge, s->window, 0, frames);
             if (s->charge >= SW_CHARGE && s->flames >= SW_FLAMES) { s->lit = 1; s->lit_left = lit_time(); }
         } else {
             /* FUN_003055c0: the lit timer; at its end the flag is cleared and the switch resets (FUN_00305fd0). */
@@ -185,6 +232,12 @@ int m6_update(float dt, unsigned int pressed, float x, float y, float z, int on_
     int e;
     float frames = dt * 60.0f;
     spin += frames;
+    if (room_now == 124) {
+        if (rise_clock >= 0.0f) rise_clock += frames;
+        if (lower_clock >= 0.0f) lower_clock += frames;
+        if (warrior_done && rise_clock >= 0.0f && lower_clock < 0.0f) lower_clock = 0.0f;   /* cleared: motion 2 */
+        for (e = 0; e < 2; ++e) sw[e].y = sw_place[e][1] - 300.0f + pillar_rise(e);
+    }
     if (caption_time > 0.0f) caption_time -= dt;
     for (e = 0; e < 3; ++e) {
         if (essence_at[e].room != room_now || !item_shown(e) || fight_on || !near_item(e, x, y, z)) continue;
@@ -246,6 +299,7 @@ void m6_hit(float x, float y, float z, float yaw, float reach, int heavy) {
             if (s->charge > 100.0f) s->wing = fminf(s->wing + amount, 201.0f);
         } else s->flames = fminf(s->flames + amount, SW_FLAMES + 1.0f);
         s->window = SW_WINDOW;
+        gim_switch_hit_sound(&s->sound);
         {
             float at[3] = {s->x, s->y, s->z};
             fx_hit_spark(at);
@@ -280,10 +334,22 @@ static void box(float x, float y0, float y1, float z, float hx, float hz, float 
 }
 
 /* main.c's seal_draw stand-in for a switch: a hub, 8 blades turning with the charge, 8 flames on a 108 cm circle. */
-static void switch_draw(const Switch *s) {
+static void switch_draw(const Switch *s, int number) {
     float a = s->yaw * 0.0174533f, ux = sinf(a), uz = cosf(a);
     float sx = uz, sz = -ux, px = s->x + ux * 8.0f, py = s->y, pz = s->z + uz * 8.0f;
     int i;
+    if (gim_has_switch(number)) {
+        /* Its own model (gimmick_models.c) on the pillar's joint (the joint's place is the port's, above), lit flames
+         * as glows [stand-in for effect 0x181]. */
+        float push[8], at[4] = {s->x, s->y, s->z, s->yaw}, still[3] = {0.0f, 0.0f, 0.0f};
+        for (i = 0; i < 8; ++i) push[i] = s->lit || s->flames >= SW_PER_FLAME * (i + 1) ? 23.0f : 0.0f;
+        gim_switch_pose(number, s->spin, s->spin2, push, at);
+        for (i = 0; i < 8; ++i) {
+            float b = 45.0f * i * 0.0174533f, r = 108.0f, p[3] = {px + sx * sinf(b) * r, py + cosf(b) * r, pz + sz * sinf(b) * r};
+            if (push[i] > 0.0f) fx_mote(p, still, 26.0f, 2.0f, 0.05f, 0xff3030ffu);
+        }
+        return;
+    }
     box(s->x, py - 22.0f, py + 22.0f, s->z, 22.0f, 22.0f, s->yaw, 0xff505860u, 0xff30363cu);
     for (i = 0; i < 8; ++i) {
         float b = (s->spin + 45.0f * i) * 0.0174533f, r = 50.0f;
@@ -299,12 +365,15 @@ static void switch_draw(const Switch *s) {
 }
 
 void m6_draw(void) {
+    if (room_now == 124) pillars_pose();
     int e, i;
     for (e = 0; e < 3; ++e) {
-        /* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
+        /* A key item (CItemKey): its effect V160; the port's glow (a soft core and sparks) only if that can't start. */
         float core[3], still[3] = {0.0f, 0.0f, 0.0f};
         if (essence_at[e].room != room_now || !item_shown(e)) continue;
-        core[0] = essence_at[e].x; core[1] = essence_at[e].y + 70.0f; core[2] = essence_at[e].z;
+        core[0] = essence_at[e].x; core[1] = essence_at[e].y; core[2] = essence_at[e].z;
+        if (gim_key_item(core)) continue;   /* CItemKey's V160 */
+        core[1] += 70.0f;
         fx_mote(core, still, 70.0f + 12.0f * sinf(spin * 0.15f), 60.0f, 0.05f, 0xffa0f0ffu);
         if (((int)spin % 4) == 0) {
             unsigned int r = fx_random_u32();
@@ -313,10 +382,14 @@ void m6_draw(void) {
             fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
         }
     }
+    if (room_now == 124 && warrior_done) {
+        /* Done: the switches stay on their pillars, gone down with them (still, as baked unlit). */
+        for (i = 0; i < 2; ++i) { Switch still = sw[i]; still.x = sw_place[i][0]; still.y = sw_place[i][1] - 300.0f + pillar_rise(i); still.z = sw_place[i][2]; still.yaw = sw_place[i][3]; switch_draw(&still, 100 + i); }
+    }
     if (room_now == 124 && !warrior_done) {
         float feet[16][3];
         int n = enemy_alive_positions(feet, 16);
-        for (i = 0; i < 2; ++i) switch_draw(&sw[i]);
+        for (i = 0; i < 2; ++i) switch_draw(&sw[i], 100 + i);
         if (barrier_on && ((int)spin % 3) == 0) {
             /* The barrier: a purple mist rising off each one. */
             for (i = 0; i < n; ++i) {

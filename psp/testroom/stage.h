@@ -30,6 +30,8 @@ int stage_last_chunks_drawn(void);  /* chunks that passed culling last draw */
 /* Highest floor at (x, z) that is no higher than y + step; returns 0 and
  * leaves *out untouched if there is no floor below. */
 int stage_floor(float x, float y, float z, float step, float *out);
+/* The material of that collision floor (the game's HITS byte 0: a footstep's program in the room's bank), 0 if none. */
+int stage_floor_material(float x, float y, float z, float step);
 /* The drawn floor within 60 cm of y (a collision floor's height): where a shadow goes. 0 if none. */
 int stage_shown_floor(float x, float y, float z, float *out);
 /* Whether the game's collision has walkable floor near (x, z) (a grid cell with floor triangles): what's
@@ -49,6 +51,14 @@ void stage_set_group_motion(int tag, const float pivot[3], const float move[3], 
 /* The same, then scaled by scale about pivot2 first (the sand in Mission 19's hourglass). */
 void stage_set_group_motion_scaled(int tag, const float pivot[3], const float move[3], const float turn[3],
                                    const float pivot2[3], const float scale[3]);
+/* Gimmick tags (256-319, tools/gimmicks.py switches_and_seals): a world-space pose, 3 x 4 row-major (NULL: as baked),
+ * and the mode (0 as baked, 1 posed, 2 hidden, 3 drawn only by stage_draw_group). Loading resets them. */
+void stage_set_group_matrix(int tag, const float m[12]);
+void stage_set_group_mode(int tag, int mode);
+/* One gimmick tag's batches, blended src * src_fix + dst * dst_fix (fixed colours 0xBBGGRR). */
+void stage_draw_group(int tag, unsigned int src_fix, unsigned int dst_fix);
+/* One gimmick tag's batches once more, placed by a world matrix (3 x 4 row-major). */
+void stage_draw_group_at(int tag, const float m[12]);
 void stage_clear_boxes(void);
 void stage_add_box(float x, float y, float z, float hx, float hy, float hz, float yaw, int tag);
 /* A negative box tag enables its walkable top (permanent authored platforms). */

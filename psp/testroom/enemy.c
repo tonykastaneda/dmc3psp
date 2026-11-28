@@ -79,9 +79,7 @@ enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't at
 };
 enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
 
-/* How long after one enemy is let attack before another may. The game passes 3.0 to a manager this
- * port hasn't read (FUN_00369180). Measured on the HD Collection in Turbo: 49 swings from 4 enemies,
- * never under 3.0 real seconds apart, so it doesn't scale with game speed. */
+/* FUN_00369180 reserves the first free manager slot for its caller's duration. */
 #define ATTACK_TOKEN_SECONDS 3.0f
 #include "attack_slots.h"
 /* The game's value comes from a mission object not read yet. 0 gives what Mission 2 on Easy shows
@@ -225,7 +223,7 @@ static int landed_heavy;
 static float landed_damage = -1.0f;
 static int landed_by = -1;   /* the enemy whose blow last landed (enemy_guarded) */
 static int landed_kind = -1;   /* the attack record's kind (+0x18), -1 unknown */
-static AttackSlots attack_slots = {1,{0}};
+static AttackSlots attack_slots = {.limit = 1};
 void enemy_set_attack_slot_limit(int limit) { attack_slots_reset(&attack_slots,limit); }
 static int mortal;
 static int dummy_kind;
@@ -1618,10 +1616,9 @@ static void plan_set(int p) {
 
 /* Pick from the game's lists: which list by whether it may attack, which row by how far Dante is. */
 static void decide(float distance) {
-    int attack = attack_slots_available(&attack_slots), band = 0, column = 0, i;
+    int attack = attack_slots_take(&attack_slots, ATTACK_TOKEN_SECONDS), band = 0, column = 0, i;
     const EnemyAiRow *row;
     float r, total = 0.0f;
-    if (attack) attack_slots_take(&attack_slots,ATTACK_TOKEN_SECONDS);
     e->gauge = 0.0f;
     const EnemyAiClass *ai = ai_class();
     while (band < ai->band_count - 1 && distance >= ai->bands[band]) ++band;
@@ -2581,7 +2578,7 @@ void enemy_update(float dt, float px, float py, float pz) {
     }
     chess_update(&chess_master,chess_actors,ENEMY_MAX,0,ai_unit); /* existing AI uses rank0 */
     ++trace_tick;
-    attack_slots_update(&attack_slots,dt / (player_step_scale > 0.0f ? player_step_scale : 1.0f));
+    attack_slots_update(&attack_slots, dt);   /* 00425850 subtracts the simulation frame step / 60. */
     for (i = 0; i < ENEMY_MAX; ++i) {
         float was_x, was_y, was_z;
         e = &enemies[i];

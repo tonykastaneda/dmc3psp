@@ -5,8 +5,12 @@
  * passage (the port hides STAY 200), door 1 (to 239) is enabled, and group 2 runs. Until then door 0 is locked and
  * door 1 disabled (block 1).
  *
- * Estimates: a hit pushes a block 300 x its zure (1.5, 1.0) over a quarter of a second; the blocks are drawn as
- * stone boxes (model 4 isn't converted) and don't block Dante. */
+ * The blocks are CStageSetSlide (vtable 0x6103e0): a melee hit from behind them (the side against their dir,
+ * FUN_004822c0) adds the hit's damage x zure to how far they're to go, which they work off at 10 cm a frame
+ * (FUN_00481fd0) until their dist is used up; then the room bank's 0x94 (bank 0x12) and the flag (FUN_004824f0).
+ * Every hit plays 0x93. Stand-ins: Dante's damage (42 a light hit, 84 heavy), the 0.3 slowdown the update takes when
+ * FUN_001fa170(0x1e53720, 0x40) is under 0.95 isn't read (always 10), the blocks are drawn as stone boxes (model 4
+ * isn't converted) and don't block Dante. */
 #include <math.h>
 #include <stdio.h>
 #include <pspgu.h>
@@ -14,9 +18,10 @@
 #include "mission11.h"
 #include "fx.h"
 #include "stage.h"
+#include "sfx.h"
 
 #define PASSAGE_TAG (128 + 200 - 100)   /* STAY 200, tools/gimmicks.py story_tag */
-#define PUSH_FRAMES 15.0f
+#define SLIDE_SPEED 10.0f   /* cm a frame */
 
 typedef struct { float x, y, z, start_z, dist, zure, push, moved; int fitted; } Block;
 static const float block_place[2][5] = {{1475.0f, 900.0f, 2600.0f, 1400.0f, 1.5f}, {3525.0f, 900.0f, 5200.0f, 4000.0f, 1.0f}};
@@ -56,11 +61,12 @@ void m11_update(float dt) {
         Block *b = &blocks[i];
         float step;
         if (b->fitted || b->push <= 0.0f) continue;
-        step = fminf(b->push, 300.0f * b->zure / PUSH_FRAMES * frames);
+        step = fminf(b->push, SLIDE_SPEED * frames);
         b->push -= step;
         b->moved += step;
-        if (b->moved >= b->dist - 100.0f && b->push <= step) {   /* close enough: it drops into its hole */
+        if (b->moved >= b->dist) {   /* FUN_004824f0: in its hole */
             b->moved = b->dist; b->push = 0.0f; b->fitted = 1;
+            sfx_play_room(0x94, 0x12, 0.0f, 1.0f);
             {
                 float at[3] = {b->x, b->y, b->start_z - b->dist};
                 fx_dust(at);
@@ -84,7 +90,8 @@ void m11_hit(float x, float y, float z, float yaw, float reach, int heavy) {
         if (b->fitted || d > reach + 80.0f || fabsf(b->y - y) > 300.0f) continue;
         if (z < b->z) continue;                                   /* from behind: the +z side */
         if (d > 1.0f && (dx * sinf(yaw) + dz * cosf(yaw)) / d < 0.2f) continue;
-        b->push += heavy ? 600.0f * b->zure / 2.0f : 300.0f * b->zure;
+        b->push += (heavy ? 84.0f : 42.0f) * b->zure;   /* the hit's damage x zure */
+        sfx_play_room(0x93, 0x12, 0.0f, 1.0f);
         {
             float at[3] = {b->x, b->y + 100.0f, b->z + 50.0f};
             fx_hit_spark(at);

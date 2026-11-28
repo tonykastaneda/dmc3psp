@@ -322,8 +322,8 @@ ITEM_GATES += [(19, "405", "408", 57)]   # area 1's floor is the slope at 4185
 # room 3 binds switch 100 to flag 32 and puts seal 200, blue, on door 1 (to 004). (mission, room, switch set,
 # seal set, the door's next room, colour 0 red / 1 blue / 2 purple.)
 SWITCH_SEALS = [(3, "003", 100, 200, "004", 1)]
-# Mission 9's 203: the light-beam puzzle (CRYSTAL 102, flag 34) isn't decoded. Its reset panel, crest switch 100,
-# stands in: lit, it takes down seal 101 on the door to 204 (door_attach_seal [101, 1, 1, 1]).
+# Mission 9's 203: seal 101 on the door to 204 (door_attach_seal [101, 1, 1, 1]) goes when the light-beam puzzle
+# (CRYSTAL 102) is solved, flag 34 (main.c: secret_missions.c's crystal code); crest switch 100 is its reset panel.
 SWITCH_SEALS += [(9, "203", 100, 101, "204", 1)]
 SWITCH_HIT = ((0.0, 0.0, -20.0), 60.0)                  # sphere: local centre, radius (CStageSetSwitch +0x7c0)
 SEAL_BOX = ((0.0, 0.0, -50.0), (200.0, 180.0, 50.0))   # local centre, half sizes (CStageSetSeal +0xfc0, layout inferred)
@@ -348,6 +348,8 @@ def write_secret_orbs(iso_path, out):
 # Secret Mission 12's blocks (st611): every set with a hit box drawn from models 0-32, and the tag prepare_stage.py
 # gives the moving ones' batches (BLOCK_TAG + set number) so the runtime can pose them.
 BLOCK_ROOM, BLOCK_TAG = "611", 160
+# The rooms whose blocks run so: st611 and Mission 17's 128, the God-cube Chamber (its cubes are the same sets).
+BLOCK_ROOMS = ("611", "128")
 
 
 def block_sets(game_text, pnst):
@@ -366,14 +368,17 @@ def block_sets(game_text, pnst):
 def write_blocks(iso_path, out):
     """st611's blocks for psp/testroom/blocks.c: place, hit box, and each moving one's channels (keys as changes from
     frame 0, a 1200-frame loop), from the room's own PNST (gimmicks.set_motion)."""
-    with Iso9660(iso_path) as iso:
-        afs = AfsArchive(iso, "GDATA.AFS")
-        slot = SLOTS[BLOCK_ROOM]
-        stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
-    game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
     rows, keys, chans = [], [], []
-    for s, m in block_sets(game, stage[5]):
+    for room in BLOCK_ROOMS:
+      with Iso9660(iso_path) as iso:
+        afs = AfsArchive(iso, "GDATA.AFS")
+        slot = SLOTS[room]
+        stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
+      game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
+      for s, m in block_sets(game, stage[5]):
         pts = [v[:3] for tri, _ in gimmicks.model_triangles(gimmicks.models(stage[5])[s["model"]]) for v in tri]
+        if not pts:
+            continue
         centre = m[1] if m else tuple((min(q[k] for q in pts) + max(q[k] for q in pts)) / 2 for k in range(3))
         pivot = m[0] if m else centre
         first_chan = len(chans)
@@ -381,13 +386,13 @@ def write_blocks(iso_path, out):
             chans.append(f"{{{axis},{len(keys)},{len(ks)}}}")
             keys += [f"{{{f},{v:.3f}f}}" for f, v in ks]
         box = s["box"]
-        rows.append(f"{{{s['number']},{BLOCK_TAG + s['number'] if m else 0},{first_chan},{len(chans) - first_chan},"
+        rows.append(f"{{{int(room)},{s['number']},{BLOCK_TAG + s['number'] if m else 0},{first_chan},{len(chans) - first_chan},"
                     f"{{{pivot[0]:.1f}f,{pivot[1]:.1f}f,{pivot[2]:.1f}f}},{{{centre[0] + box[0]:.1f}f,{centre[1] + box[1]:.1f}f,{centre[2] + box[2]:.1f}f}},"
                     f"{{{box[3]:.1f}f,{box[4]:.1f}f,{box[5]:.1f}f}}}}")
-    lines = ["/* Generated from the player's disc by tools/gen_rooms.py (write_blocks): Secret Mission 12's blocks. */",
+    lines = ["/* Generated from the player's disc by tools/gen_rooms.py (write_blocks): st611's and 128's blocks. */",
              "typedef struct { short frame; float value; } BlockKey;",
              "typedef struct { short axis, first, count; } BlockChannel;   /* axis 0-2 move x/y/z, 3-5 turn x/y/z */",
-             "typedef struct { short number, tag, first, count; float pivot[3], centre[3], half[3]; } BlockSet;",
+             "typedef struct { short room, number, tag, first, count; float pivot[3], centre[3], half[3]; } BlockSet;",
              f"#define BLOCK_SET_COUNT {len(rows)}", f"#define BLOCK_CHANNEL_COUNT {len(chans)}", f"#define BLOCK_KEY_COUNT {len(keys)}",
              "static const BlockSet block_sets[BLOCK_SET_COUNT] = {" + ",\n".join(rows) + "};",
              "static const BlockChannel block_channels[BLOCK_CHANNEL_COUNT] = {" + ",".join(chans) + "};",
@@ -712,6 +717,9 @@ def main():
                 # Keep existing boxes' behaviour unchanged in other rooms.
                 rooms[name]["boxes"] += [(-1, c, h, a) for tag, c, h, a in authored
                                          if (tag, c, h, a) not in rooms[name]["boxes"]]
+            rooms[name]["gims"] = gimmicks.switches_and_seals(game, stage[5])[1] if len(stage) > 5 else []
+            rooms[name]["spins"] = ([(t, p, r) for t, p, r, _ in gimmicks.spin_parts(game, stage[5])[0]]
+                                    if slot in gimmicks.SPIN_SLOTS and len(stage) > 5 else [])
             rooms[name]["items"] = parse_items(data)
             rooms[name]["catapults"] = sorted((s for s in gimmicks.parse_game(game) if s["kind"] == "CATAPULT"),
                                               key=lambda s: s["pos"][1])
@@ -871,7 +879,7 @@ def main():
     lines.append("static const RoomStory room_story[] = {" + (",".join(cells) or "{0}") + "};")
     lines.append("/* A crest switch and the seal it takes down: the switch's hit sphere (x y z r) and place (x y z yaw), the")
     lines.append(" * seal's wall (centre, half sizes, yaw radians) and board (centre x y z, half width, bottom, top, yaw). */")
-    lines.append("typedef struct { short mission, room, next_number, colour; float hit[4], disc[4], box[7], board[7]; } RoomSwitchSeal;")
+    lines.append("typedef struct { short mission, room, next_number, colour, sw_number, seal_number; float hit[4], disc[4], box[7], board[7]; } RoomSwitchSeal;")
     cells = []
     for mission, name, sw_n, seal_n, door, colour in SWITCH_SEALS:
         if name not in index:
@@ -885,12 +893,43 @@ def main():
         yaw = math.radians(seal["rot"][1])
         board = tuple(seal["pos"]) + (SEAL_BOARD[0], seal["pos"][1] + SEAL_BOARD[1], seal["pos"][1] + SEAL_BOARD[2], yaw)
         f = lambda v: ",".join(f"{float(x):.1f}f" for x in v)
-        cells.append(f"{{{mission},{index[name]},{int(door)},{colour},{{{f(hit + (SWITCH_HIT[1],))}}},"
+        cells.append(f"{{{mission},{index[name]},{int(door)},{colour},{sw_n},{seal_n},{{{f(hit + (SWITCH_HIT[1],))}}},"
                      f"{{{f(tuple(sw['pos']) + (sw['rot'][1],))}}},{{{f(box + SEAL_BOX[1])},{yaw:.4f}f}},"
                      f"{{{f(board[:6])},{yaw:.4f}f}}}}")
         print(f"room {name}: switch {sw_n} hit {hit}, seal {seal_n} wall {box} +- {SEAL_BOX[1]}, door to {door}")
     lines.append(f"#define ROOM_SWITCH_SEAL_COUNT {len(cells)}")
     lines.append("static const RoomSwitchSeal room_switch_seals[] = {" + (",".join(cells) or "{0}") + "};")
+    # The crest switches and seals baked from their own models (gimmicks.switches_and_seals), for gimmick_models.c.
+    lines.append("/* A room's crest switch (kind 1) or seal (kind 0) drawn from its model: its set number, first stage tag, whether")
+    lines.append(" * it's on another set's joint (baked at the origin, placed by the runtime), the door a seal stands in (-1: none")
+    lines.append(" * within 4 m), and its baked place (x y z, then the 3 x 3 turn, row-major). tools/gimmicks.py. */")
+    lines.append("typedef struct { short room, number, kind, tag, attached, door; float o[3], r[9]; } RoomGimmick;")
+    cells = []
+    for name in names:
+        for g, kind, tag, attached in rooms[name]["gims"]:
+            door = -1
+            if kind == "SEAL" and not attached:
+                best = 400.0
+                for i, d in enumerate(rooms[name]["doors"]):
+                    dist = math.hypot(d["box"][0] - g["pos"][0], d["box"][2] - g["pos"][2])
+                    if dist < best and abs(d["box"][1] - g["pos"][1]) < 600.0:
+                        best, door = dist, i
+            if attached:
+                o, r = (0.0, 0.0, 0.0), gimmicks._rotation((0.0, 0.0, 0.0))
+            else:
+                o, r = g["pos"], gimmicks._rotation(g["rot"])
+            f = lambda v: ",".join(f"{float(x):.4f}f" for x in v)
+            cells.append(f"{{{index[name]},{g['number']},{int(kind == 'SWITCH')},{tag},{int(attached)},{door},"
+                         f"{{{f(o)}}},{{{f([r[i][k] for i in range(3) for k in range(3)])}}}}}")
+    lines.append(f"#define ROOM_GIMMICK_COUNT {len(cells)}")
+    lines.append("static const RoomGimmick room_gimmicks[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("/* A room's turning prop parts (gimmicks.spin_parts): stage tag, the axis's place, radians a frame about y. */")
+    lines.append("typedef struct { short room, tag; float x, z, rate; } RoomSpin;")
+    cells = [f"{{{index[name]},{t},{p[0]:.1f}f,{p[2]:.1f}f,{r:.6f}f}}" for name in names for t, p, r in rooms[name]["spins"]]
+    lines.append(f"#define ROOM_SPIN_COUNT {len(cells)}")
+    lines.append("static const RoomSpin room_spins[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("#define ROOM_GIMMICKS_DONE 1")
+    print(f"{len(cells)} switches and seals from their models")
     lines.append("#define SWITCH_CHARGE 300.0f      /* CStageSetSwitch: damage to spin it up, */")
     lines.append("#define SWITCH_FLAMES 560.0f      /* then to light all 8 flames, */")
     lines.append("#define SWITCH_PER_FLAME 70.0f")
