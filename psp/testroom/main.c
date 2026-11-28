@@ -5354,10 +5354,9 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 vergil_boss_dante(combat.action, player.yaw);
-                /* During a script's event the enemies wait (a stand-in: what the game's event mode stops in
-                 * them isn't decoded), so they don't set on a Dante who can't move. */
-                if (!(mission_mode && msg_event_on()))
-                    enemy_set_dante_yaw(player.yaw);
+                /* The game's event mode (op 49, FUN_0023e450) doesn't stop the enemies: their task category runs on.
+                 * What it stops is below (no blow lands while an event is on). */
+                enemy_set_dante_yaw(player.yaw);
             PROF_MARK();
             if (!credits_fight_frozen()) enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
             PROF_END(3);
@@ -5416,6 +5415,10 @@ int main(int argc, char *argv[]) {
             if (combat_dead_frames(&combat) > 60.0f && !gameover_active()) gameover_start(shop_state.owned[7]);
             {
             int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
+            /* While a script's event is on the game sets ctx+8, and its hit manager resolves nothing (FUN_002fa1f0 /
+             * FUN_002fa380 / FUN_002f9c50 return no record): no blow lands on Dante. Its attack shells (task category
+             * 4) stop too; the port's projectiles aren't held [not ported]. */
+            if (mission_mode && msg_event_on()) landed = 0;
             float blow_damage = 0.0f;
             if (landed) { blow_kind = enemy_attack_kind(heavy); blow_damage = enemy_attack_damage(); }
             { int h; for (h = 0; h < cmp_hitme_count; ++h) if (cmp_hitme[h][0] == frames) { cmp_hit_frame = frames; cmp_hit_kind = cmp_hitme[h][1]; cmp_hit_damage = cmp_hitme[h][2]; } }
