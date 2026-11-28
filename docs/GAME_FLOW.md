@@ -746,7 +746,12 @@ Measured on PCSX2 (Mission 2's street, the 100% US save with three Yellow Orbs, 
   Mission 3's blue one is drawn), fading out when it's done. The game seals only the doors its script locks.
 - **Real-time cutscenes** aren't in, Mission 2's intro among them.
 - **Sound** is only in movies. There's no music or effects in menus or the game.
-- **No saves.**
+- **Saves** (`savegame.c`): Mission Select's Save and Load rows, and the title's Load Game, open the PSP's save utility.
+  - The slot list shows the port's icon (the EBOOT's ICON0), "Devil May Cry 3 Portable", "Mission N Easy/Normal", and a detail of missions cleared, Red Orbs and the Palace best. Up to eight slots in `PSP/SAVEDATA/DMC3PORTABLE000n`.
+  - Kept: missions cleared per difficulty (recorded at Mission Clear), Red Orbs, the shop's items held and times bought, Blue Orb fragments, the Devil Arms and styles got in play (added to what each mission starts with), the Bloody Palace best (a higher one also goes to BP_BEST.TXT), and the last mission, difficulty and Turbo.
+  - New Game clears the session.
+  - Tests: `autosave 1` (the utility's AUTOSAVE / AUTOLOAD on slot 0000, no dialog) and `keepsession 1`.
+  - PPSSPP: a save of 12345 Red Orbs, read back in a fresh run, showed 12345 on the HUD. The dialog is `analysis/testroom/save_dialog.png`.
 
 ## Next steps, in order
 

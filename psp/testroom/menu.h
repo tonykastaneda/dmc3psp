@@ -24,6 +24,10 @@ void menu_set_mission_mask(unsigned int mask); /* only generated mission slots a
  * and after_frame, if set, runs after each frame is shown; tests use both. */
 typedef unsigned int (*MenuPad)(int frame);
 typedef void (*MenuAfterFrame)(int frame);
+/* Main's save hooks (savegame.c): Mission Select's Save / Load and the title's Load Game / New Game. Each runs on its own
+ * frames and returns 1 if it did something (a load fills in the choice's mission, difficulty and turbo). NULL: locked. */
+typedef int (*MenuSaveHook)(MenuChoice *choice);
+extern MenuSaveHook menu_save_hook, menu_load_hook, menu_new_hook;
 void menu_run(MenuChoice *choice, MenuPad pad, MenuAfterFrame after_frame);
 /* From Quit the Mission: back to Mission Select, skipping the title. */
 void menu_run_from_mission_select(MenuChoice *choice, MenuPad pad, MenuAfterFrame after_frame);

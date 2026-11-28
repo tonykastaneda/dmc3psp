@@ -93,6 +93,7 @@ int testroom_frame;
 #include "secret_missions.h"
 #include "shadow.h"
 #include "gameover.h"
+#include "savegame.h"
 #include "credit.h"   /* DO NOT REMOVE: the owner's credit on the Options screen */
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
@@ -593,6 +594,7 @@ enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_O
 static int dummy_anim_auto = 1;
 static void mission_gimmicks_draw(void);
 static ShopState shop_state;   /* the Red Orbs and what's been bought, for this session */
+static int keep_session;   /* tests ("keepsession 1"): New Game keeps the script's orbs, to save them */
 /* Each kind's max health, from the class parameter blocks (docs/ENEMY_SPECS.md, docs/SHOP.md): what its red
  * orbs are worked out from. Lust, Wrath and Greed are inferred. */
 static int kind_max_health(int kind) {
@@ -2453,6 +2455,8 @@ static void cmp_load(void) {
             if (sscanf(line + 6, "%d %d %d", &cmp_hitme[cmp_hitme_count][0], &cmp_hitme[cmp_hitme_count][1], &cmp_hitme[cmp_hitme_count][2]) >= 2) ++cmp_hitme_count;
         }
         else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
+        else if (strncmp(line, "keepsession ", 12) == 0) keep_session = atoi(line + 12);
+        else if (strncmp(line, "autosave ", 9) == 0) savegame_auto = atoi(line + 9);   /* tests: saves without the dialog */
         else if (strncmp(line, "yelloworbs ", 11) == 0) shop_state.owned[7] = (unsigned char)atoi(line + 11);   /* tests: Yellow Orbs held */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "testcam ", 8) == 0)
@@ -4415,6 +4419,37 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
     
 }
 
+/* ---- Saves (savegame.c): what's kept, from and back into the session. */
+static void savegame_capture(const MenuChoice *c) {
+    savegame.red_orbs = shop_state.red_orbs;
+    memcpy(savegame.owned, shop_state.owned, sizeof savegame.owned);
+    memcpy(savegame.bought, shop_state.bought, sizeof savegame.bought);
+    savegame.blue_fragments = shop_state.blue_fragments;
+    if (c->mission >= 1 && c->mission <= 20) savegame.last_mission = (unsigned char)c->mission;
+    savegame.last_difficulty = (unsigned char)(c->difficulty & 1);
+    savegame.turbo = (unsigned char)(c->turbo != 0);
+    if (bp_best_floor() > savegame.bp_best) savegame.bp_best = bp_best_floor();
+}
+static int save_hook(MenuChoice *c) { savegame_capture(c); return savegame_save_dialog(); }
+static int load_hook(MenuChoice *c) {
+    if (!savegame_load_dialog()) return 0;
+    shop_state.red_orbs = savegame.red_orbs;
+    memcpy(shop_state.owned, savegame.owned, sizeof shop_state.owned);
+    memcpy(shop_state.bought, savegame.bought, sizeof shop_state.bought);
+    shop_state.blue_fragments = savegame.blue_fragments;
+    c->mission = savegame.last_mission >= 1 && savegame.last_mission <= 20 ? savegame.last_mission : 1;
+    c->difficulty = savegame.last_difficulty & 1;
+    c->turbo = savegame.turbo;
+    bp_set_best(savegame.bp_best);
+    return 1;
+}
+static int new_hook(MenuChoice *c) {
+    (void)c;
+    savegame_clear();
+    if (!keep_session) memset(&shop_state, 0, sizeof shop_state);
+    return 1;
+}
+
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
     gameover_reset();
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
@@ -4439,6 +4474,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     /* What he'd own by this mission in the real game. A test can add to it: "ownall 1", an "item" that's a weapon
      * or a style, or the weapon it starts with ("melee", "gun"). */
     player_own_mission(choice->mission);
+    player_owned |= savegame.got;   /* what a loaded save had got in play */
     if (cmp_ownall) player_owned = OWN_EVERYTHING;
     {
         int c;
@@ -4566,6 +4602,8 @@ int main(int argc, char *argv[]) {
     sfx_init(game_dir);
     credits_fight_init(game_dir);
     bp_init(game_dir);
+    savegame_init(game_dir);
+    menu_save_hook = save_hook; menu_load_hook = load_hook; menu_new_hook = new_hook;
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
@@ -5159,6 +5197,12 @@ int main(int argc, char *argv[]) {
                 if (mission_choice.mission == 13) play_movie("MOVIES/D325.MOV");
                 if (mission_choice.mission == 19) play_movie("MOVIES/D328.MOV");
                 music_menu(130);   /* Result.adx: the results (0x82) */
+                if (mission_choice.mission >= 1 && mission_choice.mission <= 20 && !focus) {
+                    /* Progress for the next save (savegame.c). */
+                    savegame.cleared[mission_choice.difficulty & 1] |= 1u << (mission_choice.mission - 1);
+                    savegame.got |= player_owned;
+                    if (mission_choice.mission < 20) savegame.last_mission = (unsigned char)(mission_choice.mission + 1);
+                }
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 if(focus_cmp && cmp_stop_on_clear)cmp_frames=frames;
                 else {

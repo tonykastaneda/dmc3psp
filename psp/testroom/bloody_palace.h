@@ -5,6 +5,7 @@
 typedef struct { short op, a, b, c, d; } PalaceOp;
 void bp_init(const char *directory);
 int bp_best_floor(void);
+void bp_set_best(int floor);   /* a loaded save's best, if higher */
 void bp_reset(int enabled);
 void bp_enter(int room);
 int bp_active(void);
