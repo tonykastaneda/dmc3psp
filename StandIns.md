@@ -102,7 +102,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   `enemy.c` The Arachne, PortJobs.
 - **Fallen**: its damage handler, 3 cm per frame ground approach, and front-hit wing guard are approximations. The
   higher-rank spear projectile (action 0x16) is unported. `fallen.c`, `enemy.c` ~5383.
-- **Dullahan**: which script is which [inferred]. `dullahan.c`.
+- **Dullahan**: the attack choice and shield collision volume are approximations. `dullahan.c`, MISSION10_SPEC.md.
 - **Soul Eater**: dodge action 16 uses the port's gun move classification for Dante's state 0x11. DT drain conversion
   (1000 units per rune) is inferred.
   `enemy.c` soul_*.

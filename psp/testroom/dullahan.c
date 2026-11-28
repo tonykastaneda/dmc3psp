@@ -4,19 +4,20 @@
 #include <math.h>
 #include "dullahan.h"
 
-const char *const dullahan_motion_names[DULLAHAN_M_COUNT] = {"du600", "du601", "du800", "du800", "du700", "du700", "du900"};
+/* FUN_003cd860 selects 0:0 to track, 0:1 to charge, 3:0 to strike, and 2:1 on death. */
+const char *const dullahan_motion_names[DULLAHAN_M_COUNT] = {"du600", "du601", "du900", "du700", "du800", "du700"};
 
-enum { A_IDLE, A_RUN, A_LUNGE, A_POUNCE, A_FLINCH, A_KNOCK, A_DEATH };
-static const int action_motion[] = {DULLAHAN_M_IDLE, DULLAHAN_M_RUN, DULLAHAN_M_LUNGE, DULLAHAN_M_POUNCE,
+enum { A_IDLE, A_RUN, A_CHARGE, A_STRIKE, A_FLINCH, A_KNOCK, A_DEATH };
+static const int action_motion[] = {DULLAHAN_M_IDLE, DULLAHAN_M_IDLE, DULLAHAN_M_CHARGE, DULLAHAN_M_STRIKE,
                                     DULLAHAN_M_FLINCH, DULLAHAN_M_KNOCK, DULLAHAN_M_DEATH};
 
 #define RUN_SPEED 3.0f
-#define LUNGE_SPEED 18.0f
-#define POUNCE_SPEED 18.0f
-#define LUNGE_RANGE 320.0f
+#define CHARGE_SPEED 13.0f      /* rank 0, 0x5b8e80 */
+#define CHARGE_DECEL 0.17f      /* rank 0, 0x5b8ea0 */
+#define CHARGE_RANGE 320.0f     /* port's distance gate */
 #define HIT_REACH 200.0f
 
-int dullahan_loops(int motion) { return motion == DULLAHAN_M_IDLE || motion == DULLAHAN_M_RUN; }
+int dullahan_loops(int motion) { return motion == DULLAHAN_M_IDLE; }
 
 static void act(DullahanBrain *b, int a) {
     b->action = a;
@@ -49,13 +50,10 @@ static void forward(DullahanBrain *b, float speed, float f) {
     b->pos[2] += cosf(b->yaw) * speed * f;
 }
 
-/* Approximate swept shield contact in front of the body. */
-/* Its attack scripts (em012 [10]) are 3:0 and 3:1, both on motion 300: 3:0 names attack record 1 (table 0x5cc7f0:
- * 600, reaction 300) and 3:1 record 2 (500, reaction 250), both light (under 500). Which of the two charges plays
- * which script is [inferred]. */
-static void charge_contact(DullahanBrain *b, float px, float py, float pz, int heavy, float damage, int attacks) {
-    float hx = b->pos[0] + sinf(b->yaw) * 120.0f - px, hz = b->pos[2] + cosf(b->yaw) * 120.0f - pz;
-    if (attacks && hx * hx + hz * hz < HIT_REACH * HIT_REACH && fabsf(py - b->pos[1]) < 200.0f) { b->land = heavy ? 2 : 1; b->land_damage = damage; }
+/* Approximate the shield contact volume. Script 3:0 arms record 1 for five frames (600 damage, light reaction). */
+static int strike_contact(DullahanBrain *b, float px, float py, float pz) {
+    float x = b->pos[0] + sinf(b->yaw) * 120.0f - px, z = b->pos[2] + cosf(b->yaw) * 120.0f - pz;
+    return x * x + z * z < HIT_REACH * HIT_REACH && fabsf(py - b->pos[1]) < 200.0f;
 }
 
 void dullahan_think(DullahanBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks) {
@@ -66,31 +64,38 @@ void dullahan_think(DullahanBrain *b, float f, float px, float py, float pz, flo
     case A_IDLE:
         turn_to(b, px, pz, 0.06f, f);
         if (b->timer > 30.0f + 40.0f * unit()) {
-            if (d < LUNGE_RANGE) act(b, A_LUNGE);
-            else if (d < 900.0f && unit() < 0.3f) act(b, A_POUNCE);
-            else act(b, A_RUN);
+            act(b, d < CHARGE_RANGE || (d < 900.0f && unit() < 0.3f) ? A_CHARGE : A_RUN);
         }
         break;
     case A_RUN:
         turn_to(b, px, pz, 0.08f, f);
         forward(b, RUN_SPEED * 0.5f, f);
-        if (d < LUNGE_RANGE) act(b, A_LUNGE);
+        if (d < CHARGE_RANGE) act(b, A_CHARGE);
         else if (b->timer > 150.0f) act(b, A_IDLE);
         break;
-    case A_LUNGE:
-        if (b->frame < 30.0f) turn_to(b, px, pz, 0.02f, f);
-        if(b->frame>=30 && b->frame<75)forward(b, LUNGE_SPEED, f);
-        if (!b->step && b->frame > 45.0f) { b->step = 1; charge_contact(b, px, py, pz, 0, 600.0f, attacks); }
-        if (b->done) act(b, A_IDLE);
+    case A_CHARGE:
+        /* FUN_003ceb50: 25 frames tracking, then a straight charge with linear drag. */
+        if (b->timer <= 25.0f) {
+            turn_to(b, px, pz, 64.0f * (6.2831853f / 65536.0f), f);
+            b->vel = CHARGE_SPEED;
+        } else if (d < 250.0f || b->vel <= 0.4f) {
+            act(b, A_STRIKE);
+        } else {
+            b->vel = fmaxf(0.0f, b->vel - CHARGE_DECEL * f);
+            forward(b, b->vel, f);
+        }
         break;
-    case A_POUNCE:
-        if (b->frame < 20.0f) turn_to(b, px, pz, 0.02f, f);
-        if(b->frame>=30 && b->frame<75)forward(b, POUNCE_SPEED, f);
-        if (!b->step && b->frame > 70.0f) { b->step = 1; charge_contact(b, px, py, pz, 0, 500.0f, attacks); }
+    case A_STRIKE:
+        if (!b->step && b->frame >= 15.0f && b->frame < 20.0f &&
+            attacks && strike_contact(b, px, py, pz)) {
+            b->step = 1;
+            b->land = 1;
+            b->land_damage = 600.0f;
+        }
         if (b->done) act(b, A_IDLE);
         break;
     case A_FLINCH:
-        if (b->done) act(b, unit() < 0.5f ? A_LUNGE : A_IDLE);
+        if (b->done) act(b, unit() < 0.5f ? A_CHARGE : A_IDLE);
         break;
     case A_KNOCK:
         forward(b, -b->vel, f);
@@ -116,6 +121,6 @@ int dullahan_hit(DullahanBrain *b, int heavy, float fx, float fz, int mortal) {
     }
     b->yaw = atan2f(fx - b->pos[0], fz - b->pos[2]);
     if (heavy) { act(b, A_KNOCK); b->vel = 210.0f / 65.0f * 2.0f; }
-    else if (b->action != A_POUNCE) act(b, A_FLINCH);
+    else if (b->action != A_STRIKE) act(b, A_FLINCH);
     return 0;
 }

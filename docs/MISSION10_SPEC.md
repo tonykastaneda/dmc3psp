@@ -12,10 +12,10 @@ Ghidra evidence: 3ccbc0 plan dispatch, 3cd9a0 action dispatch (1-11/13), 3cfea0 
 3ce320/3ce5d0 slow tracking and committed approach, and 3cb770 setup. This was read in the existing
 Ghidra 12.2 project under its exclusive lock, with exports confined to local build output.
 
-The independently written `dullahan.c` uses the native model and clips, frontal shield/rear weakness,
-slow approach and a committed charge. Speeds, damage, health, reaction timing and attack volume are
-port estimates, and its decision tree is simplified. It shares the existing enemy body's motion and
-pose renderer through thin hooks. `tools/tests/dullahan_logic.c` checks frontal rejection, rear damage,
+`dullahan.c` follows the script dispatch at `003cd860`: tracking uses 0:0, charging 0:1, striking 3:0, and death
+2:1. The charge winds up for 25 frames, starts at 13 cm per frame, then loses 0.17 per frame at rank 0
+(`003ceb50`, `0x5b8e80` / `0x5b8ea0`). Strike 3:0 uses record 1 for five frames from frame 15
+(600 damage, `0x5cc7f0`). The decision tree and shield volume remain approximations. `tools/tests/dullahan_logic.c` checks frontal rejection, rear damage,
 immortality and death. PPSSPP `pM_m10_dullahan_close`, frame 150/300, shows the native animated shield.
 
 Mission registration includes the exact M10 groups, first room/start, clear room, native key-item
