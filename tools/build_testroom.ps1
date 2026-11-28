@@ -95,7 +95,7 @@ foreach ($M10Room in @(201,206)) {
 }
 
 # Dante's script data (tools/gen_combat_data.py -> psp/testroom/combat_data.h, local): rebuilt when the script is newer.
-$CombatData = Join-Path $Root "psp	estroom\combat_data.h"
+$CombatData = Join-Path $Root "psp\testroom\combat_data.h"
 if (-not (Test-Path -LiteralPath $CombatData) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\gen_combat_data.py")).LastWriteTime -gt (Get-Item -LiteralPath $CombatData).LastWriteTime) {
     Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\gen_combat_data.py"), "--moveset", (Join-Path $Root "analysis\moveset"), "--out", $CombatData)
