@@ -1157,10 +1157,11 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   0x7a (by distance, 0-12.5 a frame; landing records 5 / 8), the wall's 0x73, 0x79 (four web shots ringing Dante at
   150, `004f46d0` / `004f4a60`: falling 0.8, 100 cm, holding him 300 frames) and 0x7b (the drop, 2 a frame), 0x88,
   its reaction (40% of hits, `0x5c6aa0`: motion 10 / 11 and back 23, or 6 and back 7) and death (0x14, motion 0x1e).
-  Stand-ins: its hits' bones (a sphere 100 ahead), the flag 4 taken as its scripts' first event, the wall's normal (the
-  ray's way back, flattened) and its pose on a wall (turned 90 degrees, facing it), 0x6d's swing on its web line (a
-  leap), 0x6f's sideways speed (8), the struggle against a web (35 [inferred]), its hit-on-a-wall fall (0x7d unread),
-  root motion ×1.5 (+0x1fc9 [inferred]); 0x76's spiderlings and 0x78's charge have weight 0 at rank 0 (not ported).
+  Attack 0x77 reads both flag-4 events for cap 9 on bone 9. Attack 0x7a reads flag 4 for cap 9 on bone 9 and
+  cap 10 on bone 2. The port mirrors bone 9 for the second rig. Root translation ×1.5 is the default spawn's
+  multiplier in `00402ba0`. Stand-ins: the wall normal (the ray's way back, flattened) and its pose on the wall
+  (turned 90 degrees, facing it), 0x6d's web-line swing (a leap), 0x6f's sideways speed (8), the struggle against a web
+  (35 [inferred]), and its hit-on-a-wall fall (0x7d unread); 0x76's spiderlings and 0x78's charge have weight 0 at rank 0 (not ported).
 - **Abyss in the port** (`ENEMY_ABYSS`; EST 24): its own body ([1], 23 bones, the Hells' skeleton) and scythe ([26], texture [25]), its own scripts [38] and caps [39] / [40] (`tools/gen_enemy_ai.py`: `abyss_ai_ops`), the Hells'
   motions (its [35] is theirs byte for byte), health **1500** (block `0x5ce060` +0x2c, from its pointer block
   `0x61a678`, laid out as the Pride's `0x618c28`: records `0x5cdde0`, blocks `0x5ce060` / `0x5ce110`, script map

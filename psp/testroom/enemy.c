@@ -5800,20 +5800,46 @@ typedef struct { int on, owner, holding; float pos[3], vel[3], life, hold; int f
 static AnWeb an_webs[AN_WEBS];
 static float an_gate[ENEMY_MAX], an_wall[ENEMY_MAX][3], an_target[ENEMY_MAX][3];
 static unsigned char an_loops[ENEMY_MAX], an_on_wall[ENEMY_MAX], an_tries[ENEMY_MAX], an_shot[ENEMY_MAX];
-static float an_hit_frames[ENEMY_MAX], an_hit_damage[ENEMY_MAX];   /* a hit its state armed (FUN_00294480) */
-/* Its state code arms its hits on script event 4 (FUN_00294480(set, 9, frames, bone)): a sphere of 64 (+0x2258)
- * at a front bone [placed 100 ahead, 60 up: the bones (+0x818 / +0x8c8) aren't mapped]. */
-static void an_arm(int record, float frames) { an_hit_frames[e - enemies] = frames; an_hit_damage[e - enemies] = an_attacks[record].damage; }
+typedef struct { float time; unsigned char cap, record, bone, mirrored; } AnHit;
+static AnHit an_hits_live[ENEMY_MAX][2];
+
+/* 004016c0 / 00402200 pass a posed rig matrix when creating caps 9 and 10.
+ * The PSP has one rig. Reflect its local X for the opposing rig's bone 9. */
+static void an_arm(int slot, int cap, int record, int bone, int mirrored, float time) {
+    an_hits_live[e - enemies][slot] = (AnHit){time, cap, record, bone, mirrored};
+    giga_note("arachne_cap", cap * 100 + record, time);
+}
+
 static void an_hits(float px, float py, float pz, float f) {
-    int me = (int)(e - enemies);
-    float at[3], dx, dy, dz;
-    if (an_hit_frames[me] <= 0.0f) return;
-    an_hit_frames[me] -= f;
-    at[0] = e->pos[0] + sinf(e->yaw) * 100.0f; at[1] = e->pos[1] + 60.0f; at[2] = e->pos[2] + cosf(e->yaw) * 100.0f;
-    dx = px - at[0]; dy = py + 100.0f - at[1]; dz = pz - at[2];
-    if (attacks_on && dx * dx + dy * dy + dz * dz < (64.0f + DANTE_RADIUS + 60.0f) * (64.0f + DANTE_RADIUS + 60.0f)) {
-        land_attack(0); landed_damage = an_hit_damage[me]; landed_x = e->pos[0]; landed_z = e->pos[2];
-        an_hit_frames[me] = 0.0f;
+    AnHit *hits = an_hits_live[e - enemies];
+    if (hits[0].time <= 0.0f && hits[1].time <= 0.0f) return;
+    if (attacks_on) evaluate_pose();
+    for (int i = 0; i < 2; ++i) {
+        AnHit *hit = &hits[i];
+        const EnemyAiCap *cap = &an_caps[hit->cap];
+        const ArAttack *record = &an_attacks[hit->record];
+        const float (*rot)[3] = world_rot[hit->bone].m;
+        const float *pos = world_pos[hit->bone];
+        float x, y, z, dx, dy, dz, reach;
+        if (hit->time <= 0.0f) continue;
+        hit->time -= f;
+        if (!attacks_on) continue;
+        x = pos[0] + rot[0][0] * cap->x + rot[0][1] * cap->y + rot[0][2] * cap->z;
+        y = pos[1] + rot[1][0] * cap->x + rot[1][1] * cap->y + rot[1][2] * cap->z;
+        z = pos[2] + rot[2][0] * cap->x + rot[2][1] * cap->y + rot[2][2] * cap->z;
+        if (hit->mirrored) x = -x;
+        dx = e->pos[0] + cosf(e->yaw) * x + sinf(e->yaw) * z - px;
+        dz = e->pos[2] - sinf(e->yaw) * x + cosf(e->yaw) * z - pz;
+        y += e->pos[1];
+        dy = y - fminf(py + DANTE_HIGH, fmaxf(py + DANTE_LOW, y));
+        reach = cap->radius + DANTE_RADIUS;
+        if (dx * dx + dy * dy + dz * dz < reach * reach) {
+            land_attack(record->reaction >= 500.0f);
+            landed_damage = record->damage;
+            landed_kind = record->kind;
+            hits[0].time = hits[1].time = 0.0f;
+            return;
+        }
     }
 }
 typedef struct { unsigned char action, weight; } AnPick;
@@ -5851,7 +5877,10 @@ static int an_pick(const AnPick *t, int n) {
     for (i = 0; i < n && t[i].action; ++i) { if (r < t[i].weight) return t[i].action; r -= t[i].weight; }
     return t[0].action;
 }
-static void an_play(int index) { script_play(an_motion_script[index]); }
+static void an_play(int index) {
+    memset(an_hits_live[e - enemies], 0, sizeof an_hits_live[0]);
+    script_play(index >= 0 && index < AN_MOTION_ROWS ? an_motion_script[index] : an_motion_script[0]);
+}
 /* FUN_00402a30: toward Dante at this rate a frame, unless he's within 15 degrees of its facing. */
 static void an_turn(float px, float pz, float rate, float f) {
     float rel = wrap_angle(atan2f(px - e->pos[0], pz - e->pos[2]) - e->yaw);
@@ -6112,20 +6141,26 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
         break;
     case 0x77:
         an_turn(px, pz, 0.04f, f);
-        /* FUN_004016c0: record 0 (600), 4 frames, as its script opens flag 4 [taken as its first event] */
-        if (script_event && !e->step) { e->step = 1; an_arm(0, 4.0f); }
+        /* The two flag-4 values use bone 9 from opposite rigs (004016c0). */
+        if (e->flags[4] == 1 || e->flags[4] == 2) {
+            an_arm(0, 9, 0, 9, e->flags[4] == 1, 4.0f);
+            e->flags[4] = 0;
+        }
         if (e->done) an_decide(px, py, pz);
         break;
     case 0x79:
-        if (!an_shot[me] && script_event) { an_shot[me] = 1; an_webs_launch(px, py, pz); }
+        if (!an_shot[me] && e->flags[0] == 1) { an_shot[me] = 1; an_webs_launch(px, py, pz); }
         if (e->done) an_go(0x7b, px, py, pz);   /* FUN_00401cc0: done, it drops onto him */
         break;
     case 0x7a:
         an_turn(px, pz, 0.2f, f);
         if (e->step == 0) { move_local(0.0f, 0.0f, e->vel[2] * f); if (e->done) { e->step = 1; an_play(0x30); } }
         else {
-            /* FUN_00402200: records 5 (600) and 8 (400), 30 frames, on flag 4 [its first event] */
-            if (script_event && e->step == 1) { e->step = 2; an_arm(5, 30.0f); }
+            if (e->flags[4] == 1) {
+                e->flags[4] = 0;
+                an_arm(0, 9, 5, 9, 1, 30.0f);
+                an_arm(1, 10, 8, 2, 0, 30.0f);
+            }
             if (e->done) an_decide(px, py, pz);
         }
         break;
