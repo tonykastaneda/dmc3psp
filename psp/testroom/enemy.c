@@ -209,7 +209,7 @@ static Vertex *weapon_vertices[ENEMY_KIND_COUNT];
 static unsigned short *indices[ENEMY_KIND_COUNT], *weapon_indices[ENEMY_KIND_COUNT];
 static void *textures[ENEMY_TEXTURE_SET_COUNT][8];
 /* Which bone holds the weapon, by kind. */
-static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5, 7, 11, HAND_BONE};
+static const signed char kind_hand[ENEMY_KIND_COUNT] = {HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, HAND_BONE, ENIGMA_HAND_BONE, 0, 5, 7, 11, HAND_BONE, [ENEMY_ABYSS] = HAND_BONE};
 static Enemy enemies[ENEMY_MAX];
 static float torso_offset[ENEMY_MAX][3];
 static int torso_kind(int kind) { return kind <= ENEMY_GREED || kind == ENEMY_ENVY || kind == ENEMY_ABYSS; }
@@ -2978,6 +2978,8 @@ static void update_pose(float elapsed, float interval, int index, int count) {
     ++poses_done;
 }
 
+static int goyle_is_stone(void);
+
 static void draw_one(void) {
     int i, bound = -1, translucent, blend_was = 0;
     unsigned int blend_on = 0;
@@ -3017,14 +3019,14 @@ static void draw_one(void) {
         float a = translucent ? 1.0f - (e->veil > 1.0f ? 1.0f : e->veil) : 1.0f;
         sceGuColor(((unsigned int)(a * 255.0f) << 24) | k << 16 | k << 8 | k);
     }
-    if (e->kind == ENEMY_GOYLE && (e->action == 15 || e->action == 16 || e->action == 17 || e->action == 19) && e->plan != P_DEATH) {
-        /* Stone: grey. */
-        sceGuDisable(GU_TEXTURE_2D);
-        sceGuAmbientColor(0xff141618u);
-        sceGuColor(0xff2a2d30u);
-    }
+    int stone = e->kind == ENEMY_GOYLE && goyle_is_stone();
     for (i = 0; i < m->object_count; ++i) {
         const Dmc3ModelObject *o = &m->objects[i];
+        if (e->kind == ENEMY_GOYLE) {
+            /* FUN_0039cb30 switches objects 0..2 against 3. Object 4 stays visible. */
+            int source = goyle_object_sources[i];
+            if ((stone && source < 3) || (!stone && source == 3)) continue;
+        }
         if ((int)o->texture != bound) {
             bound = (int)o->texture;
             sceGuClutLoad(256 / 8, set->palettes[bound]);
@@ -3505,6 +3507,11 @@ enum { G_HOVER = 0, G_STRAFE_L = 2, G_STRAFE_R = 3, G_APPROACH = 4, G_BACK = 5, 
        G_SPLIT = 8, G_EMERGE = 9, G_WINDUP = 11, G_AIM = 12, G_SHOOT = 13, G_DIVE = 14, G_STONE = 15, G_STONE_FALL = 16,
        G_STATUE = 17, G_REVIVE = 18, G_STONE_HIT = 19, G_DEATH = 26, G_GATHER = 27 };
 static int goyle_motion[28];
+
+static int goyle_is_stone(void) {
+    return e->action == G_STONE || e->action == G_STONE_FALL || e->action == G_STATUE ||
+           e->action == G_STONE_HIT || (e->action == G_DEATH && e->goyle_stone > 0);
+}
 
 static int goyle_init(void) {
     int i;

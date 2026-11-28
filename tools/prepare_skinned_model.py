@@ -397,9 +397,8 @@ ENEMY_KINDS = (
     ("lady", LADY_SLOT, 1, None),
     ("bishop", 127, 12, None),
     # The Abyss (class 6, EST 24), em006.pac: GDATA 118, pack 1 in the table at 0x58e740, the Hells' layout: [1] its
-    # body (the Hells' skeleton; its [35] motions are the Hells' byte for byte), [4] its scythe [inferred: the largest
-    # of [3]-[5]].
-    ("abyss", 118, 1, 4),
+    # body (the Hells' skeleton; its [35] motions are the Hells' byte for byte), FUN_0041c240 loads its scythe from [26] and its texture from [25].
+    ("abyss", 118, 1, 26),
     # The Soul Eater (class 16, EST 34), em016.pac: GDATA 126 (a PNST), pack 11 in the table at 0x58e740. [0] textures,
     # [1] its body (an EFM laid out as a MOD, 24 bones), [3] its six wing chains (em016_00.clt), [8] its motions.
     ("soul", 126, 1, None),
@@ -571,7 +570,7 @@ LADY_MOTIONS = ((2, 0), (2, 10), (2, 11), (5, 2), (5, 3), (5, 6), (5, 7), (5, 8)
 GOYLE_RATIO = 0.4   # of its 1,226 distinct triangles: up to a dozen are on screen once they split
 
 
-def layered_mesh(body: bytes, skel, ratio):
+def layered_mesh(body: bytes, skel, ratio, sources=None):
     """A body drawn in layers (the Blood-goyle's flesh under its scrolling blood): each surface once, the
     first object's copy, then cut across UV seams (tools/decimate_rigid.py, keeping the skinning)."""
     from decimate import weld
@@ -581,6 +580,8 @@ def layered_mesh(body: bytes, skel, ratio):
     key = lambda v: (round(P[v][0], 2), round(P[v][1], 2), round(P[v][2], 2))
     seen, keep, groups = set(), [], []
     for k, o in enumerate(mesh["objects"]):
+        if sources is not None and o["source"] not in sources:
+            continue
         for t in range(o["index_start"], o["index_start"] + o["index_count"], 3):
             s3 = frozenset(key(v) for v in I[t:t + 3])
             if s3 in seen:
@@ -658,9 +659,13 @@ def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
         "} EnemyModel;",
     ]
     sets = {}
+    weapon_texture_base = {}
     for slot in dict.fromkeys(k[1] for k in ENEMY_KINDS):
         texture_entry = packs[slot][0]
         textures = decode_textures(texture_entry)
+        if slot == 118:
+            weapon_texture_base[slot] = len(textures)
+            textures.extend(decode_textures(packs[slot][25]))
         n = f"ets{len(sets)}"
         for i, tx in enumerate(textures):
             pixels, palette = indexed_texture(tx)
@@ -680,7 +685,22 @@ def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
         body = packs[slot][body_index]
         if body[:4] == b"EFM ":
             body = b"MOD " + body[4:]
-        skel, mesh = enemy_mesh(body, GOYLE_RATIO if slot == GOYLE_SLOT else 0.45 if slot in (JESTER_SLOT, AR_SLOT, BEOWULF_SLOT, LADY_SLOT) else None)
+        if slot == GOYLE_SLOT:
+            # Its alternate stone surface overlaps the flesh. Preserve the selectable MOD objects.
+            skel = parse_skeleton(body)
+            mesh = layered_mesh(body, skel, GOYLE_RATIO, (0, 1, 2))
+            for sources in ((3,), (4,)):
+                surface = layered_mesh(body, skel, GOYLE_RATIO, sources)
+                vertex_base, first = len(mesh["positions"]), len(mesh["indices"])
+                for key in ("positions", "normals", "uvs", "bones", "weights"):
+                    mesh[key].extend(surface[key])
+                mesh["indices"].extend(vertex_base + i for i in surface["indices"])
+                mesh["objects"].extend({**o, "index_start": o["index_start"] + first}
+                                       for o in surface["objects"])
+            lines.append("static const unsigned char goyle_object_sources[] = {" +
+                         ",".join(str(o["source"]) for o in mesh["objects"]) + "};")
+        else:
+            skel, mesh = enemy_mesh(body, 0.45 if slot in (JESTER_SLOT, AR_SLOT, BEOWULF_SLOT, LADY_SLOT) else None)
         for extra_index in EXTRA_SKINS.get(name, ()):
             # Another MOD rigged to the body's own skeleton (Nevan's [4], her dress): skinned with it, one mesh.
             extra = packs[slot][extra_index]
@@ -807,7 +827,7 @@ def write_enemy(output: Path, packs: dict, executable: bytes) -> None:
             f'    {{"{name}",{n}_bone_parent,{n}_bone_local,{n}_bone_rest,{n}_positions,{n}_normals,{n}_uvs,'
             f'{n}_bones,{n}_weights,{n}_indices,{n}_objects,{n}_weapon_positions,{n}_weapon_normals,{n}_weapon_uvs,'
             f'{n}_weapon_indices,{len(mesh["positions"])},{len(mesh["indices"])},{len(mesh["objects"])},{bone_count},'
-            f'{len(wmesh["positions"])},{len(wmesh["indices"])},{wmesh["objects"][0]["texture"] if wmesh["objects"] else 0},'
+            f'{len(wmesh["positions"])},{len(wmesh["indices"])},{weapon_texture_base.get(slot, 0) + wmesh["objects"][0]["texture"] if wmesh["objects"] else 0},'
             f'{sets[slot][0]},{height:.1f}f,{body_count},{n}_bone_link,{n + "_cloths" if cloths else "0"},{len(cloths)},'
             f'{n}_object_scroll,{n + "_scrolls" if scrolls else "0"},{len(scrolls)}}},')
         max_vertices = max(max_vertices, len(mesh["positions"]))

@@ -84,8 +84,6 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 ## Enemies
 
 - **Seven Hells**: the Wrath's blast uses the port's explosion effect and tests Dante at its feet; friendly fire and its attachment matrix remain unported. ENEMY_AI.md, GAME_FLOW.md.
-- **Abyss**: the Pride's hit-script list (its block's +0x14 pairs aren't read); its scythe is the largest of [3]-[5]
-  [inferred]. `gen_enemy_ai.py`, `prepare_skinned_model.py`.
 - **Damned Chessmen**: the shared chess master is ported (docs/CHESS.md), at fixed difficulty 0. Knight 36, Bishop 37
   and Rook 38 use native moves / attacks (docs/CHESS.md); received-hit scaling, effect attachment matrices, the Bishop's
   global attack gate / wall bounds, the Rook's summon materialization (V1ee and a normal spawn) and fixed rank remain
@@ -98,7 +96,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   death (CEm017's 0x406d50) is a 60-frame sink; damage taken is the port's 1 / 2 a hit.
 - **Hell Greeds**: the coffin's flight, landing, summon cap and visuals are estimates. Summons use Prides and the coffins cannot be broken. `greed.inc`.
 - **Blood-goyle**: its bullets fly at 25 a frame for 120 frames [estimate]; the split timing [estimate]; its rest
-  value 5 and stone's triple damage [inferred]; stone drawn untextured grey. ENEMY_SPECS.md D.
+  value 5 and stone's triple damage [inferred]. ENEMY_SPECS.md D.
 - **Arachne**: its class is ported (ENEMY_SPECS H); stand-ins: its hits' bones (a sphere 100 ahead), flag 4 taken as
   its scripts' first event, the wall's normal (the ray back, flattened) and its pose there (turned 90 degrees), 0x6d's
   web-line swing (a leap), 0x6f's speed (8), the web's struggle count (35 [inferred]), its fall when struck on a wall,

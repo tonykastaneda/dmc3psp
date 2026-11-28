@@ -689,7 +689,7 @@ from table `0x5bf814`):
 | 11 → 12 → 14 | Attack: wind-up; aim (yaw ± 50° at random, pitch -0.61); dive at 20, accelerating 0.5 to 30, steering 3° a frame (546 × dt of 0x10000) while Dante's ahead. Hits a wall or the floor: effect 0x1be, back to 0 |
 | 13 | Shoots: Shl00 (`FUN_004404a0`) is an emitter that, 27-32 frames in, sends 2 / 3 / 4 Shl01 bullets by band (`0x5bf242`) at Dante's place ± 100 cm a side; they fly straight and burst on walls (`FUN_00459eb0`) |
 | 15 | Turned to stone: falls 40 frames (gravity), lands (effect 0x2c), then 16 or 17 |
-| 17 | Statue (grey, `0x80808080`) until the stone gauge is back to 0 → 18 |
+| 17 | Statue (its own textured body surface, MOD object 3, switched by `0039cb30`) until the stone gauge is back to 0 → 18 |
 | 18 | Back to life (effect 0x36d) |
 | 19, 21 | Stone struck: knocked up at 23.1, falling 0.7 a frame |
 | 27 | Splits of its own accord (`FUN_004324e0`): chosen before the tables when fewer than +0x461 are out, splits are left (+0x45c) and none is splitting (flag 0x80000000). Effect 0x194 at frame 149, then state 8 |
@@ -1132,7 +1132,7 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
 |---|---|---|---|---|
 | Arachne | 10 / 5 | 121 (em010) | `003f1e00` / `003f1770` / `0x60bf30` (per-frame `003f3e40`, actions `003f6eb0`, set-up `003f2380`) | [16] scripts, [17] caps, [18] shapes, PACs [7]-[15] motions |
 | Soul Eater | 16 / 11 | 126 (em016) | `0049a560` | [1] an **EFM** (effect model) body, [3] text, [4] caps, [5] shapes, [6] scripts, [8] / [9] motions |
-| Abyss | 6 / 1 | 118 (em006) | `0041bdb0` / `0041bc70` / `0x60d360` (its own class on the base `00284da0`, not the Hells' shared AI `003674a0`) | the Hells' layout: [1] body, [3]-[5] more MODs, [35] motions, [38] scripts, [39] caps, [40] shapes |
+| Abyss | 6 / 1 | 118 (em006) | `0041bdb0` / `0041bc70` / `0x60d360` (its own class on the base `00284da0`, not the Hells' shared AI `003674a0`) | the Hells' layout: [1] body, [3]-[5] extra body parts, [25] scythe texture, [26] scythe, [35] motions, [38] scripts, [39] caps, [40] shapes |
 
 - **Arachne**: health **1400** from block `0x5c3870` +0x2c (a second block, `0x5c396c`, has 2000; `003f2380` picks by
   spawn), already the port's. Its spiderlings are a separate 0x21b0-byte object (`004f0f60` → `004f0df0`), made by
@@ -1161,8 +1161,7 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   ray's way back, flattened) and its pose on a wall (turned 90 degrees, facing it), 0x6d's swing on its web line (a
   leap), 0x6f's sideways speed (8), the struggle against a web (35 [inferred]), its hit-on-a-wall fall (0x7d unread),
   root motion ×1.5 (+0x1fc9 [inferred]); 0x76's spiderlings and 0x78's charge have weight 0 at rank 0 (not ported).
-- **Abyss in the port** (`ENEMY_ABYSS`; EST 24): its own body ([1], 23 bones, the Hells' skeleton) and scythe ([4]
-  [inferred]), its own scripts [38] and caps [39] / [40] (`tools/gen_enemy_ai.py`: `abyss_ai_ops`), the Hells'
+- **Abyss in the port** (`ENEMY_ABYSS`; EST 24): its own body ([1], 23 bones, the Hells' skeleton) and scythe ([26], texture [25]), its own scripts [38] and caps [39] / [40] (`tools/gen_enemy_ai.py`: `abyss_ai_ops`), the Hells'
   motions (its [35] is theirs byte for byte), health **1500** (block `0x5ce060` +0x2c, from its pointer block
   `0x61a678`, laid out as the Pride's `0x618c28`: records `0x5cdde0`, blocks `0x5ce060` / `0x5ce110`, script map
   `0x5ce1f0`). Its AI object (`004a8e30`, vtable `0x612220`, RTTI CComEm006) is a clone of the Hells' (`0x607b20`):
@@ -1176,7 +1175,7 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   over its motion's frames 0-30), 59 → 75 (`004aca20` → `004bb2d0` / `004bb3a0`: script 101 sinks it, then 300 cm
   from Dante at a random angle facing him, 50 frames later script 100 brings it up, +0xcd set from its frame 45 to
   95). Its scripts 100+ are its bank's group 1, playing its own motions (ids 100+: PAC [36]; the hundreds pick the
-  PAC). The block's +0x14 (0x003-tagged pairs) is still unread; the Pride's hit-script list stands in.
+  PAC). The hit-script pairs come from +0xc (0x5ce1f0), installed at enemy+0x2304.
 - **Soul Eater in the port** (`ENEMY_SOUL`, enemy.c's soul_*; `tools/prepare_soul_eater.py`): its body, motions (seNN,
   PAC [8]), six wing chains (em016_00.clt: X / NX axes, no gravity, stiffness 0.1, no length limit; cloth.c), scripts
   ([6], one per action; a wait to the motion's end ends one), caps, records (500, 3000), action table (`0x5c14f0`,
