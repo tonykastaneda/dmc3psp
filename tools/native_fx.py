@@ -30,6 +30,8 @@ ORB_E = (185, 235)   # E235: Wall Hike's kick off the wall (FUN_002fd0c0, same b
 CERBERUS_V = (
     115, 166, 171, 117, 89, 101, 97, 72, 48, 237, 90, 320, 321, 293, 180, 177, 178, 179, 181, 172, 173, 174,
     126, 691, 118, 150, 151, 78, 66,
+    # The breath's generators (FUN_002a2530's events 1 / 2 / 5 / 8): G44, G23, G45 (0x8000: G_FLAG, below).
+    0x2c | 0x8000, 0x17 | 0x8000, 0x2d | 0x8000,
 )
 CERBERUS_E = (291, 251, 199, 284)
 # The punch's ice mist, on the paw (FUN_002a0510): P58 (0x3a) at events 2 and 4, P59 (0x3b) at 3 and 5.

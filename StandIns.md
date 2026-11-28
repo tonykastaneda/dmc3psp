@@ -130,8 +130,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
-- **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
-  the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
+- **Cerberus**: the breath's generators and the punch's P58 / P59 take the body's turn, not their bone's (the places are the
+  bones') [approximation]. NATIVE_FX.md, CERBERUS_SPEC.md.
 - **Vergil**: his effects (0x338, the slashes) play from his pack but follow his bones by position only (no bone
   rotation) [approximation]; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   is decoded (gauges, flinch windows, the brace), but Dante's blows take estimated amounts from his gauges (Dante's
