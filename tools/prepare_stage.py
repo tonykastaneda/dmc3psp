@@ -631,7 +631,7 @@ def main() -> None:
     # Secret Mission 12's blocks (st611): its DUMMY blocks are drawn too, and the moving ones tagged 160 + their set
     # number for the runtime to pose (gen_rooms.py block_sets, psp/testroom/blocks.c).
     block_tags = {}
-    if args.slot == 954:
+    if args.slot in (954, 436):   # st611, and Mission 17's 128 (its God-cubes)
         import gen_rooms
         extra = ("DUMMY",)
         for bs, motion in gen_rooms.block_sets(game_text.replace("\r", ""), stage[5]):
@@ -648,7 +648,7 @@ def main() -> None:
             import gen_rooms   # Mission 19's hourglass parts, posed by psp/testroom/mission19.c
             if s["model"] in gen_rooms.HOURGLASS_MODELS:
                 numbers[s["index"]] = gen_rooms.HOURGLASS_TAG + s["model"]
-        if args.slot == 954 and s["kind"] in ("STAY", "DUMMY"):
+        if args.slot in (954, 436) and s["kind"] in ("STAY", "DUMMY"):
             if s["box"] is None or s["model"] is None or s["model"] > 32:
                 if s["kind"] == "DUMMY":
                     continue

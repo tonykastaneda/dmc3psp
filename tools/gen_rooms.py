@@ -348,6 +348,8 @@ def write_secret_orbs(iso_path, out):
 # Secret Mission 12's blocks (st611): every set with a hit box drawn from models 0-32, and the tag prepare_stage.py
 # gives the moving ones' batches (BLOCK_TAG + set number) so the runtime can pose them.
 BLOCK_ROOM, BLOCK_TAG = "611", 160
+# The rooms whose blocks run so: st611 and Mission 17's 128, the God-cube Chamber (its cubes are the same sets).
+BLOCK_ROOMS = ("611", "128")
 
 
 def block_sets(game_text, pnst):
@@ -366,14 +368,17 @@ def block_sets(game_text, pnst):
 def write_blocks(iso_path, out):
     """st611's blocks for psp/testroom/blocks.c: place, hit box, and each moving one's channels (keys as changes from
     frame 0, a 1200-frame loop), from the room's own PNST (gimmicks.set_motion)."""
-    with Iso9660(iso_path) as iso:
-        afs = AfsArchive(iso, "GDATA.AFS")
-        slot = SLOTS[BLOCK_ROOM]
-        stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
-    game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
     rows, keys, chans = [], [], []
-    for s, m in block_sets(game, stage[5]):
+    for room in BLOCK_ROOMS:
+      with Iso9660(iso_path) as iso:
+        afs = AfsArchive(iso, "GDATA.AFS")
+        slot = SLOTS[room]
+        stage = pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))
+      game = next((c for c in stage if c[:6] == b"# GAME"), b"").decode("latin1").replace("\r", "")
+      for s, m in block_sets(game, stage[5]):
         pts = [v[:3] for tri, _ in gimmicks.model_triangles(gimmicks.models(stage[5])[s["model"]]) for v in tri]
+        if not pts:
+            continue
         centre = m[1] if m else tuple((min(q[k] for q in pts) + max(q[k] for q in pts)) / 2 for k in range(3))
         pivot = m[0] if m else centre
         first_chan = len(chans)
@@ -381,13 +386,13 @@ def write_blocks(iso_path, out):
             chans.append(f"{{{axis},{len(keys)},{len(ks)}}}")
             keys += [f"{{{f},{v:.3f}f}}" for f, v in ks]
         box = s["box"]
-        rows.append(f"{{{s['number']},{BLOCK_TAG + s['number'] if m else 0},{first_chan},{len(chans) - first_chan},"
+        rows.append(f"{{{int(room)},{s['number']},{BLOCK_TAG + s['number'] if m else 0},{first_chan},{len(chans) - first_chan},"
                     f"{{{pivot[0]:.1f}f,{pivot[1]:.1f}f,{pivot[2]:.1f}f}},{{{centre[0] + box[0]:.1f}f,{centre[1] + box[1]:.1f}f,{centre[2] + box[2]:.1f}f}},"
                     f"{{{box[3]:.1f}f,{box[4]:.1f}f,{box[5]:.1f}f}}}}")
-    lines = ["/* Generated from the player's disc by tools/gen_rooms.py (write_blocks): Secret Mission 12's blocks. */",
+    lines = ["/* Generated from the player's disc by tools/gen_rooms.py (write_blocks): st611's and 128's blocks. */",
              "typedef struct { short frame; float value; } BlockKey;",
              "typedef struct { short axis, first, count; } BlockChannel;   /* axis 0-2 move x/y/z, 3-5 turn x/y/z */",
-             "typedef struct { short number, tag, first, count; float pivot[3], centre[3], half[3]; } BlockSet;",
+             "typedef struct { short room, number, tag, first, count; float pivot[3], centre[3], half[3]; } BlockSet;",
              f"#define BLOCK_SET_COUNT {len(rows)}", f"#define BLOCK_CHANNEL_COUNT {len(chans)}", f"#define BLOCK_KEY_COUNT {len(keys)}",
              "static const BlockSet block_sets[BLOCK_SET_COUNT] = {" + ",\n".join(rows) + "};",
              "static const BlockChannel block_channels[BLOCK_CHANNEL_COUNT] = {" + ",".join(chans) + "};",
