@@ -51,6 +51,8 @@ extern MenuDebug menu_debug;
  * in PSP pixels, height the line's. Usable inside any open display list; returns the width. */
 float menu_font_draw(float x, float y, float height, const char *text, unsigned int color);
 float menu_font_width(float height, const char *text);
+void menu_draw_yellow_orb(float cx, float cy, float h, unsigned int color);   /* gameover.c: the Yellow Orb's face */
+void menu_draw_wash(unsigned int color);   /* a full-screen colour (ABGR) over what's drawn */
 float menu_font_draw_scaled(float x, float y, float height, float width_scale, const char *text, unsigned int color);
 void shop_open(ShopState *state);
 int shop_update(unsigned int pressed);   /* 1 when the player leaves */

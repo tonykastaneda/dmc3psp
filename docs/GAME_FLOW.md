@@ -721,8 +721,27 @@ Stand-ins and estimates:
 - **Encounters run from the game's scripts**, with Easy and Normal each using their own column.
 - **Enemy health** is the Pride's 6 light hits (chosen by eye), and the others in proportion to their parameter
   blocks' health. Vanguard uses his decoded 3000 base health. Dante's real damage isn't read.
-- **Dante dies** in real play: at 0 health he's knocked down and stays down, and 150 frames later the mission starts
-  again (a stand-in for the Game Over / Continue screen). Test scenes keep him at 1 unless their script says `death 1`.
+- **Dante dies** in real play: at 0 health he's knocked down and stays down, then the Game Over (below). Test scenes keep
+  him at 1 unless their script says `death 1`.
+
+### Game Over
+
+Measured on PCSX2 (Mission 2's street, the 100% US save with three Yellow Orbs, Dante's health written to 0):
+1. He goes down, the screen darkens over him and a Yellow Orb rises into the middle.
+2. About 3 s after the blow: the orb's face, **REBIRTH  YES  NO** under it, the orbs held at the bottom right ("03"). The cursor starts on NO.
+3. YES spends an orb: he's back on his feet there, with full health, in a burst of light rays.
+4. NO brings **CONTINUE / RESTART THE MISSION / END** over the same dark, still scene. Each asks YES / NO beside its row, again starting on NO.
+5. Continue YES fades to black and loads the room again from where he came in (its name caption shows), with full health. The room's fight starts over.
+6. The game's code:
+   - Its task factory (`FUN_0023ef80`) makes the Game Over object as case 9 (vtable `0x6078d0`).
+   - Its update `FUN_00359120` plays GameOver.sfd (`FUN_003591b0`: the movie table `0x58e1f0`, entry 3, 4-7 the French / German / Italian / Spanish ones), skippable with START.
+   - It then loops the movie (`FUN_00359380`) until told to quit (result -1) or continue (1).
+7. The port (`gameover.c`):
+   - A second after he lies dead, 90 frames of darkening while the orb rises. The rebirth prompt comes only if he holds a Yellow Orb, else the menu.
+   - The world holds while it's up.
+   - Continue: `enter_room` at the start he came in at. Restart: `start_mission`. End: Mission Select (the movie isn't shown).
+   - Tests: `yelloworbs N`, plus `death 1` and `hitme`. Stills: `analysis/testroom/go_rebirth_*.png`, `go_menu_*.png`.
+   - Not modelled: Gold Orb mode (`0x1d0d740`); End's GameOver movie.
 - **Doors** open once a room's fight is over; while it's on, each door shows a red seal (a tinted board, as
   Mission 3's blue one is drawn), fading out when it's done. The game seals only the doors its script locks.
 - **Real-time cutscenes** aren't in, Mission 2's intro among them.

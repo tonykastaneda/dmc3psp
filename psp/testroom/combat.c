@@ -2078,6 +2078,13 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
 int combat_dante_can_die;
 
 float combat_dead_frames(const Combat *c) { return c->dead_time; }
+/* The Game Over's REBIRTH (gameover.c): his health back, he gets up from where he lies. */
+void combat_revive(Combat *c, Player *player) {
+    /* He stands in the burst (PCSX2: on his feet a second after YES) [the getting up between isn't traced]. */
+    player->health = player->health_max;
+    combat_reset(c);
+    player->attacking = 0; player->on_ground = 1; player->vy = 0.0f;
+}
 
 /* FUN_002e8d20 picks the reaction class from the attack record's kind (+0x18): kind 0 flinches (class 1), 1 heavy
  * flinch (2), 2-5 knockdown (3, 5), 6 the pop up (6), 7 the hang then knockdown (4); in the air every kind but 6

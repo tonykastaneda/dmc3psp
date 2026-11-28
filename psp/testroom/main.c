@@ -92,6 +92,7 @@ int testroom_frame;
 #include "mission18.h"
 #include "secret_missions.h"
 #include "shadow.h"
+#include "gameover.h"
 #include "credit.h"   /* DO NOT REMOVE: the owner's credit on the Options screen */
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
@@ -1590,10 +1591,11 @@ scene_done:
         }
     }
     if (player->weapon_wheel) draw_weapon_wheel(player);
+    if (gameover_active()) gameover_draw();
     if (debug_open) draw_debug_menu(anim.viewer);
     if (pause_active) pause_draw();
     if (door_prompt_time > 0.0f && !pause_active && !debug_open) door_prompt_draw();
-    if (mission_mode && !pause_active && !debug_open) caption_draw();
+    if (mission_mode && !pause_active && !debug_open && !gameover_active()) caption_draw();
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -2451,6 +2453,7 @@ static void cmp_load(void) {
             if (sscanf(line + 6, "%d %d %d", &cmp_hitme[cmp_hitme_count][0], &cmp_hitme[cmp_hitme_count][1], &cmp_hitme[cmp_hitme_count][2]) >= 2) ++cmp_hitme_count;
         }
         else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
+        else if (strncmp(line, "yelloworbs ", 11) == 0) shop_state.owned[7] = (unsigned char)atoi(line + 11);   /* tests: Yellow Orbs held */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "testcam ", 8) == 0)
             cmp_test_camera = sscanf(line + 8, "%f %f %f %f %f %f", &cmp_test_eye[0], &cmp_test_eye[1], &cmp_test_eye[2],
@@ -3623,8 +3626,11 @@ static int script_run(float dt, float floor_y) {
 }
 
 /* Into another room: its stage, Dante at the start the door names, and the room's script from the top. */
+static int room_entry_start;   /* the start he came into this room at: the Game Over's Continue puts him back there */
 static void enter_room(int room, int start, Player *player, FollowCamera *camera) {
     int m10_previous=mission_room>=0?room_number(mission_room):-1;
+    room_entry_start = start;
+    gameover_reset();
     char path[320];
     
     float palace_start[4];
@@ -4410,6 +4416,7 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
 }
 
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    gameover_reset();
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
     enemy_set_attack_slot_limit(1);   /* Includes the Debug Room path, which skips enter_room. */
     if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
@@ -4926,6 +4933,28 @@ int main(int argc, char *argv[]) {
                 msg_fill_env(&env, &player, 0, 0);
                 msg_event_skip(&env, 0);
                 debug_pressed &= ~PSP_CTRL_START;
+            } else if (gameover_active()) {
+                /* Dante is dead (gameover.c): the world holds while the prompt and the menu are up. */
+                GameOverAction action = gameover_update(debug_pressed, dt);
+                if (action == GAMEOVER_REBIRTH) {
+                    float chest[3] = {player.x, player.y + 100.0f, player.z};
+                    if (shop_state.owned[7]) --shop_state.owned[7];
+                    combat_revive(&combat, &player);
+                    fx_explosion(chest);   /* the game's burst of light rays [stand-in] */
+                } else if (action == GAMEOVER_CONTINUE && mission_room != ROOM_NONE) {
+                    enter_room(mission_room, room_entry_start, &player, &camera);
+                    combat_revive(&combat, &player);
+                } else if (action == GAMEOVER_RESTART) start_mission(&mission_choice, &player, &camera);
+                else if (action == GAMEOVER_END) {
+                    menu_draw_buffer = draw_buffer;
+                    music_menu(129);
+                    menu_run_from_mission_select(&mission_choice, NULL, NULL);
+                    play_intro(mission_choice.mission);
+                    start_mission(&mission_choice, &player, &camera);
+                    draw_buffer = menu_draw_buffer;
+                    last_time = sceKernelGetSystemTimeLow();
+                }
+                was_open = 1;
             } else if (mission_mode && !debug_open && (debug_pressed & PSP_CTRL_START)) {
                 pause_open();
                 pause_active = 1;
@@ -5339,7 +5368,8 @@ int main(int argc, char *argv[]) {
             /* Death only in real play (and scenes that ask for it): test scenes rely on him lasting. After he has
              * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
             combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
-            if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
+            /* A second after he lies dead, the Game Over (gameover.c), with the Yellow Orbs he holds. */
+            if (combat_dead_frames(&combat) > 60.0f && !gameover_active()) gameover_start(shop_state.owned[7]);
             {
             int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
             float blow_damage = 0.0f;

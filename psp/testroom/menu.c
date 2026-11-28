@@ -588,6 +588,27 @@ PauseAction pause_update(unsigned int pressed) {
     return PAUSE_NONE;
 }
 
+/* The Yellow Orb's face (the item shop's bottom bar, GROUP_ITEM_YELLOW quad 2) and a dark wash over the screen, for
+ * the Game Over prompt (gameover.c): centred at cx, cy in PSP pixels, h tall, its aspect kept. */
+void menu_draw_yellow_orb(float cx, float cy, float h, unsigned int color) {
+    const Quad *q;
+    float w;
+    if (!header) return;
+    q = group_quad(GROUP_ITEM_YELLOW, 2);
+    w = h * (q->x1 - q->x0) / (q->y1 - q->y0);
+    begin_2d();
+    bind_atlas(q->atlas);
+    sprite(q->u0, q->v0, q->u1, q->v1, cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f, color);
+    end_2d();
+}
+void menu_draw_wash(unsigned int color) {
+    begin_2d();
+    sceGuDisable(GU_TEXTURE_2D);
+    sprite(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, SCR_W, SCR_H, color);
+    sceGuEnable(GU_TEXTURE_2D);
+    end_2d();
+}
+
 void pause_draw(void) {
     int i;
     if (!header) return;
