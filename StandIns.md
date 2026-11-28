@@ -68,8 +68,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   read]. NATIVE_FX.md "Blade trails".
 - **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
   PS2's lattice burst as it ends isn't played (its source isn't found).
-- **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
-  flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
+- **Gimmick models**: crest switches and seal boards are their own models (`gimmick_models.c`), but a switch's flames
+  (effect 0x181) and lit effects are glows, the seals' hands (EFM bmodels) and random shimmer (FUN_0031c390) aren't
+  drawn, and a seal is drawn on every door while a fight is on. Essences and key items are glows (CItemKey's effect
+  isn't ported). `main.c`, `gimmicks.py`, `mission6.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
 
 ## Enemies
@@ -147,7 +149,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Missions and rooms
 
-- **Mission 3**: switch and seal models (stand-ins), the unlock camera event. BAR_CRANK_SPEC.md.
+- **Mission 3**: the unlock camera event. BAR_CRANK_SPEC.md.
 - **Mission 6**: 125's spike trap (CStageSetNeedle not decoded; speed and spacing estimates, `needles.c`, shared with
   131 and Secret Mission 11); the barrier's effect (vfunc +0x114: "no damage" by the walkthrough); 124's switches'
   and wall's places; the pillars don't rise; Essences and Artemis glows; messages, cameras and demos 15 / 321.

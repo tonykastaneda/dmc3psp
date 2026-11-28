@@ -28,6 +28,7 @@
 #include "enemy.h"
 #include "fx.h"
 #include "stage.h"
+#include "gimmick_models.h"
 
 #define STORY_TAG 128            /* tools/gimmicks.py: STAY set n >= 100 is stage tag 128 + n - 100 */
 #define RUBBLE_TAG (STORY_TAG + 0)
@@ -280,10 +281,22 @@ static void box(float x, float y0, float y1, float z, float hx, float hz, float 
 }
 
 /* main.c's seal_draw stand-in for a switch: a hub, 8 blades turning with the charge, 8 flames on a 108 cm circle. */
-static void switch_draw(const Switch *s) {
+static void switch_draw(const Switch *s, int number) {
     float a = s->yaw * 0.0174533f, ux = sinf(a), uz = cosf(a);
     float sx = uz, sz = -ux, px = s->x + ux * 8.0f, py = s->y, pz = s->z + uz * 8.0f;
     int i;
+    if (gim_has_switch(number)) {
+        /* Its own model (gimmick_models.c) on the pillar's joint (the joint's place is the port's, above), lit flames
+         * as glows [stand-in for effect 0x181]. */
+        float push[8], at[4] = {s->x, s->y, s->z, s->yaw}, still[3] = {0.0f, 0.0f, 0.0f};
+        for (i = 0; i < 8; ++i) push[i] = s->lit || s->flames >= SW_PER_FLAME * (i + 1) ? 23.0f : 0.0f;
+        gim_switch_pose(number, s->spin, s->spin2, push, at);
+        for (i = 0; i < 8; ++i) {
+            float b = 45.0f * i * 0.0174533f, r = 108.0f, p[3] = {px + sx * sinf(b) * r, py + cosf(b) * r, pz + sz * sinf(b) * r};
+            if (push[i] > 0.0f) fx_mote(p, still, 26.0f, 2.0f, 0.05f, 0xff3030ffu);
+        }
+        return;
+    }
     box(s->x, py - 22.0f, py + 22.0f, s->z, 22.0f, 22.0f, s->yaw, 0xff505860u, 0xff30363cu);
     for (i = 0; i < 8; ++i) {
         float b = (s->spin + 45.0f * i) * 0.0174533f, r = 50.0f;
@@ -313,10 +326,14 @@ void m6_draw(void) {
             fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
         }
     }
+    if (room_now == 124 && warrior_done) {
+        /* Done: the switches stay on their pillars, still (as baked unlit) [the lit state after the fight isn't read]. */
+        for (i = 0; i < 2; ++i) { Switch still = sw[i]; still.x = sw_place[i][0]; still.y = sw_place[i][1]; still.z = sw_place[i][2]; still.yaw = sw_place[i][3]; switch_draw(&still, 100 + i); }
+    }
     if (room_now == 124 && !warrior_done) {
         float feet[16][3];
         int n = enemy_alive_positions(feet, 16);
-        for (i = 0; i < 2; ++i) switch_draw(&sw[i]);
+        for (i = 0; i < 2; ++i) switch_draw(&sw[i], 100 + i);
         if (barrier_on && ((int)spin % 3) == 0) {
             /* The barrier: a purple mist rising off each one. */
             for (i = 0; i < n; ++i) {

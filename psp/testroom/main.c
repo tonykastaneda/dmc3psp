@@ -83,6 +83,7 @@ int testroom_frame;
 #include "devil_runtime.h"
 #include "mission6.h"
 #include "needles.h"
+#include "gimmick_models.h"
 #include "messages.h"
 #include "blocks.h"
 #include "spheres.h"
@@ -3212,6 +3213,15 @@ static void breakables_enter(int room) {
         if (room_story[i].room == room && mission_choice.mission >= room_story[i].first && mission_choice.mission <= room_story[i].last)
             stage_hide_group(room_story[i].tag);
 }
+/* The room's crest switches and seals drawn from their models (gimmick_models.c). */
+static void gimmicks_enter(int room) {
+    int i;
+    gim_clear();
+    for (i = 0; i < ROOM_GIMMICK_COUNT; ++i)
+        if (room_gimmicks[i].room == room)
+            gim_add(room_gimmicks[i].kind, room_gimmicks[i].number, room_gimmicks[i].tag, room_gimmicks[i].attached,
+                    room_gimmicks[i].door, room_gimmicks[i].o, room_gimmicks[i].r);
+}
 static void crystals_update(float dt) {
     int i;
     for (i = 0; i < ROOM_BREAKABLE_COUNT; ++i) {
@@ -3278,6 +3288,16 @@ static int shop_closed;   /* the shop had its own frames: the game's clock start
  * holds them all shut then), fading in over half a second and out once it's over. Drawn as Mission 3's seal is. */
 static float fight_seal_alpha;
 static int fight_seal_on;
+/* The SEAL set standing in door i (or in another door record with the same box: the later missions' copies). */
+static int door_seal(int i) {
+    const RoomDoor *d = &rooms[mission_room].doors[i];
+    int j, n = gim_seal_at_door(i);
+    for (j = 0; n < 0 && j < rooms[mission_room].door_count; ++j) {
+        const RoomDoor *e = &rooms[mission_room].doors[j];
+        if (e->box[0] == d->box[0] && e->box[1] == d->box[1] && e->box[2] == d->box[2]) n = gim_seal_at_door(j);
+    }
+    return n;
+}
 static void fight_seals_draw(void) {
     int i;
     float shimmer = 0.85f + 0.15f * sinf(seal_time * 0.21f);
@@ -3294,6 +3314,10 @@ static void fight_seals_draw(void) {
         int k;
         if (mission_choice.mission < d->low || mission_choice.mission > d->high || d->next == ROOM_NONE) continue;
         if (d->box[4] > 1000.0f) continue;   /* a fall into another room (112's pit), not a door */
+        if (door_seal(i) >= 0) {
+            /* The door's own seal (its SEAL set's board, red): drawn after the stand-in pass below. */
+            continue;
+        }
         /* The board spans the box's long side, across its middle. */
         if (d->box[3] >= d->box[5]) { x0 = d->box[0] - d->box[3] * 0.5f; x1 = d->box[0] + d->box[3] * 0.5f; z0 = z1 = d->box[2]; }
         else { z0 = d->box[2] - d->box[5] * 0.5f; z1 = d->box[2] + d->box[5] * 0.5f; x0 = x1 = d->box[0]; }
@@ -3311,13 +3335,30 @@ static void fight_seals_draw(void) {
     }
     sceGuDisable(GU_BLEND);
     sceGuDepthMask(GU_FALSE);
+    for (i = 0; i < rooms[mission_room].door_count; ++i) {
+        const RoomDoor *d = &rooms[mission_room].doors[i];
+        int n = door_seal(i);
+        if (n < 0 || mission_choice.mission < d->low || mission_choice.mission > d->high || d->next == ROOM_NONE) continue;
+        gim_seal_draw(n, 0, fight_seal_alpha * shimmer);
+    }
 }
 
 static void seal_draw(void) {
     const RoomSwitchSeal *w = room_seal();
     int i;
     if (!w) return;
-    {
+    if (gim_has_switch(w->sw_number)) {
+        /* The switch's own model, posed as FUN_00306160 does; a lit flame (effect 0x181, red RGB 0x80 0x30 0x30) as a
+         * glow at Rz(-45 i) (0, 85 + 23, 8) [stand-in for the effect]. */
+        float push[8], a = w->disc[3] * 0.0174533f, ux = sinf(a), uz = cosf(a), sx = uz, sz = -ux;
+        for (i = 0; i < 8; ++i) push[i] = sw_flames >= SWITCH_PER_FLAME * (i + 1) ? 23.0f : 0.0f;
+        gim_switch_pose(w->sw_number, sw_spin, sw_spin2, push, 0);
+        for (i = 0; i < 8; ++i) {
+            float b = 45.0f * i * 0.0174533f, r = 108.0f, still[3] = {0.0f, 0.0f, 0.0f};
+            float at[3] = {w->disc[0] + ux * 8.0f + sx * sinf(b) * r, w->disc[1] + cosf(b) * r, w->disc[2] + uz * 8.0f + sz * sinf(b) * r};
+            if (push[i] > 0.0f) fx_mote(at, still, 26.0f + 4.0f * sinf(seal_time * 0.3f + i), 2.0f, 0.05f, 0xff3030ffu);
+        }
+    } else {
         float a = w->disc[3] * 0.0174533f, ux = sinf(a), uz = cosf(a);   /* the disc's normal; its plane is (side, up) */
         float sx = uz, sz = -ux, px = w->disc[0] + ux * 8.0f, py = w->disc[1], pz = w->disc[2] + uz * 8.0f;
         draw_box(w->disc[0], py - 22.0f, py + 22.0f, w->disc[2], 22.0f, 22.0f, w->disc[3], 0xff505860u, 0xff30363cu);
@@ -3333,7 +3374,11 @@ static void seal_draw(void) {
                      w->disc[3], lit ? 0xff3050ffu : 0xff202028u, lit ? 0xff2030c0u : 0xff101018u);
         }
     }
-    if (seal_alpha > 0.0f) {
+    if (seal_alpha > 0.0f && gim_has_seal(w->seal_number)) {
+        /* CStageSetSeal: its own board, tinted by the colour (1 blue), alpha up to 0x40, shimmering [the shimmer's
+         * the port's: FUN_0031c390's random walk isn't ported]. */
+        gim_seal_draw(w->seal_number, w->colour, seal_alpha * (0.85f + 0.15f * sinf(seal_time * 0.21f)));
+    } else if (seal_alpha > 0.0f) {
         /* CStageSetSeal: the board tinted by the colour (1 blue: RGB 0x30 0x40 0x80), alpha up to 0x40, shimmering. */
         float c = cosf(w->board[6]), sn = sinf(w->board[6]), hw = w->board[3], y0 = w->board[4], y1 = w->board[5];
         float x0 = w->board[0] - c * hw, z0 = w->board[2] + sn * hw, x1 = w->board[0] + c * hw, z1 = w->board[2] - sn * hw;
@@ -3396,6 +3441,17 @@ static void mission_gimmicks_draw(void) {
     if (l) {
         /* The lift and its switch are the room's own models (baked into the stage, the lift raised there). */
         stage_set_lift(lift_y - l->low);
+        /* Its switch, from its own model: flames out and spinning once struck [the port's lit state, not the
+         * switch's charge: the lift's switch takes one hit here]. */
+        {
+            static float lift_sw_spin;
+            float push[8];
+            int k, n;
+            if (lift_on) lift_sw_spin += 1.0f;
+            for (k = 0; k < 8; ++k) push[k] = lift_on ? 23.0f : 0.0f;
+            for (k = 0; (n = gim_switch_number(k)) >= 0; ++k)
+                gim_switch_pose(n, fmodf(lift_sw_spin * 60.0f, 180.0f), fmodf(lift_sw_spin * 20.0f, 180.0f), push, 0);
+        }
     }
     seal_draw();
     fight_seals_draw();
@@ -3512,6 +3568,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     path_in_game_dir(path, sizeof(path), rooms[room].file);
     stage_load(path);
     breakables_enter(room);
+    gimmicks_enter(room);
     seal_enter(room);
     msg_prev_room = mission_room != ROOM_NONE ? room_number(mission_room) : -1;   /* op 1e */
     music_room(mission_choice.mission, atoi(rooms[room].file + 5));   /* its on-enter BGM (event op 0x70) */

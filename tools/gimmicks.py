@@ -56,7 +56,7 @@ def parse_game(text):
         s = {"index": len(sets), "number": number, "comment": comment,
              "kind": head[3] if len(head) > 3 else "", "model": None, "bmodel": None, "pos": (0.0, 0.0, 0.0),
              "rot": (0.0, 0.0, 0.0), "scale": (1.0, 1.0, 1.0), "vital": None, "items": [],
-             "box": None, "hit_rot": (0.0, 0.0, 0.0), "hitattr": []}
+             "box": None, "hit_rot": (0.0, 0.0, 0.0), "hitattr": [], "const": None}
         for l in lines[1:]:
             if not l:
                 continue
@@ -80,6 +80,9 @@ def parse_game(text):
                 n = _numbers(rest)
                 if len(n) >= 3:
                     s["hit_rot"] = tuple(n[:3])
+            elif key == "const":   # placed on another set's joint: "const <set number> <joint>"
+                n = _numbers(rest)
+                s["const"] = (int(n[0]), int(n[1]) if len(n) > 1 else 0) if n else None
             elif key == "hitattr":
                 s["hitattr"].append(" ".join(rest.split()))
             elif key == "item":
@@ -361,3 +364,87 @@ def set_motion_bones(pnst, model, index=0):
             axes.append((axis, [(int(k[0]), k[1]) for k in keys]))
         out[b] = (world(b) if b < nodes else (0.0, 0.0, 0.0), axes)
     return out
+
+
+# Crest switches (CStageSetSwitch) and seals (CStageSetSeal), baked from the room's own models with their own batch
+# tags (above the 0-255 of breakables, story pieces and lifts) for psp/testroom/gimmick_models.c to pose and draw.
+# A seal's board (its "model"; the hand, "bmodel", is an EFM and isn't drawn) is SEAL_TAG + k, k its place among the
+# room's seals; the runtime draws it tinted and faded (the main pass skips it). A switch's parts are SWITCH_TAG +
+# SWITCH_PARTS * j + p, by the SCM record each object hangs on as FUN_00306160 poses them: p 0 record 1 (the hub
+# cube, turned about its y by +0x850), 1 record 2 (the disc, about z by +0x854), 2-9 records 3-10 (the blades:
+# blade i is turned Rz(-45 i) and pushed out along its y by +0x858[i]), 10 the rest (records 11-13, not moved).
+# The blades are baked turned to their places (unpushed). A switch on another set's joint ("const", 124's and 130's
+# on their pillars) is baked in model space at the origin and placed by the runtime.
+SEAL_TAG = 256
+SEALS_MAX = 16
+SWITCH_TAG = SEAL_TAG + SEALS_MAX
+SWITCH_PARTS = 11
+SWITCHES_MAX = 4
+
+
+def _switch_part(record):
+    if record == 1:
+        return 0
+    if record == 2:
+        return 1
+    if 3 <= record <= 10:
+        return record - 1
+    return 10
+
+
+def _rz(deg):
+    a = math.radians(deg)
+    return ((math.cos(a), -math.sin(a), 0), (math.sin(a), math.cos(a), 0), (0, 0, 1))
+
+
+def _apply(m, v):
+    return tuple(m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2] for i in range(3))
+
+
+def switches_and_seals(game_text, pnst):
+    """[(set, kind, tag, [(tri, texture)])] in world space, and [(set, kind, first tag, attached)] per gimmick."""
+    found = models(pnst)
+    batches, gims = [], []
+    seals = switches = 0
+    for s in parse_game(game_text):
+        if s["kind"] not in ("SWITCH", "SEAL") or s["model"] is None or s["model"] not in found:
+            continue
+        data = found[s["model"]]
+        if data[:4] != b"SCM ":
+            continue
+        attached = s["const"] is not None
+        if attached:
+            r, sc, p = _rotation((0.0, 0.0, 0.0)), (1.0, 1.0, 1.0), (0.0, 0.0, 0.0)
+        else:
+            r, sc, p = _rotation(s["rot"]), s["scale"], s["pos"]
+        if s["kind"] == "SEAL":
+            if seals >= SEALS_MAX:
+                continue
+            first = SEAL_TAG + seals
+            seals += 1
+        else:
+            if switches >= SWITCHES_MAX:
+                continue
+            first = SWITCH_TAG + SWITCH_PARTS * switches
+            switches += 1
+        parts = {}
+        for obj in parse_scm(data, True)["objects"]:
+            part = _switch_part(obj["node"]) if s["kind"] == "SWITCH" else 0
+            local = _rz(-45.0 * (part - 2)) if 2 <= part <= 9 else None
+            for m in obj["submeshes"]:
+                for f in m["faces"]:
+                    vs = []
+                    for i in f:
+                        v = m["positions"][i]
+                        if local:
+                            v = _apply(local, v)
+                        x, y, z = v[0] * sc[0], v[1] * sc[1], v[2] * sc[2]
+                        vs.append((p[0] + r[0][0] * x + r[0][1] * y + r[0][2] * z,
+                                   p[1] + r[1][0] * x + r[1][1] * y + r[1][2] * z,
+                                   p[2] + r[2][0] * x + r[2][1] * y + r[2][2] * z)
+                                  + tuple(m["uvs"][i]) + tuple(m["colors"][i]))
+                    parts.setdefault(part, []).append((tuple(vs), m["texture"]))
+        for part, tris in sorted(parts.items()):
+            batches.append((s, s["kind"], first + part, tris))
+        gims.append((s, s["kind"], first, attached))
+    return batches, gims

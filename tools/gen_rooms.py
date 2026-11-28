@@ -712,6 +712,7 @@ def main():
                 # Keep existing boxes' behaviour unchanged in other rooms.
                 rooms[name]["boxes"] += [(-1, c, h, a) for tag, c, h, a in authored
                                          if (tag, c, h, a) not in rooms[name]["boxes"]]
+            rooms[name]["gims"] = gimmicks.switches_and_seals(game, stage[5])[1] if len(stage) > 5 else []
             rooms[name]["items"] = parse_items(data)
             rooms[name]["catapults"] = sorted((s for s in gimmicks.parse_game(game) if s["kind"] == "CATAPULT"),
                                               key=lambda s: s["pos"][1])
@@ -871,7 +872,7 @@ def main():
     lines.append("static const RoomStory room_story[] = {" + (",".join(cells) or "{0}") + "};")
     lines.append("/* A crest switch and the seal it takes down: the switch's hit sphere (x y z r) and place (x y z yaw), the")
     lines.append(" * seal's wall (centre, half sizes, yaw radians) and board (centre x y z, half width, bottom, top, yaw). */")
-    lines.append("typedef struct { short mission, room, next_number, colour; float hit[4], disc[4], box[7], board[7]; } RoomSwitchSeal;")
+    lines.append("typedef struct { short mission, room, next_number, colour, sw_number, seal_number; float hit[4], disc[4], box[7], board[7]; } RoomSwitchSeal;")
     cells = []
     for mission, name, sw_n, seal_n, door, colour in SWITCH_SEALS:
         if name not in index:
@@ -885,12 +886,37 @@ def main():
         yaw = math.radians(seal["rot"][1])
         board = tuple(seal["pos"]) + (SEAL_BOARD[0], seal["pos"][1] + SEAL_BOARD[1], seal["pos"][1] + SEAL_BOARD[2], yaw)
         f = lambda v: ",".join(f"{float(x):.1f}f" for x in v)
-        cells.append(f"{{{mission},{index[name]},{int(door)},{colour},{{{f(hit + (SWITCH_HIT[1],))}}},"
+        cells.append(f"{{{mission},{index[name]},{int(door)},{colour},{sw_n},{seal_n},{{{f(hit + (SWITCH_HIT[1],))}}},"
                      f"{{{f(tuple(sw['pos']) + (sw['rot'][1],))}}},{{{f(box + SEAL_BOX[1])},{yaw:.4f}f}},"
                      f"{{{f(board[:6])},{yaw:.4f}f}}}}")
         print(f"room {name}: switch {sw_n} hit {hit}, seal {seal_n} wall {box} +- {SEAL_BOX[1]}, door to {door}")
     lines.append(f"#define ROOM_SWITCH_SEAL_COUNT {len(cells)}")
     lines.append("static const RoomSwitchSeal room_switch_seals[] = {" + (",".join(cells) or "{0}") + "};")
+    # The crest switches and seals baked from their own models (gimmicks.switches_and_seals), for gimmick_models.c.
+    lines.append("/* A room's crest switch (kind 1) or seal (kind 0) drawn from its model: its set number, first stage tag, whether")
+    lines.append(" * it's on another set's joint (baked at the origin, placed by the runtime), the door a seal stands in (-1: none")
+    lines.append(" * within 4 m), and its baked place (x y z, then the 3 x 3 turn, row-major). tools/gimmicks.py. */")
+    lines.append("typedef struct { short room, number, kind, tag, attached, door; float o[3], r[9]; } RoomGimmick;")
+    cells = []
+    for name in names:
+        for g, kind, tag, attached in rooms[name]["gims"]:
+            door = -1
+            if kind == "SEAL" and not attached:
+                best = 400.0
+                for i, d in enumerate(rooms[name]["doors"]):
+                    dist = math.hypot(d["box"][0] - g["pos"][0], d["box"][2] - g["pos"][2])
+                    if dist < best and abs(d["box"][1] - g["pos"][1]) < 600.0:
+                        best, door = dist, i
+            if attached:
+                o, r = (0.0, 0.0, 0.0), gimmicks._rotation((0.0, 0.0, 0.0))
+            else:
+                o, r = g["pos"], gimmicks._rotation(g["rot"])
+            f = lambda v: ",".join(f"{float(x):.4f}f" for x in v)
+            cells.append(f"{{{index[name]},{g['number']},{int(kind == 'SWITCH')},{tag},{int(attached)},{door},"
+                         f"{{{f(o)}}},{{{f([r[i][k] for i in range(3) for k in range(3)])}}}}}")
+    lines.append(f"#define ROOM_GIMMICK_COUNT {len(cells)}")
+    lines.append("static const RoomGimmick room_gimmicks[] = {" + (",".join(cells) or "{0}") + "};")
+    print(f"{len(cells)} switches and seals from their models")
     lines.append("#define SWITCH_CHARGE 300.0f      /* CStageSetSwitch: damage to spin it up, */")
     lines.append("#define SWITCH_FLAMES 560.0f      /* then to light all 8 flames, */")
     lines.append("#define SWITCH_PER_FLAME 70.0f")

@@ -625,9 +625,9 @@ def main() -> None:
     for index, tag in gimmicks.story_tags(game_text).items():
         numbers.setdefault(index, tag)
     prop_batches = 0
-    # A room with a lift also gets its lift and the lift's switch drawn from their own models (the lift tagged so
-    # the runtime can raise it); other switches (Mission 3's crest switch) are drawn by the runtime.
-    extra = ("LIFT", "SWITCH") if re.search(r"# SET\s+\d+\s+LIFT", game_text) else ()
+    # A room with a lift also gets its lift drawn from its own model (tagged so the runtime can raise it). Crest
+    # switches and seals are baked below, part by part (gimmicks.switches_and_seals).
+    extra = ("LIFT",) if re.search(r"# SET\s+\d+\s+LIFT", game_text) else ()
     # Secret Mission 12's blocks (st611): its DUMMY blocks are drawn too, and the moving ones tagged 160 + their set
     # number for the runtime to pose (gen_rooms.py block_sets, psp/testroom/blocks.c).
     block_tags = {}
@@ -666,6 +666,19 @@ def main() -> None:
             batches.append([texture, kind_flag, subdivided, 0, gimmicks.LIFT_TAG if kind == "LIFT" else numbers.get(s["index"], 0), sky,
                             0, 256 + s["index"] if s["index"] < 256 else 0])
             prop_batches += 1
+
+    # Crest switches and seals from their own models, each part under its own tag (psp/testroom/gimmick_models.c).
+    if len(stage) > 5 and not args.scm:
+        gim_batches, _ = gimmicks.switches_and_seals(game_text, stage[5])
+        for s, kind, tag, tris in gim_batches:
+            by_texture = {}
+            for tri, texture in tris:
+                by_texture.setdefault(texture, []).extend(subdivide(tri, play))
+            for texture, subdivided in by_texture.items():
+                texture = min(texture, len(textures) - 1)
+                kind_flag = 2 if texture in blend_textures else (1 if texture in alpha_textures else 0)
+                batches.append([texture, kind_flag, subdivided, 0, tag, False, 0, 0])
+                prop_batches += 1
 
     # Room 216, the Temperance Wagon's ride: its TRUCK set (CStageSetTruck, FUN_004865e0 / 004867b0) turns its parts
     # (model 0, a 90-degree arc of tunnel and rail centred on +Z) about its base (10000, 0, 0) while the wagon stands

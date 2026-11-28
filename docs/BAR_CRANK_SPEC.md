@@ -5,8 +5,10 @@ This is a port-ready spec of the Mission 3 puzzle. In the bar, a crest switch si
 ## PSP implementation and verification (2026-11-05)
 
 The runtime charges from sword hits, drains after the timeout, lights eight flames, fades the blue seal,
-unlocks the Love Planet door, and retains the open state for the rest of the mission. Switch and seal
-graphics are stand-ins; original gimmick models, the unlock camera event and Shotgun pickup are still pending.
+unlocks the Love Planet door, and retains the open state for the rest of the mission. The switch and
+the seal's board are drawn from their own models (`psp/testroom/gimmick_models.c`, 2026-11-27): the switch's parts posed
+as FUN_00306160 does, the board tinted and faded; the flames are glows and the seal's hand isn't drawn. The unlock
+camera event and Shotgun pickup are still pending.
 Damage per hit remains the port's estimate described below.
 
 PPSSPP checks passed for: breaking the dart machines and walking into the alcove to activate the switch;
@@ -95,7 +97,9 @@ boxes are solid in the port (`collision_boxes`). Nothing has to be added for the
   - obj 11: the outer ring (r ≈ 67)
   - obj 12: a flat quad (r ≈ 46)
 
-  `gimmicks.DRAWN` excludes SWITCH, so the port draws nothing for it today.
+  FUN_00306160 poses them by record: record 1 (the cube) turns about its y by +0x850, record 2 (the disc) about its z
+  by +0x854, and blade i (records 3-10) is moved out along its y by +0x858[i], then turned Rz(-45°·i). The 8 blades
+  are built in one place: the game spreads them round the disc. `gimmicks.switches_and_seals` bakes them so.
 - **Seal board, model 17:** an SCM with 50 triangles, flat in local XY at z = 0. It spans x ±154.8 and
   y −218.1..203.7, with full 0..1 UVs on texture 14 and white vertices. In the world it covers x 2145..2455 and
   y −98..324 in the plane z = 1741.
