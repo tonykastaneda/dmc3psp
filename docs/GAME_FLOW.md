@@ -557,8 +557,11 @@ In the port (`psp/testroom/mission18.c`): the route plays from 400 to Mission Cl
 runs its boss from its existing file. Stand-ins and estimates:
 
 - The gates are doors (`EXTRA_DOORS`, Mission 18 only): a box 400 across and 800 high round each GATE's place.
-- **The bingo board's rule** (CStageSetBingo) isn't decoded: the board is read as 3 x 3 in door order (0 1 2 / 3 4 5 /
-  6 7 8), and a full row, column or diagonal opens the mirror (a glow; stepping into it ends the mission).
+- **The bingo board's rule** is CStageSetBingo's (vtable 0x613d90, FUN_004ed320 / 004ed8b0): cell c lights with flag c
+  (door c - 1's boss beaten); twelve links each join two cells (0x5dfd00) and light when both are; any of seven
+  patterns of links (0x5dfdc0) all lit opens the mirror: cells {3 4 5 6}, {1 3 5}, {1 2 3 8 9}, {1 2 4 5 7},
+  {2 3 4 6 7 8 9}, {1 2 3 4 6 7} or {2 3 4 5 7 8 9}, so three bosses (doors 0, 2 and 4) are the fewest. The mirror is a
+  glow; stepping into it ends the mission.
 - 419's heart is spawned as Mission 8 does it (`enemy_add_kind(ENEMY_LEVIATHAN, ...)`); in 417 Geryon starts in his
   ground phase (`geryon_boss_start_on_ground`, added for this). The bosses' arenas are their missions' rooms again, so
   their code runs unchanged.

@@ -176,8 +176,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 16**: the hanging spheres are plain spheres; gravity, damage and switch pairing [estimates]; the items
   aren't held back by them; Lady (above).
 - **Mission 17**: 128's God-cubes aren't moved (Dante comes in at start 2).
-- **Mission 18**: gates are doors; the bingo board's rule (CStageSetBingo) read as 3 × 3 in door order; the mirror is
-  a glow; all of 401's chessmen (EST 35-40) have their own logic.
+- **Mission 18**: gates are doors; the mirror is a glow (the bingo board's rule is CStageSetBingo's, its board model
+  isn't drawn lit); all of 401's chessmen (EST 35-40) have their own logic.
 - **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect (E0x2e0's model texture isn't decoded) and tint, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
   group 0 respawns in place of groups 1 and 0, the glass's turn isn't played. `mission19.c`, PortJobs.
 - **Mission 20**: see MISSION20_SPEC.md.
