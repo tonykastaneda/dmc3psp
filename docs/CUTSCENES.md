@@ -436,7 +436,19 @@ Y 4143, NY 139, NX 129, Z 75, NZ 44, X 33, and 27 chains mix axes, so a chain is
 
 **The other simulator.** `ClothSim1D` (model clip +`0x38`, `FUN_002ec400`, applied from `FUN_002342b0` when that
 pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone pairs on the model work
-(+`0x664`). It is in demos 6, 7, 39 and 41 only. Coats use the chain above.
+(+`0x664`). It is in demos 6, 7, 39 and 41 only (Cerberus's chains `em125_05`, demo 7's `wp115_01`, `wp139_01`).
+Coats use the chain above. Decoded (2026-11-27): the `.clt` is `ClothSim1D n length`, Gravity, SpringForce, Damping,
+MaxSpeed, FloorLevel (`FUN_002ec400`); `FUN_002eb4b0` makes n particles `length` apart (0x80 each: two position
+buffers, rest, velocity, mass 1, up to 8 links with their rest lengths), both ends pinned. The model update
+(`FUN_00235be0`) sets the first particle to CnsPos0's bone and the last to CnsPos1's each frame, lays them evenly
+between the two on the first, and steps (`FUN_002eb830`, from one buffer to the other): a stretched link pulls by
+SpringForce x the stretch (a slack one doesn't push), gravity, Damping, the MaxSpeed cap, the move, the floor (the
+velocity scaled by +0x10 there). Then bone i + 1 goes to link i's middle, its x along the link, z = x × (0, 0, 1),
+y = z × x (`FUN_00132df0`). **In the port** (`demo_cloth.c` demo_rope_apply): all of that; `prepare_demo` writes an
+84-byte "R1D1" trailer at the actor's cloth block (the clip's values, the ends, and a stage node's baked place when an
+end is the stage: demo 6's walls are st006's nodes 1-5, 9-10 m up). The floor factor +0x10 is taken as 0 and the
+capsule pushes (+0x50-0x5c) aren't run [inferred: none set for these]. Checked: demo 6 frame 700 (`d6rope_700.png`
+against the old build's `d6old_700.png`): the chains run from Cerberus's collar to the walls.
 
 ## In the port
 

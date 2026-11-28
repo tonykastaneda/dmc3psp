@@ -681,6 +681,31 @@ static void pose(Actor *a, int depth) {
                          &a->world_pos[0][0], &a->world_rot[0].m[0][0],
                          parents, &local[0][0], d->bones, blob + d->pad[0], d->pad[1], demo_clock,
                          caps, ncaps);
+        {   /* its ClothSim1D rope, between two models' bones (FUN_00235be0) */
+            int s0, b0, s1, b1, n, found = 0, ends;
+            float e0[3], e1[3];
+            if ((ends = demo_rope_ends(blob + d->pad[0], d->pad[1], &s0, &b0, &s1, &b1, e0, e1)) != 0) {
+                found = (ends >> 1) & 3;   /* a stage node's end comes baked */
+                for (n = 0; n < actor_count; ++n) {
+                    const Actor *o = &actors[n];
+                    if (!o->d) continue;
+                    if (o->d->slot == s0 && b0 >= 0 && b0 < o->d->bones) { memcpy(e0, o->world_pos[b0], sizeof e0); found |= 1; }
+                    if (o->d->slot == s1 && b1 >= 0 && b1 < o->d->bones) { memcpy(e1, o->world_pos[b1], sizeof e1); found |= 2; }
+                }
+                {
+                    static int noted[64];
+                    int me = (int)(a - actors);
+                    if (me < 64 && !noted[me]) {
+                        extern void enemy_test_note(const char *what, int a, float b);
+                        noted[me] = 1;
+                        enemy_test_note("demo rope ends found", d->slot * 10 + found, found == 3 ? e1[1] - e0[1] : 0.0f);
+                    }
+                }
+                if (found == 3)
+                    demo_rope_apply((int)(a - actors), blob + d->pad[0], d->pad[1], e0, e1,
+                                    &a->world_pos[0][0], &a->world_rot[0].m[0][0], d->bones, demo_clock);
+            }
+        }
     }
 }
 
