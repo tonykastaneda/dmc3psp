@@ -654,6 +654,9 @@ def main() -> None:
                     continue
             elif block_tags.get(s["number"]):
                 numbers[s["index"]] = block_tags[s["number"]]
+        # Mission 19's mirrors in 405 (STAY 445-452): tags 304-311, hidden as each breaks (mission19.c).
+        if args.slot == 756 and s["kind"] == "STAY" and 445 <= s["number"] <= 452:
+            numbers[s["index"]] = 304 + s["number"] - 445
         # M10's two rotating bridge arms and the lake's rising bridge.
         if args.slot == 516 and s["kind"] == "STAY" and s["number"] in (1,2):
             numbers[s["index"]] = 239 + s["number"]
