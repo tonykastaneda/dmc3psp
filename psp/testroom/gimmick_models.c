@@ -180,3 +180,26 @@ void gim_switch_sounds(GimSwitchSound *s, float charge, float window, int lit, f
     else if (charge <= 200.0f) { sfx_play_room(0x18, 0x20, 0.0f, 1.0f); s->hum = 15.0f; }
     else { sfx_play_room(0x19, 0x20, 0.0f, 1.0f); s->hum = 5.0f; }
 }
+
+/* ---- Turning props (gimmicks.spin_parts: 205's and 207's bladed pillars): each part turned about y through its
+ * set's place at its motion's rate, the motion's frame advancing a frame a frame (a loop of 240). */
+#define SPIN_MAX 48
+static struct { short tag; float x, z, rate; } spins[SPIN_MAX];
+static int spin_count;
+static float spin_frame;
+void gim_spins_clear(void) { spin_count = 0; spin_frame = 0.0f; }
+void gim_spin_add(int tag, float x, float z, float rate) {
+    if (spin_count >= SPIN_MAX) return;
+    spins[spin_count].tag = (short)tag; spins[spin_count].x = x; spins[spin_count].z = z; spins[spin_count].rate = rate;
+    ++spin_count;
+}
+void gim_spins_update(float frames) {
+    int i;
+    spin_frame = fmodf(spin_frame + frames, 240.0f);
+    for (i = 0; i < spin_count; ++i) {
+        float a = spins[i].rate * spin_frame, c = cosf(a), s = sinf(a), x = spins[i].x, z = spins[i].z;
+        /* Ry as gimmicks._rotation: (c 0 s; 0 1 0; -s 0 c), about (x, z). */
+        float m[12] = {c, 0.0f, s, x - c * x - s * z, 0.0f, 1.0f, 0.0f, 0.0f, -s, 0.0f, c, z + s * x - c * z};
+        stage_set_group_matrix(spins[i].tag, m);
+    }
+}

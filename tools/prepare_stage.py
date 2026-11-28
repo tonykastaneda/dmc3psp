@@ -636,7 +636,11 @@ def main() -> None:
         extra = ("DUMMY",)
         for bs, motion in gen_rooms.block_sets(game_text.replace("\r", ""), stage[5]):
             block_tags[bs["number"]] = gen_rooms.BLOCK_TAG + bs["number"] if motion else 0
+    spin_parts, spin_rest = (gimmicks.spin_parts(game_text, stage[5]) if args.slot in gimmicks.SPIN_SLOTS and len(stage) > 5
+                             else ([], {}))
     for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra, static_efm=680 <= args.slot <= 732) if len(stage) > 5 else []):
+        if s["index"] in spin_rest:
+            tris = spin_rest[s["index"]]   # its turning parts are baked below under their own tags
         if args.slot == 752 and s["kind"] == "STAY" and s["number"] in (100, 101, 102, 103):
             import gen_rooms   # Mission 19's hourglass parts, posed by psp/testroom/mission19.c
             if s["model"] in gen_rooms.HOURGLASS_MODELS:
@@ -670,6 +674,8 @@ def main() -> None:
     # Crest switches and seals from their own models, each part under its own tag (psp/testroom/gimmick_models.c).
     if len(stage) > 5 and not args.scm:
         gim_batches, _ = gimmicks.switches_and_seals(game_text, stage[5])
+        for tag, pivot, rate, tris in spin_parts:
+            gim_batches.append((None, "SPIN", tag, tris))
         needle = gimmicks.needle_model(game_text, stage[5])
         if needle:
             gim_batches.append((None, "NEEDLE", gimmicks.NEEDLE_TAG, needle))

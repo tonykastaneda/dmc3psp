@@ -276,7 +276,8 @@ script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run t
   reaches the end crystal, which takes down seal 101 on the door to 204 (flag 34); a hit on crest switch 100 puts the
   crystals back. Crystals are glows and the beam a line (their models aren't converted).
 - **205's and 207's bladed pillars** hurt on touch from their COLLISION cylinders (`atk`, `platk`; `parse_hazards`),
-  once a second; the 700 damage is an estimate and the blades don't turn.
+  once a second; the 700 damage is an estimate. Their blades turn as the pillar model's own looping motion has them
+  (four rings, two and four turns either way every 240 frames; `gimmicks.spin_parts`, `gimmick_models.c`).
 - Mission Clear comes as Nevan falls (`CLEAR_ROOMS`), not by 210's door 1 and demo 24. 206's item 31 isn't in.
 - **Arachnes** (em010, GDATA 121, pack 5 in the table at 0x58e740) have their own model, motions and class (`enemy.c` The Arachne, ENEMY_SPECS H):
   they run at Dante, lunge and leap. Which motion is which is read from their root paths; their class's decision

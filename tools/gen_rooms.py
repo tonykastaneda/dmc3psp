@@ -713,6 +713,8 @@ def main():
                 rooms[name]["boxes"] += [(-1, c, h, a) for tag, c, h, a in authored
                                          if (tag, c, h, a) not in rooms[name]["boxes"]]
             rooms[name]["gims"] = gimmicks.switches_and_seals(game, stage[5])[1] if len(stage) > 5 else []
+            rooms[name]["spins"] = ([(t, p, r) for t, p, r, _ in gimmicks.spin_parts(game, stage[5])[0]]
+                                    if slot in gimmicks.SPIN_SLOTS and len(stage) > 5 else [])
             rooms[name]["items"] = parse_items(data)
             rooms[name]["catapults"] = sorted((s for s in gimmicks.parse_game(game) if s["kind"] == "CATAPULT"),
                                               key=lambda s: s["pos"][1])
@@ -916,6 +918,12 @@ def main():
                          f"{{{f(o)}}},{{{f([r[i][k] for i in range(3) for k in range(3)])}}}}}")
     lines.append(f"#define ROOM_GIMMICK_COUNT {len(cells)}")
     lines.append("static const RoomGimmick room_gimmicks[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("/* A room's turning prop parts (gimmicks.spin_parts): stage tag, the axis's place, radians a frame about y. */")
+    lines.append("typedef struct { short room, tag; float x, z, rate; } RoomSpin;")
+    cells = [f"{{{index[name]},{t},{p[0]:.1f}f,{p[2]:.1f}f,{r:.6f}f}}" for name in names for t, p, r in rooms[name]["spins"]]
+    lines.append(f"#define ROOM_SPIN_COUNT {len(cells)}")
+    lines.append("static const RoomSpin room_spins[] = {" + (",".join(cells) or "{0}") + "};")
+    lines.append("#define ROOM_GIMMICKS_DONE 1")
     print(f"{len(cells)} switches and seals from their models")
     lines.append("#define SWITCH_CHARGE 300.0f      /* CStageSetSwitch: damage to spin it up, */")
     lines.append("#define SWITCH_FLAMES 560.0f      /* then to light all 8 flames, */")

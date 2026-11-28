@@ -3226,6 +3226,9 @@ static void breakables_enter(int room) {
 static void gimmicks_enter(int room) {
     int i;
     gim_clear();
+    gim_spins_clear();
+    for (i = 0; i < ROOM_SPIN_COUNT; ++i)
+        if (room_spins[i].room == room) gim_spin_add(room_spins[i].tag, room_spins[i].x, room_spins[i].z, room_spins[i].rate);
     for (i = 0; i < ROOM_GIMMICK_COUNT; ++i)
         if (room_gimmicks[i].room == room)
             gim_add(room_gimmicks[i].kind, room_gimmicks[i].number, room_gimmicks[i].tag, room_gimmicks[i].attached,
@@ -3465,6 +3468,7 @@ static void mission_gimmicks_draw(void) {
                 gim_switch_pose(n, fmodf(lift_sw_spin * 60.0f, 180.0f), fmodf(lift_sw_spin * 20.0f, 180.0f), push, 0);
         }
     }
+    gim_spins_update(1.0f);   /* a draw a frame */
     seal_draw();
     fight_seals_draw();
     if (mission_choice.mission == 6) m6_draw();
