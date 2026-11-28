@@ -448,3 +448,17 @@ def switches_and_seals(game_text, pnst):
             batches.append((s, s["kind"], first + part, tris))
         gims.append((s, s["kind"], first, attached))
     return batches, gims
+
+
+# The spike traps (CStageSetNeedle): the set's model, a spiked panel, baked once in model space for
+# psp/testroom/needles.c to draw at each panel's place.
+NEEDLE_TAG = 318
+
+
+def needle_model(game_text, pnst):
+    """[(tri, texture)] of the room's NEEDLE set's model at the origin, or []."""
+    found = models(pnst)
+    for s in parse_game(game_text):
+        if s["kind"] == "NEEDLE" and s["model"] in found:
+            return model_triangles(found[s["model"]])
+    return []

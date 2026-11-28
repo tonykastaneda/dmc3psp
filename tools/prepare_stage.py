@@ -670,6 +670,9 @@ def main() -> None:
     # Crest switches and seals from their own models, each part under its own tag (psp/testroom/gimmick_models.c).
     if len(stage) > 5 and not args.scm:
         gim_batches, _ = gimmicks.switches_and_seals(game_text, stage[5])
+        needle = gimmicks.needle_model(game_text, stage[5])
+        if needle:
+            gim_batches.append((None, "NEEDLE", gimmicks.NEEDLE_TAG, needle))
         for s, kind, tag, tris in gim_batches:
             by_texture = {}
             for tri, texture in tris:

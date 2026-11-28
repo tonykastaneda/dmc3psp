@@ -57,6 +57,8 @@ void stage_set_group_matrix(int tag, const float m[12]);
 void stage_set_group_mode(int tag, int mode);
 /* One gimmick tag's batches, blended src * src_fix + dst * dst_fix (fixed colours 0xBBGGRR). */
 void stage_draw_group(int tag, unsigned int src_fix, unsigned int dst_fix);
+/* One gimmick tag's batches once more, placed by a world matrix (3 x 4 row-major). */
+void stage_draw_group_at(int tag, const float m[12]);
 void stage_clear_boxes(void);
 void stage_add_box(float x, float y, float z, float hx, float hy, float hz, float yaw, int tag);
 /* A negative box tag enables its walkable top (permanent authored platforms). */

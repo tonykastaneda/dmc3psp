@@ -151,8 +151,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 ## Missions and rooms
 
 - **Mission 3**: the unlock camera event. BAR_CRANK_SPEC.md.
-- **Mission 6**: 125's spike trap (CStageSetNeedle not decoded; speed and spacing estimates, `needles.c`, shared with
-  131 and Secret Mission 11); the barrier's effect (vfunc +0x114: "no damage" by the walkthrough); 124's switches'
+- **Mission 6**: the spike traps' level (125, 131, 610; `needles.c`) by the difficulty, not the value the game reads
+  (game +4, +0x10, vfunc +0x1c); the barrier's effect (vfunc +0x114: "no damage" by the walkthrough); 124's switches'
   and wall's places; the pillars don't rise; messages, cameras and demos 15 / 321.
 - **Mission 7**: 114's jump pads' arc; 105's hanging ball (CStageSetHang hit counts, stand-in blocks); 127's door
   into 114 lands on the ground floor; 144 has no rain.
@@ -169,7 +169,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 15**: the portal is struck from the walkway; its wait 120 frames [estimate]. `mission15.c`.
 - **Mission 16**: the hanging spheres are plain spheres; gravity, damage and switch pairing [estimates]; the items
   aren't held back by them; Lady (above).
-- **Mission 17**: 128's God-cubes aren't moved (Dante comes in at start 2); 131's spikes are Mission 6's stand-in.
+- **Mission 17**: 128's God-cubes aren't moved (Dante comes in at start 2).
 - **Mission 18**: gates are doors; the bingo board's rule (CStageSetBingo) read as 3 × 3 in door order; the mirror is
   a glow; all of 401's chessmen (EST 35-40) have their own logic.
 - **Mission 19**: 405's mirrors run (mission19.c) with a green glow for their effect (E0x2e0's model texture isn't decoded) and tint, the port's 42 / 84 a blow and its heavy hit for the throw; 403 and 406 are only passed through; the hourglass's HUD is a countdown,
@@ -177,7 +177,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 20**: see MISSION20_SPEC.md.
 - **Mission 20's ending street** (`credits_fight.c`, docs/CREDITS_FIGHT.md): the kill counter's place on the PSP screen is matched to the PCSX2 capture, not converted from the PS2's screen units; every death in the street counts once (the PS2 counted 121 for 100 spawns, not decoded). Lady the ally (`lady_boss.c` ally modes 0x2f-0x33): her shots fly at her target and only it takes them (the game's bullet hits any enemy on team 1), their damage from her attack records (80 a bullet, 0x5cbc40; 1500 the rocket) given as that many of Dante's hits; her target is the nearest enemy (FUN_0044c8b0's cone test isn't ported); her rocket counter (+0x4838) fills 5 a bullet up to 100 and the rocket takes 50 (FUN_004497f0 / 0044cc40), every shot taken as in her sight (FUN_00359b40, which picks 5 or 1, isn't ported) [inferred]; 0x85's three shots and the rocket's frame are estimates; enemies don't attack her (the Seven Hells' AI targets the player, game+0xc, and nothing in it refers to her) and she isn't counted by the spawn script's alive gates [inferred]. The staff roll: a page's full alpha 0x40 is drawn as opaque [inferred: the model's alpha doubled]; the pages are the disc's pictures cut to 256 colours (tools/prepare_staffroll.py) and drawn 4:3 in the middle of the screen as the PCSX2 capture shows them; each loads from the memory stick when its slot frees (a short read on the PSP). The ending: op 7e [3] / [4] are taken as stopping and resuming Dante's and the enemies' updates [inferred]; EST ops 10 / 11 and what sets the ending flag (game+10) aren't decoded (the port's flag is Mission 20's room 012); the music is the room's BGM table's (the credits' track isn't checked: the capture has no sound). The look: the fog's colour is LIG2's (checked in PCSX2), but its near 0 / far 4100 is fitted to PCSX2's measured fog [estimate]; the stage is drawn 3.5x the port's usual brightness, measured against PCSX2 at the same camera (why the PS2 draws it brighter isn't decoded) [estimate].
 - **Secret Missions**: 600's goal [inferred]; 605's 60 s limit [estimate]; 608's wagons (CStageSetTruck's timetable,
-  the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall); 610's spikes (Mission 6's stand-in);
+  the walkthrough's eight wagons at 2.5 m/s [estimate], shots pass every wall);
   611's block sides don't stop Dante, their start when he enters is the port's. `secret_missions.c`, GAME_FLOW.md.
 - **Bloody Palace** (`bloody_palace.c`, docs/BLOODY_PALACE.md): ordinary EST encounters use the Normal column;
   Palace's native attack-slot budget = floor/1000+1 is applied to the shared scheduler; separate boss AI retains its own scheduling. Portals use the original V965/V967/V964
