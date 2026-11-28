@@ -36,7 +36,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
   track held until a fight and the stage channel dipping under it [inferred]; tracks loop at their ADX loop points) and
   the system bank's effects (menus, orbs; that it's the game's type 0 is inferred). Dante's own bank and his ten weapons' play from his moves'
-  events; footsteps and the enemies' and rooms' banks aren't in yet. MUSIC.md. GAME_FLOW.md.
+  events, his footsteps and the crest switches' and seals' sounds the room's own bank (type 8); the enemies' banks
+  (types 2-6), the event scripts' sounds (ops 71 / 72, type 7), the other gimmicks' sounds and the sounds' distance
+  falloff (FUN_0033d8d0) aren't in yet. MUSIC.md. GAME_FLOW.md.
 - **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
 - **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
   `main.c` ~4296, EVENT_SCRIPTS.md.
@@ -68,8 +70,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   read]. NATIVE_FX.md "Blade trails".
 - **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
   PS2's lattice burst as it ends isn't played (its source isn't found).
-- **Gimmick models** aren't converted: seals are tinted boards, lifts stone blocks, switches a hub with blades and
-  flames, Essences and key items glows. `main.c` ~2706 / 2808 / 2933, `gimmicks.py`, `mission6.c`, `mission7.c`.
+- **Gimmick models**: crest switches and seal boards are their own models (`gimmick_models.c`), but a switch's flames
+  (effect 0x181) and lit effects are glows, the seals' hands (EFM bmodels) and random shimmer (FUN_0031c390) aren't
+  drawn, and a seal is drawn on every door while a fight is on. `main.c`, `gimmicks.py`, `mission6.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
 
 ## Enemies
@@ -150,10 +153,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Missions and rooms
 
-- **Mission 3**: switch and seal models (stand-ins), the unlock camera event. BAR_CRANK_SPEC.md.
+- **Mission 3**: the unlock camera event. BAR_CRANK_SPEC.md.
 - **Mission 6**: 125's spike trap (CStageSetNeedle not decoded; speed and spacing estimates, `needles.c`, shared with
   131 and Secret Mission 11); the barrier's effect (vfunc +0x114: "no damage" by the walkthrough); 124's switches'
-  and wall's places; the pillars don't rise; Essences and Artemis glows; messages, cameras and demos 15 / 321.
+  and wall's places; the pillars don't rise; messages, cameras and demos 15 / 321.
 - **Mission 7**: 114's jump pads' arc; 105's hanging ball (CStageSetHang hit counts, stand-in blocks); 127's door
   into 114 lands on the ground floor; 144 has no rain.
 - **Mission 9**: 203's light beam (CRYSTAL 102) isn't decoded (the reset panel drops seal 101); 205's / 207's bladed

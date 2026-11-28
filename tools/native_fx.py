@@ -27,6 +27,7 @@ from tim2 import decode_picture
 
 ORB_V = (45, 186, 187, 188, 189)
 ORB_E = (185, 235)   # E235: Wall Hike's kick off the wall (FUN_002fd0c0, same bank)
+ITEM_V = (0xa0,)     # V160: a key item lying (CItemKey, FUN_00428600: FUN_00208580(3, 0xa0), looping)
 CERBERUS_V = (
     115, 166, 171, 117, 89, 101, 97, 72, 48, 237, 90, 320, 321, 293, 180, 177, 178, 179, 181, 172, 173, 174,
     126, 691, 118, 150, 151, 78, 66,
@@ -262,7 +263,7 @@ def main():
     # V0x83: Air Hike (FUN_00222700); V0x14d: Enemy Step (FUN_00228950); V0x90: Cerberus's and Beowulf's charges start
     # (FUN_00272210, FUN_0027abf0) and kicks off a wall or an enemy. V0xdc, E0x140, V0x3c: the Devil Trigger (CEfcPub,
     # FUN_00332240 ids 0x20-0x24 / 0x42-0x46). G0x5f, V0x29, V0x7b: CEfcPub 0x58 (Beowulf's 7:31) for the default costume.
-    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90, 0xdc, 0x3c, 0x5f | G_FLAG, 0x29, 0x7b, 0xc0, 0x295, 0x26a, 0x265, 0x264, 0x267, 0x269, 0x2a6), ORB_E + (0x140,), (44,)))
+    summary.append(write_bank(lines, 0, records(read(167)), ORB_V + ITEM_V + (4, 0x1c, 6, 0x83, 0x14d, 0x90, 0xdc, 0x3c, 0x5f | G_FLAG, 0x29, 0x7b, 0xc0, 0x295, 0x26a, 0x265, 0x264, 0x267, 0x269, 0x2a6), ORB_E + (0x140,), (44,)))
     summary.append(write_bank(lines, 1, records(pnst_entries(read(130))[23]), CERBERUS_V, CERBERUS_E, CERBERUS_P))
     leviathan = records(read(690))
     summary.append(write_bank(lines, 2, leviathan,

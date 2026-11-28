@@ -4,6 +4,7 @@
 #include <pspgu.h>
 #include <pspgum.h>
 #include "mission7.h"
+#include "gimmick_models.h"
 #include "fx.h"
 #include "enemy.h"
 
@@ -137,6 +138,14 @@ void m7_draw(void) {
     int i, left;
     float lift, y;
     if (room_now != 105) return;
+    if (gim_has_switch(100)) {
+        /* The crest switch's own model (gimmick_models.c): a flame out for each eighth of its hits, spinning once lit
+         * [the port's hit count, not CStageSetSwitch's charge]. */
+        float push[8];
+        int lit = switch_lit ? 8 : switch_hits * 8 / SWITCH_HITS;
+        for (i = 0; i < 8; ++i) push[i] = i < lit ? 23.0f : 0.0f;
+        gim_switch_pose(100, switch_lit ? fmodf(spin * 60.0f, 180.0f) : 0.0f, switch_lit ? fmodf(spin * 20.0f, 180.0f) : 0.0f, push, 0);
+    } else
     /* Stand-ins (the stage's own models aren't converted): the switch's hub, red once lit... */
     box(sw_at[0], sw_at[1] - 25.0f, sw_at[1] + 25.0f, sw_at[2], 25.0f, switch_lit ? 0xff3050ffu : 0xff606870u,
         switch_lit ? 0xff2030c0u : 0xff404850u);
