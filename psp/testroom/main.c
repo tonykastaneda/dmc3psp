@@ -3589,6 +3589,11 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     gimmicks_enter(room);
     sfx_room(room_number(room));   /* its footsteps */
     seal_enter(room);
+    if (room_number(room) == 144) {
+        /* The room's STE record (its data's STE chunk: type 2, id 0x71, at its place): G113 of its own pack, the rain. */
+        static const float rain_at[3] = {3555.0f, 4300.0f, 3545.0f};
+        nfx_spawn(NFX_ROOM144, 113 | 0x8000, rain_at, 0.0f, 1);
+    }
     if (mission_choice.mission == 9 && room_number(room) == 203) {
         /* 203's light beam: CRYSTAL 102 ("no 0", at its set's place), struck back by crest switch 100 (secret_missions.c's
          * CStageSetCrystal); its end crystal lit is flag 34, seal 101's (seal_update). */

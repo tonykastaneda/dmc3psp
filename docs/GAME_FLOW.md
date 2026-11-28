@@ -228,7 +228,9 @@ Normal 4 Lusts and 3 Greeds) -> back up -> 138 Moonlight Mile -> 142 (demo 17) -
   1320 frames before it rises at 10 a frame and the switch must be struck again); its shell takes 1200 of damage in
   five stages and breaks below 0, and the Skull shows. Stand-ins: the ball's EFM model drawn as blocks, its swing a
   plain pendulum, Dante's damage 42 / 84 (`psp/testroom/mission7.c`).
-- 142's area 0 (demo 17) leads to 144. No cutscenes, and 144 has no rain.
+- 142's area 0 (demo 17) leads to 144. 144's rain is its STE record (its data's STE chunk: type 2, id 0x71, at
+  (3555, 4300, 3545)): G113 of the room's own effect pack (GDATA 502, native bank 28) with its particles P201 / P202.
+  Other rooms' STE effects aren't read.
 - Approximation: 127's door into 114 lands on the ground floor (start 0), not the 9000 balcony Dante drops from.
 - Damned Pawns (`pawn.inc`): their hops and strike as decoded; turns now use the shared chess master (`chess.c`, docs/CHESS.md), at the port's fixed rank0.
   Hell Greeds (`greed.inc`): the coffin's flight and summon as decoded; when they summon is an estimate.

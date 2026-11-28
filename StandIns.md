@@ -160,7 +160,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   before 111 rises [estimate]; messages, cameras and demos 15 / 321.
 - **Mission 7**: 114's jump pads' arc; 105's hanging ball (CStageSetHang decoded: its drop, 1320-frame clock, 1200 HP and five shell stages; stand-ins: its
   EFM model as blocks, its swing a damped pendulum, the switch lit again to restart it [inferred]); 127's door
-  into 114 lands on the ground floor; 144 has no rain.
+  into 114 lands on the ground floor; the rooms' STE effects are read only for 144's rain.
 - **Mission 9**: 203's light beam runs CStageSetCrystal's layout 0 (crystals drawn as glows, the beam a line); 205's / 207's bladed
   pillars' 700 damage [estimate] (their blades turn by their models' own motion);
   206's item 31; 204 / 205 / 207 run group 0 by the walkthrough [inferred].

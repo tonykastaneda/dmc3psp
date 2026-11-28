@@ -322,6 +322,8 @@ def main():
     # the slashes FUN_004e0fc0 starts with an action on his body: 0x1a V0x2fc, 0x1b V0x2fd, 0x1c V0x2fe, 0x47 V0x2ff,
     # 0x2a V0x300 + V0x32e, 0x27 V0x34f. docs/VERGIL_SPEC.md "Effects".
     summary.append(write_bank(lines, 27, records(pac_list(read(139))[57]), (0x338, 0x2fc, 0x2fd, 0x2fe, 0x2ff, 0x300, 0x32e, 0x34f), ()))
+    # 28 room 144's own effect pack (GDATA 502, the room's third file): its STE record starts G113, the rain.
+    summary.append(write_bank(lines, 28, records(read(502)), (113 | G_FLAG,), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     # The blade trails' models (docs/NATIVE_FX.md "Blade trails"): M34 (Dante's pack), M30 / M31 (A&R's), 33 bones in a
