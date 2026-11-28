@@ -14,8 +14,8 @@
  *     then goes out. All beaten: the barrier's gone and the Essence of Fighting (item 40) is there.
  * 127 The Dark Corridor: its area 0 plays demo 15, which clears the mission.
  *
- * Stand-ins: the Essences lie as a glow (as Mission 4's Astronomical Board); the switches are drawn as Mission 3's
- * is; the barrier is a purple mist on each enemy and makes them take no damage (the walkthrough: "lighting the two
+ * The Essences lie as the game's key-item glint (V160, gimmick_models.c); the switches are their own models.
+ * Stand-ins: the barrier is a purple mist on each enemy and makes them take no damage (the walkthrough: "lighting the two
  * structures removes the barriers"; what the barrier does in the game, through each enemy's vfunc +0x114, isn't
  * decoded). The pillars don't rise, and the cameras, messages and the demo aren't in. */
 #include <math.h>
@@ -314,10 +314,12 @@ static void switch_draw(const Switch *s, int number) {
 void m6_draw(void) {
     int e, i;
     for (e = 0; e < 3; ++e) {
-        /* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
+        /* A key item (CItemKey): its effect V160; the port's glow (a soft core and sparks) only if that can't start. */
         float core[3], still[3] = {0.0f, 0.0f, 0.0f};
         if (essence_at[e].room != room_now || !item_shown(e)) continue;
-        core[0] = essence_at[e].x; core[1] = essence_at[e].y + 70.0f; core[2] = essence_at[e].z;
+        core[0] = essence_at[e].x; core[1] = essence_at[e].y; core[2] = essence_at[e].z;
+        if (gim_key_item(core)) continue;   /* CItemKey's V160 */
+        core[1] += 70.0f;
         fx_mote(core, still, 70.0f + 12.0f * sinf(spin * 0.15f), 60.0f, 0.05f, 0xffa0f0ffu);
         if (((int)spin % 4) == 0) {
             unsigned int r = fx_random_u32();

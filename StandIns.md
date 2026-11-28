@@ -70,8 +70,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models**: crest switches and seal boards are their own models (`gimmick_models.c`), but a switch's flames
   (effect 0x181) and lit effects are glows, the seals' hands (EFM bmodels) and random shimmer (FUN_0031c390) aren't
-  drawn, and a seal is drawn on every door while a fight is on. Essences and key items are glows (CItemKey's effect
-  isn't ported). `main.c`, `gimmicks.py`, `mission6.c`.
+  drawn, and a seal is drawn on every door while a fight is on. `main.c`, `gimmicks.py`, `mission6.c`.
 - **Hit shapes** (types 2 / 3 / 4 / 6) are read by their use [inferred]. ENEMY_SPECS.md G.
 
 ## Enemies
@@ -152,7 +151,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 3**: the unlock camera event. BAR_CRANK_SPEC.md.
 - **Mission 6**: 125's spike trap (CStageSetNeedle not decoded; speed and spacing estimates, `needles.c`, shared with
   131 and Secret Mission 11); the barrier's effect (vfunc +0x114: "no damage" by the walkthrough); 124's switches'
-  and wall's places; the pillars don't rise; Essences and Artemis glows; messages, cameras and demos 15 / 321.
+  and wall's places; the pillars don't rise; messages, cameras and demos 15 / 321.
 - **Mission 7**: 114's jump pads' arc; 105's hanging ball (CStageSetHang hit counts, stand-in blocks); 127's door
   into 114 lands on the ground floor; 144 has no rain.
 - **Mission 9**: 203's light beam (CRYSTAL 102) isn't decoded (the reset panel drops seal 101); 205's / 207's bladed

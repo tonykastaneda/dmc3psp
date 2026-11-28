@@ -22,4 +22,10 @@ void gim_switch_hide(int number, int hidden);
 /* Seal set `number`'s board: colour 0 red, 1 blue, 2 purple; alpha 0..1 of its full 0x40. */
 void gim_seal_draw(int number, int colour, float alpha);
 
+/* Key items: the game's own effect (V160) at each one lying, named every frame it's shown (0 if it couldn't start:
+ * the caller's glow stands in). gim_items_end_frame stops the rest; gim_items_reset after nfx_reset. */
+int gim_key_item(const float at[3]);
+void gim_items_end_frame(void);
+void gim_items_reset(void);
+
 #endif

@@ -115,8 +115,9 @@ to 111 after 104, 110's to 111 never (it's entered from 112), and 112's to 113 i
 
 The lift and its switch are the room's own models (`tools/gimmicks.py` bakes a lift room's LIFT and SWITCH
 sets into its stage; the lift's batches are tagged 254 and drawn raised to its height). The
-Astronomical Board lies as a glow with sparks rising off it: key items (`CItemKey`, vtable `0x60d820`) are an
-effect with a pick-up range of 200 cm, not a model. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
+Astronomical Board lies as the game's own glint: key items (`CItemKey`, vtable `0x60d820`) are an effect, V160 from
+static_effect.pac (FUN_00428600: `FUN_00208580(3, 0xa0)`, looping; a 4-frame white flash and a flat streak growing
+over 30 frames), with a pick-up range of 200 cm (FUN_004289d0), not a model. Lift speed is an estimate. Where a start point has no floor under it (110's, on a gimmick that isn't
 in the stage collision), the room gets a pad at that height. 112's stairs don't collapse: the pit is open,
 and falling in is what takes Dante to 104.
 

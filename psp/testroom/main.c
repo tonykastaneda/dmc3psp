@@ -3404,7 +3404,8 @@ static void seal_draw(void) {
         sceGuDepthMask(GU_FALSE);
     }
 }
-/* A key item (CItemKey) lies as a glow, not a model: a soft core and sparks rising off it. */
+/* The port's glow (a key item's if its effect can't start, the Bloody Palace's portals): a soft core and sparks
+ * rising off it. */
 static void key_glow(const float *p) {
     float core[3] = {p[0], p[1] + 70.0f, p[2]}, still[3] = {0.0f, 0.0f, 0.0f};
     fx_mote(core, still, 70.0f + 12.0f * sinf(goal_spin * 0.15f), 60.0f, 0.05f, 0xffa0f0ffu);
@@ -3415,6 +3416,8 @@ static void key_glow(const float *p) {
         fx_mote(at, up, 24.0f, 4.0f, 0.9f, (r >> 24 & 1) ? 0xffffffffu : 0xff60d0ffu);
     }
 }
+/* A key item (CItemKey) lies as the game's effect V160 (gimmick_models.c). */
+static void key_item_draw(const float *p) { if (!gim_key_item(p)) key_glow(p); }
 static void mission_gimmicks_draw(void) {
     const RoomLift *l;
     const MissionInfo *info;
@@ -3476,12 +3479,13 @@ static void mission_gimmicks_draw(void) {
     }
     info = &missions[mission_choice.mission - 1];
     goal_spin += 1.0f;
-    if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) key_glow(info->goal);
+    if (info->goal_room == mission_room && room_is_cleared(info->goal_after)) key_item_draw(info->goal);
     {
         int i;
         for (i = 0; i < ROOM_KEY_ITEM_COUNT; ++i)
-            if (key_item_shown(&room_key_items[i])) key_glow(&room_key_items[i].x);
+            if (key_item_shown(&room_key_items[i])) key_item_draw(&room_key_items[i].x);
     }
+    gim_items_end_frame();
     sceGuEnable(GU_TEXTURE_2D);
 }
 
@@ -3565,6 +3569,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
     enemy_set_count(0, player->x, player->z);
     orbs_clear();
     nfx_reset();
+    gim_items_reset();
     path_in_game_dir(path, sizeof(path), rooms[room].file);
     stage_load(path);
     breakables_enter(room);
@@ -5616,7 +5621,7 @@ int main(int argc, char *argv[]) {
                 path_in_game_dir(path, sizeof(path), "FOCUS_DONE.TXT");
                 report = fopen(path, "w");
                 if (report) {
-                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d pfx_dropped=%d pfx_peak=%d nfx_seqs=%d\narm_fx %s\n%s", cmp_frames, enemy_poses_done(), pfx_started(), pfx_dropped(), pfx_peak(), nfx_live_seqs(), arm_fx_log, enemy_giga_log());
+                    fprintf(report, "cmp done, frames=%d enemy_poses=%d pfx_started=%d pfx_dropped=%d pfx_peak=%d nfx_seqs=%d nfx_elements=%d\narm_fx %s\n%s", cmp_frames, enemy_poses_done(), pfx_started(), pfx_dropped(), pfx_peak(), nfx_live_seqs(), nfx_live_elements(), arm_fx_log, enemy_giga_log());
                     fprintf(report,"hud hp=%.0f/%.0f dt=%.3f/%.0f active=%d melee_hits=%d gun_hits=%d\n",player.health,player.health_max,player.dt_energy,player.dt_max,player.devil,combat.hits_dealt,bullets_hits());
                     fprintf(report,"own=0x%04x melee=%d gun=%d style=%d room=%d pos=%.0f,%.0f,%.0f alive=%d item34=%d\n",player_owned,player.melee_weapon,player.gun_weapon,(int)player.style,room_number(mission_room),player.x,player.y,player.z,enemy_alive_count(),item_state[34]);
                     { char nl[96]; needles_status(nl, sizeof nl); fprintf(report, "%s\n", nl); }

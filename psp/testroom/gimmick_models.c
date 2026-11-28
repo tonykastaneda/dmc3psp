@@ -130,3 +130,35 @@ void gim_seal_draw(int number, int colour, float alpha) {
     dst = d << 16 | d << 8 | d;
     stage_draw_group(g->tag, src, dst);
 }
+
+/* ---- Key items (CItemKey): the game's V160 from static_effect.pac, looping at the item (FUN_00428600). A caller
+ * names each item lying this frame; gim_items_end_frame stops those not named (taken, or the room left). */
+#include "nfx.h"
+#define KEY_FX_MAX 8
+static struct { float at[3]; int handle, seen; } key_fx[KEY_FX_MAX];
+
+int gim_key_item(const float at[3]) {
+    int i, free_slot = -1;
+    for (i = 0; i < KEY_FX_MAX; ++i) {
+        if (key_fx[i].handle && !nfx_alive(key_fx[i].handle)) key_fx[i].handle = 0;
+        if (key_fx[i].handle && fabsf(key_fx[i].at[0] - at[0]) < 1.0f && fabsf(key_fx[i].at[1] - at[1]) < 1.0f
+            && fabsf(key_fx[i].at[2] - at[2]) < 1.0f) { key_fx[i].seen = 1; return 1; }
+        if (!key_fx[i].handle && free_slot < 0) free_slot = i;
+    }
+    if (free_slot < 0) return 0;
+    key_fx[free_slot].handle = nfx_spawn(NFX_STATIC, 0xa0, at, 0.0f, 1);
+    if (!key_fx[free_slot].handle) return 0;
+    memcpy(key_fx[free_slot].at, at, sizeof key_fx[free_slot].at);
+    key_fx[free_slot].seen = 1;
+    return 1;
+}
+
+void gim_items_end_frame(void) {
+    int i;
+    for (i = 0; i < KEY_FX_MAX; ++i) {
+        if (key_fx[i].handle && !key_fx[i].seen) { nfx_kill(key_fx[i].handle); key_fx[i].handle = 0; }
+        key_fx[i].seen = 0;
+    }
+}
+
+void gim_items_reset(void) { memset(key_fx, 0, sizeof key_fx); }
