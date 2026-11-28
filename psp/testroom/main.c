@@ -5374,7 +5374,8 @@ int main(int argc, char *argv[]) {
                 vergil_boss_dante(combat.action, player.yaw);
                 /* The game's event mode (op 49, FUN_0023e450) doesn't stop the enemies: their task category runs on.
                  * What it stops is below (no blow lands while an event is on). */
-                enemy_set_dante_yaw(player.yaw);
+                enemy_set_dante_view(player.yaw, atan2f(camera.tx - camera.x, camera.tz - camera.z),
+                                     combat_move_is_gun(combat.move));
             PROF_MARK();
             if (!credits_fight_frozen()) enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
             PROF_END(3);

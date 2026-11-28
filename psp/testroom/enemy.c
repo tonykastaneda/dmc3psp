@@ -6799,12 +6799,17 @@ static void beowulf_hit_glue(HitKind kind, float from_x, float from_z) {
  * Its bite holds Dante (FUN_0021f2e0, combat_hold) and its hold (7) drains his Devil Trigger (FUN_0021eae0: 20 a frame,
  * 1000 a rune [inferred]) until he struggles 60 points free (8) or its time's up (9, the burst).
  * Dante's side of the bite (his lift and turn, FUN_0049dac0's states) is combat.c's; the struggle starts afresh as
- * the hold (7) starts (FUN_00254a10). Stand-ins: the rank-0 teleport (4) reappears ahead of his
- * facing, not the camera's; 16 (a dodge when he does move 0x11 near it) isn't triggered. */
+ * the hold (7) starts (FUN_00254a10). The blink uses the camera's heading, and the dodge
+ * checks Dante's gun move as the port's equivalent of +0x284a == 0x11. */
 enum { SE_HOVER = 0, SE_COME = 1, SE_KNOCK = 2, SE_KNOCK2 = 3, SE_BLINK = 4, SE_CLOSE = 5, SE_BITE = 6, SE_HOLD = 7,
-       SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DEATH = 30 };
-static float se_dante_yaw, se_dt_drain;
-void enemy_set_dante_yaw(float yaw) { se_dante_yaw = yaw; }
+       SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DODGE = 16, SE_DEATH = 30 };
+static float se_dante_yaw, se_camera_yaw, se_dt_drain;
+static int se_dante_gun_move;
+void enemy_set_dante_view(float yaw, float camera_yaw, int gun_move) {
+    se_dante_yaw = yaw;
+    se_camera_yaw = camera_yaw;
+    se_dante_gun_move = gun_move;
+}
 float enemy_take_dt_drain(void) { float d = se_dt_drain; se_dt_drain = 0.0f; return d; }
 
 static int se_init(void) {
@@ -6830,10 +6835,10 @@ static void se_go(int a) {
     script_play(a == SE_DEATH ? 2 : a == SE_ARRIVE ? 13 : a);
 }
 
-/* FUN_00359b40: is it within his facing's cone (+-60 degrees) [the cone's width is read as 0x5555 either way]. */
+/* FUN_00359b40 halves the supplied 0xaaab before comparing the turn (±120 degrees). */
 static int se_seen(float px, float pz) {
     float d = wrap_angle(atan2f(e->pos[0] - px, e->pos[2] - pz) - se_dante_yaw);
-    return fabsf(d) < PI / 3.0f;
+    return fabsf(d) <= ANGLE(0x5555);
 }
 
 /* FUN_0049dea0 at rank 0: in his view, hover (0); out of it, come for him (1). */
@@ -6880,7 +6885,27 @@ static void soul_update_glue(float f, float px, float py, float pz) {
         return;
     }
     if (e->se_hit_pending && (a == SE_HOVER || a == SE_COME)) { e->se_hit_pending = 0; se_go(SE_SHOWN); a = SE_SHOWN; }
+    if ((a == SE_HOVER || a == SE_COME) && e->se_sight <= 0.0f && se_dante_gun_move &&
+        hypotf(d, py - e->pos[1]) < 200.0f) {
+        se_go(SE_DODGE);
+        a = SE_DODGE;
+    }
     switch (a) {
+    case SE_DODGE:
+        /* FUN_00433c20: back away for 30 frames while facing him. */
+        hover = 1;
+        if (e->step == 0) {
+            e->se_vel[0] = (ai_unit() - 0.5f) * 5.0f;
+            e->se_vel[1] = 0.5f;
+            e->se_vel[2] = -12.0f;
+            e->timer = 30.0f;
+            e->step = 1;
+        }
+        goyle_turn_to(px, pz, turn, f);
+        e->se_vel[2] = fminf(0.0f, e->se_vel[2] + f);
+        se_move(f);
+        if (e->timer <= 0.0f) se_decide(px, pz);
+        break;
     case SE_HOVER:
         hover = 1;
         if (e->step == 0) { e->timer = se_time(a); e->step = 1; e->wake = 0.0f; }
@@ -6919,9 +6944,15 @@ static void soul_update_glue(float f, float px, float py, float pz) {
         if (e->step == 1) {
             e->veil = 1.0f - (e->timer > 0.0f ? e->timer : 0.0f) / 10.0f;
             if (e->timer <= 0.0f) {
-                float ang = se_dante_yaw + (ai_unit() - 0.5f) * (PI / 4.0f), r = 400.0f + 500.0f * ai_unit(), g;
-                e->se_to[0] = px + sinf(ang) * r; e->se_to[2] = pz + cosf(ang) * r;
-                e->se_to[1] = (floor_under(px, py + 100.0f, pz, &g) ? g : py) + 100.0f;
+                float ang = se_camera_yaw + (ai_unit() - 0.5f) * (PI / 4.0f);
+                float r = 400.0f + 500.0f * ai_unit(), ground, hit;
+                float from[3] = {e->pos[0], e->pos[1] + 100.0f, e->pos[2]};
+                float target[3] = {px + sinf(ang) * r, py + 100.0f, pz + cosf(ang) * r};
+                if (floor_under(px, py + 100.0f, pz, &ground)) target[1] = ground + 100.0f;
+                if (!stage_loaded() || !stage_raycast(from, target, &hit)) {
+                    memcpy(e->se_to, target, sizeof e->se_to);
+                    giga_note("soul_blink", (int)r, ang);
+                } else memcpy(e->se_to, e->pos, sizeof e->se_to);
                 e->timer = 10.0f; e->step = 2; e->veil = 1.0f;
             }
         } else if (e->step == 2) {

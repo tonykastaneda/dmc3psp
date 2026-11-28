@@ -103,8 +103,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Fallen**: its damage handler, 3 cm per frame ground approach, and front-hit wing guard are approximations. The
   higher-rank spear projectile (action 0x16) is unported. `fallen.c`, `enemy.c` ~5383.
 - **Dullahan**: which script is which [inferred]. `dullahan.c`.
-- **Soul Eater**: Dante is held from its bite and struggles free (above); the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
-  dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
+- **Soul Eater**: dodge action 16 uses the port's gun move classification for Dante's state 0x11. DT drain conversion
+  (1000 units per rune) is inferred.
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
