@@ -50,7 +50,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   read), bosses and the big enemies still take the old 260 cm reach, and the attack records (ops 6 / 7: damage, hit
   kind) aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; shotgun spread and tracers
   are stand-in effects. MOVESET_RE.md, `combat.c`.
-- **Stand-in guard motion** without a loop range. `combat.c` ~1436.
+- **The held guard** loops from 24:30's start (frame 10), as the guard state replaying the script would [inferred:
+  FUN_00224850 isn't decoded]. `combat.c`.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (the Jester's

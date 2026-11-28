@@ -1742,8 +1742,13 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             seek_events(c);
         }
     } else if (d->hold_loop && c->frame >= m->end_frame - 1.0f) {
-        c->frame = m->loop_start;   /* stand-in guard motion without a loop range */
+        /* The held guard: 24:30 plays motion 24:0 from frame 10 to its end, and the guard state asks for 24:30 again
+         * while the button's held [FUN_00224850 isn't decoded: read from the script's start frame], so it loops from
+         * the script's start, not the motion's first frame. */
+        float from = c->script >= 0 && script_data[c->script].start >= 0 ? (float)script_data[c->script].start : m->loop_start;
+        c->frame = from;
         motion_root(m, c->frame, c->last_root);
+        seek_events(c);
     }
     c->flag = 0;
     hits = run_events(c);
