@@ -163,7 +163,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 9**: 203's light beam runs CStageSetCrystal's layout 0 (crystals drawn as glows, the beam a line); 205's / 207's bladed
   pillars' 700 damage [estimate] (their blades turn by their models' own motion); Mission Clear as Nevan falls (not door 1 / demo 24);
   206's item 31; 204 / 205 / 207 run group 0 by the walkthrough [inferred].
-- **Mission 11**: the wagon ride's camera moves (ops 0x7c / 0x7d), clock and lights, the truck's enemy part, and the track's chaining (three baked copies) are the port's (GAME_FLOW); 214's slide blocks (300 × zure a hit, stone boxes, don't stop Dante); Mission Clear as
+- **Mission 11**: the wagon ride's camera moves (ops 0x7c / 0x7d), clock and lights, the truck's enemy part, and the track's chaining (three baked copies) are the port's (GAME_FLOW); 214's slide blocks (CStageSetSlide decoded: damage x zure a hit at 10 cm a frame; Dante's damage 42 / 84,
+  stone boxes, don't stop Dante); Mission Clear as
   Beowulf falls, not demo 30. `wagon.c`, `mission11.c`.
 - **Mission 12**: Mission Clear handling of start 1 [approximation]. `mission12.c`.
 - **Mission 13**: 216 is a static 8 × 4 m deck (the ride doesn't move); Dante leaves 216 at 239 start 1; 201's bridge
