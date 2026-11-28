@@ -1548,12 +1548,36 @@ scene_done:
             float h = (float)size * (float)SCR_HEIGHT / 448.0f * 1.5f, y = (float)sy * (float)SCR_HEIGHT / 448.0f - h * 0.3f;
             char row[112];
             const char *p = line;
+            float widest = 0.0f, x0;
+            /* As the PS2 lays it out: the block centred on its widest line (its x is (640 - that width) / 2 in the
+             * PS2's font), every line starting at that x. Measured in this font, so the block keeps its shape. */
+            while (*p) {
+                int n = 0;
+                float w;
+                while (p[n] && p[n] != '\n' && n < 111) { row[n] = p[n]; ++n; }
+                row[n] = 0;
+                w = menu_font_width(h, row);
+                if (w > widest) widest = w;
+                p += n;
+                if (*p == '\n') ++p;
+            }
+            /* The PS2's widest line spans 640 - 2x. Size this font so it spans the same, then start at x. */
+            x0 = (float)sx * (float)SCR_WIDTH / 640.0f;
+            if (widest > 0.0f && sx > 0 && sx < 320) {
+                float scale = ((float)SCR_WIDTH - 2.0f * x0) / widest;
+                if (scale > 2.0f) scale = 2.0f;
+                if (scale < 0.75f) scale = 0.75f;
+                h *= scale;
+                widest *= scale;
+            }
+            x0 = (SCR_WIDTH - widest) * 0.5f;
+            p = line;
             while (*p) {
                 int n = 0;
                 while (p[n] && p[n] != '\n' && n < 111) { row[n] = p[n]; ++n; }
                 row[n] = 0;
-                menu_font_draw(SCR_WIDTH / 2 - menu_font_width(h, row) * 0.5f + 1.0f, y + 1.0f, h, row, 0xc0000000u);
-                menu_font_draw(SCR_WIDTH / 2 - menu_font_width(h, row) * 0.5f, y, h, row, 0xffffffffu);
+                menu_font_draw(x0 + 1.0f, y + 1.0f, h, row, 0xc0000000u);
+                menu_font_draw(x0, y, h, row, 0xffffffffu);
                 y += h * 1.15f;
                 p += n;
                 if (*p == '\n') ++p;

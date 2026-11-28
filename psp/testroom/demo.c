@@ -692,15 +692,6 @@ static void pose(Actor *a, int depth) {
                     if (o->d->slot == s0 && b0 >= 0 && b0 < o->d->bones) { memcpy(e0, o->world_pos[b0], sizeof e0); found |= 1; }
                     if (o->d->slot == s1 && b1 >= 0 && b1 < o->d->bones) { memcpy(e1, o->world_pos[b1], sizeof e1); found |= 2; }
                 }
-                {
-                    static int noted[64];
-                    int me = (int)(a - actors);
-                    if (me < 64 && !noted[me]) {
-                        extern void enemy_test_note(const char *what, int a, float b);
-                        noted[me] = 1;
-                        enemy_test_note("demo rope ends found", d->slot * 10 + found, found == 3 ? e1[1] - e0[1] : 0.0f);
-                    }
-                }
                 if (found == 3)
                     demo_rope_apply((int)(a - actors), blob + d->pad[0], d->pad[1], e0, e1,
                                     &a->world_pos[0][0], &a->world_rot[0].m[0][0], d->bones, demo_clock);
