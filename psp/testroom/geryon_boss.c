@@ -43,7 +43,8 @@ extern unsigned int enemy_ai_random(void);
 extern int testroom_frame;
 
 enum { PART_HORSE, PART_CART, PART_MISSILE, PART_SPHERE, PART_SMALL };
-/* Actions (+5), both bodies play motion n for action n [inferred]. */
+/* Actions (+5): their scripts ([12] horse, [16] cart, bank 0 by action) play motion n for action n, 1-18; 0 plays
+ * 0 then 1, 19 (0x13) motion 9 for a frame and 20 (0x14) motion 15. A_DEATH (0x13) is the port's: it plays gh19. */
 enum {
     A_IDLE = 0, A_WALK = 1, A_THINK = 3, A_CHARGE = 4, A_TURN_L = 5, A_TURN_R = 6, A_TURN_BACK = 7,
     A_SPHERES = 8, A_HIDE = 9, A_MISSILES = 0x0b, A_SHOCK = 0x0e, A_GALLOP_L = 0x10, A_GALLOP_R = 0x11,
@@ -267,8 +268,17 @@ static void bridge_clamp(void) {
     gb.pos[0] = bridge_a[0] + (bridge_b[0] - bridge_a[0]) * t;
     gb.pos[2] = bridge_a[2] + (bridge_b[2] - bridge_a[2]) * t;
 }
+/* Think is action 3 (4bfb20 / 4c0c50): its script plays motion 3 to its end (144 frames; root motion only, no turn,
+ * 42e580) and the pick comes then. On the ground, a horse beyond 800 from the centre and facing it within 0x2000
+ * (45 degrees) goes straight to the spheres (8) as think starts. */
 static void go_think(void) {
-    set_action(A_IDLE, 1);
+    if (gb.phase == 1 && flat_distance(gb.pos, gb.centre) > SPHERE_RANGE &&
+        fabsf(wrap_angle(angle_to(gb.centre) - gb.yaw)) < PI / 4.0f) {
+        set_action(A_SPHERES, 0);
+        set_state(S_SPHERES);
+        return;
+    }
+    set_action(A_THINK, 0);
     set_state(S_IDLE);
 }
 static void start_charge(void) {
@@ -288,15 +298,10 @@ static void think_bridge(void) {
     if ((gb.think_count++ % 3) == 0) start_charge();
     else { set_action(A_CAST, 0); set_state(S_SPHERES); }
 }
-/* Phase 1's think (4c0c50): far from the centre and facing it, the spheres; else the gallop round it. */
+/* Phase 1's think (4c0c50), once its script is over (the spheres' check came as it started, go_think): the gallop
+ * round the centre. */
 static void think_ground(void) {
-    float d = flat_distance(gb.pos, gb.centre);
     if (gb.near_time > 90.0f) { gb.near_time = 0.0f; set_action(A_SHOCK, 0); set_state(S_SHOCK); return; }
-    if (d > SPHERE_RANGE && fabsf(wrap_angle(angle_to(gb.centre) - gb.yaw)) < PI / 2.0f) {
-        set_action(A_SPHERES, 0);
-        set_state(S_SPHERES);
-        return;
-    }
     gb.side = !gb.side;   /* +0x97a: the gallops alternate */
     gb.laps = GALLOP_WINDOWS; gb.gallop_clip=0; gb.window_time=0;
     set_action(gb.side ? A_GALLOP_R : A_GALLOP_L, 1);
@@ -328,7 +333,7 @@ static void ai_step(float f) {
     else gb.near_time = fmaxf(0.0f, gb.near_time - f);
     switch (gb.state) {
     case S_IDLE:
-        if (gb.timer < (gb.phase ? 40.0f : 60.0f)) { turn_toward(angle_to(gb.dante), 182.0f * UNITS * f); break; }
+        if (!gb.horse.done) break;   /* 255b70: action 3's script is over */
         if (gb.phase == 0) think_bridge(); else think_ground();
         break;
     case S_CHARGE:

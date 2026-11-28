@@ -137,7 +137,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   is decoded (gauges, flinch windows, the brace), but Dante's blows take estimated amounts from his gauges (Dante's
   attack records aren't decoded); his coat and cord swing as their .clt chains, with Dante's body capsules [inferred];
   his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
-- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
+- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; his death's motion (gh19) [inferred]; the cart's missiles'
   path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
   runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
 - **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority), and so is where he rises when lit (3c4c40); the underground travel is a jump; his coat's

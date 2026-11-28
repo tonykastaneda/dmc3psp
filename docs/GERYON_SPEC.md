@@ -25,7 +25,7 @@ does something simpler. A line that doesn't say is decoded. Values are quoted at
 | [3] [5] [7] | Shells: the missile (2 bones), the red sphere, a small one |
 | [9] | The horse: 33 bones, 2,165 triangles; faces +z, 452 tall |
 | [11] | The horse's 21 motions (`gh00`-`gh20`; ends 249, 249, 249, 144, 29, 29, 29, 83, 47, 55, 292, 343, 430, 249, 80, 135, 29, 29, 29, 249, 249) |
-| [12] [16] | Their scripts (mode-0 tables); one per action [inferred: action *n* plays motion *n*] |
+| [12] [16] | Their scripts (mode-0 tables), bank 0 by action: action *n* plays motion *n* for 1-18; 0 plays 0 then 1, 0x13 motion 9 for a frame, 0x14 motion 15 (both bodies) |
 | [13] | The carriage: 19 bones, 3,737 triangles (z −1015 to 114: it trails the hitch at the horse's origin) |
 | [15] | The carriage's 21 motions (`gc00`-`gc20`) |
 
@@ -74,7 +74,10 @@ has 3-5 rotation, 6-8 translation].
 ## 6. In the port (`psp/testroom/geryon_boss.c`, `tools/prepare_geryon.py`)
 
 Sections 3-5 at rank 0. Approximations:
-- **Motions:** most actions still play `gh`*n* and `gc`*n* by index. Horse gallops 10/11 now use decoded
+- **Motions:** actions play `gh`*n* and `gc`*n* by index, as their scripts do. Think is action 3 (`4bfb20` /
+  `4c0c50`): motion 3 to its end (144 frames), then the pick; it doesn't turn (`42e580` is root motion); on the
+  ground the spheres' check (beyond 800 from the centre, facing it within 45°) comes as it starts. The port's death
+  plays gh19 under its own action 0x13 [the dying update isn't read]. Horse gallops 10/11 now use decoded
   script window timing (below), not the earlier twelve-motion-loop substitute. The full remaining horse/cart
   scripts are not yet executed.
 - **Phase 0:** think → the charge (every third) or the cast (0x12 → 8: the spheres) → the charge. The charge runs
