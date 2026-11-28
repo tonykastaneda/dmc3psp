@@ -110,3 +110,18 @@ patch=1,EE,002e0d54,word,44810000
 patch=1,EE,002e0d58,word,03e00008
 patch=1,EE,002e0d5c,word,00000000
 ```
+
+## Running in the background (2026-11-27)
+
+`tools/pcsx2_ref.py` no longer needs PCSX2 in front. Its pad is a virtual Xbox 360 pad (ViGEmBus, `vgamepad`):
+`setup()` binds the private copy's Pad1 to the XInput slot that pad lands in (the first free one; the user's own pads
+keep theirs) and turns the XInput source on; XInput is read without focus. States load and save over PINE
+(`load_state(slot)` / `save_state(slot)`, opcodes 0x0A / 0x09) instead of the F1 / F3 hotkeys. Shots and recordings
+come from the window's own drawing (`grab`: PrintWindow with PW_RENDERFULLCONTENT; the Vulkan window comes out, also
+covered). `start()` opens the window without activating it (and hands the foreground back if it takes it), and moves
+it to a second display when there is one. `focus()` does nothing unless the keyboard path is asked for
+(`PCSX2_REF_KEYBOARD=1`). The private copy is muted ([SPU2/Output] OutputMuted, OutputVolume 0, FastForwardVolume 0).
+Checked: boot, the title's warning dismissed by the pad, slot 1 loaded, the stick and triangle moving Dante, a 3 s
+recording; GetForegroundWindow sampled every 50 ms from before the launch never was the emulator (0 of 840).
+The HD Collection (`tools/hd_ref.py`) can't go the same way: it reads XInput slot 0 only and stops while unfocused,
+so it keeps the keyboard and the focus; its shots now use the window's drawing where that isn't black.
