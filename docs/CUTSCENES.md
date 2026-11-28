@@ -202,8 +202,21 @@ Mission 2's opening, demo 3; the ending, demo 59: `analysis/testroom/demo5_sky_c
   8x16 kernel), not a tint. Demo 5 has it only on frames 0-271 (frame 180: grey, Alpha 48, Scale 16, DirNum 4,
   Feedback 4, Attenuate 0.85); frames 300 and 1260 have none. Demo 59 has it the whole cut (frame 700: R140 G132
   B128, Alpha 64, Scale 8, DirNum 4, DirOffset 23, Feedback 5, Attenuate 0.9) plus a BGA of the same family
-  (Alpha 38, Feedback 4). Nothing in the renderer samples the frame at a reduced size, and a blur of the 480x272
-  frame is the pass that does not fit under about 1.5 ms, so neither glow nor blur is drawn. ATF is not part of this.
+  (Alpha 38, Feedback 4). ATF is not part of this.
+- **ScrEfc blur and glow, on the GE (2026-11-27, `post_fx.c`).** `prepare_demo` bakes the FCS / DOF / SGA / BGA clips
+  into an "SFX1" block after the stage hide events; `demo_post_fx` picks this frame's. The pass: the frame copied to a
+  120 x 68 buffer (VRAM past the depth buffer, 0x160000 and 0x16c000) with the bilinear filter; a blur pass redraws
+  it into the other buffer four times a texel off diagonally at a quarter each; the clip's Power passes (FCS / DOF)
+  or Feedback passes (SGA / BGA, at most 3). The blur goes back as screen sprites drawn at the depth value of a view
+  distance with the depth test, so only what's farther is covered: half beyond OutStartZ (DOF StartZ), all beyond
+  OutEndZ (EndZ). The glow is the copy less a level of 0x70 (GU_REVERSE_SUBTRACT), blurred and added in Color at Alpha.
+  Not modelled [inferred / approximations]: FCS's near band (InStartZ / InEndZ) and Range, SGA's Scale, DirNum,
+  DirOffset and Attenuate (its directional smear), the threshold (the port's). Cost: the display-list build grows
+  about 20 us (demo 5, PPSSPP), 60 FPS kept; PPSSPP doesn't time the GE, and by its fill (about 330 Mpx/s textured and
+  blended) the blur is about 0.95 ms (two screen-size layers, three quarter-size passes) and the glow about 0.55 ms
+  [estimate], 1.5 ms with both (demo 59's first 300 frames). Checked: demo 5 frames 300 and 1260 (`post5_*.png`
+  against `post5off_*`, test line `nopost 1`): the backgrounds behind Vergil and Arkham soft, the faces sharp; frame
+  180's glow is faint. Not compared with PCSX2 yet.
 - Demo 3's over-the-shoulder shot (frame 1260) was the near plane cutting Dante; the cap is 25 cm, below.
 
 **Demo 3's over-the-shoulder "holes" were the near plane, not culled triangles.** Frame 1240 puts the eye 30-40 cm
@@ -423,7 +436,19 @@ Y 4143, NY 139, NX 129, Z 75, NZ 44, X 33, and 27 chains mix axes, so a chain is
 
 **The other simulator.** `ClothSim1D` (model clip +`0x38`, `FUN_002ec400`, applied from `FUN_002342b0` when that
 pointer is set) is a separate system. `ClothSim1DCnsPos0` / `CnsPos1` store bone pairs on the model work
-(+`0x664`). It is in demos 6, 7, 39 and 41 only. Coats use the chain above.
+(+`0x664`). It is in demos 6, 7, 39 and 41 only (Cerberus's chains `em125_05`, demo 7's `wp115_01`, `wp139_01`).
+Coats use the chain above. Decoded (2026-11-27): the `.clt` is `ClothSim1D n length`, Gravity, SpringForce, Damping,
+MaxSpeed, FloorLevel (`FUN_002ec400`); `FUN_002eb4b0` makes n particles `length` apart (0x80 each: two position
+buffers, rest, velocity, mass 1, up to 8 links with their rest lengths), both ends pinned. The model update
+(`FUN_00235be0`) sets the first particle to CnsPos0's bone and the last to CnsPos1's each frame, lays them evenly
+between the two on the first, and steps (`FUN_002eb830`, from one buffer to the other): a stretched link pulls by
+SpringForce x the stretch (a slack one doesn't push), gravity, Damping, the MaxSpeed cap, the move, the floor (the
+velocity scaled by +0x10 there). Then bone i + 1 goes to link i's middle, its x along the link, z = x × (0, 0, 1),
+y = z × x (`FUN_00132df0`). **In the port** (`demo_cloth.c` demo_rope_apply): all of that; `prepare_demo` writes an
+84-byte "R1D1" trailer at the actor's cloth block (the clip's values, the ends, and a stage node's baked place when an
+end is the stage: demo 6's walls are st006's nodes 1-5, 9-10 m up). The floor factor +0x10 is taken as 0 and the
+capsule pushes (+0x50-0x5c) aren't run [inferred: none set for these]. Checked: demo 6 frame 700 (`d6rope_700.png`
+against the old build's `d6old_700.png`): the chains run from Cerberus's collar to the walls.
 
 ## In the port
 
@@ -484,8 +509,14 @@ and, when `ResetCltLevel` is above 0, step that many times at the pose held for 
 above 32 is capped; the game's update just before the snap is overwritten by it). Each bone keeps its own axis, NY
 included. These scripts' wind is 0 and they name no capsules. A coat on Dante's 23-bone body still gets the
 gameplay capsules (spine and both legs), so the chains can't hang through him. `ClothSim1D` is not run. A Bone line whose axis token
-is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`);
-bone 8 is X and bone 6 takes that axis.
+is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`).
+The game's tokeniser (`FUN_0022fca0`) binds bone 6 and reads the next token as its axis (`X` 0, `Y` 1, `Z` 2, `NX` 3,
+`NY` 4, `NZ` 5, strings at `0x6186a0`); `Bone` is none, so the node keeps its axis byte (+0x1c0, written only there:
+zero, X [inferred]); `8` and `X` are no keyword and are skipped, so bone 8 isn't in the chain. `prepare_demo` now
+reads it so. The capsules: the cutscene Dante (pl100 / pl101, 23 bones) has the gameplay Dante's bones 0-22 in the
+same order and places, so the coat's capsule list (`FUN_00230130`, list `0x5949d0`) sits on his own spine and legs;
+whether a cutscene model applies capsules at all isn't read. Wind: every demo script's Wind is 0, so there is
+nothing to blow.
 
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):

@@ -20,4 +20,8 @@ float demo_screen_fov(float fov_degrees);
 void demo_letterbox(void);                  /* the bars, in the 2D pass */
 int demo_fog(void);                         /* GFG on this frame: 1, and sceGuFog is set */
 const char *demo_subtitle(int *x, int *y, int *size);   /* the line shown now, or 0 (PS2 640 x 448 place) */
+#include "post_fx.h"
+/* The ScrEfc blur / glow on this frame (post_fx.c), for a projection's near and far: 1 if any. */
+int demo_post_fx(PostFx *fx, float near, float far);
+extern int demo_no_post;                    /* tests: "nopost 1" */
 #endif
