@@ -102,14 +102,26 @@ static void mtrail_draw(void) {
         for (i = 0; i < 9 && b < 33; ++i) {
             int i0 = i < n ? i : n - 1, i1 = i + 1 < n ? i + 1 : n - 1, i2 = i + 2 < n ? i + 2 : n - 1;
             for (j = 0; j < 4 && b < 33; ++j, ++b) {
-                for (a = 0; a < 3; ++a) {
-                    float len = 0.0f;
+                {
+                    /* FUN_00133ab0: only the y and z axes are blended, then FUN_00133890 rebuilds the frame round the
+                     * blended z: x = y x z, y = z x x, each normalised (a nudge to y if they're parallel). */
+                    float y[3], z[3], x[3], len;
                     for (c = 0; c < 3; ++c) {
-                        bm[b][c][a] = mtrails[k].m[i0][c][a] * ab[j][0] + mtrails[k].m[i1][c][a] * ab[j][1];
-                        len += bm[b][c][a] * bm[b][c][a];
+                        y[c] = mtrails[k].m[i0][c][1] * ab[j][0] + mtrails[k].m[i1][c][1] * ab[j][1];
+                        z[c] = mtrails[k].m[i0][c][2] * ab[j][0] + mtrails[k].m[i1][c][2] * ab[j][1];
                     }
-                    len = len > 1e-6f ? 1.0f / sqrtf(len) : 0.0f;
-                    for (c = 0; c < 3; ++c) bm[b][c][a] *= len;
+                    x[0] = y[1] * z[2] - y[2] * z[1]; x[1] = y[2] * z[0] - y[0] * z[2]; x[2] = y[0] * z[1] - y[1] * z[0];
+                    if (x[0] * x[0] + x[1] * x[1] + x[2] * x[2] < 1e-12f) {
+                        y[0] += 0.1f;
+                        x[0] = y[1] * z[2] - y[2] * z[1]; x[1] = y[2] * z[0] - y[0] * z[2]; x[2] = y[0] * z[1] - y[1] * z[0];
+                    }
+                    y[0] = z[1] * x[2] - z[2] * x[1]; y[1] = z[2] * x[0] - z[0] * x[2]; y[2] = z[0] * x[1] - z[1] * x[0];
+                    for (a = 0; a < 3; ++a) {
+                        const float *v = a == 0 ? x : a == 1 ? y : z;
+                        len = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+                        len = len > 1e-12f ? 1.0f / sqrtf(len) : 0.0f;
+                        for (c = 0; c < 3; ++c) bm[b][c][a] = v[c] * len;
+                    }
                 }
                 for (c = 0; c < 3; ++c)
                     bp[b][c] = (i == 0 && j == 0) ? mtrails[k].p[0][c]

@@ -431,6 +431,10 @@ static void release_script(Combat *c, int action) {
     }
 }
 
+#include "dante_caps_runtime.h"
+extern int combat_no_caps;
+static void caps_clear(Combat *c);
+static void cap_add(Combat *c, int cap, int frames);
 static void start_move(Combat *c, MoveId move, int action) {
     const Motion *m;
     if ((move == MOVE_RG_BLOCK || move == MOVE_RG_AIR_BLOCK) && c->move != MOVE_RG_BLOCK && c->move != MOVE_RG_HOLD &&
@@ -500,6 +504,14 @@ static void start_move(Combat *c, MoveId move, int action) {
     /* The script's first segments run at once even when they wait for frames
      * before the start frame (the game only waits for frames still ahead). */
     c->next_event = 0;
+    caps_clear(c);
+    c->script_caps = 0;
+    if (c->script >= 0) {
+        const ScriptData *sd = &script_data[c->script];
+        int k;
+        for (k = 0; k < sd->count; ++k)
+            if (sd->events[k].kind == EV_CAP && sd->events[k].a < DANTE_CAP_COUNT && dante_caps[sd->events[k].a].kind == 1) c->script_caps = !combat_no_caps;
+    }
     motion_root(m, c->frame, c->last_root);
 }
 
@@ -802,7 +814,9 @@ static int run_events(Combat *c) {
             if (e->a && !c->active) ++hits;
             c->active = e->a;
             c->window_bits = e->b;
-        } else if (e->kind == EV_HIT && (c->active || !script_has_active(sd))) {
+        } else if (e->kind == EV_CAP) cap_add(c, e->a, e->b);
+        else if (e->kind == EV_ATTACK) c->attack_record = e->a;
+        else if (e->kind == EV_HIT && (c->active || !script_has_active(sd))) {
             /* Window 0 byte 2 0x2n re-arms the attack: a new hit inside an
              * active window, or each stab of a move without one (Million Stab). */
             ++hits;
@@ -812,6 +826,101 @@ static int run_events(Combat *c) {
 }
 
 void (*combat_hit_fn)(const Player *player, float reach, int kind);
+
+/* ---- His attack caps (FUN_0024fff0: GDATA 0 chunks 6 / 7 into his collider, FUN_002942e0). A script's ops 0x10-0x1F
+ * turn caps on for their frames; a kind-1 cap is a sphere on a bone (its place in the bone's frame, its radius) that
+ * hits what it touches, each enemy once an activation. Tested against the port's body (48 cm about the enemy's
+ * middle, feet to 180 cm [estimate]: the enemies' own hurt caps aren't read); bosses and the big enemies keep the
+ * old reach in front of him. */
+#define CAP_BODY_RADIUS 48.0f
+int combat_no_caps;   /* tests: "nocaps 1", the old reach for every enemy */
+static const float (*cap_bone_pos)[3];
+static const float (*cap_bone_rot)[3][3];
+static int cap_bone_count;
+void combat_set_bones(const float (*world_pos)[3], const float (*world_rot)[3][3], int count) {
+    cap_bone_pos = world_pos; cap_bone_rot = world_rot; cap_bone_count = count;
+}
+/* A cap's middle in the world (coat.c's bone_point: model space turned by his yaw, then at his place). */
+static int cap_world(const Player *player, int cap, float out[3]) {
+    const DanteCap *k;
+    float v[3], m[3], c = cosf(player->yaw), s = sinf(player->yaw);
+    int i;
+    if (cap < 0 || cap >= DANTE_CAP_COUNT || !cap_bone_pos) return 0;
+    k = &dante_caps[cap];
+    if (k->bone >= cap_bone_count) return 0;
+    for (i = 0; i < 3; ++i)
+        m[i] = cap_bone_rot[k->bone][i][0] * k->x + cap_bone_rot[k->bone][i][1] * k->y + cap_bone_rot[k->bone][i][2] * k->z
+             + cap_bone_pos[k->bone][i];
+    v[0] = c * m[0] + s * m[2]; v[1] = m[1]; v[2] = -s * m[0] + c * m[2];
+    out[0] = player->x + v[0]; out[1] = player->y + v[1]; out[2] = player->z + v[2];
+    return 1;
+}
+static int cap_body_kind(int kind) {
+    return kind == ENEMY_PRIDE || kind == ENEMY_GLUTTONY || kind == ENEMY_LUST || kind == ENEMY_SLOTH || kind == ENEMY_WRATH
+        || kind == ENEMY_GREED || kind == ENEMY_ENIGMA || kind == ENEMY_GOYLE || kind == ENEMY_ENVY || kind == ENEMY_PAWN
+        || kind == ENEMY_DULLAHAN || kind == ENEMY_ABYSS || kind == ENEMY_SOUL || kind == ENEMY_KNIGHT || kind == ENEMY_FALLEN;
+}
+/* Does any attack cap on now touch the selected enemy (at e)? */
+static int caps_touch(const Combat *c, const Player *player, const float e[3]) {
+    int i;
+    for (i = 0; i < c->cap_count; ++i) {
+        float p[3], dx, dz, dy, r = dante_caps[c->cap_on[i]].radius + CAP_BODY_RADIUS;
+        if (!cap_world(player, c->cap_on[i], p)) continue;
+        dx = p[0] - e[0]; dz = p[2] - e[2];
+        dy = p[1] < e[1] ? e[1] - p[1] : p[1] > e[1] + 180.0f ? p[1] - (e[1] + 180.0f) : 0.0f;
+        if (dx * dx + dz * dz + dy * dy < r * r) return 1;
+    }
+    return 0;
+}
+/* How far in front of him his caps reach now (the props', the Gigapede's), 0 if none are on. */
+static float caps_reach(const Combat *c, const Player *player) {
+    float best = 0.0f;
+    int i;
+    for (i = 0; i < c->cap_count; ++i) {
+        float p[3], d;
+        if (!cap_world(player, c->cap_on[i], p)) continue;
+        d = sqrtf((p[0] - player->x) * (p[0] - player->x) + (p[2] - player->z) * (p[2] - player->z)) + dante_caps[c->cap_on[i]].radius;
+        if (d > best) best = d;
+    }
+    return best;
+}
+static void caps_clear(Combat *c) { c->cap_count = 0; c->cap_hit_mask = 0; c->attack_record = 0; }
+static void cap_add(Combat *c, int cap, int frames) {
+    int i;
+    if (cap >= DANTE_CAP_COUNT || dante_caps[cap].kind != 1) return;
+    for (i = 0; i < c->cap_count && c->cap_on[i] != cap; ++i) {}
+    if (i == c->cap_count) { if (c->cap_count >= 8) return; ++c->cap_count; }
+    c->cap_on[i] = (unsigned char)cap;
+    c->cap_left[i] = frames >= 255 ? -1.0f : (float)frames;
+    c->cap_hit_mask = 0;   /* a new activation hits again */
+}
+/* Each frame: the caps on test every enemy they haven't hit this activation; then their frames run down. */
+static void caps_update(Combat *c, const Player *player, float frames) {
+    const MoveDef *d = &moves[c->move];
+    int i, k;
+    if (!c->cap_count || d->hit_kind < 0 || !c->script_caps) return;
+    {
+        float reach = caps_reach(c, player);
+        if (reach > 0.0f && combat_hit_fn && !c->cap_hit_mask) combat_hit_fn(player, reach, d->hit_kind);
+    }
+    enemy_set_hit_weapon(player->melee_weapon);
+    for (i = 0; i < ENEMY_MAX && i < 32; ++i) {
+        float e[3];
+        if (c->cap_hit_mask >> i & 1) continue;
+        enemy_select(i);
+        if (!enemy_active() || !cap_body_kind(enemy_kind())) continue;
+        enemy_position(e);
+        if (!caps_touch(c, player, e)) continue;
+        enemy_hit((HitKind)d->hit_kind, player->x, player->z);
+        c->cap_hit_mask |= 1u << i;
+        ++c->hits_dealt;
+    }
+    for (k = 0, i = 0; i < c->cap_count; ++i) {
+        if (c->cap_left[i] >= 0.0f && (c->cap_left[i] -= frames) <= 0.0f) continue;
+        c->cap_on[k] = c->cap_on[i]; c->cap_left[k] = c->cap_left[i]; ++k;
+    }
+    c->cap_count = k;
+}
 
 static void deal_hit(Combat *c, const Player *player) {
     const MoveDef *d = &moves[c->move];
@@ -833,6 +942,7 @@ static void deal_hit(Combat *c, const Player *player) {
             }
             continue;
         }
+        if (c->script_caps && cap_body_kind(enemy_kind())) continue;   /* his caps hit these (caps_update) */
         enemy_position(e);
         dx = e[0] - player->x; dz = e[2] - player->z;
         dist = sqrtf(dx * dx + dz * dz);
@@ -1235,20 +1345,80 @@ static void start_knockdown(Combat *c, Player *player, int kind) {
  * the holder's: FUN_0021f2e0 hands him a motion bank from its own pack and FUN_0021f3a0 an index in it, played by
  * FUN_002500d0 (group 0x20). With none (a holder whose motions aren't wired), the heavy flinch held at its 10th frame. */
 #define HELD_POSE_FRAME 10.0f
+enum { HOLD_OTHER, HOLD_NEVAN, HOLD_SOUL, HOLD_ARACHNE };
+/* The motion of index n in the holder's bank for him ("nvh-NN", "seh-NN", "arh-NN"), or -1. */
+static int held_motion(int kind, int n) {
+    char name[16];
+    snprintf(name, sizeof name, "%s-%02d", kind == HOLD_NEVAN ? "nvh" : kind == HOLD_SOUL ? "seh" : "arh", n);
+    return kind == HOLD_OTHER ? -1 : motion_find(name);
+}
+static void held_play(Combat *c, int kind, int n) {
+    int m = held_motion(kind, n);
+    if (m < 0 || !motion_get(m)) return;
+    if (m != c->motion || !c->held_loop) { c->motion = m; c->script = -1; c->script_bank = -1; c->frame = 0.0f; }
+    c->held_loop = 1;
+}
+static int held_motion_done(const Combat *c) {
+    const Motion *m = motion_get(c->motion);
+    return !m || c->frame >= m->end_frame;
+}
+static void held_end(Combat *c, Player *player) {
+    c->held = c->held_free = 0; c->held_leaving = 0; c->held_kind = HOLD_OTHER;
+    end_move(c, player);
+}
 static void held_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
-    int dir = -1;
+    int dir = -1, pressed;
+    float f = dt * MOTION_FPS;
     player->attacking = 1;
+    if (c->held_leaving) {
+        /* His end of it (FUN_0022b9b0): the motion to its end, then he's his own again. Thrown, he turns about
+         * first and then plays his own knockdown (group 1, 9) before getting up. */
+        c->frame += f;
+        if (held_motion_done(c)) {
+            if (c->held_leaving == 2) {
+                int m = motion_find("3-09");
+                c->held_leaving = 3;
+                if (m >= 0) { c->motion = m; c->frame = 0.0f; return; }
+            }
+            if (c->held_leaving == 4) player->yaw += (float)M_PI;   /* the Soul Eater's let-go: turned about at its end */
+            held_end(c, player);
+        }
+        return;
+    }
     if (input->stick_x * input->stick_x + input->stick_y * input->stick_y > (STICK_TILT_NEUTRAL / STICK_TILT_SCALE) * (STICK_TILT_NEUTRAL / STICK_TILT_SCALE))
         dir = (int)floorf((atan2f(input->stick_x, input->stick_y) + (float)M_PI) / ((float)M_PI / 4.0f) + 0.5f) & 7;
+    pressed = (input->melee != 0) + (input->gun != 0) + (input->style_action != 0) + (input->jump != 0);
     if (dir != c->held_dir) ++c->held_mash;
     c->held_dir = dir;
-    c->held_mash += 2 * ((input->melee != 0) + (input->gun != 0) + (input->style_action != 0) + (input->jump != 0));
+    c->held_mash += 2 * pressed;
     if (c->held_mash > c->held_need) c->held_free = 1;
-    c->frame += dt * MOTION_FPS;
-    if (c->held_loop) {
+    c->frame += f;
+    c->held_clock += f;
+    if (c->held_kind == HOLD_SOUL) {
+        /* FUN_0049dac0: 0xf lifting him (up at 15 a frame less 0.64 a frame, 18 frames), 10 for 55 frames, 11 to its
+         * end, then 12 held. */
+        if (c->held_step == 0) {
+            player->y += c->held_vy * f; c->held_vy -= 0.64f * f; player->vy = 0.0f; player->on_ground = 0;
+            if (c->held_clock >= 18.0f) { c->held_step = 1; c->held_clock = 0.0f; held_play(c, HOLD_SOUL, 10); }
+        } else if (c->held_step == 1) {
+            if (c->held_clock >= 55.0f) { c->held_step = 2; c->held_clock = 0.0f; held_play(c, HOLD_SOUL, 11); c->held_loop = 0; }
+        } else if (c->held_step == 2) {
+            if (held_motion_done(c)) { c->held_step = 3; held_play(c, HOLD_SOUL, 12); }
+        }
+        if (c->held_step > 0) { player->vy = 0.0f; player->on_ground = 0; }
+    } else if (c->held_kind == HOLD_ARACHNE) {
+        /* FUN_003f8080: index 0 as the web takes him, to its end; then 1, or 2 for 10 frames after each struggle. */
+        if (c->held_step == 0) {
+            if (held_motion_done(c)) { c->held_step = 1; held_play(c, HOLD_ARACHNE, 1); }
+        } else {
+            if (pressed || dir != -1) c->held_struggle = 10.0f; else c->held_struggle -= f;
+            held_play(c, HOLD_ARACHNE, c->held_struggle > 0.0f ? 2 : 1);
+        }
+    }
+    if (c->held_loop || c->held_kind != HOLD_OTHER) {
         const Motion *m = motion_get(c->motion);
         float span = m ? m->end_frame - m->loop_start : 0.0f;
-        if (span > 0.0f) while (c->frame > m->end_frame) c->frame -= span;
+        if (c->held_loop && span > 0.0f) while (c->frame > m->end_frame) c->frame -= span;
     } else if (c->frame > HELD_POSE_FRAME) c->frame = HELD_POSE_FRAME;
 }
 
@@ -1261,19 +1431,49 @@ void combat_hold(Combat *c, Player *player, int need, int motion) {
     c->held_loop = motion >= 0 && motion_get(motion);
     if (c->held_loop) { c->motion = motion; c->script = -1; c->script_bank = -1; c->frame = 0.0f; }
     c->held = 1; c->held_mash = 0; c->held_need = need; c->held_dir = -1; c->held_free = 0;
+    c->held_kind = HOLD_OTHER; c->held_step = 0; c->held_leaving = 0; c->held_clock = 0.0f; c->held_vy = 0.0f;
+    c->held_struggle = 0.0f;
 }
-int combat_held(const Combat *c) { return c->held; }
+void combat_hold_named(Combat *c, Player *player, int need, const char *motion) {
+    int kind = !motion ? HOLD_OTHER : !strncmp(motion, "nvh", 3) ? HOLD_NEVAN : !strncmp(motion, "seh", 3) ? HOLD_SOUL
+             : !strncmp(motion, "arh", 3) ? HOLD_ARACHNE : HOLD_OTHER;
+    combat_hold(c, player, need, motion ? motion_find(motion) : -1);
+    c->held_kind = kind;
+    if (kind == HOLD_SOUL) { c->held_vy = 15.0f; held_play(c, HOLD_SOUL, 15); c->held_loop = 0; }
+    if (kind == HOLD_ARACHNE) { held_play(c, HOLD_ARACHNE, 0); c->held_loop = 0; }
+}
+void combat_hold_face(Combat *c, Player *player, float yaw) {
+    /* FUN_00359c00: toward the holder's facing at most 1092 / 65536 of a turn a frame (6 degrees). */
+    float d;
+    if (!c->held || c->held_leaving || c->held_kind != HOLD_SOUL) return;
+    d = atan2f(sinf(yaw - player->yaw), cosf(yaw - player->yaw));
+    if (d > 0.1047f) d = 0.1047f;
+    if (d < -0.1047f) d = -0.1047f;
+    player->yaw += d;
+}
+void combat_hold_reset(Combat *c) { if (c->held) c->held_mash = 0; }
+int combat_held(const Combat *c) { return c->held && !c->held_leaving; }
 int combat_hold_broken(Combat *c, Player *player) {
-    if (!c->held || !c->held_free) return 0;
-    c->held = c->held_free = 0;
-    end_move(c, player);
+    if (!c->held || !c->held_free || c->held_leaving) return 0;
+    c->held_free = 0;
+    /* Free: Nevan hands him 0x15 (her [3] 21, FUN_003b8810), the Soul Eater lets him go (14). */
+    if (c->held_kind == HOLD_NEVAN && held_motion(HOLD_NEVAN, 21) >= 0) { held_play(c, HOLD_NEVAN, 21); c->held_loop = 0; c->held_leaving = 1; return 1; }
+    if (c->held_kind == HOLD_SOUL && held_motion(HOLD_SOUL, 14) >= 0) { held_play(c, HOLD_SOUL, 14); c->held_loop = 0; c->held_leaving = 4; return 1; }
+    held_end(c, player);
     return 1;
 }
-void combat_release(Combat *c, Player *player) {
-    if (!c->held) return;
-    c->held = c->held_free = 0;
-    end_move(c, player);
+void combat_release_how(Combat *c, Player *player, int how) {
+    if (!c->held || c->held_leaving) return;
+    if (how == 2 && c->held_kind == HOLD_NEVAN) {
+        /* Thrown (her 0x16, which her bank hasn't: FUN_0022b9b0 turns him about, then his own knockdown). */
+        player->yaw += (float)M_PI;
+        c->held_leaving = 2; c->frame = 1.0e9f;
+        return;
+    }
+    if (c->held_kind == HOLD_SOUL && held_motion(HOLD_SOUL, 14) >= 0) { held_play(c, HOLD_SOUL, 14); c->held_loop = 0; c->held_leaving = 4; return; }
+    held_end(c, player);
 }
+void combat_release(Combat *c, Player *player) { combat_release_how(c, player, 1); }
 
 static int knockdown_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
     const float *fl = knock_flags[c->kd_far];
@@ -1542,11 +1742,17 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
             seek_events(c);
         }
     } else if (d->hold_loop && c->frame >= m->end_frame - 1.0f) {
-        c->frame = m->loop_start;   /* stand-in guard motion without a loop range */
+        /* The held guard: 24:30 plays motion 24:0 from frame 10 to its end, and the guard state asks for 24:30 again
+         * while the button's held [FUN_00224850 isn't decoded: read from the script's start frame], so it loops from
+         * the script's start, not the motion's first frame. */
+        float from = c->script >= 0 && script_data[c->script].start >= 0 ? (float)script_data[c->script].start : m->loop_start;
+        c->frame = from;
         motion_root(m, c->frame, c->last_root);
+        seek_events(c);
     }
     c->flag = 0;
     hits = run_events(c);
+    caps_update(c, player, dt * MOTION_FPS);
     if (d->flag_air && c->flag == 1) {
         memcpy(c->air_v, d->flag_v, sizeof(c->air_v));
         c->air = 1;
@@ -1871,7 +2077,11 @@ float combat_dead_frames(const Combat *c) { return c->dead_time; }
 int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage) {
     float to_attacker;
     int front, down;
-    if (c->held) return 1;   /* held: other blows pass [the port's: what the game does isn't read] */
+    if (c->held) {
+        /* Held: the blow's damage lands, he stays in the holder's grip [inferred: his reaction isn't read]. */
+        if (!c->held_leaving && damage > 0.0f) { player->health -= damage; if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f; }
+        return 1;
+    }
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
         c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK ||
         c->move == MOVE_DOWN || c->move == MOVE_DOWN_FAR || c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR ||

@@ -268,10 +268,14 @@ static void giga_note(const char *what, int a, float b);
 static const char *hold_motion;
 static void hold_take(int need) {
     hold_new = 1; hold_need = need; hold_broken = 0; hold_owner = e;
-    hold_motion = e->kind == ENEMY_NEVAN ? "nvh-20" : e->kind == ENEMY_SOUL ? "seh-12" : 0;
+    hold_motion = e->kind == ENEMY_NEVAN ? "nvh-20" : e->kind == ENEMY_SOUL ? "seh-12" : e->kind == ENEMY_ARACHNE ? "arh-00" : 0;
     giga_note("hold", need, (float)e->kind);
 }
 const char *enemy_hold_motion(void) { return hold_motion; }
+/* Dante's side (combat.c): the holder's facing, and its struggle count started afresh (FUN_00254a10). */
+static int hold_reset;
+int enemy_hold_yaw(float *yaw) { if (!hold_owner || !hold_owner->active) return 0; *yaw = hold_owner->yaw; return 1; }
+int enemy_hold_reset_take(void) { int r = hold_reset; hold_reset = 0; return r; }
 static void hold_let_go(int how) { if (hold_owner == e) { hold_end = how; hold_from[0] = e->pos[0]; hold_from[1] = e->pos[2]; hold_owner = 0; } }
 static int hold_freed(void) { int r = hold_owner == e && hold_broken; if (r) { hold_broken = 0; hold_owner = 0; } return r; }
 int enemy_hold_take(int *need) { if (!hold_new) return 0; hold_new = 0; *need = hold_need; return 1; }
@@ -6599,8 +6603,8 @@ static void beowulf_hit_glue(HitKind kind, float from_x, float from_z) {
  * most 3, up at most 1) in its hovering actions (0x10000000).
  * Its bite holds Dante (FUN_0021f2e0, combat_hold) and its hold (7) drains his Devil Trigger (FUN_0021eae0: 20 a frame,
  * 1000 a rune [inferred]) until he struggles 60 points free (8) or its time's up (9, the burst).
- * Stand-ins: he isn't lifted or turned with it (FUN_0049dac0's states: up 15 a frame less 0.64, for 18 frames); the
- * struggle's count isn't reset as the hold starts (FUN_00254a10 in 7); the rank-0 teleport (4) reappears ahead of his
+ * Dante's side of the bite (his lift and turn, FUN_0049dac0's states) is combat.c's; the struggle starts afresh as
+ * the hold (7) starts (FUN_00254a10). Stand-ins: the rank-0 teleport (4) reappears ahead of his
  * facing, not the camera's; 16 (a dodge when he does move 0x11 near it) isn't triggered. */
 enum { SE_HOVER = 0, SE_COME = 1, SE_KNOCK = 2, SE_KNOCK2 = 3, SE_BLINK = 4, SE_CLOSE = 5, SE_BITE = 6, SE_HOLD = 7,
        SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DEATH = 30 };
@@ -6779,7 +6783,7 @@ static void soul_update_glue(float f, float px, float py, float pz) {
          * 9, the burst. */
         held = 1;
         if (hold_freed()) { se_go(SE_FREED); return; }   /* FUN_00254a20: past 60, 8 */
-        if (e->step == 0) { e->timer = se_time(a); e->step = 1; }
+        if (e->step == 0) { e->timer = se_time(a); e->step = 1; hold_reset = 1; }   /* FUN_00254a10 */
         se_dt_drain += 20.0f * f;
         if (e->timer <= 0.0f) { se_go(SE_BURST); return; }
         break;

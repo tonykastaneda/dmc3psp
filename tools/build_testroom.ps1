@@ -94,6 +94,20 @@ foreach ($M10Room in @(201,206)) {
     }
 }
 
+# Dante's script data (tools/gen_combat_data.py -> psp/testroom/combat_data.h, local): rebuilt when the script is newer.
+$CombatData = Join-Path $Root "psp\testroom\combat_data.h"
+if (-not (Test-Path -LiteralPath $CombatData) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\gen_combat_data.py")).LastWriteTime -gt (Get-Item -LiteralPath $CombatData).LastWriteTime) {
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\gen_combat_data.py"), "--moveset", (Join-Path $Root "analysis\moveset"), "--out", $CombatData)
+}
+
+# Dante's hit caps (tools/gen_dante_caps.py): GDATA 0 chunks 6 / 7.
+if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Generated "dante_caps_runtime.h")) -or
+    (Get-Item -LiteralPath (Join-Path $Root "tools\gen_dante_caps.py")).LastWriteTime -gt (Get-Item -LiteralPath (Join-Path $Generated "dante_caps_runtime.h")).LastWriteTime) {
+    $Iso = Get-ChildItem -LiteralPath $Root -File -Filter "*.iso" | Select-Object -First 1
+    Invoke-Native (Get-Command python -ErrorAction Stop).Source @((Join-Path $Root "tools\gen_dante_caps.py"), $Iso.FullName, "--out", (Join-Path $Generated "dante_caps_runtime.h"))
+}
+
 # The system bank's sound effects (tools/gen_sfx.py).
 if ($Regenerate -or -not (Test-Path -LiteralPath (Join-Path $Build "SFX_W9.BIN")) -or -not (Test-Path -LiteralPath (Join-Path $Generated "sfx_runtime.h")) -or
     (Get-Item -LiteralPath (Join-Path $Root "tools\gen_sfx.py")).LastWriteTime -gt (Get-Item -LiteralPath (Join-Path $Generated "sfx_runtime.h")).LastWriteTime) {

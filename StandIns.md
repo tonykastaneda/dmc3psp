@@ -8,12 +8,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Systems that touch everything
 
-- **Dante held** (his action 0x2e, `combat_hold`): Nevan's kiss holds him and he mashes free as the game counts it,
-  and he plays her held motion (her pack's [3] slot 20, as the game hands it him), but breaking free doesn't play
-  her [3] 21, her throw at the end is a knockdown without damage, and other blows pass him while he's held. The Soul
-  Eater's bite holds him too (60 to break free) in its held loop ([9] 12), without its lift (10, 11) or end (14). The
-  Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
-  `combat.c` held_update, `enemy.c` hold_take.
+- **Dante held** (his action 0x2e, `combat_hold_named`): his side of each hold is the game's: Nevan's [3] 20 and 21
+  (broken free) and her throw (FUN_0022b9b0: turned about, then his own knockdown, no damage); the Soul Eater's lift,
+  10, 11, the held loop and 14 as it lets go, turned toward it (FUN_0049dac0); the Arachne's [15] 0, 1 and 2 as he
+  struggles (FUN_003f8080). Stand-ins: the Arachne's index 4 (its web's end) and the Soul Eater's let-go root motion
+  aren't played, and a blow while he's held takes its damage without moving him [inferred]. `combat.c` held_update.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
   defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
@@ -46,9 +45,13 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Enemy health and Dante's damage**: Dante's hits are 42 light / 84 heavy (×1.1, Easy ×2, guns 20%) for every boss
   [inferred], a bullet its record's 10 (Ebony & Ivory's, 0x5a5a30 +4) against every enemy, kept in fractions of a unit by the Hells and the like; health is the Pride's 6 light hits by eye and
   the rest in proportion to their parameter blocks. `enemy.c`, `vergil_boss.c`, `geryon_boss.c`.
-- **Hit detection on Dante's moves**: every generated move uses one stand-in reach; Quicksilver and Doppelganger styles
-  aren't compared with the game; shotgun spread and tracers are stand-in effects. MOVESET_RE.md, `combat.c`.
-- **Stand-in guard motion** without a loop range. `combat.c` ~1436.
+- **Hit detection on Dante's moves**: his moves hit with their own attack caps (GDATA 0 chunks 6 / 7, switched on by
+  the scripts' ops 0x10-0x1F), but the ordinary enemies' bodies are the port's 48 cm cylinder (their hurt caps aren't
+  read), bosses and the big enemies still take the old 260 cm reach, and the attack records (ops 6 / 7: damage, hit
+  kind) aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; shotgun spread and tracers
+  are stand-in effects. MOVESET_RE.md, `combat.c`.
+- **The held guard** loops from 24:30's start (frame 10), as the guard state replaying the script would [inferred:
+  FUN_00224850 isn't decoded]. `combat.c`.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (the Jester's
@@ -67,8 +70,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   object's +0x10) and the other classes' +0x114 handlers aren't read (Lady's and the Enigma's do nothing); and Release's damage from the gauge (+0x2a1c) aren't carried (the port's blows are in
   units of health).
 - **Blade trails** (`fx.c` mtrails): the game's trail models bent through the last 11 weapon frames, type 0 added and types 1 / 2
-  alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the rotations blended linearly and renormalised [FUN_00133ab0 not
-  read]. NATIVE_FX.md "Blade trails".
+  alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the frames between samples are FUN_00133ab0's (y and z
+  blended, the frame rebuilt round z by FUN_00133890). NATIVE_FX.md "Blade trails".
 - **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
   PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models**: crest switches and seal boards are their own models (`gimmick_models.c`), but a switch's flames
@@ -103,7 +106,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
   [estimate]; its spear is straight at his chest (the shell isn't decoded). `fallen.c`, `enemy.c` ~5383.
 - **Dullahan**: which script is which [inferred]. `dullahan.c`.
-- **Soul Eater**: Dante is held from its bite and struggles free (above), but isn't lifted or turned with it, and his struggle's count isn't reset as the hold starts; the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
+- **Soul Eater**: Dante is held from its bite and struggles free (above); the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
   dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
