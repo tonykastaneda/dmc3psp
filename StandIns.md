@@ -16,9 +16,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
   defeats that stay in their room, with English subtitles (at the PS2's x, the font scaled so the widest line spans the PS2's width), fades and their own sound (voices and music), but: cloth steps in world space (ClothSim1D's ropes run as decoded, the floor factor taken as 0; ClothMode 1 rides the hips, because bone 0 stays at the origin; a coat gets Dante's own capsules (bones 0-22 match) though whether cutscenes apply capsules isn't read; a chain that never sets the key trails the pose); a CnsPos piece's root on its parent bone [inferred]; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
-  (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
-  read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
-  matched by eye]; IsMinus lights left out. The stage is the baked SCM colour: no stage clip sets Light, so it keeps
+  (`demo.c` demo_lights) as the VU1 microcode does it (read: strength, colour / 128 up to 2.0 via colour doubling, ambient 32 / 128 from FUN_00215280); an IsMinus light takes half its colour off the ambient [estimate: the PSP has no negative light]; Program No 6 taken as the same ambient [inferred]. The stage is the baked SCM colour: no stage clip sets Light, so it keeps
   flag 2 and ValidType 3 stays idle, and the class-2 lights are not multiplied onto the bake (demos 3, 5 and 59;
   docs/CUTSCENES.md).
 - **Cutscene framing and colour** (`demo.c`): the letterbox's 0.712 [measured]; the Program track's No 5 / No 6 as
@@ -118,9 +116,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   mark (57 / 58) aren't picked (their shots aren't decoded); the pedestal's sword flash (0x3b3 / 0x3b4) isn't shown and
   the landings' effects (0x2c, 0x2e5) are dust; the slam hurting within 300 as record 12 [estimate], its effects at
   the hand's floor point [estimate]. `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
-- **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
-  (FUN_003ba660) charges the bats about her (+0x1b7: their touch takes record 7, 500, not 0's 300), which the port
-  doesn't keep, so it does nothing; Shl03-05's shapes beyond their numbers; the teleport's darkening is a draw colour
+- **Nevan**: 23's swarm leaves from her formation slots (FUN_003b9c40's wide table, turned toward Dante; the table choice flag +0x1b2 taken as 0 [inferred]) and homes as decoded, its vectors taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
+  (FUN_003ba660) charges the bats about her (+0x1b7: record 7, 500, not 0's 300, on their next swarm, till
+  they come home), as the port now does; Shl03-05's shapes beyond their numbers; the teleport's darkening is a draw colour
   toward black [inferred: the material words' GS meaning], its G0xe / G0x93 100 up from her [estimate: her bone +0x724];
   her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
@@ -139,9 +137,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   is decoded (gauges, flinch windows, the brace), but Dante's blows take estimated amounts from his gauges (Dante's
   attack records aren't decoded); his coat and cord swing as their .clt chains, with Dante's body capsules [inferred];
   his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
-- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; his death's motion (gh19) [inferred]; the missiles' path and timing are decoded, their hit [estimate] and effects not; the shockwave comes from his gauges as decoded, Dante's blows' amounts [estimates]; his caps' record [inferred]; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
+- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact box is the native record (the contact test inferred); his death's motion (gh19) [inferred]; the missiles' path and timing are decoded, their hit [estimate] and effects not; the shockwave comes from his gauges as decoded, Dante's blows' amounts [estimates]; his caps' record [inferred]; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
 - **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority), and so is where he rises when lit (3c4c40); the underground travel is a jump; his coat's
-  chain (em031_01.clt) gets Dante's body capsules [inferred]; his sword's offset [inferred]; the crests' lighting is a glow.
+  chain (em031_01.clt) gets Dante's body capsules [inferred]; the crests' lighting is a glow.
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.
 - **Arkham**: one fight runs both rounds; Vergil joins the second as Dante's partner (Dante's input a frame late, as the
   game), but plays Dante's moveset on his body (his own isn't ported), with his coat and Yamato, untouchable; Arkham stays where the EST puts him; his body radius 220 and Legions' speed 8 [estimates]; Legions drawn

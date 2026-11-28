@@ -657,3 +657,6 @@ When a head's HP goes below 0:
   height 100; ev6 V78 (0x4e) at (0, −180, −200) riding; ev8 G23 riding; all end with the breath. The effects take
   the body's turn, not the bone's flipped matrix [approximation].
 
+
+## Performance (2026-11-28)
+The skin was most of the fight's frame: ~9250 vertices on the FPU, 6.5 ms a frame (update 8.4 ms average, PERF.TXT, Mission 3 room 6). `skin_part_vfpu` makes each bone's matrix once per part with the rest offset folded into its translation, so a vertex is one vtfm4 and one vtfm3; one-weight vertices (79%) keep their bone's matrix loaded while it repeats, the others blend theirs first. Now 2.4 ms (update ~4 ms); the frame matches the FPU skin to 1 level (`cperf_690.png` against `cvfpu_690.png`). The ~15 ms update spikes left also happen in Mission 1 (not the boss).

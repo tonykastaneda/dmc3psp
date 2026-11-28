@@ -22,7 +22,7 @@
  *   (800); 32 Shl04, 70 cm on his spot after 50 frames, live 30 (500); 33 / 34 Shl05 at her feet, 200 cm for 5
  *   frames (800), then she's gone at 40 frames and placed by move 9 at 75 (FUN_003b81b0); 35 the kiss's rush.
  * 25 (FUN_003b7460) its lightning balls (FUN_00468580's class, orbs_start): pillars or bars sweeping at him.
- * Stand-ins: 29 / 38's event (FUN_003ba660), the kiss's hold, 23's circling bats (let out as the bats are), and the shapes of
+ * Stand-ins: the kiss's hold, the bats kept in formation only while they wait to go (their slots, FUN_003b9c40), and the shapes of
  * Shl03-05 beyond those numbers. */
 #include <math.h>
 #include "nevan_boss.h"
@@ -197,6 +197,20 @@ static void bats_particles(NevanBrain *b) {
 static const float swarm_vectors[16][3] = {{100, 0, 20}, {85, 15, 20}, {75, 25, 20}, {60, 40, 20}, {50, 50, 20},
     {40, 60, 20}, {25, 75, 20}, {15, 85, 20}, {0, 100, 20}, {-15, 85, 20}, {-25, 75, 20}, {-40, 60, 20}, {-50, 50, 20},
     {-75, 25, 20}, {-85, 15, 20}, {-100, 0, 20}};
+/* Her bats' formation (FUN_003b9c40): bat n's slot, turned toward Dante (the yaw from her to him) about her place.
+ * In actions 0x16-0x26 (23 among them) the wide one, 0x5bc6d0 [its flag +0x1b2 taken as 0, inferred]; the bats
+ * steer there at up to 15 a frame (0x5b7d40 mode 0), so a bat waiting to go sits in its slot and leaves from it. */
+static const float formation_wide[16][3] = {{0, 250, 90}, {100, 200, 90}, {-100, 200, 90}, {170, 100, 100},
+    {-170, 100, 100}, {0, -150, 110}, {170, 50, 110}, {-170, 50, 110}, {120, -10, 120}, {-120, -10, 120},
+    {0, -100, 130}, {100, -100, 130}, {-100, -100, 130}, {50, -150, 140}, {-50, -150, 140}, {0, -200, 150}};
+static void formation_slot(const NevanBrain *b, int n, float px, float pz, float out[3]) {
+    const float *o = formation_wide[n & 15];
+    float a = atan2f(px - b->pos[0], pz - b->pos[2]), s = sinf(a), c = cosf(a);
+    out[0] = b->pos[0] + o[0] * c + o[2] * s;
+    out[1] = b->pos[1] + o[1];
+    out[2] = b->pos[2] + o[2] * c - o[0] * s;
+}
+static float formation_px, formation_pz;   /* Dante's place when the swarm was let out */
 static unsigned int swarm_seed = 0x9e3779b9u;
 static float swarm_unit(void) { swarm_seed ^= swarm_seed << 13; swarm_seed ^= swarm_seed >> 17; swarm_seed ^= swarm_seed << 5; return (float)(swarm_seed >> 8) / 16777216.0f; }
 static void release_swarm(NevanBrain *b, int count, float gap, float (*unit)(void)) {
@@ -214,7 +228,7 @@ static void release_swarm(NevanBrain *b, int count, float gap, float (*unit)(voi
         t->on = 1; t->swarm = 1;
         t->wait = gap * (float)n;
         t->life = 180.0f; t->speed = 25.0f; t->turn_wait = 0.0f;
-        t->pos[0] = b->pos[0] + s * 100.0f; t->pos[1] = b->pos[1] + 150.0f; t->pos[2] = b->pos[2] + c * 100.0f;
+        formation_slot(b, i, formation_px, formation_pz, t->pos);
         t->dir[0] = v[0] * c + v[2] * s; t->dir[1] = v[1]; t->dir[2] = v[2] * c - v[0] * s;
         l = sqrtf(t->dir[0] * t->dir[0] + t->dir[1] * t->dir[1] + t->dir[2] * t->dir[2]);
         t->dir[0] /= l; t->dir[1] /= l; t->dir[2] /= l;
@@ -247,6 +261,7 @@ static void swarm_update(NevanBrain *b, NevanBat *t, float f, float px, float py
     float dx, dy, dz;
     int k;
     if (t->wait > 0.0f) {
+        formation_slot(b, (int)(t - b->bats), px, pz, t->pos);   /* in its slot till it goes */
         if ((t->wait -= f) > 0.0f) return;
         {
             float w[3] = {px - t->pos[0], py + 150.0f - t->pos[1], pz - t->pos[2]}, l = sqrtf(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
@@ -260,12 +275,12 @@ static void swarm_update(NevanBrain *b, NevanBat *t, float f, float px, float py
         float home[3] = {b->pos[0], b->pos[1] + 150.0f, b->pos[2]};
         if ((t->turn_wait -= f) <= 0.0f) { t->turn_wait = 3.0f; steer(t->dir, t->pos, home, 0x600 * 6.2831853f / 65536.0f); }
         dx = home[0] - t->pos[0]; dy = home[1] - t->pos[1]; dz = home[2] - t->pos[2];
-        if (dx * dx + dy * dy + dz * dz < 100.0f * 100.0f) { t->on = 0; return; }
+        if (dx * dx + dy * dy + dz * dz < 100.0f * 100.0f) { t->on = 0; t->charged = 0; return; }   /* home: FUN_003c9870 clears +0x1b7 */
     }
     for (k = 0; k < 3; ++k) t->pos[k] += t->dir[k] * t->speed * f;
     dx = px - t->pos[0]; dy = py + 100.0f - t->pos[1]; dz = pz - t->pos[2];
     if (t->swarm == 1 && dx * dx + dy * dy + dz * dz < (50.0f + 60.0f) * (50.0f + 60.0f)) {
-        if (attacks) { b->land = 1; b->land_damage = 300.0f; }
+        if (attacks) { b->land = 1; b->land_damage = t->charged ? 500.0f : 300.0f; }   /* record 7 if charged (FUN_003c96d0) */
         t->swarm = 2; t->speed = 60.0f; t->life = 240.0f;
         return;
     }
@@ -547,7 +562,8 @@ static void attack_event(NevanBrain *b, float px, float py, float pz, int attack
     case 22: release_bats(b); break;
     /* FUN_003ba470 -> FUN_003c9080: the bats about her sent at him, each first along a random one of 0x5bc7d0's
      * vectors, homing (swarm_update). */
-    case 23: release_swarm(b, swarm_count[b->phase], swarm_gap[b->phase], swarm_unit); break;
+    case 23: formation_px = px; formation_pz = pz;
+             release_swarm(b, swarm_count[b->phase], swarm_gap[b->phase], swarm_unit); break;
     case 24: strikes_start(b); break;   /* FUN_003b7300 → FUN_0045d720 */
     case 25: {   /* script event 4 (0x61acf8 = 3): her balls go (FUN_00469050 → state 1) */
         int i;
@@ -556,8 +572,13 @@ static void attack_event(NevanBrain *b, float px, float py, float pz, int attack
     }
     /* 29 and 38: their floor lightning started with the action (field_update); the event (5) calls FUN_003ba660:
      * each of the 16 bats about her (+0x4db0) that's out (+0x4df0) and not on a swarm (+0x1b5) is charged
-     * (FUN_003c9a50: +0x1b7), so its touch takes record 7 (500) for record 0 (300) (FUN_003c96d0). The port doesn't
-     * keep the bats about her, so there's nothing to charge [stand-in]. */
+     * (FUN_003c9a50: +0x1b7), so its touch takes record 7 (500) for record 0 (300) when it's next let out on a swarm
+     * (FUN_003c96d0 makes its hit then); the charge stays until it comes home (FUN_003c9870). */
+    case 29: case 38: {
+        int i;
+        for (i = 0; i < NEVAN_BATS; ++i) if (!b->bats[i].on) b->bats[i].charged = 1;
+        break;
+    }
     case 30: shell(b, mine, 0.0f, 57.0f, 300.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz); break;      /* Shl03, record 3: to 134 */
     case 32: shell(b, his, 50.0f, 30.0f, 70.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;       /* Shl04, record 4 */
     case 35: break;   /* the kiss: its rush is in nevan_think */

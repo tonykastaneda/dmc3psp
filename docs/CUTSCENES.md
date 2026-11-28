@@ -563,3 +563,21 @@ scene (`demo_fade`, `fx_screen_tint`).
 **Boss entrances wait for their area** (2026-11-27). The ROOM blocks play a boss's entrance once counter 0 is 0 and `sw_in_area [a]` holds (Mission 3 room 6 area 0, 5/121 area 1, 9/210 0, 11/217 0, 12/228 0, 16/115 area 1, read with tools/event_dump.py). The port now checks that EVE area (messages.c `msg_in_area`) each frame and holds the room's script, so the boss doesn't spawn, until the demo has played (main.c `room_entrance_waiting`; tests with `nodemo` aren't held). Checked: Mission 3 room 6, `ent6_150.png` (in the room, no demo), demo 6 after walking into the area, `ent6c_5500.png` (the fight after it). Subtitles: the PS2's x is (640 - its widest line) / 2, so the port sizes its font to span the same and starts there, lifted when the larger font would leave the screen.
 
 **Blur ghosting (2026-11-27).** The quarter-size copy was one bilinear sample per quarter pixel, the middle 2 x 2 of each 4 x 4, so demo 5's stonework aliased into stripes and doubled edges behind Vergil (orchestrator's `orch4f_d5_d300.png`). It's now four samples a pixel off diagonally, a quarter each: a true 4 x 4 box (`post_fx.c` shrink; 3 more 120 x 68 sprites, GE cost small). PCSX2 reference: `analysis/ref/demofx/demo5_ps2.mp4` (local; Mission 3 on Normal from the 100% save, the background smooth). The port is still less soft than the PS2 there [the pass count from the clip's Power: estimate].
+
+**The VU1 lighting, read (2026-11-28).** The microcode is in the ELF as VIF MPG blocks (0x55e404-0x562a8c, loaded at
+VU1 0x000-0x770; a disassembler was written for it, kept local). The skinned-model program (VU 0x2c0) takes four
+light directions transposed (VU 176+: x's, y's, z's, 0 0 0 1) and a colour matrix (the three colours and the ambient
+as columns): per vertex `max(0, M.N)` per light, then `ambient + sum colour_i x dot_i`, times the model's colour
+(VU 1021) / 128, clamped to 0..255; the GS reads 128 as 1.0. The CPU side (`FUN_001a9d80`, from the model draw
+`FUN_001aa110`) scales each of the three chosen colours at the model's centre by `max(0, 1 - d^2 / Force^2)`
+(the vector's w, 1 / Force^2; a 0 w skips it) and normalises the vectors; `FUN_001a9d30` puts the light manager's
++0x30 (flag 2, the cast) or +0x20 in the ambient column. The demo update `FUN_00215280` resets +0x20 to 128 and
++0x30 to 32 each frame. **In the port** (`demo.c` demo_lights): the strength and colour / 128 were right; the
+default ambient is now 32 / 128 (`DEMO_AMBIENT_LEVEL`, was 0x30 by eye); the colours and ambient are halved and the
+GE's colour doubling (`GU_FRAGMENT_2X`) restores them, so a lit colour reaches 2.0 as on the PS2; an IsMinus light
+takes its slot among the three and, with no negative light on the PSP, half its colour comes off the ambient
+[estimate]. Program No 6 is taken as writing +0x30 [inferred]. Checked against PCSX2 demo 5 frame 1260 (Arkham's
+face, PS2 [54.9, 33.2, 22.8], port [55.1, 33.8, 22.4]; `analysis/ref/demofx/demo5_ps2.mp4` from 15.7 s = frame 0)
+and demo 6 (IsMinus lights) unchanged by eye. The stage program (VU 0x1a0) is a point-light one: four lights in
+SoA at VU 12-15, `1 - d^2 k` times N.(L - P) unnormalised, times the vertex colour / 255. Who fills it for the
+stage isn't traced, so the stage stays the bake.

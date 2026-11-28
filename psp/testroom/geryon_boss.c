@@ -792,11 +792,23 @@ void geryon_boss_update(float frames, float px, float py, float pz, int attacks)
              * against the bridge end. His normal hurt reaction still runs. */
         }
     }
-    {   /* 384160: eight-update history of high body contact. The port's existing
-         * horse/cart footprint supplies contact instead of native cap record +35fc flag 1000. */
-        float x=px,z=pz;int high;
-        geryon_boss_push_out(&x,&z,py,DANTE_RADIUS);
-        high=py>gb.pos[1]+300 && hypotf(x-px,z-pz)>.1f;
+    {   /* 384160: eight-update history of high body contact: record +35fc's contact flag 1000 and Dante more
+         * than 300 above. That record is the body +3580 that 382470 builds: one box (kind 3) on the main model's
+         * bone 2 (+0xa60, the third of +0xa58's bone table), centre (0, -120, 40), half sizes (80, 150, 160).
+         * Contact: Dante's middle (90 up) inside it, widened by his radius [inferred: the collision manager's
+         * box test isn't read]. */
+        static const float centre[3] = {0.0f, -120.0f, 40.0f}, half[3] = {80.0f, 150.0f, 160.0f};
+        const Transform *b = &horse_pose[2];
+        float c = cosf(gb.yaw), s = sinf(gb.yaw), w[3], m[3], d[3];
+        int high, k, inside = 1;
+        w[0] = px - gb.pos[0]; w[1] = py + 90.0f - gb.pos[1]; w[2] = pz - gb.pos[2];
+        m[0] = c * w[0] - s * w[2]; m[1] = w[1]; m[2] = s * w[0] + c * w[2];   /* world to model space */
+        for (k = 0; k < 3; ++k) d[k] = m[k] - b->p[k];
+        for (k = 0; k < 3; ++k) {   /* into the bone's frame (its rotation's transpose) */
+            float v = b->m[0][k] * d[0] + b->m[1][k] * d[1] + b->m[2][k] * d[2];
+            if (fabsf(v - centre[k]) > half[k] + DANTE_RADIUS) inside = 0;
+        }
+        high = inside && py > gb.pos[1] + 300;
         gb.history_time+=frames;
         while(gb.history_time>=1){gb.history_time-=1;gb.high_history=((gb.high_history<<1)|high)&255u;}
     }

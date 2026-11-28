@@ -138,8 +138,10 @@ There is also a decoded acceleration condition: **383b70 at 384160** shifts an e
 at **+970**, setting bit 0 if collision record **+35fc** has flag **1000** and Dante is more than **300** above
 the horse. Each window subtracts an extra **2** while that history is nonzero and the counter is **>5**.
 Continuous high contact therefore expires in 16 events (464 frames). The port retains the exact history
-and decrement rules, using its existing horse/cart push footprint for the contact input; that footprint
-remains an approximation of the native cap record, rather than a newly invented detection radius.
+and decrement rules. The record is the body +3580 that 382470 builds in place (+37a0 / +37b0): one box
+(kind 3) on the main model's bone 2 (+a60, the third of its bone table +a58), centre (0, -120, 40), half sizes
+(80, 150, 160), contact flag +3658 = 1000. In the port it sits at about (0, 195, 25) in his model space, the
+horse's back; contact is Dante's middle inside it widened by his radius [inferred: the box test isn't read].
 
 `python tools/tests/run_geryon_windows.py` checks both directions, the first event boundary, all forty events,
 the conditional decrement and both native turn actions. Existing movement, shockwave and missile stand-ins

@@ -760,10 +760,16 @@ static int object_shown(const DemoHideClip *h, unsigned int k) {
  * does not add that bit. The stage mesh stays the baked colour (stage.c): multiplying these class-1 and class-2
  * lights onto it misses the PS2 stills (docs/CUTSCENES.md). Clips running now whose ValidType, less bit 4, is 1 or
  * 2; the three best by 1 - d^2 / Range^2 (a 0 range reaches everywhere); a ValidType 8 one (the scene slot) first.
- * Strength 1 - d^2 / Force^2 (a 0 force: whole) and colour / 128 [inferred: the VU1 lighting isn't read]. On the
- * PSP, per actor, a directional light from its centre. IsMinus lights are left out. Returns 0 when there are no
- * Light clips. */
-#define DEMO_AMBIENT 0xff303030u   /* [stand-in, by eye] when the demo's Program track sets no No 6 */
+ * The shading, read from the VU1 microcode (the skinned-model program at 0x2c0, its light setup FUN_001a9d80):
+ * each of the three is a directional light toward the model's centre (normalised), its Rgb scaled there by
+ * max(0, 1 - d^2 / Force^2); per vertex, ambient + sum of Rgb x max(0, N.L), clamped to 0..255, times the model's
+ * colour / 128, and the GS takes 128 as 1.0: so the lit colour reaches 2.0. Here the colours are halved and the
+ * GE's colour doubling (GU_FRAGMENT_2X) puts them back, so the 1.0..2.0 range isn't lost. The ambient is the light
+ * manager's +0x30 for these models (flag 2, FUN_001a9d30), which the demo update resets to 32 each frame
+ * (FUN_00215280): 0.25; a Program No 6 clip sets it [inferred: the same field]. An IsMinus light (its colour
+ * negated, FUN_0027f610) takes its slot among the three as on the PS2; the PSP has no negative light, so half its
+ * colour comes off the ambient instead [estimate: the mean N.L]. Returns 0 when there are no Light clips. */
+#define DEMO_AMBIENT_LEVEL (32.0f / 128.0f)
 typedef struct { float start; unsigned int no; float arg[4]; } DemoProgram;
 /* ScrEfc GFG, after the Program clips: depth fog from MinAlpha/128 at StartZ to MaxAlpha/128 at EndZ. */
 typedef struct { float start, life, z0, z1; unsigned int color; unsigned char min_a, max_a, type, pad; } DemoFog;
@@ -810,7 +816,6 @@ static int demo_lights(const float c[3]) {
         int cls = x->valid & 0xfb;
         if (demo_clock < x->start || demo_clock >= x->start + x->frames) continue;
         if (!(x->valid & 8) && cls != 1 && cls != 2) continue;
-        if (x->minus) continue;
         t = x->ease ? (demo_clock - x->start) / x->frames : 0.0f;
         for (k = 0; k < 3; ++k) {
             pos[k] = x->src_pos[k] + (x->dst_pos[k] - x->src_pos[k]) * t;
@@ -828,7 +833,10 @@ static int demo_lights(const float c[3]) {
             int slot = n < 4 ? n++ : 3;
             if (x->valid & 8) { special = slot; rank = 2.0f; }   /* the scene's slot goes first */
             else if (slot == 3 && pick[3].rank >= rank) continue;
-            for (k = 0; k < 3; ++k) { pick[slot].dir[k] = d[k] / len; pick[slot].rgb[k] = rgb[k] / 128.0f * strength; }
+            for (k = 0; k < 3; ++k) {
+                pick[slot].dir[k] = d[k] / len;
+                pick[slot].rgb[k] = rgb[k] / 128.0f * strength * (x->minus ? -1.0f : 1.0f);
+            }
             pick[slot].rank = rank;
             /* keep them by rank, best first */
             for (k = slot; k > 0 && pick[k].rank > pick[k - 1].rank; --k) {
@@ -837,16 +845,20 @@ static int demo_lights(const float c[3]) {
         }
     }
     (void)special;
-    if (has_ambient) {
+    {
         float a[3];
-        for (k = 0; k < 3; ++k) a[k] = ambient[k] * scale[k];
+        for (k = 0; k < 3; ++k) a[k] = has_ambient ? ambient[k] : DEMO_AMBIENT_LEVEL;
+        for (i = 0; i < 3 && i < n; ++i)   /* an IsMinus light: half its colour off the ambient [estimate] */
+            for (k = 0; k < 3; ++k) if (pick[i].rgb[k] < 0.0f) a[k] += pick[i].rgb[k] * 0.5f;
+        for (k = 0; k < 3; ++k) a[k] = a[k] * scale[k] * 0.5f;   /* halved: GU_FRAGMENT_2X doubles it back */
         sceGuAmbient(colour_word(a));
-    } else sceGuAmbient(DEMO_AMBIENT);
+    }
+    sceGuEnable(GU_FRAGMENT_2X);
     for (i = 0; i < 4; ++i) {
-        if (i < 3 && i < n) {
+        if (i < 3 && i < n && pick[i].rgb[0] + pick[i].rgb[1] + pick[i].rgb[2] > 0.0f) {
             ScePspFVector3 dir = {pick[i].dir[0], pick[i].dir[1], pick[i].dir[2]};
             float rgb[3];
-            for (k = 0; k < 3; ++k) rgb[k] = pick[i].rgb[k] * scale[k];
+            for (k = 0; k < 3; ++k) rgb[k] = pick[i].rgb[k] * scale[k] * 0.5f;
             sceGuLight(i, GU_DIRECTIONAL, GU_DIFFUSE, &dir);
             sceGuLightColor(i, GU_DIFFUSE, colour_word(rgb));
             sceGuEnable(GU_LIGHT0 + i);
@@ -941,6 +953,7 @@ void demo_letterbox(void) {
 /* Back to the room's lights (main.c's init: a key and a fill, ambient 0x90). */
 static void demo_lights_off(void) {
     ScePspFVector3 key_dir = {0.45f, 0.8f, 0.4f}, fill_dir = {-0.45f, -0.3f, -0.4f};
+    sceGuDisable(GU_FRAGMENT_2X);
     sceGuLight(0, GU_DIRECTIONAL, GU_DIFFUSE, &key_dir);
     sceGuLightColor(0, GU_DIFFUSE, 0xffa0a0a0);
     sceGuLight(1, GU_DIRECTIONAL, GU_DIFFUSE, &fill_dir);
@@ -1026,11 +1039,15 @@ void demo_draw(void) {
                 /* An SCM piece's object: scenery, unlit at its baked colour (prepare_demo scm_rig), as the stage. */
                 unsigned int g = obj[k].texture >> 24;
                 sceGuDisable(GU_LIGHTING);
+                if (lit) sceGuDisable(GU_FRAGMENT_2X);   /* its colour isn't halved */
                 sceGuColor(0xff000000u | g << 16 | g << 8 | g);
             }
             sceGumDrawArray(GU_TRIANGLES, DEMO_VTYPE, (int)obj[k].count, idx + obj[k].first, a->skinned);
             if (near) near_clip_draw(a->skinned, idx + obj[k].first, (int)obj[k].count, DEMO_VTYPE & ~GU_INDEX_16BIT);
-            if (obj[k].texture & (1u << 20)) { sceGuEnable(GU_LIGHTING); sceGuColor(0xffffffffu); }
+            if (obj[k].texture & (1u << 20)) {
+                sceGuEnable(GU_LIGHTING); sceGuColor(0xffffffffu);
+                if (lit) sceGuEnable(GU_FRAGMENT_2X);
+            }
             if (mode >= 2) model_object_blend(0, 1);
         }
     }

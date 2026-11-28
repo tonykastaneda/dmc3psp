@@ -172,3 +172,16 @@ switch on 2-6, 10-12 for 25 / 30 frames from motion frames 105 / 40; the front /
 A port of them on the body's bones (2026-11-27) put cap 7 about 1000 above a Dante 450 in front during 0xf's window
 (at 2813, 946, 3216), so the set's bone list isn't the body's as the port poses it [open: which model +1950 binds,
 FUN_002942e0]; the zone test stays.
+**The bone lists, settled (2026-11-28).** Both cap sets read the same list ([7] / [8]); what differs is the bone
+table a cap is switched on with (`294370(set, cap, frames, table)`: the matrix is `*(table + bone*4) + 0x104`).
+The front / left handlers (3d6710 / 6830 / 6950, and 3d71c0 / 7530 with record 5 for 20 frames) switch caps 7, 8, 9,
+13, 14 of set +1950 on the **shell's** table (+64c, model +c80 = pack [2], motions [4]): its bone 8, offsets y 0 / 60 /
+-60 / -120 / 120, r60. Bones 30 and 28 (caps 2-6, 10-12) exist only in the body (+5ac, model +680 = pack [1]), so the
+right side's are the body's. The port's earlier try used the body's bone 8 for the front caps, hence the 1000. Also:
+the shell's root is parented (3d1400: `*(+64c)+0xfc = +1360`, `+1378 = *(+5b4)+0x104`) to the **body's bone 2**;
+the port builds the shell from his root instead. Attached (2026-11-28 trial, reverted), shell bone 8 during 0xf's
+window sits about 100 in front and 460-500 above the floor with the port's 730 origin (body bone 2: (0, 210-233, 86-102),
+rotation identity), so its caps can't reach a Dante on the floor: the origin height or the shell's motion still
+disagrees with the game, which needs a PCSX2 look at the fight before the caps replace the zone test [open]. The
+release: state 13 switches cap 15 (type-4 capsule, shell bone 4) and the owner releases on any of the sixteen caps'
+contact flag 1 or a lost held handle; the port's damaging-hit rescue stands for that.
