@@ -911,7 +911,15 @@ static void caps_update(Combat *c, const Player *player, float frames) {
         if (!enemy_active() || !cap_body_kind(enemy_kind())) continue;
         enemy_position(e);
         if (!caps_touch(c, player, e)) continue;
-        enemy_hit((HitKind)d->hit_kind, player->x, player->z);
+        {
+            /* The attack record's damage (ops 6 / 7 in this script's bank) [his attack power, +0x2a18, taken as 1]. */
+            extern float enemy_melee_damage;
+            int bank = c->script >= 0 ? atoi(script_data[c->script].key) : -1;
+            enemy_melee_damage = bank >= 0 && bank < 34 && c->attack_record < dante_damage_banks[bank].count
+                ? dante_damage[dante_damage_banks[bank].first + c->attack_record] : -1.0f;
+            enemy_hit((HitKind)d->hit_kind, player->x, player->z);
+            enemy_melee_damage = -1.0f;
+        }
         c->cap_hit_mask |= 1u << i;
         ++c->hits_dealt;
     }

@@ -47,8 +47,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   the rest in proportion to their parameter blocks. `enemy.c`, `vergil_boss.c`, `geryon_boss.c`.
 - **Hit detection on Dante's moves**: his moves hit with their own attack caps (GDATA 0 chunks 6 / 7, switched on by
   the scripts' ops 0x10-0x1F), but the ordinary enemies' bodies are the port's 48 cm cylinder (their hurt caps aren't
-  read), bosses and the big enemies still take the old 260 cm reach, and the attack records (ops 6 / 7: damage, hit
-  kind) aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; shotgun spread and tracers
+  read), bosses and the big enemies still take the old 260 cm reach; the attack records' damage (ops 6 / 7, the bank's
+  records at 0x5a7240) reaches the ordinary enemies that count health (his attack power, +0x2a18, taken as 1), but
+  not the bosses or the enemies with their own health code, and the records' other fields (reaction kind, hit stop)
+  aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; shotgun spread and tracers
   are stand-in effects. MOVESET_RE.md, `combat.c`.
 - **The held guard** loops from 24:30's start (frame 10), as the guard state replaying the script would [inferred:
   FUN_00224850 isn't decoded]. `combat.c`.
