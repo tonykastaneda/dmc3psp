@@ -9,7 +9,7 @@ import struct
 SCRIPT_CHUNK, CAP_CHUNK, SHAPE_CHUNK = 38, 39, 40
 AI_TABLE = 0x5A8300
 # Per class, from their set-ups (build/hdref/enemy_specs.md): the Pride, the Gluttony (CEm001), the Sloth (CEm003).
-CLASS_TABLES = (("pride", 0x5A8300), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60), ("envy", 0x5CF5B0), ("greed", 0x5B0330),
+CLASS_TABLES = (("pride", 0x5A8300), ("lust", 0x5ACC10), ("gluttony", 0x5AB9D0), ("sloth", 0x5B0E60), ("envy", 0x5CF5B0), ("greed", 0x5B0330), ("wrath", 0x5B1460),
                 ("abyss", 0x5CE910))   # the Abyss (CEm006): its AI code is a clone of the Hells' (CComEm006); its set-up
                                        # (FUN_0041c240) hands FUN_004a8f00 its block's +0x10, 0x5ce910, laid out as
                                        # theirs: three bands (300, 600), its own zones and rows, plans 40 / 58 / 59 too
@@ -177,6 +177,11 @@ def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
     elf = Elf(executable)
     caps = read_caps(pack)
     ops, starts = compile_scripts(pack[SCRIPT_CHUNK], caps)
+    # CEm005 maps its actions to group 1. Keep these after the shared group 0.
+    greed_ops, greed_starts = compile_scripts(pack[SCRIPT_CHUNK], caps, group=1, script_count=9, motion_limit=110)
+    base = len(ops)
+    ops.extend((op, a, b + base if op == OP_GOTO else b, c) for op, a, b, c in greed_ops)
+    starts.extend(start + base if start >= 0 else -1 for start in greed_starts)
     bands, lists = read_rows(elf, AI_TABLE)
     times = floats(elf, elf.word(AI_TABLE + 0x10), 6)
     thresholds = floats(elf, elf.word(AI_TABLE + 0x14), 6)
@@ -192,7 +197,7 @@ def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
              f"#define ENEMY_AI_BANDS {len(bands) + 1}",
              "static const EnemyAiOp enemy_ai_ops[] = {"]
     lines += [f"    {{{o},{x},{b},{c}}}," for o, x, b, c in ops]
-    lines += ["};", f"static const short enemy_ai_scripts[{SCRIPT_COUNT}] = {{" + ",".join(map(str, starts)) + "};",
+    lines += ["};", f"static const short enemy_ai_scripts[{len(starts)}] = {{" + ",".join(map(str, starts)) + "};",
               "static const EnemyAiCap enemy_ai_caps[] = {"]
     lines += [f"    {{{k},{b},{real(x)},{real(y)},{real(z)},{real(r)}}}," for k, b, x, y, z, r in caps]
     lines += ["};",

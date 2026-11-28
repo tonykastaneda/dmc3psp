@@ -5,14 +5,10 @@
  * frame), then drops; at the floor it spawns the Greed's summon (FUN_00358a20 by its spawn word: 0 a Pride, 1 a
  * Lust, 2 a Sloth, 3-7 mixes) 110 cm up, while the enemy manager's summon count (+0x898) is under its limit
  * (+0x89c). A hit in flight breaks it.
- * Not decoded, so estimated: when the Greed summons (its table only ever picks plan 27, whose override isn't
- * read), the summon limit, where the coffins come down, and how a coffin's drawn (a streak of motes: its
- * model isn't converted). Coffins can't be broken yet. */
+ * The flight path, landing point, spawn cap and visuals remain approximations. */
 #define COFFIN_MAX 12
-#define GREED_SUMMON_EVERY 480.0f    /* [estimate] frames between summons */
-#define GREED_SUMMON_LIMIT 6         /* [estimate] the manager's +0x89c */
+#define GREED_SUMMON_LIMIT 6
 static struct { int active; float t, from[3], to[3], spin; } coffins[COFFIN_MAX];
-static float greed_clock[ENEMY_MAX];
 static int greed_summoned;
 
 static void coffin_throw(const float from[3], float px, float pz) {
@@ -29,20 +25,30 @@ static void coffin_throw(const float from[3], float px, float pz) {
         return;
     }
 }
-/* After a Greed's own update: its summon clock. */
-static void greed_tick(int slot, float f, float px, float pz) {
-    float dx = px - e->pos[0], dz = pz - e->pos[2];
-    if (!attacks_on || e->plan == P_DEATH) return;
-    greed_clock[slot] += f;
-    if (greed_clock[slot] < GREED_SUMMON_EVERY || dx * dx + dz * dz > 1500.0f * 1500.0f) return;
-    greed_clock[slot] = ai_unit() * 120.0f;
-    {
-        /* Actions 1000-1002: three coffins out of it. */
-        float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
-        int k;
-        for (k = 0; k < 3; ++k) coffin_throw(at, px, pz);
-        fx_hit_spark(at);
+/* CComEm005 plan 27 (003dd540) runs action 6, then action 5. After
+ * script 1:3 finishes, the coffin releases are timed separately (003de480). */
+static int greed_cast(float f, float px, float pz) {
+    if (e->step == 0 && e->done) {
+        script_play(103);
+        e->step = 1;
+    } else if (e->step == 1 && e->done) {
+        e->timer = 0;
+        e->step = 2;
+    } else if (e->step >= 2 && e->step <= 4) {
+        float from[3] = {e->pos[0], e->pos[1] + 150, e->pos[2]};
+        e->timer += f;
+        if (e->timer > 60 * (e->step - 1)) {
+            /* Only rank buckets 3, 4 and 5 release the middle coffin. */
+            if (e->step != 3) coffin_throw(from, px, pz);
+            ++e->step;
+        }
+    } else if (e->step == 5) {
+        script_play(104);
+        e->step = 6;
+    } else if (e->step == 6 && e->done) {
+        action_enter(A_NONE);
     }
+    return e->step == 0 || (e->step == 1 && e->frame < 140) || e->step == 6;
 }
 static void coffins_update(float f) {
     int i;
@@ -67,6 +73,5 @@ static void coffins_update(float f) {
 }
 static void coffins_reset(void) {
     memset(coffins, 0, sizeof(coffins));
-    memset(greed_clock, 0, sizeof(greed_clock));
     greed_summoned = 0;
 }

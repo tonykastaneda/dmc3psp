@@ -714,8 +714,7 @@ Working: the stage, spawn points from the measurements above, waves, enemies dyi
 Stand-ins and estimates:
 
 - **Enemies:** each of the six Seven Hells has its own model. The Pride, Sloth and Gluttony use their own
-  decision tables, the Sloth warps and the Gluttony spews (`docs/ENEMY_AI.md`). The Lust, Wrath and Greed use
-  the Pride's table, so the Wrath doesn't explode yet. The Enigma has its own logic, and the Gigapede is a full boss fight. Classes
+  decision tables, the Sloth warps and the Gluttony spews (`docs/ENEMY_AI.md`). The Lust circles and leaps into its scythe strike. The Wrath charges and explodes, including on death. The Greed swings its coffin and releases its summons. The Enigma has its own logic, and the Gigapede is a full boss fight. Classes
   not ported spawn as Prides. Cerberus is his own boss fight (`docs/CERBERUS_SPEC.md`). Mission 2 now runs groups 0 and 1,
   then the Hell Vanguard in group 3; his health bar, teleport attacks and death lead into Mission Clear
   (`docs/VANGUARD_SPEC.md`).
@@ -732,7 +731,7 @@ Stand-ins and estimates:
 
 ## Next steps, in order
 
-1. The Lust's, Wrath's and Greed's own tables and moves (the Wrath's explosion).
+1. The Greed's coffin flight and summon variants.
 2. The seals' own models (the lifts and their switches are in; the seals are tinted boards).
 3. Boss fidelity improvements, listed in CERBERUS_SPEC.md and VANGUARD_SPEC.md.
 4. Enemy health and Dante's damage from the game, then dying and Game Over.
