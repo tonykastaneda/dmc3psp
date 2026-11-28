@@ -161,6 +161,25 @@ static void play(int slot) {
     db.motion = slot >= 0 && slot < 34 ? motion_ids[slot] : -1;
     db.frame = 0.0f;
 }
+/* The sword's place over a motion: em034 [7]'s scripts (the one playing each motion whole), their op 3 records by
+ * frame (a script's timed records follow a 00 00 <frame> 00 00 wait [inferred: that record's layout]); the
+ * motions not listed keep 0, his back. */
+static int sword_place(void) {
+    static const struct { int motion; int count; struct { short frame, place; } ev[4]; } events[] = {
+        {3, 4, {{0, 0}, {4, 2}, {13, 3}, {78, 1}}},
+        {4, 2, {{0, 2}, {106, 1}}},
+        {5, 3, {{0, 2}, {60, 3}, {129, 1}}},
+        {17, 2, {{0, 2}, {4, 2}}},
+        {18, 1, {{0, 2}}},
+        {19, 3, {{0, 2}, {22, 4}, {79, 1}}},
+    };
+    int i, k, place = 0;
+    for (i = 0; i < (int)(sizeof(events) / sizeof(events[0])); ++i) {
+        if (events[i].motion != db.motion_slot) continue;
+        for (k = 0; k < events[i].count && db.frame >= events[i].ev[k].frame; ++k) place = events[i].ev[k].place;
+    }
+    return place;
+}
 static int motion_done(void) {
     const Motion *m = motion_get(db.motion);
     return !m || db.frame >= m->end_frame;
@@ -443,12 +462,22 @@ static void evaluate_poses(void) {
     at = body_pose[1];
     build_skeleton(&doppel_parts[PART_COAT], 0, 0, 0.0f, &at, coat_pose);
     coat_cloth(&at);
-    /* His sword in the right hand, bone 9, as Vergil's drawn Yamato (-7.5, -2, 0) [inferred] */
+    /* His sword (FUN_003c3080): the place the playing script last set (op 3's second byte, read each frame by
+     * FUN_003c3040; a script's start clears it to 0), one of the records at PTR_DAT_005b7930: {bone at +2,
+     * position at +0x10, rotation at +0x20}, rotated, moved, then on that body bone. */
     {
+        static const struct { int bone; float p[3], r[3]; } places[5] = {
+            {3, {-14.5f, 32.0f, -14.0f}, {-1.6581f, 0.0f, 3.4034f}},   /* 0, 1: on his back */
+            {3, {-14.5f, 32.0f, -14.0f}, {-1.6581f, 0.0f, 3.4034f}},
+            {9, {-7.6f, -3.0f, -1.0f}, {0.0f, 0.0f, 0.0f}},            /* 2: right hand */
+            {13, {7.6f, -3.0f, -1.0f}, {0.0f, 0.0f, 0.0f}},            /* 3: left hand */
+            {0, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}},               /* 4: the root */
+        };
+        int place = sword_place();
         Transform offset;
-        euler(&offset, 0.0f, 0.0f, 0.0f);
-        offset.p[0] = -7.5f; offset.p[1] = -2.0f; offset.p[2] = 0.0f;
-        multiply(&at, &body_pose[9], &offset);
+        euler(&offset, places[place].r[0], places[place].r[1], places[place].r[2]);
+        memcpy(offset.p, places[place].p, sizeof(offset.p));
+        multiply(&at, &body_pose[places[place].bone], &offset);
         build_skeleton(&doppel_parts[PART_SWORD], 0, 0, 0.0f, &at, sword_pose);
     }
 }
