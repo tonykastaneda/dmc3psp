@@ -2088,7 +2088,7 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
         c->move == MOVE_RECOVER || c->move == MOVE_POP || c->move == MOVE_POP_LAND || player->health <= 0.0f) return 1;
     /* Royalguard's judgement (FUN_002e7f10 -> FUN_004416f0): the time since the guard began (+0x3c8c) against the
      * style level's windows (config chunk 9 +0x18c.. / +0x198..: within 5 frames grade 3, within 0 / 8 / 10 grade 4,
-     * else grade 0), then table 0x5c9400 by the blow's guard class (+0x3e) and the grade: 0 / 1 blocked (1: by a table on the record's +0x18, not read), 2 a guard
+     * else grade 0), then table 0x5c9400 by the blow's guard class (+0x3e) and the grade: 0 / 1 blocked (1: kinds 4-7, 0x61a438), 2 a guard
      * break, 3 / 4 the timed blocks, 6 not blocked. The port's blows carry no guard class: a knockdown kind (2-7) is
      * taken as class 1, the rest class 0 [estimate]. Level 2 (the full moveset); grade 5 (+0x3c82, a block straight
      * after a type-5 one) isn't reached; the gauge isn't ported. */
@@ -2111,6 +2111,9 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
         int grade = c->guard_frames <= 5.0f ? 2 : c->guard_frames <= 10.0f ? 1 : 0;   /* columns: 0, 4, 3, 5 */
         int cls = kind >= 2 && kind <= 7 ? 1 : 0;
         c->guard_type = table[cls][grade];
+        /* FUN_004416f0: a plain block (0) of a blow whose kind (record +0x18) is set in 0x61a438 (kinds 4-7) is
+         * result 1 (the block's second camera / sound set, the same gauge factor and profile). */
+        if (c->guard_type == 0 && kind >= 4 && kind <= 7) c->guard_type = 1;
         if (c->guard_type != 2 && c->guard_type != 6) {
             /* A block fills the gauge (FUN_00441df0): the blow's damage (its record's +4) times 1 (type 0), +0x188 1
              * (1), +0x180 2 (3, the just block, also +0x1f4 = 10 frames of blows ignored), +0x184 1.25 (4); to 9000. */
@@ -2127,8 +2130,8 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
             c->guard_type = 6;   /* the blow lands */
         }
         if (c->guard_type == 2) {
-            /* A break (FUN_002e7f10 case 2 -> FUN_004421f0 -> state 0x15): the blow's damage, then the stagger facing
-             * the attacker. [The damage under profile 0x11 (FUN_002e8af0) isn't read: the blow's own.] */
+            /* A break (FUN_002e7f10 case 2 -> FUN_004421f0(4, 1) -> state 0x15): the blow under profile 0x11, 33, his
+             * own (so its damage whole), 0x12 (11) in Devil Trigger; then the stagger facing the attacker. */
             if (damage < 0.0f) damage = kind >= 1 ? 800.0f : 700.0f;
             if (player->devil) damage *= 11.0f / 33.0f;   /* profile 0x12 in Devil Trigger; 0x11's 33 is his own */
             player->health -= damage;
