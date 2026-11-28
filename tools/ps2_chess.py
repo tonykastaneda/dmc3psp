@@ -83,7 +83,7 @@ try:
     print('chessmen', len(men), [hex(a) for a in men])
     if men:
         time.sleep(4)
-        r.focus(); r.key(0x70, True); time.sleep(0.05); r.key(0x70, False)   # F1: save to slot
+        r.save_state(1)   # slot 1 over PINE (F1 saved the current slot, 1)
         time.sleep(4)
         slot = sorted(glob.glob('build/refemu/sstates/SLUS-21361 (*).0*.p2s'), key=os.path.getmtime)[-1]
         shutil.copy(slot, 'build/refemu/sstates/m18_chess.p2s')
