@@ -50,8 +50,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   read), bosses and the big enemies still take the old 260 cm reach; the attack records' damage (ops 6 / 7, the bank's
   records at 0x5a7240) reaches the ordinary enemies that count health (his attack power, +0x2a18, taken as 1), but
   not the bosses or the enemies with their own health code, and the records' other fields (reaction kind, hit stop)
-  aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; shotgun spread and tracers
-  are stand-in effects. MOVESET_RE.md, `combat.c`.
+  aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; the Shotgun's pellets are its
+  shell's (FUN_002ee930) at level 0 only (the gun's level isn't carried), with no tracers. MOVESET_RE.md, `combat.c`.
 - **The held guard** loops from 24:30's start (frame 10), as the guard state replaying the script would [inferred:
   FUN_00224850 isn't decoded]. `combat.c`.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.

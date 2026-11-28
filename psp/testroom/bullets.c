@@ -1,6 +1,7 @@
 #include "bullets.h"
 
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "enemy.h"
@@ -14,8 +15,11 @@
 #define ENEMY_RADIUS 70.0f
 #define ENEMY_HEIGHT 220.0f
 #define PROJECTILE_MAX_SECONDS 2.5f
-#define SHOTGUN_PELLETS 5
-#define SHOTGUN_SPREAD 0.10f      /* radians between pellets: estimate, not decoded */
+/* The Shotgun's shell (FUN_002ee930): 6 / 8 / 10 pellets by its level (0x5a2348; level 0 here [the gun's level isn't
+ * carried]): one straight to 2000 cm along the aim, the rest on a ring round that point, evenly spaced from a random
+ * angle, each 250-500 cm out across the aim (500-1000 for its shell type 2). */
+#define SHOTGUN_PELLETS 6
+#define SHOTGUN_REACH 2000.0f
 
 typedef struct {
     int active, kind, moving;
@@ -178,10 +182,22 @@ static void bullets_fire_one(int kind, const float muzzle[3], const float yaw, i
     }
     if (kind == BULLET_SHOTGUN) {
         int p, any = 0;
-        float base = atan2f(d[0], d[2]);
-        for (p = 0; p < SHOTGUN_PELLETS; ++p) {
-            float a = base + (float)(p - SHOTGUN_PELLETS / 2) * SHOTGUN_SPREAD;
-            float pellet[3] = {muzzle[0] + sinf(a) * guns[kind].range, to[1], muzzle[2] + cosf(a) * guns[kind].range};
+        float aim[3] = {to[0] - muzzle[0], to[1] - muzzle[1], to[2] - muzzle[2]}, len, x[3], y[3], up[3] = {0.0f, 1.0f, 0.0f};
+        float centre[3], start = (float)(rand() % 6283) / 1000.0f;
+        len = sqrtf(aim[0] * aim[0] + aim[1] * aim[1] + aim[2] * aim[2]);
+        if (len < 1.0f) { aim[0] = d[0]; aim[1] = d[1]; aim[2] = d[2]; len = 1.0f; }
+        for (p = 0; p < 3; ++p) { aim[p] /= len; centre[p] = muzzle[p] + aim[p] * SHOTGUN_REACH; }
+        /* FUN_00133890's frame round the aim (up the world's y): x = up x aim, y = aim x x. */
+        x[0] = up[1] * aim[2] - up[2] * aim[1]; x[1] = up[2] * aim[0] - up[0] * aim[2]; x[2] = up[0] * aim[1] - up[1] * aim[0];
+        len = sqrtf(x[0] * x[0] + x[1] * x[1] + x[2] * x[2]); if (len < 1e-4f) { x[0] = 1.0f; x[1] = x[2] = 0.0f; len = 1.0f; }
+        for (p = 0; p < 3; ++p) x[p] /= len;
+        y[0] = aim[1] * x[2] - aim[2] * x[1]; y[1] = aim[2] * x[0] - aim[0] * x[2]; y[2] = aim[0] * x[1] - aim[1] * x[0];
+        any |= hitscan(kind, muzzle, centre);
+        for (p = 0; p < SHOTGUN_PELLETS - 1; ++p) {
+            float a = start + 6.283185f / (float)(SHOTGUN_PELLETS - 1) * (float)p, r = 250.0f + (float)(rand() % 1000) * 0.25f;
+            float pellet[3];
+            int k2;
+            for (k2 = 0; k2 < 3; ++k2) pellet[k2] = centre[k2] + r * (x[k2] * cosf(a) + y[k2] * sinf(a));
             any |= hitscan(kind, muzzle, pellet);
         }
         if (any) { enemy_hit(guns[kind].hit, muzzle[0], muzzle[2]); ++hits_landed; }
