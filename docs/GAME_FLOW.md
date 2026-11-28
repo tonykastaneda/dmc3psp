@@ -224,8 +224,10 @@ Normal 4 Lusts and 3 Greeds) -> back up -> 138 Moonlight Mile -> 142 (demo 17) -
   taken in 105.)
 - 114's six super jump pads (CATAPULT) throw Dante to the next pad, the last to the top door [approximation: the arc].
   137's and 100's lifts run as one elevator, both ways, and take their door at the end of the run.
-- 105: the crest switch brings the ball down; break its shell (it rises and regrows if left alone) and the Skull shows
-  [approximation: CStageSetHang isn't decoded; hit counts are estimates, drawn as stand-in blocks].
+- 105: the crest switch brings the ball down (CStageSetHang, HANG 200: 20 cm a frame to 1200 below its root, then
+  1320 frames before it rises at 10 a frame and the switch must be struck again); its shell takes 1200 of damage in
+  five stages and breaks below 0, and the Skull shows. Stand-ins: the ball's EFM model drawn as blocks, its swing a
+  plain pendulum, Dante's damage 42 / 84 (`psp/testroom/mission7.c`).
 - 142's area 0 (demo 17) leads to 144. No cutscenes, and 144 has no rain.
 - Approximation: 127's door into 114 lands on the ground floor (start 0), not the 9000 balcony Dante drops from.
 - Damned Pawns (`pawn.inc`): their hops and strike as decoded; turns now use the shared chess master (`chess.c`, docs/CHESS.md), at the port's fixed rank0.

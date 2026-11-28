@@ -154,7 +154,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Mission 6**: the spike traps' level (125, 131, 610; `needles.c`) by the difficulty, not the value the game reads
   (game +4, +0x10, vfunc +0x1c); the barrier's effect (vfunc +0x114: "no damage" by the walkthrough); 124's switches'
   and wall's places; the pillars don't rise; messages, cameras and demos 15 / 321.
-- **Mission 7**: 114's jump pads' arc; 105's hanging ball (CStageSetHang hit counts, stand-in blocks); 127's door
+- **Mission 7**: 114's jump pads' arc; 105's hanging ball (CStageSetHang decoded: its drop, 1320-frame clock, 1200 HP and five shell stages; stand-ins: its
+  EFM model as blocks, its swing a damped pendulum, the switch lit again to restart it [inferred]); 127's door
   into 114 lands on the ground floor; 144 has no rain.
 - **Mission 9**: 203's light beam (CRYSTAL 102) isn't decoded (the reset panel drops seal 101); 205's / 207's bladed
   pillars' 700 damage [estimate] and the blades don't turn; Mission Clear as Nevan falls (not door 1 / demo 24);
