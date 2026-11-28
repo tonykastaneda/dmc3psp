@@ -324,7 +324,7 @@ static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
 void enemy_test_note(const char *what, int a, float b) { giga_note(what, a, b); }
-static int goyle_bullet(const float from[3], const float to[3]);
+static int straight_projectile(const float from[3], const float to[3], float speed, float life);
 static int enemy_giga_part(int k, float out[3]);
 static void enemy_giga_struck(const float at[3], float damage);
 #define GIGA_PARTS_PUBLIC 8
@@ -3497,10 +3497,8 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
  *   while the gauge drains 1 a frame (0.2 as flesh). At 0 it comes back to life (18). Sword hits on the
  *   statue knock it up (19, vy 23, fall 0.7) and it shatters when its health is gone.
  * Simplified: the decision tables (0x5bf814) are a fixed choice; its blood shots (state 13) and the
- * dodge from aimed guns aren't in; damage to Dante is the default; three times the damage on stone is
- * inferred, not decoded. */
+ * aiming dodge uses the port's gun event and sword damage on stone still uses the port's multiplier. */
 #define GOYLE_HEALTH (ENEMY_HEALTH * 300 / 250)
-#define GOYLE_STONE_AT 150.0f
 #define GOYLE_MAX_OUT 5
 #define GOYLE_SPLITS 5
 enum { G_HOVER = 0, G_STRAFE_L = 2, G_STRAFE_R = 3, G_APPROACH = 4, G_BACK = 5, G_FLINCH = 6, G_FLINCH_HEAVY = 7,
@@ -3521,6 +3519,11 @@ static int goyle_init(void) {
         if (goyle_motion[i] < 0) return 0;
     }
     return 1;
+}
+
+/* 0x5bf240: distance, shot count, stone threshold and the two gauge decay rates. */
+static int goyle_band(float distance) {
+    return distance < 350.0f ? 0 : distance < 700.0f ? 1 : 2;
 }
 
 static int goyle_count(void) {
@@ -3628,7 +3631,10 @@ static void goyle_update(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, s = sinf(e->yaw), c = cosf(e->yaw);
     int stone = e->action == G_STONE || e->action == G_STONE_FALL || e->action == G_STATUE || e->action == G_STONE_HIT;
     /* The stone gauge drains; so does the split cooldown, faster the nearer he is. */
-    if (e->goyle_stone > 0.0f) { e->goyle_stone -= (stone ? 1.0f : 0.2f) * f; if (e->goyle_stone < 0.0f) e->goyle_stone = 0.0f; }
+    if (e->goyle_stone > 0.0f) {
+        static const float decay[2][3] = {{0.2f, 0.25f, 0.25f}, {1.0f, 1.2f, 1.5f}};
+        e->goyle_stone = fmaxf(0.0f, e->goyle_stone - decay[stone][goyle_band(d)] * f);
+    }
     if (e->goyle_shots > 0.0f) e->goyle_shots -= f;
     if (e->goyle_split > 0.0f) { float dd = d < 1000.0f ? 1000.0f : d; e->goyle_split -= 1.0e6f / (dd * dd) * f; }
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
@@ -3681,29 +3687,30 @@ static void goyle_update(float f, float px, float py, float pz) {
         if (e->done) {
             --e->goyle_splits;
             e->goyle_split = 300.0f;
-            e->vel[0] = 10.0f;
             goyle_state(G_SPLIT);
             goyle_split_off();
         }
         break;
     case G_SPLIT: case G_EMERGE:
         /* Thrown apart, frames 11-40 (FUN_00430330 / 00430480). */
-        if (e->frame > 11.0f && e->frame < 40.0f) { e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f; }
+        if (e->frame > 11.0f && e->frame < 40.0f) move_local((e->action == G_SPLIT ? 10.0f : -10.0f) * f, 0, 0);
         if (e->done) goyle_decide(d);
         break;
     case G_SHOOT:
         /* State 13: Shl00 (FUN_004404a0) emits, 27-32 frames into its life, 2 / 3 / 4 Shl01 blood bullets by
          * distance band (under 350, under 700, further; 0x5bf242) at Dante's place +-100 cm each way. They fly
-         * straight and burst on a wall (FUN_00459eb0). Their speed and life aren't decoded: 25 a frame and 120. */
+         * straight and burst on a wall (FUN_00459eb0). FUN_00459ce0 sets speed and lifetime to 30. */
         goyle_turn_to(px, pz, 0.1f, f);
         if (!e->step && e->timer > 28.0f) {
-            int k, n = d < 350.0f ? 2 : d < 700.0f ? 3 : 4;
+            int k, n = 2 + goyle_band(d);
             e->step = 1;
             for (k = 0; k < n; ++k) {
                 float from[3] = {e->pos[0] + s * 60.0f, e->pos[1] + 150.0f, e->pos[2] + c * 60.0f};
                 float to[3] = {px + ai_unit() * 200.0f - 100.0f, py + 100.0f + ai_unit() * 200.0f - 100.0f, pz + ai_unit() * 200.0f - 100.0f};
-                goyle_bullet(from, to);
+                int shot = straight_projectile(from, to, 30.0f, 30.0f);
+                if (shot >= 0) arrows[shot].damage = 1000.0f;   /* +4 of record 0, 0x5bf310 */
             }
+            giga_note("goyle_volley", n, 30.0f);
         }
         if (e->done) goyle_state(G_HOVER);
         break;
@@ -3783,15 +3790,15 @@ void enemy_gun_aimed(float x, float z) {
     e = was;
 }
 
-static int goyle_bullet(const float from[3], const float to[3]) {
+static int straight_projectile(const float from[3], const float to[3], float speed, float life) {
     int i;
     float dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], l = sqrtf(dx * dx + dy * dy + dz * dz) + 0.01f;
     for (i = 0; i < ARROW_MAX && arrows[i].active; ++i) {}
     if (i >= ARROW_MAX) return -1;
     memset(&arrows[i], 0, sizeof(arrows[i]));
-    arrows[i].active = 1; arrows[i].type = 4; arrows[i].life = 120.0f;
+    arrows[i].active = 1; arrows[i].type = 4; arrows[i].life = life;
     memcpy(arrows[i].pos, from, sizeof(arrows[i].pos));
-    arrows[i].vel[0] = dx / l * 25.0f; arrows[i].vel[1] = dy / l * 25.0f; arrows[i].vel[2] = dz / l * 25.0f;
+    arrows[i].vel[0] = dx / l * speed; arrows[i].vel[1] = dy / l * speed; arrows[i].vel[2] = dz / l * speed;
     return i;
 }
 
@@ -3804,11 +3811,10 @@ static void goyle_split_off(void) {
         e = o;
         spawn_one(ENEMY_GOYLE, parent->pos[0], parent->pos[2]);
         o->pos[1] = parent->pos[1];
-        o->yaw = wrap_angle(parent->yaw + PI);
+        o->yaw = parent->yaw;
         o->health = parent->health;
         o->goyle_splits = parent->goyle_splits;
         o->goyle_split = 300.0f;
-        o->vel[0] = 10.0f;
         goyle_state(G_EMERGE);
         break;
     }
@@ -3822,12 +3828,14 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
     if (e->plan == P_DEATH) return;
     e->yaw = atan2f(from_x - e->pos[0], from_z - e->pos[2]);   /* knocked away from him */
     if (gun) {
-        /* The stone gauge: twice the shot's power (a pistol shot's 5, inferred), capped at 1000; each 60 shot
-         * at it is a flinch and 120 more. */
-        e->goyle_stone += 10.0f; e->goyle_shots += 5.0f;
+        static const float threshold[3] = {150.0f, 150.0f, 200.0f};
+        float distance = hypotf(from_x - e->pos[0], from_z - e->pos[2]);
+        /* 0039d9e0 reads the incoming shot record's +4 for both gauges. */
+        e->goyle_stone += enemy_bullet_damage * 2.0f;
+        e->goyle_shots += enemy_bullet_damage;
         if (e->goyle_shots > 60.0f) { e->goyle_stone += 120.0f; e->goyle_shots = 0.0f; if (!stone) { e->vel[0] = 4.0f; goyle_state(G_FLINCH_HEAVY); } }
         if (e->goyle_stone > 1000.0f) e->goyle_stone = 1000.0f;
-        if (!stone && e->goyle_stone > GOYLE_STONE_AT) { e->vel[0] = 0.0f; e->vel[1] = 0.0f; goyle_state(G_STONE); }
+        if (!stone && e->goyle_stone > threshold[goyle_band(distance)]) { e->vel[0] = 0.0f; e->vel[1] = 0.0f; goyle_state(G_STONE); }
         if (mortal && ai_unit() < 0.15f) --e->health;   /* bullets barely hurt it */
     } else if (stone) {
         /* Struck stone: up it goes, and it takes three times the damage. */
@@ -3839,7 +3847,6 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
         if (e->health > 0 && e->goyle_split <= 0.0f && e->goyle_splits > 0 && goyle_count() < GOYLE_MAX_OUT && ai_unit() < 0.75f) {
             --e->goyle_splits;
             e->goyle_split = 300.0f;
-            e->vel[0] = 10.0f;
             goyle_state(G_SPLIT);
             fx_explosion(at);
             goyle_split_off();
@@ -7135,7 +7142,7 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
         /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
         float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
         float to[3] = {px, py + 100.0f, pz};
-        { int k = goyle_bullet(from, to); if (k >= 0) { arrows[k].damage = 900.0f; fallen_spear[e - enemies] = k + 1; } }   /* record 0 (0x5c2dd0): 900 */
+        { int k = straight_projectile(from, to, 25.0f, 120.0f); if (k >= 0) { arrows[k].damage = 900.0f; fallen_spear[e - enemies] = k + 1; } }   /* record 0 (0x5c2dd0): 900 */
         nfx_spawn(NFX_FALLEN, 0x367, from, e->yaw, 0);
     }
     /* Its spear's effects (CEm011Shl00, FUN_0045a330; em011's pack, nfx bank 10): V0x367 as it's let go, V0x368 where it

@@ -700,12 +700,13 @@ from table `0x5bf814`):
 - **Guns** (hit record byte 2 = 1): stone gauge +0x448 += 2 × power, shots +0x44c += power; over 60 shots: gauge
   +120, a flinch (7). Over `0x5bf244[band]` (**150** near and mid, 200 far) it turns to stone (0xf). Capped
   at 1000.
-- The gauge drains `0x5bf248[rank]` a frame as stone (1.0 at rank 0) and `0x5bf24c` as flesh (0.2).
+- The gauge drains by distance band: 1 / 1.2 / 1.5 per frame as stone and 0.2 / 0.25 / 0.25 as flesh (
+  `0x5bf248` and `0x5bf24c` in `0039cb30`).
 - **Sword** (byte 2 = 0): the split check `FUN_0039e460`: not stone, the cooldown +0x454 run out (it drains
   1e6 / max(d, 1000)² a frame, d = distance to Dante), fewer of its class than +0x461, a 75% roll, splits left.
   Else a flinch by hit type. On stone: states 0x13 / 0x15.
 
-**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above. The shots' bullets fly at 25 a frame for 120 frames [estimate]; it shoots
+**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above. The blood bullets fly 30 cm per frame for 30 frames (`00459ce0`, `00459eb0`); it shoots
 instead of diving half the time from beyond 500 cm. The dodge from aimed guns is taken from Dante's shots (within 500 hovering, 300
 approaching, 50/50 left or right). The decision tables are the game's (below).
 
