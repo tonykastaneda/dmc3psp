@@ -262,8 +262,8 @@ def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
                   ",".join(str(elf.byte(0x5CED30 + i * 2 + 1)) for i in range(HIT_SCRIPT_COUNT)) + "};"]
     if abyss_pack is not None:
         # The Abyss (em006, GDATA 118): the Hells' motions and caps layout, its own scripts [38] and caps [39] / [40].
-        # Its block's +0x10 (0x5ce910) is a list of pointers, not the hit-script list the Hells have there: the Pride's
-        # (which the Envy's matches byte for byte) stands in [inferred].
+        # FUN_0041c240 installs the block's +0xc at enemy+0x2304 for the hit-script lookup.
+        abyss_hit_scripts = elf.word(0x61A678 + 0x0C)
         abyss_caps = read_caps(abyss_pack)
         abyss_ops, abyss_starts = compile_scripts(abyss_pack[SCRIPT_CHUNK], abyss_caps, motion_limit=200)
         # Its own scripts (group 1, ids 100+: 100 the rise, 101 the sink, 102 the sweep), after the shared ones.
@@ -279,5 +279,5 @@ def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
                       "{%d,%d,%s,%s,%s,%s}" % (k, b, real(x), real(y), real(z), real(r))
                       for k, b, x, y, z, r in abyss_caps) + "};",
                   "static const unsigned char abyss_ai_hit_scripts[] = {" +
-                  ",".join(str(elf.byte(HIT_SCRIPTS + i * 2 + 1)) for i in range(HIT_SCRIPT_COUNT)) + "};"]
+                  ",".join(str(elf.byte(abyss_hit_scripts + i * 2 + 1)) for i in range(HIT_SCRIPT_COUNT)) + "};"]
     path.write_text("\n".join(lines) + "\n")
