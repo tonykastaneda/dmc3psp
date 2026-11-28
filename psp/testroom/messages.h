@@ -29,6 +29,8 @@ void msg_enter(int mission, int room);    /* mission 0: none run */
 /* Each frame in a mission. Returns 1 while the box is open: nothing else should take the buttons. */
 int msg_update(float dt, unsigned int pressed, const MsgEnv *env);
 int msg_busy(void);
+/* Whether a place is inside this room's EVE area a (event op 0x0f, sw_in_area). */
+int msg_in_area(int a, float x, float y, float z);
 /* An in-engine event is on (49 .. 4c): Dante takes no input, and the mission holds the enemies. */
 int msg_event_on(void);
 int msg_event_skippable(void);

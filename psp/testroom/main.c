@@ -1552,7 +1552,8 @@ scene_done:
             float h = (float)size * (float)SCR_HEIGHT / 448.0f * 1.5f, y = (float)sy * (float)SCR_HEIGHT / 448.0f - h * 0.3f;
             char row[112];
             const char *p = line;
-            float widest = 0.0f, x0;
+            float widest = 0.0f, x0, bottom;
+            int lines = 0;
             /* As the PS2 lays it out: the block centred on its widest line (its x is (640 - that width) / 2 in the
              * PS2's font), every line starting at that x. Measured in this font, so the block keeps its shape. */
             while (*p) {
@@ -1562,6 +1563,7 @@ scene_done:
                 row[n] = 0;
                 w = menu_font_width(h, row);
                 if (w > widest) widest = w;
+                ++lines;
                 p += n;
                 if (*p == '\n') ++p;
             }
@@ -1575,6 +1577,9 @@ scene_done:
                 widest *= scale;
             }
             x0 = (SCR_WIDTH - widest) * 0.5f;
+            /* The larger font grows down from the PS2's y: keep its last line on the screen. */
+            bottom = y + (float)(lines - 1) * h * 1.15f + h * 0.85f;
+            if (bottom > (float)SCR_HEIGHT - 3.0f) y -= bottom - ((float)SCR_HEIGHT - 3.0f);
             p = line;
             while (*p) {
                 int n = 0;
@@ -2973,8 +2978,10 @@ static int key_item_shown(const RoomKeyItem *k) {
         && (k->after < 0 || item_is(k->after, 2));
 }
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
+static int room_entrance_waiting(void);
 static int room_held(void) {
     int i;
+    if (room_entrance_waiting()) return 1;   /* the boss waits for his entrance demo (Dante in its area) */
     if(mission_choice.mission==10 && mission10_hold())return 1;
     if(mission_choice.mission==13 && mission13_returning())return 1;
     if(mission_choice.mission==8 && mission_room>=0 && atoi(rooms[mission_room].file+5)==302 && !item_is(46,2))return 1;
@@ -4294,18 +4301,18 @@ static int demo_queue[8], demo_queue_len, demo_queue_at;
 static int demo_queue_then, demo_clear_due, demo_clear_played, demo_resume_start = -1;
 
 /* Demos inside the missions, from the event scripts' ROOM blocks: a boss's entrance (counter 0 still 0 and Dante in the
- * room's area: taken as his first entry into the room [the area: not checked]) and its defeat (the counter at its step
- * and the room's enemies cleared: sw_enemies_cleared), each then putting Dante at a start of the room (AFTER_DEMO's
- * goto_room). Only those that stay in the room are here. */
-typedef struct { unsigned char mission; short room, demo; unsigned char cleared; signed char start; } RoomDemo;
+ * room's EVE area, sw_in_area [area]: until then the room's script, and so the boss, waits) and its defeat (the counter
+ * at its step and the room's enemies cleared: sw_enemies_cleared), each then putting Dante at a start of the room
+ * (AFTER_DEMO's goto_room). Only those that stay in the room are here. */
+typedef struct { unsigned char mission; short room, demo; unsigned char cleared; signed char start, area; } RoomDemo;
 static const RoomDemo room_demos[] = {
-    {3, 6, 6, 0, 2}, {3, 6, 7, 1, 2},          /* Cerberus appears / beaten */
-    {5, 121, 12, 0, 3}, {5, 121, 13, 1, 2},    /* the Jester's room */
-    {9, 210, 22, 0, 2}, {9, 210, 23, 1, 3},    /* Nevan */
-    {11, 217, 28, 0, 2}, {11, 217, 29, 1, 3},  /* Beowulf */
-    {12, 228, 32, 0, 0}, {12, 228, 34, 1, 2},  /* Geryon: his entrance; 33 (the bridge falls) is mission12.c's; his defeat */
-    {16, 115, 44, 0, 2},                       /* Lady */
-    {17, 139, 48, 1, 1},                       /* the Doppelganger beaten */
+    {3, 6, 6, 0, 2, 0}, {3, 6, 7, 1, 2, -1},          /* Cerberus appears / beaten */
+    {5, 121, 12, 0, 3, 1}, {5, 121, 13, 1, 2, -1},    /* the Jester's room */
+    {9, 210, 22, 0, 2, 0}, {9, 210, 23, 1, 3, -1},    /* Nevan */
+    {11, 217, 28, 0, 2, 0}, {11, 217, 29, 1, 3, -1},  /* Beowulf */
+    {12, 228, 32, 0, 0, 0}, {12, 228, 34, 1, 2, -1},  /* Geryon: his entrance; 33 (the bridge falls) is mission12.c's; his defeat */
+    {16, 115, 44, 0, 2, 1},                           /* Lady */
+    {17, 139, 48, 1, 1, -1},                          /* the Doppelganger beaten */
 };
 /* Demos between rooms: the script plays them in one room and its AFTER_DEMO goes to the next, which the port's own flow
  * reaches by a door or a defeat: played as Dante arrives. 7: 142's area 0 (17) to 144; 17: 143's area 0 (47) to 139;
@@ -4324,16 +4331,27 @@ static int room_demo_last_room = -1;
 
 static void queue_demo(int id);
 /* A room demo due now (kind 0 on entering, 1 once cleared), queued to resume play; 1 if one was. */
-static int queue_room_demo(int mission, int room, int cleared) {
+static int queue_room_demo(int mission, int room, int cleared, const Player *p) {
     int k;
     for (k = 0; k < ROOM_DEMOS; ++k) {
         const RoomDemo *r = &room_demos[k];
         if (r->mission != mission || r->room != room || r->cleared != cleared || room_demo_played[k]) continue;
+        if (r->area >= 0 && !msg_in_area(r->area, p->x, p->y, p->z)) continue;   /* not yet in its area */
         room_demo_played[k] = 1;
         queue_demo(r->demo);
         demo_resume_start = r->start;
         return 1;
     }
+    return 0;
+}
+/* This room's boss entrance still to play (its script waits for it, room_held). */
+static int room_entrance_waiting(void) {
+    int k, room;
+    if (cmp_no_demo || mission_room == ROOM_NONE) return 0;
+    room = room_number(mission_room);
+    for (k = 0; k < ROOM_DEMOS; ++k)
+        if (room_demos[k].mission == mission_choice.mission && room_demos[k].room == room && !room_demos[k].cleared
+            && room_demos[k].area >= 0 && !room_demo_played[k]) return 1;
     return 0;
 }
 /* "nodemo": a test skips the cutscenes (cmp_no_demo) */
@@ -4880,8 +4898,8 @@ int main(int argc, char *argv[]) {
             room_demo_last_room = room;
             if (pending_room_demo >= 0) { queue_demo(pending_room_demo); pending_room_demo = -1; demo_resume_start = -1; transit = 1; }
             if (transit) demo_queue_then = 2;
-            else if ((entered && queue_room_demo(mission_choice.mission, room, 0)) ||
-                (msg_room_fought && enemy_alive_count() == 0 && queue_room_demo(mission_choice.mission, room, 1)))
+            else if (queue_room_demo(mission_choice.mission, room, 0, &player) ||
+                (msg_room_fought && enemy_alive_count() == 0 && queue_room_demo(mission_choice.mission, room, 1, &player)))
                 demo_queue_then = 2;
         }
         if (focus_cmp && cmp_enemy_audit && cmp_audit_room_count) {
@@ -5096,7 +5114,7 @@ int main(int argc, char *argv[]) {
                     int k;
                     demo_clear_played = 1;
                     demo_queue_len = demo_queue_at = 0;
-                    if (mission_room != ROOM_NONE) queue_room_demo(m, room_number(mission_room), 1);   /* its defeat first */
+                    if (mission_room != ROOM_NONE) queue_room_demo(m, room_number(mission_room), 1, &player);   /* its defeat first */
                     for (k = 0; k < 3 && mission_clear_demos[m][k] >= 0; ++k) queue_demo(mission_clear_demos[m][k]);
                     demo_queue_then = 1;
                     cleared = 0;
