@@ -326,6 +326,8 @@ def main():
     summary.append(write_bank(lines, 27, records(pac_list(read(139))[57]), (0x338, 0x2fc, 0x2fd, 0x2fe, 0x2ff, 0x300, 0x32e, 0x34f), ()))
     # 28 room 144's own effect pack (GDATA 502, the room's third file): its STE record starts G113, the rain.
     summary.append(write_bank(lines, 28, records(read(502)), (113 | G_FLAG,), ()))
+    # 29 the Palace's boss exits' warp (V487, the same in rooms 433 / 436 / 448 / 449's packs): from 433's, GDATA 870.
+    summary.append(write_bank(lines, 29, records(read(870)), (487,), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     # The blade trails' models (docs/NATIVE_FX.md "Blade trails"): M34 (Dante's pack), M30 / M31 (A&R's), 33 bones in a

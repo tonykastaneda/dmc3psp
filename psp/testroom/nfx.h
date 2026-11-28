@@ -11,7 +11,8 @@ enum { NFX_STATIC = 0, NFX_CERBERUS = 1, NFX_LEVIATHAN = 2, NFX_DEMO = 3, NFX_AG
        NFX_GUN_EI = 14, NFX_GUN_SHOTGUN = 15, NFX_GUN_ARTEMIS = 16, NFX_GUN_SPIRAL = 17, NFX_GUN_KALINA = 18, NFX_PALACE = 19, NFX_DANTE = 20,
        NFX_ARM_CERBERUS = 21, NFX_ARM_AGNI = 22, NFX_ARM_NEVAN = 23, NFX_ARM_BEOWULF = 24 /* the Devil Arms' packs, GDATA 98-101 */, NFX_CHESS = 25,
        NFX_ROYAL = 26 /* em021's, the Queen's and King's */, NFX_VERGIL = 27 /* em035's */,
-       NFX_ROOM144 = 28 /* room 144's own pack (GDATA 502): its rain, G113 */ };
+       NFX_ROOM144 = 28 /* room 144's own pack (GDATA 502): its rain, G113 */,
+       NFX_BP_WARP = 29 /* the Palace boss exits' warp, V487 (room 433's pack, GDATA 870) */ };
 /* A cutscene's own effects (demo.c): its bank's description at blob + at (0, 0: none). */
 void nfx_set_demo_bank(const unsigned char *blob, unsigned int at);
 
