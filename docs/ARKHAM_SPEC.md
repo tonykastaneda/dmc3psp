@@ -82,9 +82,10 @@ Sections 1-3 at variant 0. Approximations:
   one appears, and `3ed840`'s pull on a bone (−70 y, −20 z) in its states 4 / 5. Their contact uses native radius 40 and record 0 (300); the combined
   horizontal/height collision test remains simpler than the native collision engine.
 - **Damage taken:** as Vergil's (42 light, 84 heavy, × 1.1; Easy × 2).
-- **The second round:** at 9000 he pauses 120 frames (demo 53 isn't played) and fights on at 9000; Vergil joins
+- **The second round:** at 9000 he pauses 120 frames, demo 53 plays (`main.c`, queued as the partner joins), and he
+  fights on at 9000; Vergil joins
   as above.
-- **Death:** the room clears and Mission Clear follows (demo 328 isn't played).
+- **Death:** the room clears; the clear plays movie 328 (m19_c00, `main.c`), then Mission Clear.
 
 ## 5. Checked in PPSSPP (2026-11-14)
 

@@ -119,7 +119,7 @@ All of section 4 at rank 0, variant 0. Approximations:
   0x47 V0x2ff, 0x2a V0x300 + V0x32e, 0x27 V0x34f (Mission 7 only). Not played: the effects' time scale (+0x14 from
   +0xb534), the turned-aside blow's V0x32d, and the other variants' effects. The effects aren't compared with a PS2
   capture yet.
-- **Death:** he plays reaction 1:11 and the mission clears; demo 322 isn't played.
+- **Death:** he plays reaction 1:11 and the mission clears; the clear plays 322 (a movie, m07's clear, `main.c`).
 
 ## Hit reactions (decoded 2026-11-27)
 
