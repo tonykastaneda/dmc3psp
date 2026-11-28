@@ -133,16 +133,14 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   grenade each [inferred]); 0x5c's motion (its slot is empty: the gun's draw); her run's speed [estimate]; the room
   clamp (1500 about the middle, for its walls); shots per burst (3; the second gun 1); which record each weapon uses
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
-- **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
-  the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
+- **Cerberus**: the breath's generators and the punch's P58 / P59 take the body's turn, not their bone's (the places are the
+  bones') [approximation]. NATIVE_FX.md, CERBERUS_SPEC.md.
 - **Vergil**: his effects (0x338, the slashes) play from his pack but follow his bones by position only (no bone
   rotation) [approximation]; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   is decoded (gauges, flinch windows, the brace), but Dante's blows take estimated amounts from his gauges (Dante's
   attack records aren't decoded); his coat and cord swing as their .clt chains, with Dante's body capsules [inferred];
   his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.
-- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
-  path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
-  runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
+- **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; his death's motion (gh19) [inferred]; the missiles' path and timing are decoded, their hit [estimate] and effects not; the shockwave comes from his gauges as decoded, Dante's blows' amounts [estimates]; his caps' record [inferred]; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
 - **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority), and so is where he rises when lit (3c4c40); the underground travel is a jump; his coat's
   chain (em031_01.clt) gets Dante's body capsules [inferred]; his sword's offset [inferred]; the crests' lighting is a glow.
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.

@@ -25,7 +25,7 @@ does something simpler. A line that doesn't say is decoded. Values are quoted at
 | [3] [5] [7] | Shells: the missile (2 bones), the red sphere, a small one |
 | [9] | The horse: 33 bones, 2,165 triangles; faces +z, 452 tall |
 | [11] | The horse's 21 motions (`gh00`-`gh20`; ends 249, 249, 249, 144, 29, 29, 29, 83, 47, 55, 292, 343, 430, 249, 80, 135, 29, 29, 29, 249, 249) |
-| [12] [16] | Their scripts (mode-0 tables); one per action [inferred: action *n* plays motion *n*] |
+| [12] [16] | Their scripts (mode-0 tables), bank 0 by action: action *n* plays motion *n* for 1-18; 0 plays 0 then 1, 0x13 motion 9 for a frame, 0x14 motion 15 (both bodies) |
 | [13] | The carriage: 19 bones, 3,737 triangles (z −1015 to 114: it trails the hitch at the horse's origin) |
 | [15] | The carriage's 21 motions (`gc00`-`gc20`) |
 
@@ -74,14 +74,34 @@ has 3-5 rotation, 6-8 translation].
 ## 6. In the port (`psp/testroom/geryon_boss.c`, `tools/prepare_geryon.py`)
 
 Sections 3-5 at rank 0. Approximations:
-- **Motions:** most actions still play `gh`*n* and `gc`*n* by index. Horse gallops 10/11 now use decoded
+- **Motions:** actions play `gh`*n* and `gc`*n* by index, as their scripts do. Think is action 3 (`4bfb20` /
+  `4c0c50`): motion 3 to its end (144 frames), then the pick; it doesn't turn (`42e580` is root motion); on the
+  ground the spheres' check (beyond 800 from the centre, facing it within 45°) comes as it starts. The port's death
+  plays gh19 under its own action 0x13 [the dying update isn't read]. Horse gallops 10/11 now use decoded
   script window timing (below), not the earlier twelve-motion-loop substitute. The full remaining horse/cart
   scripts are not yet executed.
 - **Phase 0:** think → the charge (every third) or the cast (0x12 → 8: the spheres) → the charge. The charge runs
-  the whole bridge line (400 to 5600) or to 1000 past Dante, then 7 turns him round. The shockwave comes when Dante
-  has stayed within 500 for 90 frames [inferred trigger].
-- **Phase 1:** gallop laps → turn (5 / 6) → alternately the straight run or the spheres (then hidden 120 frames,
-  back on the ring behind Dante, then two volleys of 4 missiles). The missiles rise 30 frames and home at 18 a
+  the whole bridge line (400 to 5600) or to 1000 past Dante, then 7 turns him round. The shockwave is his answer to
+  being hurt (`385130`, the reaction-code handler): his damage component's gauges (param block `0x5d6bf0`: stun
+  800 at +0x30, flinch 500 at +0x34; shares Rebellion 100, guns 20 / 35; refilled after 180 frames without a blow)
+  send codes; a stun code (2-5, 7) starts 0xd → 0xe at once, a flinch code plays 0x14 (motion 15) the first time and
+  the shockwave the second (+0x978); none while +0x8fc has 0x4000000 [not read]. `384d20` also starts 0xd on a
+  blow of kind 3 / 4 / 5 / 7 with its argument 6 [not read]. Dante's blows take 20 / 30 (light) or 60 / 60 (heavy)
+  from the gauges [estimates: his records aren't decoded].
+- **Phase 1:** as decoded: gallop 0x10 / 0x11 → turn 5 / 6 (`4c1250` / `4c1380`: 60 frames turning 382 units a
+  frame each way at 25 a frame; +0x97a 2 / 1, flag 0x800) → the straight run 4 (`4c0fd0`: 65 frames, 30 with 0x800,
+  10 with 0x100; +0x97a cleared) → with 0x800 action 10 (`4c1e10`: its script, then half round) → the missiles 0xb →
+  think; a plain run → the spheres 8; a run with 0x100 → a gallop by a coin. Think (as it starts, beyond 800 and
+  facing the centre: the spheres; else the gallop +0x97a names, a coin when 0). The spheres → hidden 120 frames →
+  back on the ring behind Dante → 9 (`4c1af0`, 0x100 and 0x200 set: half the time 0x12, the spheres again, else
+  the 10-frame run). Not read: flag 0x80 (think → the run), 9's count +0x979 without 0x200. **The missiles** (0xb, `4c0410` / `4c1fc0`):
+  G0x215 at a cart bone at motion frames 60 and 190; launcher shells (`4bd7d0`, vtable `0x612690`, update `4bdcf0`)
+  from bone 15 at 107 and bone 11 at 226, which after 30 frames let out type-0x81 missiles (`4bee60`: V0xfc riding,
+  straight on; they steer at 182 units a frame only from rank 2): on the bridge (type 0, `4bddf0`) two, 100 to each
+  side, 20 a frame along his facing, 180 frames; on the ground (type 1, `4be160`) three at −90 / 0 / +90 degrees
+  (five, 45 apart, above rank 0) from 200 out, 30 a frame, 90 frames. On the ground 0xb first lets out 3 red spheres
+  (`4cbdb0` type 3, while fewer than 40). Their hit (300, heavy) and their V0xfc / G0x215 aren't the game's [estimate,
+  not drawn]: the shells' cap record isn't read. The missiles rise 30 frames and home at 18 a
   frame; the spheres drift at Dante at 7 a frame and hurt (they don't stop time).
 - **Damage he deals** (the attack records aren't decoded): running into Dante 600, heavy; a missile 300, heavy; a
   sphere 150; the shockwave 500, heavy.
