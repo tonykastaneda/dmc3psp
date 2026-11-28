@@ -61,8 +61,10 @@ The pick of section 3 and the light of section 2, at rank 0. Approximations:
 - **The meteor:** a 40-frame arc onto the crest, which shuts as he lands. The pick to go shut a crest is taken a third
   of the time a lit crest has a dark opposite [the walkthrough's frequency, estimated].
 - **Sinking and rising:** hidden for 40-50 frames; up in the middle of the nearest dark sixth, or 150 behind Dante.
-- **Drawing:** dark (the texture modulated to a quarter) unless lit; the coat rigid on the hips, the sword in the
-  right hand (bone 9). The lights themselves aren't drawn: an open crest sparkles.
+- **Drawing:** dark (the texture modulated to a quarter) unless lit; the coat on the hips (its rig's root at body
+  bone 1, its bone 1 at bone 3's place, 19 up), its tails (bones 3-4, 6-7) swinging as em031_01.clt's chain
+  (gravity 0, spring 0.02, max speed 50, stiffness 0.2) through `demo_cloth.c` in his model space, as Vergil's coat
+  (slot 62); the sword in the right hand (bone 9). The lights themselves aren't drawn: an open crest sparkles.
 - **Death:** motion 32 and the room clears; demo 48 and the Doppelganger style (item 35) aren't given.
 
 ## 5. Checked in PPSSPP (2026-11-14)
