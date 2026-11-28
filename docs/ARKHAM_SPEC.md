@@ -162,3 +162,13 @@ grab drain followed by rescue/release (9310/10000 HP). Inspected captures:
 The full build also reported unrelated cutscene room/demo memory-budget warnings
 for rooms 237, 228, 111, 001 and DSTG_035 (128 bytes over); these were not changed
 as part of this boss decoding task.
+
+### Tentacle caps (decoded, not yet used)
+
+em033 [7] / [8]: 16 caps of {kind, bone, shape}, type-2 spheres. 0 bone 3 (0,70,0) r232 and 1 bone 2 (0,-100,-130) r208
+(kind 6, push); kind 1 (attack): 2-6, 10, 11 on bone 30 (y 0 / 60 / -60 / -130 / 126 / 4 / -102), 12 on bone 28, all
+r58-60; 7, 8, 9, 13, 14 on bone 8 (y 0 / 60 / -60 / -120 / 120) r60; 15 bone 4, a type-4 capsule. Scripts 0:13 / 0:14
+switch on 2-6, 10-12 for 25 / 30 frames from motion frames 105 / 40; the front / left handlers' caps are 7-9, 13, 14.
+A port of them on the body's bones (2026-11-27) put cap 7 about 1000 above a Dante 450 in front during 0xf's window
+(at 2813, 946, 3216), so the set's bone list isn't the body's as the port poses it [open: which model +1950 binds,
+FUN_002942e0]; the zone test stays.

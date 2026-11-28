@@ -131,7 +131,7 @@ def main():
     parked = [a for a, _ in ps2_enemies.scan(p)]
     for n, spot in enumerate(args.spot):
         x, z = float(spot[0]), float(spot[1])
-        r.focus()   # PCSX2 pauses without focus
+        r.focus()   # a no-op unless PCSX2_REF_KEYBOARD=1 (the virtual pad needs no focus)
         t_end = time.perf_counter() + args.hold
         while time.perf_counter() < t_end:
             for i, a in enumerate(parked):
