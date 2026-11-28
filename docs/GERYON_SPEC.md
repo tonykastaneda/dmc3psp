@@ -94,8 +94,14 @@ Sections 3-5 at rank 0. Approximations:
   think; a plain run → the spheres 8; a run with 0x100 → a gallop by a coin. Think (as it starts, beyond 800 and
   facing the centre: the spheres; else the gallop +0x97a names, a coin when 0). The spheres → hidden 120 frames →
   back on the ring behind Dante → 9 (`4c1af0`, 0x100 and 0x200 set: half the time 0x12, the spheres again, else
-  the 10-frame run). Not read: flag 0x80 (think → the run), 9's count +0x979 without 0x200. The missiles are two
-  volleys of 4 [the volleys are the port's]. The missiles rise 30 frames and home at 18 a
+  the 10-frame run). Not read: flag 0x80 (think → the run), 9's count +0x979 without 0x200. **The missiles** (0xb, `4c0410` / `4c1fc0`):
+  G0x215 at a cart bone at motion frames 60 and 190; launcher shells (`4bd7d0`, vtable `0x612690`, update `4bdcf0`)
+  from bone 15 at 107 and bone 11 at 226, which after 30 frames let out type-0x81 missiles (`4bee60`: V0xfc riding,
+  straight on; they steer at 182 units a frame only from rank 2): on the bridge (type 0, `4bddf0`) two, 100 to each
+  side, 20 a frame along his facing, 180 frames; on the ground (type 1, `4be160`) three at −90 / 0 / +90 degrees
+  (five, 45 apart, above rank 0) from 200 out, 30 a frame, 90 frames. On the ground 0xb first lets out 3 red spheres
+  (`4cbdb0` type 3, while fewer than 40). Their hit (300, heavy) and their V0xfc / G0x215 aren't the game's [estimate,
+  not drawn]: the shells' cap record isn't read. The missiles rise 30 frames and home at 18 a
   frame; the spheres drift at Dante at 7 a frame and hurt (they don't stop time).
 - **Damage he deals** (the attack records aren't decoded): running into Dante 600, heavy; a missile 300, heavy; a
   sphere 150; the shockwave 500, heavy.

@@ -60,7 +60,7 @@ enum { S_IDLE, S_CHARGE, S_TURN_BACK, S_SPHERES, S_HIDDEN, S_MISSILES, S_SHOCK, 
 typedef struct { float m[3][3], p[3]; } Transform;
 typedef struct { float u, v, nx, ny, nz, x, y, z; } Vertex;
 typedef struct { int motion, previous; float frame, previous_frame, fade; int loop, loops, done; } Player;
-typedef struct { int on, kind; float pos[3], vel[3], life, rise; } Shell;   /* kind: PART_MISSILE / PART_SPHERE */
+typedef struct { int on, kind; float pos[3], vel[3], life, rise, wait; } Shell;   /* kind: PART_MISSILE / PART_SPHERE */
 
 #define SHELLS 12
 static struct {
@@ -70,6 +70,7 @@ static struct {
     int flinches;                                 /* +0x978: flinch codes since the last shockwave */
     int next_gallop;                              /* +0x97a: 2 the gallop 0x10, 1 0x11, 0 a coin */
     int short_run, after_spheres;                 /* +0x8fc 0x800 (after a turn) / 0x100 (after the spheres) */
+    int fired[2];                                 /* 0xb's two launches */
     float run_len;
     float dante[3], centre[3];
     Player horse, cart;
@@ -202,15 +203,16 @@ static void set_state(int state) {
 }
 
 /* ---- Shells ---------------------------------------------------------------------------------------------- */
-static void shell_add(int kind, const float at[3], const float vel[3], float life) {
+static Shell *shell_add(int kind, const float at[3], const float vel[3], float life) {
     int i;
     for (i = 0; i < SHELLS; ++i) if (!gb.shells[i].on) {
         Shell *s = &gb.shells[i];
-        s->on = 1; s->kind = kind; s->life = life; s->rise = kind == PART_MISSILE ? 30.0f : 0.0f;
+        s->on = 1; s->kind = kind; s->life = life; s->rise = 0.0f; s->wait = 0.0f;
         memcpy(s->pos, at, sizeof(s->pos));
         memcpy(s->vel, vel, sizeof(s->vel));
-        return;
+        return s;
     }
+    return 0;
 }
 static void land(float x, float z, float damage, int heavy) {
     if (gb.landed) return;
@@ -226,19 +228,15 @@ static void shells_update(float frames) {
         Shell *s = &gb.shells[i];
         float to[3], d, k, speed;
         if (!s->on) continue;
+        if (s->wait > 0.0f) { s->wait -= frames; continue; }   /* still in its launcher's 30 frames */
         s->life -= frames;
         if (s->life <= 0.0f) { s->on = 0; continue; }
         to[0] = gb.dante[0] - s->pos[0]; to[1] = gb.dante[1] + 100.0f - s->pos[1]; to[2] = gb.dante[2] - s->pos[2];
         d = sqrtf(to[0] * to[0] + to[1] * to[1] + to[2] * to[2]);
+        (void)k; (void)speed;
         if (s->kind == PART_MISSILE) {
-            /* The cart's missiles (shell 0x215): up out of the roof, then after Dante [approximation: the
-             * shell's own steering isn't decoded]. */
-            if (s->rise > 0.0f) s->rise -= frames;
-            else if (d > 1.0f) {
-                speed = 18.0f;
-                k = fminf(1.0f, 0.06f * frames);
-                for (int j = 0; j < 3; ++j) s->vel[j] += (to[j] / d * speed - s->vel[j]) * k;
-            }
+            /* The cart's missiles (CEm029 shells 0x81, FUN_004bee60): straight on at their speed; they steer
+             * (+0x4e0, 182 units a frame) only from AI rank 2. */
         } else if (d > 1.0f) {
             /* The red spheres (4cbdb0) drift at him. */
             for (int j = 0; j < 3; ++j) s->vel[j] = to[j] / d * 7.0f;
@@ -251,13 +249,36 @@ static void shells_update(float frames) {
         }
     }
 }
-static void fire_missiles(int count) {
-    int i;
-    for (i = 0; i < count; ++i) {
-        float at[3], vel[3], side = (float)(i - (count - 1) * 0.5f);
-        local_to_world(side * 120.0f, 450.0f, -500.0f, at);
-        vel[0] = sinf(gb.yaw + PI / 2.0f) * side * 3.0f; vel[1] = 14.0f; vel[2] = cosf(gb.yaw + PI / 2.0f) * side * 3.0f;
-        shell_add(PART_MISSILE, at, vel, 300.0f);
+/* 0xb's launches (4c0410 on the bridge, 4c1fc0 on the ground): a launcher shell at a cart bone (vfunc +0x134; 15
+ * at motion frame 107, 11 at 226) that after 30 frames lets out its missiles (FUN_004bd7d0's types): on the bridge
+ * (type 0, 4bddf0) two, 100 to each side, 20 a frame along his facing, for 180 frames; on the ground (type 1,
+ * 4be160) three at rank 0 (five above), at -90, 0 and +90 degrees from his facing (45 apart above), from 200 out,
+ * 30 a frame, for 90 frames. Their hit, 300 heavy, is the port's [estimate: the shells' record isn't read]. */
+static void fire_missiles(int bone) {
+    float at[3], local[3];
+    int i, n;
+    if (bone >= 0 && bone < geryon_parts[PART_CART].bone_count) {
+        memcpy(local, cart_pose[bone].p, sizeof(local));
+        local_to_world(local[0], local[1], local[2], at);
+    } else local_to_world(0.0f, 450.0f, -500.0f, at);
+    n = gb.phase == 0 ? 2 : gb.rank ? 5 : 3;
+    trace(bone == 15 ? "missiles_15" : "missiles_11");
+    for (i = 0; i < n; ++i) {
+        float a, p[3], v[3];
+        if (gb.phase == 0) {
+            float side = i ? 100.0f : -100.0f;
+            a = gb.yaw;
+            p[0] = at[0] + cosf(a) * side; p[1] = at[1]; p[2] = at[2] - sinf(a) * side;
+            v[0] = sinf(a) * 20.0f; v[1] = 0.0f; v[2] = cosf(a) * 20.0f;
+        } else {
+            a = gb.yaw - PI * 0.5f + (float)i * (gb.rank ? PI * 0.25f : PI * 0.5f);
+            p[0] = at[0] + sinf(a) * 200.0f; p[1] = at[1]; p[2] = at[2] + cosf(a) * 200.0f;
+            v[0] = sinf(a) * 30.0f; v[1] = 0.0f; v[2] = cosf(a) * 30.0f;
+        }
+        {
+            Shell *s = shell_add(PART_MISSILE, p, v, gb.phase == 0 ? 180.0f : 90.0f);
+            if (s) s->wait = 30.0f;
+        }
     }
 }
 static void cast_spheres(int count) {
@@ -376,7 +397,14 @@ static void ai_step(float f) {
         }
         break;
     case S_ABOUT:   /* 10 (4c1e10): its script, then turned half round, the missiles (0xb) */
-        if (gb.horse.done) { gb.yaw = wrap_angle(gb.yaw + PI); set_action(A_MISSILES, 0); set_state(S_MISSILES); }
+        if (gb.horse.done) {
+            gb.yaw = wrap_angle(gb.yaw + PI);
+            set_action(A_MISSILES, 0);
+            set_state(S_MISSILES);
+            gb.fired[0] = gb.fired[1] = 0;
+            /* 4c1fc0 on the ground first lets out 3 red spheres (4cbdb0, 5 above rank 0, while fewer than 40). */
+            if (gb.phase == 1) cast_spheres(gb.rank ? 5 : 3);
+        }
         break;
     case S_BACK:    /* 9 (4c1af0, with 0x200 set): its script, then 0x12 (the spheres again) or the short run */
         if (gb.horse.done) {
@@ -409,8 +437,8 @@ static void ai_step(float f) {
         }
         break;
     case S_MISSILES:
-        if (gb.timer >= 60.0f && gb.timer - f < 60.0f) fire_missiles(4);
-        if (gb.timer >= 150.0f && gb.timer - f < 150.0f) fire_missiles(4);
+        if (gb.horse.frame >= 107.0f && !gb.fired[0]) { gb.fired[0] = 1; fire_missiles(15); }
+        if (gb.horse.frame >= 226.0f && !gb.fired[1]) { gb.fired[1] = 1; fire_missiles(11); }
         if (gb.horse.done || gb.timer > 360.0f) go_think();
         break;
     case S_FLINCH:   /* 0x14 (4c0a20): its script to its end, then think */
@@ -624,7 +652,7 @@ void geryon_boss_draw(void) {
     }
     for (i = 0; i < SHELLS; ++i) {
         const Shell *s = &gb.shells[i];
-        if (!s->on) continue;
+        if (!s->on || s->wait > 0.0f) continue;
         place(s->pos, atan2f(s->vel[0], s->vel[2]));
         draw_part(s->kind);
     }
