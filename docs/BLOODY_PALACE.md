@@ -106,6 +106,22 @@ The level label and portal legend use the menu font. Arena STAY 100/101/102 name
 water/lightning/fire for +1/+10/+100. Their effect bank is **GDATA 830**, shared by st423–432. Bank 19 in `nfx.c`
 plays these through the native effect runtime; the generated closure has 23 V/G, 27 E, seven P, 17 textures,
 and ten models, with no missing G children. `bp_native_portals_280.png` is the first PPSSPP visual check.
+Boss exits: EventTbl21's clear block turns on gimmick 200 (gimmick_cmd0c [200, 0]) with camera 0. In 433, 436, 448
+and 449 set 200 is a STAY with effect V487 (byte-identical in their packs; native bank 29 from GDATA 870) and two SE
+sets, the room bank's 83 once and 82 every 90 frames (bank 40): the port starts them as the exit opens. The other boss
+rooms' exits are seals or plain doors and keep the item glow.
+Cameras: EventTbl21's room blocks run through `messages.c` like the story's (`gen_messages.py` takes mission 21), so
+each room's DCA cuts play: the ordinary rooms' portal reveal (cam_play 0 after the clear), the boss rooms' entrances
+(434: cuts 0-2 as the Gigapede is spawned) and exits (433: cut 0 on the V487 warp, 180 frames after the clear; 434:
+cuts 10 / 11). Dante's input is off while a cut plays and START skips it. Test runs skip them unless `events 1`.
+Checks: `analysis/testroom/bpcam433_*.png`, `bpcam434_*.png` (PPSSPP).
+EST classes: every id the Palace's groups spawn is mapped. The last two, **EST 47 and 48** (one group each in 428 / 431
+and 430 / 432, a lone spawn at the arena's middle), are classes 29 / 30 by the byte table `0x599690`: the factory
+(`FUN_002acf40` cases 0x1d / 0x1e) makes them with `FUN_0039ee10(.., 0x10, 2, 1 / 2)`, the brothers' own class, so
+**Agni alone** (+0x2dd5 = 1) and **Rudra alone** (2), each holding both swords (+0x2f40 = 2). The port spawns that
+brother with the survivor's brain and both swords. He stands as a statue first and wakes as the pair do [estimate:
+the 0x10 flag isn't traced]. Check: `analysis/testroom/bpsolo_*.png` (Level 5001, room 428). Test control
+`killuntil N` stops `killevery` at frame N.
 Arrival rewards use the event's positions and decoded recovery amounts; their mote visuals, simplified falling
 and 120 cm collection radius are stand-ins. Taking a boss exit does not grant an additional arrival reward.
 

@@ -51,7 +51,8 @@ enum { LABEL_NORMAL = 1, LABEL_EASY = 12 };
 enum { TAG_TURBO = 0 };
 enum { ROWS_SHOWN = 2 };
 /* What the cursor visits on Mission Select: Easy, Normal and the Debug Room. The game's other rows are shown greyed out. */
-enum { ROW_EASY, ROW_NORMAL, ROW_DEBUG, ROW_PALACE, SELECT_ROWS };
+enum { ROW_EASY, ROW_NORMAL, ROW_DEBUG, ROW_PALACE, ROW_SAVE, ROW_LOAD, SELECT_ROWS };
+MenuSaveHook menu_save_hook, menu_load_hook, menu_new_hook;
 enum { LABEL_GALLERY = 6 };
 /* The briefing strip holds the bar and both labels on one texture and one quad; the labels' places
  * are read off the HD Collection. */
@@ -377,7 +378,11 @@ static void draw_missions(const MenuChoice *c, int row) {
         if (i == 0 || bars[i] != bars[i - 1]) draw_quad(GROUP_MISSION_ROWS, bars[i], working ? BRIGHT : 0xa0ffffff);
         /* Everything but Save and Load lines up on the difficulties' left edge. */
         if (i < 7) draw_quad_left(GROUP_MISSION_LABELS, labels[i], color);
-        else draw_quad(GROUP_MISSION_LABELS, labels[i], color);
+        else {
+            /* Save and Load: the PSP's save utility (savegame.c, through main's hooks). */
+            int r = i == 8 ? ROW_SAVE : ROW_LOAD;
+            draw_quad(GROUP_MISSION_LABELS, labels[i], !(r == ROW_SAVE ? menu_save_hook : menu_load_hook) ? LOCKED : row == r ? BRIGHT : DIM);
+        }
         if (!working) continue;
         if (i == row) {
             draw_quad_offset(GROUP_MISSION_ARROWS, i * 2, BRIGHT, 0.0f, 0.0f, 0);
@@ -444,15 +449,39 @@ static void flow(MenuChoice *c, Screen screen, MenuPad pad, MenuAfterFrame after
                 if (pressed & PSP_CTRL_LEFT) title_cursor = title_cursor == TITLE_NEW ? TITLE_LOAD : TITLE_NEW;
                 if (pressed & PSP_CTRL_RIGHT) title_cursor = title_cursor == TITLE_LOAD ? TITLE_NEW : TITLE_LOAD;
                 if (pressed & (PSP_CTRL_CROSS | PSP_CTRL_START)) {
-                    /* No saves yet: both lead to Mission Select. New Game starts at the first mission. */
-                    if (title_cursor == TITLE_NEW) c->mission = row_mission[0] = row_mission[1] = 1;
-                    next = SCREEN_MISSIONS;
-                    leaving = 1;
+                    /* New Game starts at the first mission; Load Game opens the save utility (savegame.c) and goes on
+                     * only with a save read. */
+                    if (title_cursor == TITLE_NEW) {
+                        c->mission = row_mission[0] = row_mission[1] = 1;
+                        if (menu_new_hook) menu_new_hook(c);
+                        next = SCREEN_MISSIONS;
+                        leaving = 1;
+                    } else if (!menu_load_hook || menu_load_hook(c)) {
+                        row_mission[0] = row_mission[1] = c->mission;
+                        row = c->difficulty & 1;
+                        next = SCREEN_MISSIONS;
+                        leaving = 1;
+                    }
+                    held = 0xffffffffu;
                 }
                 break;
             case SCREEN_MISSIONS:
-                if (pressed & PSP_CTRL_UP) row = row==ROW_EASY?ROW_DEBUG:row==ROW_DEBUG?ROW_PALACE:row==ROW_PALACE?ROW_NORMAL:ROW_EASY;
-                if (pressed & PSP_CTRL_DOWN) row = row==ROW_EASY?ROW_NORMAL:row==ROW_NORMAL?ROW_PALACE:row==ROW_PALACE?ROW_DEBUG:ROW_EASY;
+                {
+                    /* Down the screen: Easy, Normal, Bloody Palace, the Debug Room, Save, Load. */
+                    static const int order[] = {ROW_EASY, ROW_NORMAL, ROW_PALACE, ROW_DEBUG, ROW_SAVE, ROW_LOAD};
+                    int k = 0, n = menu_save_hook ? 6 : 4;
+                    while (k < n && order[k] != row) ++k;
+                    if (pressed & PSP_CTRL_UP) row = order[(k + n - 1) % n];
+                    if (pressed & PSP_CTRL_DOWN) row = order[(k + 1) % n];
+                }
+                if ((pressed & PSP_CTRL_CROSS) && (row == ROW_SAVE || row == ROW_LOAD)) {
+                    MenuSaveHook hook = row == ROW_SAVE ? menu_save_hook : menu_load_hook;
+                    if (hook && hook(c) && row == ROW_LOAD) {
+                        row_mission[0] = row_mission[1] = c->mission;
+                    }
+                    held = 0xffffffffu;
+                    break;
+                }
                 if ((pressed & PSP_CTRL_CROSS) && row == ROW_DEBUG) { c->mission = MENU_DEBUG_ROOM; next = SCREEN_DONE; leaving = 1; break; }
                 if ((pressed & PSP_CTRL_CROSS) && row == ROW_PALACE) { c->mission = MENU_BLOODY_PALACE; c->difficulty = 1; next = SCREEN_DONE; leaving = 1; break; }
                 if (row < 2 && (pressed & PSP_CTRL_LEFT)) row_mission[row] = next_mission(row_mission[row],-1);
@@ -586,6 +615,27 @@ PauseAction pause_update(unsigned int pressed) {
         }
     }
     return PAUSE_NONE;
+}
+
+/* The Yellow Orb's face (the item shop's bottom bar, GROUP_ITEM_YELLOW quad 2) and a dark wash over the screen, for
+ * the Game Over prompt (gameover.c): centred at cx, cy in PSP pixels, h tall, its aspect kept. */
+void menu_draw_yellow_orb(float cx, float cy, float h, unsigned int color) {
+    const Quad *q;
+    float w;
+    if (!header) return;
+    q = group_quad(GROUP_ITEM_YELLOW, 2);
+    w = h * (q->x1 - q->x0) / (q->y1 - q->y0);
+    begin_2d();
+    bind_atlas(q->atlas);
+    sprite(q->u0, q->v0, q->u1, q->v1, cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f, color);
+    end_2d();
+}
+void menu_draw_wash(unsigned int color) {
+    begin_2d();
+    sceGuDisable(GU_TEXTURE_2D);
+    sprite(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, SCR_W, SCR_H, color);
+    sceGuEnable(GU_TEXTURE_2D);
+    end_2d();
 }
 
 void pause_draw(void) {

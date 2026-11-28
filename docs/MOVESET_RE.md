@@ -268,10 +268,18 @@ Known to differ from the game (each one is still to do):
   lock-on point, or 2000 cm ahead (shotgun 1000, Spiral 1500). Not in: aim pitch
   columns, the gun-stance walk after a shot (`player+0x3c60`), charged shot types,
   damage, and Artemis' and Kalina Ann's real shells (their speeds are estimates).
-  Shotgun spread and tracers are stand-ins for the game's effects. Air and
+  The Shotgun's shell (`FUN_002ee930`) throws 6 / 8 / 10 pellets by level (0x5a2348): one straight to 2000 cm
+  along the aim, the rest on a ring round that point (a random start angle, evenly spaced, each 250-500 cm out
+  across the aim, 500-1000 for shell type 2); the port fires level 0's. Air and
   Gunslinger fire counts are approximate.
-- **Hit detection and damage**: every generated move uses the same stand-in reach
-  and light hit, at the scripts' active frames. Chunk 7 is still undecoded.
+- **Hit detection and damage**: his attack caps are GDATA 0's chunk 6 (252 caps of 4 bytes: kind, bone, u16 shape)
+  and chunk 7 (the shapes, 0x50 bytes: u32 type, place at +0x10 in the bone's frame, radius at +0x20, or +0x30 for
+  type 4), handed to his collider by `FUN_0024fff0` -> `FUN_002942e0`. The scripts' ops 0x10-0x1F (read before as
+  "attach effects") switch caps on: n = op - 0xF caps, a u16 duration (0xffff: the script's length), then the caps,
+  a u16 each; ops 6 / 7 pick the attack record (the player's table at `0x593af0`). Kind 1 caps (193) are attacks:
+  Rebellion's run along a hand bone (9 or 13) 20 / 60 / 100 cm out, radius 30-40. The port tests the caps on each
+  frame against the ordinary enemies (`combat.c` caps_update); the attack records aren't applied yet (the light /
+  heavy hit stays the port's).
 - **Royalguard**: release ignores the gauge (`player+0x3c86` picks among 13
   scripts), and block plays the state's first script without its logic.
 - **Nevan**: actions 81 and 82 are simplified (the handler forks on state not
@@ -513,8 +521,7 @@ ground, 24:18-20 air). The block itself is a player state: handlers
    (Trickster), 10 (guns) are clear from the commands that need them;
    5, 6, 9, 15 still need naming (15 looks like "free to move").
 2. Royalguard block states (above), Air Hike, and the indirect gun handlers.
-3. Chunk 6 (252 x 4 bytes) and chunk 7 (251 x 80-byte floats, likely hit
-   spheres): index and meaning.
+3. Chunk 6 / 7 are his caps (above); the attack records (`0x593af0`) aren't read.
 4. Identify motion files 27-33 (likely Devil Trigger / special states).
 5. The Air Trick lock-on point (player+0x3c40) and side Wall Hike (needs
    the wall's side, player+0x3c6d).

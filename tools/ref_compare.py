@@ -267,11 +267,14 @@ def record_ps2(name, state_key=0x72):
     if source.exists() and slot1:
         shutil.copy(source, slot1[0])
     p = r.Pine()
-    r.focus()
-    time.sleep(0.2)
-    r.key(state_key, True)
-    time.sleep(0.05)
-    r.key(state_key, False)
+    if r.KEYBOARD:
+        r.focus()
+        time.sleep(0.2)
+        r.key(state_key, True)
+        time.sleep(0.05)
+        r.key(state_key, False)
+    else:
+        p.load_state(1)   # slot 1 over PINE (F3 loaded the current slot, 1): no focus
     events, s = prepared(events)
     time.sleep(2.5)   # writes too soon after a state load have crashed PCSX2
     for button in r.KEYS:

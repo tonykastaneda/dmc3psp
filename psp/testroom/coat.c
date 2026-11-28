@@ -347,6 +347,8 @@ void coat_joint(int index, float out[3], int *parent_index) {
     *parent_index = dmc3_coat_bone_parent[index];
 }
 
+const float (*coat_bone_rest(void))[3] { return (const float (*)[3])dmc3_coat_bone_rest; }
+
 void coat_bone_matrix(int bone, float r[3][3], float t[3]) {
     M3 inv_yaw, rot;
     float d[3];

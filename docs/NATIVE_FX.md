@@ -128,7 +128,21 @@ in the paw's frame and doesn't ride it, as the game's mode 0. Both take the body
   under every enemy and boss (`enemy_draw_shadows`, `enemy.c`), sized per kind (Cerberus 3.3 m, Geryon 2.6 m,
   Arachne 1.5 m, Beowulf 1.2 m, the Hell Vanguard 75 cm, most others about 46 cm; fitted by eye, estimates) and
   fading with height over 5 m plus twice the radius. None under the Gigapede (on the walls) or the Leviathan
-  (Dante's inside it). The game's own shadow records (SHW, the zone's shadow type) aren't decoded.
+  (Dante's inside it).
+- **Dante's SHW shadow** (`shadow.c`, data from `tools/gen_dante_caps.py` into the local `dante_shadow_runtime.h`):
+  his character file holds two SHW chunks, GDATA 0 [8] (the body: 17 convex hulls on bones 2-5, 7-9, 11-17, 19-21,
+  the T-pose's head to toes) and [14] (the coat: 17 hulls on the coat's bones). Layout: "SHW ", float 0.5, u8 part
+  count at +0x10, 0x30-byte parts from +0x20 {u16 vertices, u16 faces, 12 pad, offsets of the faces (3 u32 indices,
+  16 bytes each), each face's three neighbours (u16, two faces a row: the silhouette's edges), the vertices (float4
+  in the rest pose's model space), a bone per vertex (u8)}. The port poses each body hull on its bone, drops it
+  straight down onto the floor under him and fills what the hulls cover once (the framebuffer's alpha as a stencil:
+  zeroed under them with the colour masked, then filled where still zero), black at 128 (the header's 0.5) fading
+  as the disc did. Estimates: the light's direction (straight down) and the fill; the game draws a shadow volume
+  from the neighbours, not traced. The coat's 17 hulls ride the coat's bones (`coat_bone_matrix`, in the coat's
+  rest space, `coat_bone_rest`). Cost in PPSSPP, M2 street: about 75 µs of draw a frame over the disc for the body,
+  about 0.2 ms with the coat. Tests: `blobshadow 1` brings the disc back. Stills: `analysis/testroom/shw_coat_400.png`
+  against `shw_blob_400.png`, the fill shown red in `shw_dbg_400.png` (body only).
+  The zone's shadow type isn't decoded.
 - How they're drawn: one untextured draw for all of them (8-sided disc, solid to half the radius, then a ramp to
   nothing, in the vertex colours), on the **drawn** floor (`stage_shown_floor`: the mesh's floor triangles can sit
   centimetres above the collision floor) with a depth bias of 96, a little over the decals' 64. Before this, Dante's

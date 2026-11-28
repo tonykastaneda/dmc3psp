@@ -91,6 +91,9 @@ int testroom_frame;
 #include "mission14.h"
 #include "mission18.h"
 #include "secret_missions.h"
+#include "shadow.h"
+#include "gameover.h"
+#include "savegame.h"
 #include "credit.h"   /* DO NOT REMOVE: the owner's credit on the Options screen */
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
@@ -105,6 +108,9 @@ PSP_HEAP_SIZE_KB(-1024);
 /* Verified in PPSSPP screenshots and by the skeleton (toes at z=+9.9): the
  * MOD front is +Z, so no extra rotation is needed. */
 #define MODEL_YAW_OFFSET 0.0f
+/* The frame being drawn (relative VRAM) and a cutscene's near plane, for post_fx.c's pass in the draw. */
+static void *frame_draw_buffer;
+static float demo_view_near = 25.0f;
 
 /* HUD font: the PSPSDK debug font (8x8, MSB = leftmost pixel) baked into a
  * 128x128 RGBA texture, 16x16 glyphs. Drawn through the GU, not by CPU writes
@@ -178,6 +184,7 @@ static void perf_add(unsigned int gap, unsigned int update, unsigned int skin) {
     if (stage_loaded()) p->chunks_sum += (unsigned int)stage_last_chunks_drawn();
 }
 static Pose pose;
+static int blob_shadow;   /* tests: "blobshadow 1" draws his round shadow, not the hulls (shadow.c) */
 static AnimState anim;
 /* Mission 19's partner, Vergil (EventTbl19 op 0x7e after demo 53: FUN_0025e540 makes a second player, CPlVergil;
  * docs/ARKHAM_SPEC.md 1). With no second pad he replays Dante's input a frame late (FUN_0021fe30 in mode 3:
@@ -587,6 +594,7 @@ enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_O
 static int dummy_anim_auto = 1;
 static void mission_gimmicks_draw(void);
 static ShopState shop_state;   /* the Red Orbs and what's been bought, for this session */
+static int keep_session;   /* tests ("keepsession 1"): New Game keeps the script's orbs, to save them */
 /* Each kind's max health, from the class parameter blocks (docs/ENEMY_SPECS.md, docs/SHOP.md): what its red
  * orbs are worked out from. Lust, Wrath and Greed are inferred. */
 static int kind_max_health(int kind) {
@@ -1326,6 +1334,7 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             float use = demo_raw_fov ? fov : demo_screen_fov(fov);
             if (near < 4.0f) near = 4.0f;
             if (near > 25.0f) near = 25.0f;
+            demo_view_near = near;   /* post_fx's depth bands */
             sceGumPerspective(use, (float)SCR_WIDTH / (float)SCR_HEIGHT, near, 60000.0f);
         }
         else if (stage_loaded()) sceGumPerspective(fov, (float)SCR_WIDTH / (float)SCR_HEIGHT, 25.0f, 16000.0f);
@@ -1377,7 +1386,9 @@ static void render_scene(const Player *player, const FollowCamera *camera_state,
             float h = player->y - floor_y, k = 1.0f - h / 500.0f;
             float shown;
             if (stage_shown_floor(player->x, floor_y, player->z, &shown)) floor_y = shown;   /* on what's drawn */
-            if (k > 0.0f) fx_draw_shadow(player->x, floor_y, player->z, 42.0f, (unsigned int)(170.0f * k));
+            /* The game's own hulls (shadow.c), his round one without them or with "blobshadow 1" (tests). */
+            if (k > 0.0f && (blob_shadow || !dante_shadow_draw(player, &pose, (const float (*)[3])dmc3_bone_rest, floor_y, (unsigned int)(128.0f * k))))
+                fx_draw_shadow(player->x, floor_y, player->z, 42.0f, (unsigned int)(170.0f * k));
         }
     }
         enemy_draw_shadows();   /* every enemy and boss gets the same soft shadow */
@@ -1534,18 +1545,51 @@ scene_done:
         int sx, sy, size;
         const char *line = demo_subtitle(&sx, &sy, &size);
         unsigned int fade = demo_fade();
+        {   /* ScrEfc blur and glow over the 3D (post_fx.c) */
+            PostFx fx;
+            if (demo_post_fx(&fx, demo_view_near, 60000.0f)) post_fx_draw(frame_draw_buffer, &fx);
+        }
         demo_letterbox();                 /* the cinema bars, under the fade and the subtitles */
         if (fade) fx_screen_tint(fade);   /* the Fade track */
         if (line) {
             float h = (float)size * (float)SCR_HEIGHT / 448.0f * 1.5f, y = (float)sy * (float)SCR_HEIGHT / 448.0f - h * 0.3f;
             char row[112];
             const char *p = line;
+            float widest = 0.0f, x0, bottom;
+            int lines = 0;
+            /* As the PS2 lays it out: the block centred on its widest line (its x is (640 - that width) / 2 in the
+             * PS2's font), every line starting at that x. Measured in this font, so the block keeps its shape. */
+            while (*p) {
+                int n = 0;
+                float w;
+                while (p[n] && p[n] != '\n' && n < 111) { row[n] = p[n]; ++n; }
+                row[n] = 0;
+                w = menu_font_width(h, row);
+                if (w > widest) widest = w;
+                ++lines;
+                p += n;
+                if (*p == '\n') ++p;
+            }
+            /* The PS2's widest line spans 640 - 2x. Size this font so it spans the same, then start at x. */
+            x0 = (float)sx * (float)SCR_WIDTH / 640.0f;
+            if (widest > 0.0f && sx > 0 && sx < 320) {
+                float scale = ((float)SCR_WIDTH - 2.0f * x0) / widest;
+                if (scale > 2.0f) scale = 2.0f;
+                if (scale < 0.75f) scale = 0.75f;
+                h *= scale;
+                widest *= scale;
+            }
+            x0 = (SCR_WIDTH - widest) * 0.5f;
+            /* The larger font grows down from the PS2's y: keep its last line on the screen. */
+            bottom = y + (float)(lines - 1) * h * 1.15f + h * 0.85f;
+            if (bottom > (float)SCR_HEIGHT - 3.0f) y -= bottom - ((float)SCR_HEIGHT - 3.0f);
+            p = line;
             while (*p) {
                 int n = 0;
                 while (p[n] && p[n] != '\n' && n < 111) { row[n] = p[n]; ++n; }
                 row[n] = 0;
-                menu_font_draw(SCR_WIDTH / 2 - menu_font_width(h, row) * 0.5f + 1.0f, y + 1.0f, h, row, 0xc0000000u);
-                menu_font_draw(SCR_WIDTH / 2 - menu_font_width(h, row) * 0.5f, y, h, row, 0xffffffffu);
+                menu_font_draw(x0 + 1.0f, y + 1.0f, h, row, 0xc0000000u);
+                menu_font_draw(x0, y, h, row, 0xffffffffu);
                 y += h * 1.15f;
                 p += n;
                 if (*p == '\n') ++p;
@@ -1554,10 +1598,11 @@ scene_done:
         }
     }
     if (player->weapon_wheel) draw_weapon_wheel(player);
+    if (gameover_active()) gameover_draw();
     if (debug_open) draw_debug_menu(anim.viewer);
     if (pause_active) pause_draw();
     if (door_prompt_time > 0.0f && !pause_active && !debug_open) door_prompt_draw();
-    if (mission_mode && !pause_active && !debug_open) caption_draw();
+    if (mission_mode && !pause_active && !debug_open && !gameover_active()) caption_draw();
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -2292,6 +2337,7 @@ static int focus_cmp;
 static int cmp_death;
 static int cmp_hit_frame = -1, cmp_hit_kind, cmp_hit_damage = 500;   /* "hitme f kind damage": hit Dante from 1 m ahead */
 static int cmp_hitme[8][3], cmp_hitme_count;   /* up to 8 "hitme" lines */
+static int cmp_hold_at = -1, cmp_hold_kind, cmp_hold_need = 9999, cmp_letgo_at = -1, cmp_letgo_how = 1;
 #define CMP_MAX_EVENTS 64
 #define CMP_MAX_FRAMES 18000
 static struct { char button[12]; int first, last, every; } cmp_events[CMP_MAX_EVENTS];   /* every: pressed again each n frames (mashing) */
@@ -2351,7 +2397,7 @@ static int cmp_demo_shots[32], cmp_demo_shot_count;   /* "demoshot N": a still a
 /* "mkey button frame" and "mshot frame" drive and picture the menus, for tests. */
 #define MENU_SCRIPT_MAX 32
 static struct { unsigned int button; int frame; } menu_keys[MENU_SCRIPT_MAX];
-static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_breakall_at;
+static int menu_key_count, menu_shots[MENU_SCRIPT_MAX], menu_shot_count, cmp_menu, cmp_movie, cmp_kill_at, cmp_kill_until, cmp_breakall_at;
 static int cmp_royal_at[8][2], cmp_royal_count;   /* "royalcmd frame command": the Queen and King get it (tests) */
 static int cmp_fxtest[16][4], cmp_fxtest_count;   /* "fxtest frame bank kind id": tests, a V (kind 0), P (1), looping P (2) or E (3) 2 m before Dante */
 static int cmp_no_trace, cmp_heap_leave, cmp_fastwaves, cmp_clear_minions, cmp_events_play, cmp_credits_at, cmp_credits_kills;
@@ -2406,11 +2452,17 @@ static void cmp_load(void) {
                 shop_state.bought[5]=(unsigned char)(purple<0?0:purple>7?7:purple);
             }
         }
+        else if (strncmp(line, "nocaps ", 7) == 0) { extern int combat_no_caps; combat_no_caps = atoi(line + 7); }
+        else if (strncmp(line, "holdme ", 7) == 0) sscanf(line + 7, "%d %d %d", &cmp_hold_at, &cmp_hold_kind, &cmp_hold_need);   /* tests: "holdme frame kind need" (0 Nevan, 1 Soul Eater, 2 Arachne) */
+        else if (strncmp(line, "letgo ", 6) == 0) sscanf(line + 6, "%d %d", &cmp_letgo_at, &cmp_letgo_how);   /* tests: "letgo frame how" (1 let go, 2 thrown) */
         else if (strncmp(line, "hitme ", 6) == 0 && cmp_hitme_count < 8) {
             cmp_hitme[cmp_hitme_count][2] = 500;
             if (sscanf(line + 6, "%d %d %d", &cmp_hitme[cmp_hitme_count][0], &cmp_hitme[cmp_hitme_count][1], &cmp_hitme[cmp_hitme_count][2]) >= 2) ++cmp_hitme_count;
         }
         else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
+        else if (strncmp(line, "keepsession ", 12) == 0) keep_session = atoi(line + 12);
+        else if (strncmp(line, "autosave ", 9) == 0) savegame_auto = atoi(line + 9);   /* tests: saves without the dialog */
+        else if (strncmp(line, "yelloworbs ", 11) == 0) shop_state.owned[7] = (unsigned char)atoi(line + 11);   /* tests: Yellow Orbs held */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "testcam ", 8) == 0)
             cmp_test_camera = sscanf(line + 8, "%f %f %f %f %f %f", &cmp_test_eye[0], &cmp_test_eye[1], &cmp_test_eye[2],
@@ -2443,6 +2495,8 @@ static void cmp_load(void) {
         else if (strncmp(line, "menu ", 5) == 0) cmp_menu = atoi(line + 5);
         else if (strncmp(line, "movie ", 6) == 0) cmp_movie = atoi(line + 6);
         else if (strncmp(line, "killevery ", 10) == 0) cmp_kill_at = atoi(line + 10);
+        else if (strncmp(line, "blobshadow ", 11) == 0) blob_shadow = atoi(line + 11);
+        else if (strncmp(line, "killuntil ", 10) == 0) cmp_kill_until = atoi(line + 10);   /* killevery stops at this frame */
         else if (strncmp(line, "royalcmd ", 9) == 0) { if (cmp_royal_count < 8 && sscanf(line + 9, "%d %d", &cmp_royal_at[cmp_royal_count][0], &cmp_royal_at[cmp_royal_count][1]) == 2) ++cmp_royal_count; }
         else if (strncmp(line, "smlayout ", 9) == 0) sm_test_layout(atoi(line + 9));   /* tests: Secret Mission 10's crystals */
         else if (strncmp(line, "breakall ", 9) == 0) cmp_breakall_at = atoi(line + 9);   /* tests: every prop in the room breaks */
@@ -2528,6 +2582,7 @@ static void cmp_load(void) {
         else if (strncmp(line, "nearclip ", 9) == 0) { extern int near_clip_off; near_clip_off = !atoi(line + 9); }
         else if (strncmp(line, "rawfov ", 7) == 0) demo_raw_fov = atoi(line + 7);   /* tests: 1 passes channel 12 raw */
         else if (strncmp(line, "nofog ", 6) == 0) demo_no_fog = atoi(line + 6);     /* tests: 1 leaves GFG off */
+        else if (strncmp(line, "nopost ", 7) == 0) demo_no_post = atoi(line + 7);   /* tests: 1 no ScrEfc blur / glow */
         else if (strncmp(line, "realdt ", 7) == 0) cmp_realdt = atoi(line + 7);
         else if (strncmp(line, "spin ", 5) == 0) sscanf(line + 5, "%f %d %d", &cmp_spin_rate, &cmp_spin_from, &cmp_spin_to);
         else if (strncmp(line, "walkto ", 7) == 0 && cmp_walk_count < CMP_MAX_WALKS) {
@@ -2767,6 +2822,19 @@ static int m8_clears_seen;
 static float script_wait;
 static int script_waiting_alive, doors_armed;
 static int bp_portal_fx[3];
+/* The Palace's boss exits that warp (433, 436, 448, 449): their set 200, a STAY with V487 (one in every such room's
+ * pack: native bank 29) and two SE sets, the room bank's 83 once and 82 every 90 frames (bank 40), switched on by the
+ * clear's gimmick_cmd0c [200, 0] (EventTbl21). */
+static int bp_warp_fx;
+static float bp_warp_sound;
+static int bp_warp_at(int room, float at[3]) {
+    switch (room) {
+    case 433: at[0] = 2500.0f; at[1] = 2.0f; at[2] = 2500.0f; return 1;
+    case 436: at[0] = 2500.0f; at[1] = 105.0f; at[2] = 2500.0f; return 1;
+    case 448: case 449: at[0] = 3502.0f; at[1] = 500.0f; at[2] = 3513.0f; return 1;
+    }
+    return 0;
+}
 #define ROOMS_MAX 256
 static unsigned char rooms_cleared[ROOMS_MAX / 8];   /* this mission: a room's fight doesn't come back */
 static int room_is_cleared(int r) { return r >= 0 && r < ROOMS_MAX && (rooms_cleared[r >> 3] >> (r & 7) & 1); }
@@ -2917,8 +2985,10 @@ static int key_item_shown(const RoomKeyItem *k) {
         && (k->after < 0 || item_is(k->after, 2));
 }
 /* A room whose fight waits for an item to be taken (102's, for the Soul of Steel). */
+static int room_entrance_waiting(void);
 static int room_held(void) {
     int i;
+    if (room_entrance_waiting()) return 1;   /* the boss waits for his entrance demo (Dante in its area) */
     if(mission_choice.mission==10 && mission10_hold())return 1;
     if(mission_choice.mission==13 && mission13_returning())return 1;
     if(mission_choice.mission==8 && mission_room>=0 && atoi(rooms[mission_room].file+5)==302 && !item_is(46,2))return 1;
@@ -3438,7 +3508,7 @@ static void mission_gimmicks_draw(void) {
         int i;
         for (i=0;i<rooms[mission_room].door_count;++i) if (bp_portal_ready(i)) {
             const RoomDoor *d=&rooms[mission_room].doors[i];
-            if (i>=3 || !bp_portal_fx[i]) key_glow(d->box);
+            if ((i>=3 || !bp_portal_fx[i]) && !bp_warp_fx) key_glow(d->box);
         }
         {
             float at[3],up[3]={0,12,0};
@@ -3567,8 +3637,11 @@ static int script_run(float dt, float floor_y) {
 }
 
 /* Into another room: its stage, Dante at the start the door names, and the room's script from the top. */
+static int room_entry_start;   /* the start he came into this room at: the Game Over's Continue puts him back there */
 static void enter_room(int room, int start, Player *player, FollowCamera *camera) {
     int m10_previous=mission_room>=0?room_number(mission_room):-1;
+    room_entry_start = start;
+    gameover_reset();
     char path[320];
     
     float palace_start[4];
@@ -3616,6 +3689,7 @@ static void enter_room(int room, int start, Player *player, FollowCamera *camera
         }
     }
     memset(bp_portal_fx,0,sizeof bp_portal_fx);
+    bp_warp_fx = 0; bp_warp_sound = 0.0f;
     if (bp_active()) {
         int number=room_number(room);
         vergil_boss_set_variant(number==444?2:number==443?1:0);
@@ -3778,6 +3852,15 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
             const RoomDoor *d=&rooms[mission_room].doors[i];
             float at[3]={d->box[0],d->box[1]+17.0f,d->box[2]};
             bp_portal_fx[i]=nfx_spawn(NFX_PALACE,portal_v[i],at,0,1);
+        }
+    }
+    if (bp_active()) {
+        float at[3];
+        int ready = 0;
+        for (i = 0; i < rooms[mission_room].door_count; ++i) ready |= bp_portal_ready(i);
+        if (ready && bp_warp_at(room_number(mission_room), at)) {
+            if (!bp_warp_fx) { bp_warp_fx = nfx_spawn(NFX_BP_WARP, 487, at, 0.0f, 1); sfx_play_room(83, 40, 0.0f, 1.0f); bp_warp_sound = 0.0f; }
+            if ((bp_warp_sound += dt * 60.0f) >= 90.0f) { bp_warp_sound = 0.0f; sfx_play_room(82, 40, 0.0f, 1.0f); }
         }
     }
     if(mission_choice.mission==20 && room_number(mission_room)==12){
@@ -4228,18 +4311,18 @@ static int demo_queue[8], demo_queue_len, demo_queue_at;
 static int demo_queue_then, demo_clear_due, demo_clear_played, demo_resume_start = -1;
 
 /* Demos inside the missions, from the event scripts' ROOM blocks: a boss's entrance (counter 0 still 0 and Dante in the
- * room's area: taken as his first entry into the room [the area: not checked]) and its defeat (the counter at its step
- * and the room's enemies cleared: sw_enemies_cleared), each then putting Dante at a start of the room (AFTER_DEMO's
- * goto_room). Only those that stay in the room are here. */
-typedef struct { unsigned char mission; short room, demo; unsigned char cleared; signed char start; } RoomDemo;
+ * room's EVE area, sw_in_area [area]: until then the room's script, and so the boss, waits) and its defeat (the counter
+ * at its step and the room's enemies cleared: sw_enemies_cleared), each then putting Dante at a start of the room
+ * (AFTER_DEMO's goto_room). Only those that stay in the room are here. */
+typedef struct { unsigned char mission; short room, demo; unsigned char cleared; signed char start, area; } RoomDemo;
 static const RoomDemo room_demos[] = {
-    {3, 6, 6, 0, 2}, {3, 6, 7, 1, 2},          /* Cerberus appears / beaten */
-    {5, 121, 12, 0, 3}, {5, 121, 13, 1, 2},    /* the Jester's room */
-    {9, 210, 22, 0, 2}, {9, 210, 23, 1, 3},    /* Nevan */
-    {11, 217, 28, 0, 2}, {11, 217, 29, 1, 3},  /* Beowulf */
-    {12, 228, 32, 0, 0}, {12, 228, 34, 1, 2},  /* Geryon: his entrance; 33 (the bridge falls) is mission12.c's; his defeat */
-    {16, 115, 44, 0, 2},                       /* Lady */
-    {17, 139, 48, 1, 1},                       /* the Doppelganger beaten */
+    {3, 6, 6, 0, 2, 0}, {3, 6, 7, 1, 2, -1},          /* Cerberus appears / beaten */
+    {5, 121, 12, 0, 3, 1}, {5, 121, 13, 1, 2, -1},    /* the Jester's room */
+    {9, 210, 22, 0, 2, 0}, {9, 210, 23, 1, 3, -1},    /* Nevan */
+    {11, 217, 28, 0, 2, 0}, {11, 217, 29, 1, 3, -1},  /* Beowulf */
+    {12, 228, 32, 0, 0, 0}, {12, 228, 34, 1, 2, -1},  /* Geryon: his entrance; 33 (the bridge falls) is mission12.c's; his defeat */
+    {16, 115, 44, 0, 2, 1},                           /* Lady */
+    {17, 139, 48, 1, 1, -1},                          /* the Doppelganger beaten */
 };
 /* Demos between rooms: the script plays them in one room and its AFTER_DEMO goes to the next, which the port's own flow
  * reaches by a door or a defeat: played as Dante arrives. 7: 142's area 0 (17) to 144; 17: 143's area 0 (47) to 139;
@@ -4258,16 +4341,27 @@ static int room_demo_last_room = -1;
 
 static void queue_demo(int id);
 /* A room demo due now (kind 0 on entering, 1 once cleared), queued to resume play; 1 if one was. */
-static int queue_room_demo(int mission, int room, int cleared) {
+static int queue_room_demo(int mission, int room, int cleared, const Player *p) {
     int k;
     for (k = 0; k < ROOM_DEMOS; ++k) {
         const RoomDemo *r = &room_demos[k];
         if (r->mission != mission || r->room != room || r->cleared != cleared || room_demo_played[k]) continue;
+        if (r->area >= 0 && !msg_in_area(r->area, p->x, p->y, p->z)) continue;   /* not yet in its area */
         room_demo_played[k] = 1;
         queue_demo(r->demo);
         demo_resume_start = r->start;
         return 1;
     }
+    return 0;
+}
+/* This room's boss entrance still to play (its script waits for it, room_held). */
+static int room_entrance_waiting(void) {
+    int k, room;
+    if (cmp_no_demo || mission_room == ROOM_NONE) return 0;
+    room = room_number(mission_room);
+    for (k = 0; k < ROOM_DEMOS; ++k)
+        if (room_demos[k].mission == mission_choice.mission && room_demos[k].room == room && !room_demos[k].cleared
+            && room_demos[k].area >= 0 && !room_demo_played[k]) return 1;
     return 0;
 }
 /* "nodemo": a test skips the cutscenes (cmp_no_demo) */
@@ -4343,7 +4437,39 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
     
 }
 
+/* ---- Saves (savegame.c): what's kept, from and back into the session. */
+static void savegame_capture(const MenuChoice *c) {
+    savegame.red_orbs = shop_state.red_orbs;
+    memcpy(savegame.owned, shop_state.owned, sizeof savegame.owned);
+    memcpy(savegame.bought, shop_state.bought, sizeof savegame.bought);
+    savegame.blue_fragments = shop_state.blue_fragments;
+    if (c->mission >= 1 && c->mission <= 20) savegame.last_mission = (unsigned char)c->mission;
+    savegame.last_difficulty = (unsigned char)(c->difficulty & 1);
+    savegame.turbo = (unsigned char)(c->turbo != 0);
+    if (bp_best_floor() > savegame.bp_best) savegame.bp_best = bp_best_floor();
+}
+static int save_hook(MenuChoice *c) { savegame_capture(c); return savegame_save_dialog(); }
+static int load_hook(MenuChoice *c) {
+    if (!savegame_load_dialog()) return 0;
+    shop_state.red_orbs = savegame.red_orbs;
+    memcpy(shop_state.owned, savegame.owned, sizeof shop_state.owned);
+    memcpy(shop_state.bought, savegame.bought, sizeof shop_state.bought);
+    shop_state.blue_fragments = savegame.blue_fragments;
+    c->mission = savegame.last_mission >= 1 && savegame.last_mission <= 20 ? savegame.last_mission : 1;
+    c->difficulty = savegame.last_difficulty & 1;
+    c->turbo = savegame.turbo;
+    bp_set_best(savegame.bp_best);
+    return 1;
+}
+static int new_hook(MenuChoice *c) {
+    (void)c;
+    savegame_clear();
+    if (!keep_session) memset(&shop_state, 0, sizeof shop_state);
+    return 1;
+}
+
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    gameover_reset();
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
     enemy_set_attack_slot_limit(1);   /* Includes the Debug Room path, which skips enter_room. */
     if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
@@ -4366,6 +4492,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     /* What he'd own by this mission in the real game. A test can add to it: "ownall 1", an "item" that's a weapon
      * or a style, or the weapon it starts with ("melee", "gun"). */
     player_own_mission(choice->mission);
+    player_owned |= savegame.got;   /* what a loaded save had got in play */
     if (cmp_ownall) player_owned = OWN_EVERYTHING;
     {
         int c;
@@ -4441,6 +4568,7 @@ int main(int argc, char *argv[]) {
     FollowCamera camera;
     PlayerInput input;
     void *draw_buffer = (void *)0;
+    frame_draw_buffer = draw_buffer;
     unsigned int last_time, previous_buttons = 0, boot_start;
     int previous_l = 0, moves_total = 0, moves_finished = 0, moves_failed = -1, moves_fallbacks = 0;
     int inputs_total = 0, inputs_ok = 0, inputs_failed = -1, focus = 0;
@@ -4492,6 +4620,8 @@ int main(int argc, char *argv[]) {
     sfx_init(game_dir);
     credits_fight_init(game_dir);
     bp_init(game_dir);
+    savegame_init(game_dir);
+    menu_save_hook = save_hook; menu_load_hook = load_hook; menu_new_hook = new_hook;
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
@@ -4813,8 +4943,8 @@ int main(int argc, char *argv[]) {
             room_demo_last_room = room;
             if (pending_room_demo >= 0) { queue_demo(pending_room_demo); pending_room_demo = -1; demo_resume_start = -1; transit = 1; }
             if (transit) demo_queue_then = 2;
-            else if ((entered && queue_room_demo(mission_choice.mission, room, 0)) ||
-                (msg_room_fought && enemy_alive_count() == 0 && queue_room_demo(mission_choice.mission, room, 1)))
+            else if (queue_room_demo(mission_choice.mission, room, 0, &player) ||
+                (msg_room_fought && enemy_alive_count() == 0 && queue_room_demo(mission_choice.mission, room, 1, &player)))
                 demo_queue_then = 2;
         }
         if (focus_cmp && cmp_enemy_audit && cmp_audit_room_count) {
@@ -4859,6 +4989,28 @@ int main(int argc, char *argv[]) {
                 msg_fill_env(&env, &player, 0, 0);
                 msg_event_skip(&env, 0);
                 debug_pressed &= ~PSP_CTRL_START;
+            } else if (gameover_active()) {
+                /* Dante is dead (gameover.c): the world holds while the prompt and the menu are up. */
+                GameOverAction action = gameover_update(debug_pressed, dt);
+                if (action == GAMEOVER_REBIRTH) {
+                    float chest[3] = {player.x, player.y + 100.0f, player.z};
+                    if (shop_state.owned[7]) --shop_state.owned[7];
+                    combat_revive(&combat, &player);
+                    fx_explosion(chest);   /* the game's burst of light rays [stand-in] */
+                } else if (action == GAMEOVER_CONTINUE && mission_room != ROOM_NONE) {
+                    enter_room(mission_room, room_entry_start, &player, &camera);
+                    combat_revive(&combat, &player);
+                } else if (action == GAMEOVER_RESTART) start_mission(&mission_choice, &player, &camera);
+                else if (action == GAMEOVER_END) {
+                    menu_draw_buffer = draw_buffer;
+                    music_menu(129);
+                    menu_run_from_mission_select(&mission_choice, NULL, NULL);
+                    play_intro(mission_choice.mission);
+                    start_mission(&mission_choice, &player, &camera);
+                    draw_buffer = menu_draw_buffer;
+                    last_time = sceKernelGetSystemTimeLow();
+                }
+                was_open = 1;
             } else if (mission_mode && !debug_open && (debug_pressed & PSP_CTRL_START)) {
                 pause_open();
                 pause_active = 1;
@@ -4907,7 +5059,7 @@ int main(int argc, char *argv[]) {
         }
         if (dummy_ready && !mission_mode) enemy_spawn_height(player.y);
         if (mission_mode && dummy_ready && !pause_active && !debug_open) {
-            if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1) enemy_kill_all();
+            if (cmp_kill_at && (frames % cmp_kill_at) == cmp_kill_at - 1 && (!cmp_kill_until || frames < cmp_kill_until)) enemy_kill_all();
             { int k; for (k = 0; k < cmp_royal_count; ++k) if (frames == cmp_royal_at[k][0]) enemy_royal_command(cmp_royal_at[k][1]); }
             {
                 int k;
@@ -5029,7 +5181,7 @@ int main(int argc, char *argv[]) {
                     int k;
                     demo_clear_played = 1;
                     demo_queue_len = demo_queue_at = 0;
-                    if (mission_room != ROOM_NONE) queue_room_demo(m, room_number(mission_room), 1);   /* its defeat first */
+                    if (mission_room != ROOM_NONE) queue_room_demo(m, room_number(mission_room), 1, &player);   /* its defeat first */
                     for (k = 0; k < 3 && mission_clear_demos[m][k] >= 0; ++k) queue_demo(mission_clear_demos[m][k]);
                     demo_queue_then = 1;
                     cleared = 0;
@@ -5063,6 +5215,12 @@ int main(int argc, char *argv[]) {
                 if (mission_choice.mission == 13) play_movie("MOVIES/D325.MOV");
                 if (mission_choice.mission == 19) play_movie("MOVIES/D328.MOV");
                 music_menu(130);   /* Result.adx: the results (0x82) */
+                if (mission_choice.mission >= 1 && mission_choice.mission <= 20 && !focus) {
+                    /* Progress for the next save (savegame.c). */
+                    savegame.cleared[mission_choice.difficulty & 1] |= 1u << (mission_choice.mission - 1);
+                    savegame.got |= player_owned;
+                    if (mission_choice.mission < 20) savegame.last_mission = (unsigned char)(mission_choice.mission + 1);
+                }
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 if(focus_cmp && cmp_stop_on_clear)cmp_frames=frames;
                 else {
@@ -5214,10 +5372,9 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 vergil_boss_dante(combat.action, player.yaw);
-                /* During a script's event the enemies wait (a stand-in: what the game's event mode stops in
-                 * them isn't decoded), so they don't set on a Dante who can't move. */
-                if (!(mission_mode && msg_event_on()))
-                    enemy_set_dante_yaw(player.yaw);
+                /* The game's event mode (op 49, FUN_0023e450) doesn't stop the enemies: their task category runs on.
+                 * What it stops is below (no blow lands while an event is on). */
+                enemy_set_dante_yaw(player.yaw);
             PROF_MARK();
             if (!credits_fight_frozen()) enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
             PROF_END(3);
@@ -5229,7 +5386,17 @@ int main(int argc, char *argv[]) {
                 /* A hold on Dante (Nevan's kiss): taken, his health drained, his struggle, let go or thrown. */
                 int need, end;
                 float hx, hz, drained = enemy_take_hold_drain();
-                if (enemy_hold_take(&need)) combat_hold(&combat, &player, need, enemy_hold_motion() ? motion_find(enemy_hold_motion()) : -1);
+                if (enemy_hold_take(&need)) combat_hold_named(&combat, &player, need, enemy_hold_motion());
+                if (focus_cmp && frames == cmp_hold_at) {
+                    static const char *const names[3] = {"nvh-20", "seh-12", "arh-00"};
+                    combat_hold_named(&combat, &player, cmp_hold_need, names[cmp_hold_kind % 3]);
+                }
+                if (focus_cmp && frames == cmp_letgo_at) combat_release_how(&combat, &player, cmp_letgo_how);
+                if (enemy_hold_reset_take()) combat_hold_reset(&combat);   /* FUN_00254a10 as the Soul Eater's hold starts */
+                {
+                    float holder_yaw;
+                    if (combat_held(&combat) && enemy_hold_yaw(&holder_yaw)) combat_hold_face(&combat, &player, holder_yaw);
+                }
                 if (combat_held(&combat) && drained > 0.0f) {
                     player.health -= drained;
                     if (player.health < 1.0f) player.health = combat_dante_can_die ? 0.0f : 1.0f;
@@ -5243,11 +5410,8 @@ int main(int argc, char *argv[]) {
                 }
                 if (combat_hold_broken(&combat, &player)) enemy_hold_broken();
                 end = enemy_hold_end(&hx, &hz);
-                if (end && combat_held(&combat)) {
-                    combat_release(&combat, &player);
-                    /* Thrown (his action 0x16) [stand-in: a knockdown without damage]. */
-                    if (end == 2) combat_player_hit_kind(&combat, &player, hx, hz, 2, 0.0f);
-                }
+                if (end && combat_held(&combat)) combat_release_how(&combat, &player, end);   /* let go, or thrown (FUN_0022b9b0) */
+                (void)hx; (void)hz;
             }
                 if(leviathan_boss_drain_trigger(dt*60,player.devil))player.devil=0;
                 orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);
@@ -5265,9 +5429,14 @@ int main(int argc, char *argv[]) {
             /* Death only in real play (and scenes that ask for it): test scenes rely on him lasting. After he has
              * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
             combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
-            if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
+            /* A second after he lies dead, the Game Over (gameover.c), with the Yellow Orbs he holds. */
+            if (combat_dead_frames(&combat) > 60.0f && !gameover_active()) gameover_start(shop_state.owned[7]);
             {
             int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
+            /* While a script's event is on the game sets ctx+8, and its hit manager resolves nothing (FUN_002fa1f0 /
+             * FUN_002fa380 / FUN_002f9c50 return no record): no blow lands on Dante. Its attack shells (task category
+             * 4) stop too; the port's projectiles aren't held [not ported]. */
+            if (mission_mode && msg_event_on()) landed = 0;
             float blow_damage = 0.0f;
             if (landed) { blow_kind = enemy_attack_kind(heavy); blow_damage = enemy_attack_damage(); }
             { int h; for (h = 0; h < cmp_hitme_count; ++h) if (cmp_hitme[h][0] == frames) { cmp_hit_frame = frames; cmp_hit_kind = cmp_hitme[h][1]; cmp_hit_damage = cmp_hitme[h][2]; } }
@@ -5391,6 +5560,7 @@ int main(int argc, char *argv[]) {
                 player.z += -s * anim.idle_root_step[0] + c * anim.idle_root_step[1];
             }
             anim_pose(&anim, &player, &combat, &pose, time);
+            combat_set_bones((const float (*)[3])pose.world_pos, (const float (*)[3][3])pose.world_rot, 32);   /* his attack caps */
         } else {
             pose_procedural(&pose, &player, time);
         }
@@ -5692,6 +5862,7 @@ int main(int argc, char *argv[]) {
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
                     { char cl[320]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); { int st[5]; sfx_step_stats(st); fprintf(report, "footsteps played=%d material=%d missing=%d room_sounds=%d room_missing=%d\n", st[0], st[1], st[2], st[3], st[4]); }
+                    { static int holds_seen; (void)holds_seen; fprintf(report, "held now=%d kind=%d step=%d leaving=%d mash=%d/%d y=%.0f\n", combat.held, combat.held_kind, combat.held_step, combat.held_leaving, combat.held_mash, combat.held_need, player.y); }
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
                     { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }
@@ -5957,6 +6128,7 @@ int main(int argc, char *argv[]) {
         testroom_frame = frames;
         if (!(focus_cmp && cmp_enemy_audit && cmp_audit_fast)) sceDisplayWaitVblankStart();
         draw_buffer = sceGuSwapBuffers();
+        frame_draw_buffer = draw_buffer;
         if (focus_pending) { focus_hold(focus_pending); focus_pending = NULL; }
     }
 

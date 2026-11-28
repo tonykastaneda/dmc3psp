@@ -88,7 +88,7 @@ for _ in range(12):
     p.writef(P + 0x2AD4, 5300.0); p.writef(P + 0x50, 2750.0); p.writef(P + 0x54, 30.0); p.writef(P + 0x58, 2450.0)
     time.sleep(0.25)
 shot('7game')
-r.focus(); time.sleep(0.2); r.key(0x70, True); time.sleep(0.08); r.key(0x70, False); time.sleep(3)
+r.save_state(1); time.sleep(3)   # slot 1 over PINE (was F1, the current slot)
 print('style byte', p.read(P + 0x3C6C, 1)[0], 'level', p.read(P + 0x3C74, 1)[0])
 shutil.copy(SLOT1[0], f'build/refemu/sstates/style_{name}.p2s')
 print('saved', f'build/refemu/sstates/style_{name}.p2s')

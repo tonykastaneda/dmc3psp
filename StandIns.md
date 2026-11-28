@@ -8,14 +8,13 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Systems that touch everything
 
-- **Dante held** (his action 0x2e, `combat_hold`): Nevan's kiss holds him and he mashes free as the game counts it,
-  and he plays her held motion (her pack's [3] slot 20, as the game hands it him), but breaking free doesn't play
-  her [3] 21, her throw at the end is a knockdown without damage, and other blows pass him while he's held. The Soul
-  Eater's bite holds him too (60 to break free) in its held loop ([9] 12), without its lift (10, 11) or end (14). The
-  Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
-  `combat.c` held_update, `enemy.c` hold_take.
+- **Dante held** (his action 0x2e, `combat_hold_named`): his side of each hold is the game's: Nevan's [3] 20 and 21
+  (broken free) and her throw (FUN_0022b9b0: turned about, then his own knockdown, no damage); the Soul Eater's lift,
+  10, 11, the held loop and 14 as it lets go, turned toward it (FUN_0049dac0); the Arachne's [15] 0, 1 and 2 as he
+  struggles (FUN_003f8080). Stand-ins: the Arachne's index 4 (its web's end) and the Soul Eater's let-go root motion
+  aren't played, and a blow while he's held takes its damage without moving him [inferred]. `combat.c` held_update.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
-  defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
+  defeats that stay in their room, with English subtitles (at the PS2's x, the font scaled so the widest line spans the PS2's width), fades and their own sound (voices and music), but: cloth steps in world space (ClothSim1D's ropes run as decoded, the floor factor taken as 0; ClothMode 1 rides the hips, because bone 0 stays at the origin; a coat gets Dante's own capsules (bones 0-22 match) though whether cutscenes apply capsules isn't read; a chain that never sets the key trails the pose); a CnsPos piece's root on its parent bone [inferred]; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
   (`demo.c` demo_lights): the light's strength 1 - d² / Force² and colour / 128 [inferred: the VU1 lighting isn't
   read], taken at each actor's centre as a directional light; the characters' ambient (`DEMO_AMBIENT`) [stand-in,
@@ -27,10 +26,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   raw angle, as `FUN_001ac750` builds it, matches the PS2 once its frames are matched by picture, not by drifting time.)
   Cutscene fog is the ScrEfc GFG track through sceGuFog (`demo_fog`): MinAlpha/128 at StartZ to MaxAlpha/128 at
   EndZ, colour MaxColor. The far distance is extended so the factor at EndZ equals that fraction, because hardware
-  fog reaches full colour at its far [inferred]. The sky dome is left unfogged. Not ported: SGA glow (a feedback
-  bloom: Scale, DirNum, Feedback, Attenuate, an 8x16 kernel) and the FCS / DOF full-screen blur. There is no
-  reduced-resolution framebuffer pass, and that blur does not fit under about 1.5 ms, so backgrounds stay sharper
-  than the PS2's where those clips run. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
+  fog reaches full colour at its far [inferred]. The sky dome is left unfogged. FCS / DOF blur and SGA / BGA glow are a
+  quarter-size GE pass (post_fx.c): the blur's depth bands and the glow's threshold are the port's, FCS's near band and
+  SGA's directional smear (Scale, DirNum, Attenuate) aren't modelled, and its look isn't compared with the PS2 yet. Demo 3's over-the-shoulder shot shows holes where the near plane cuts Dante.
 - **Model blends** (`model_blend.h`): a MOD object's byte 8 read as the GS ALPHA table index [inferred]; its bits 4
   and 5 unknown.
 - **Sound**: movies, cutscenes, the missions' music (two stream channels per room from the event scripts; the battle
@@ -40,15 +38,22 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   se / se_3d play in the blocks messages.c runs when they're the room's (kind 0), the system's (1) or Dante's (4)
   bank (not placed); the enemies' banks (types 2-6), the scripts' type 7 sounds and the blocks messages.c doesn't
   keep, the other gimmicks' sounds and the sounds' distance falloff (FUN_0033d8d0) aren't in yet. MUSIC.md. GAME_FLOW.md.
-- **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
-- **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
+- **Saves** (`savegame.c`, GAME_FLOW.md "Saves"): the PSP's save utility, not the game's own save screen. Mission Select's Save / Load and the title's Load Game; no saving from the pause menu yet (its Save Data stays locked). Progress is written only when the player saves.
+- **Game Over** (`gameover.c`, GAME_FLOW.md "Game Over"): the game's flow, measured on PCSX2. The lettering is the port's menu font, not the game's art for these words, and the orb is the item shop's Yellow Orb icon. Rebirth's burst of light rays is the port's explosion. End skips GameOver.sfd (not converted). Gold Orb mode isn't modelled: Yellow Orbs only.
+- **Event mode** (EVENT_SCRIPTS.md "What event mode stops"): Dante's input is off and no blow lands, as in the game; the enemies keep moving. The game also stops its attack shells (task category 4, and 5 when the event's first argument is 1). The port's projectiles aren't held, and category 5 isn't identified.
   `main.c` ~4296, EVENT_SCRIPTS.md.
 - **Enemy health and Dante's damage**: Dante's hits are 42 light / 84 heavy (×1.1, Easy ×2, guns 20%) for every boss
   [inferred], a bullet its record's 10 (Ebony & Ivory's, 0x5a5a30 +4) against every enemy, kept in fractions of a unit by the Hells and the like; health is the Pride's 6 light hits by eye and
   the rest in proportion to their parameter blocks. `enemy.c`, `vergil_boss.c`, `geryon_boss.c`.
-- **Hit detection on Dante's moves**: every generated move uses one stand-in reach; Quicksilver and Doppelganger styles
-  aren't compared with the game; shotgun spread and tracers are stand-in effects. MOVESET_RE.md, `combat.c`.
-- **Stand-in guard motion** without a loop range. `combat.c` ~1436.
+- **Hit detection on Dante's moves**: his moves hit with their own attack caps (GDATA 0 chunks 6 / 7, switched on by
+  the scripts' ops 0x10-0x1F), but the ordinary enemies' bodies are the port's 48 cm cylinder (their hurt caps aren't
+  read), bosses and the big enemies still take the old 260 cm reach; the attack records' damage (ops 6 / 7, the bank's
+  records at 0x5a7240) reaches the ordinary enemies that count health (his attack power, +0x2a18, taken as 1), but
+  not the bosses or the enemies with their own health code, and the records' other fields (reaction kind, hit stop)
+  aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; the Shotgun's pellets are its
+  shell's (FUN_002ee930) at level 0 only (the gun's level isn't carried), with no tracers. MOVESET_RE.md, `combat.c`.
+- **The held guard** loops from 24:30's start (frame 10), as the guard state replaying the script would [inferred:
+  FUN_00224850 isn't decoded]. `combat.c`.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (the Jester's
@@ -63,12 +68,12 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   action 81 / 82's phases. Nevan's V0x38e dome reads whiter and more solid than the PS2's (analysis/ref/pfx/nevan_ab.png).
 - **Royalguard's judgement** (`combat_player_hit_kind`, NATIVE_FX.md): the blow's guard class (+0x3e) is taken
   from its hit kind (knockdown kinds class 1, others 0) [estimate]; the style level is 2; grade 5 (+0x3c82) is unreachable in the
-  game's own code (set only after a type-5 block, which needs it); the result-1 table (on the record's +0x18) isn't read; a guard break takes the blow's own damage (profile 0x11, `FUN_002e8af0`, isn't read); the guarded attacker's reaction (`enemy_guarded`) is ported for the Hells and Beowulf only: Nevan's (+0x13c
+  game's own code (set only after a type-5 block, which needs it); the guarded attacker's reaction (`enemy_guarded`) is ported for the Hells and Beowulf only: Nevan's (+0x13c
   object's +0x10) and the other classes' +0x114 handlers aren't read (Lady's and the Enigma's do nothing); and Release's damage from the gauge (+0x2a1c) aren't carried (the port's blows are in
   units of health).
 - **Blade trails** (`fx.c` mtrails): the game's trail models bent through the last 11 weapon frames, type 0 added and types 1 / 2
-  alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the rotations blended linearly and renormalised [FUN_00133ab0 not
-  read]. NATIVE_FX.md "Blade trails".
+  alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the frames between samples are FUN_00133ab0's (y and z
+  blended, the frame rebuilt round z by FUN_00133890). NATIVE_FX.md "Blade trails".
 - **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
   PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models**: crest switches and seal boards are their own models (`gimmick_models.c`), but a switch's flames
@@ -101,7 +106,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
   [estimate]; its spear is straight at his chest (the shell isn't decoded). `fallen.c`, `enemy.c` ~5383.
 - **Dullahan**: which script is which [inferred]. `dullahan.c`.
-- **Soul Eater**: Dante is held from its bite and struggles free (above), but isn't lifted or turned with it, and his struggle's count isn't reset as the hold starts; the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
+- **Soul Eater**: Dante is held from its bite and struggles free (above); the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
   dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
@@ -193,7 +198,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   collection within 120 cm; Lady's extra defeat pickups are omitted. The transient Level label uses a widened substitute serif font; native position, fade and slide timing are restored. Arena camera
   initialization starts its collision sweep at Dante's head: the default safe point lies beneath the raised arena.
   Boss entrance/defeat camera sequences are skipped; boss behaviors retain their documented story-mode stand-ins.
-  Boss exits use an item glow in place of their room-specific warp effects; unmapped EST enemy classes retain
+  Boss exits 433 / 436 / 448 / 449 show their warp (set 200: V487 and its sounds); the others (seals) keep the item
+  glow; unmapped EST enemy classes retain
   the shared enemy mapper's fallback (including some rare ordinary-floor sets and the unported chess pieces).
   Best floor uses the port's BP_BEST.TXT sidecar and a selected-row menu label, not the PS2 memory-card/ranking UI.
   The task's requested kill-time countdown is omitted: EventTbl21 and PCSX2 show no survival timer in this PS2 mode.

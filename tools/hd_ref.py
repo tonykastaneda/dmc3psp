@@ -1,9 +1,11 @@
 """Drive the Steam HD Collection's Devil May Cry 3 to measure a maxed-out Dante.
 
 Starts dmc3.exe directly, so the collection's launcher and its videos are skipped. Input is
-the keyboard, with the game's default bindings, because the game reads XInput slot 0 and that
-is the user's own pad. The window is captured from the desktop. Used as a module or from the
-command line:
+the keyboard, with the game's default bindings, so it still needs the game in front: the game
+reads XInput slot 0 only (the user's own pad when one is plugged in), and it stops while it
+hasn't the focus (`paused`), so a background virtual pad (pcsx2_ref's) can't drive it. Shots come
+from the window's own drawing where that works (pcsx2_ref.grab), else the desktop. Used as a
+module or from the command line:
 
     python tools/hd_ref.py launch               # start the game
     python tools/hd_ref.py pin                  # hold Dante's health up, in the background
@@ -135,7 +137,19 @@ def client_rect(hwnd):
 
 
 def shot(path, width=960):
-    x, y, w, h = client_rect(game_window())
+    """The window's own drawing (pcsx2_ref.grab: PrintWindow, PW_RENDERFULLCONTENT), so it can be covered; if that
+    comes back black (a swap chain PrintWindow can't read), the desktop under the window as before."""
+    hwnd = game_window()
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import pcsx2_ref
+        w, h, data = pcsx2_ref.grab(hwnd)
+        if any(data[i] for i in range(0, len(data), 4097)):
+            pcsx2_ref._write_png(path, w, h, data, f"scale={width}:-2")
+            return
+    except Exception:
+        pass
+    x, y, w, h = client_rect(hwnd)
     subprocess.run([FFMPEG, "-y", "-loglevel", "error", "-f", "gdigrab", "-offset_x", str(x), "-offset_y", str(y),
                     "-video_size", f"{w}x{h}", "-i", "desktop", "-frames:v", "1", "-update", "1",
                     "-vf", f"scale={width}:-2", str(path)], check=True)

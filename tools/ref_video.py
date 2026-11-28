@@ -49,7 +49,8 @@ def record_ps2(name, seconds):
     def start_capture():
         nonlocal proc
         time.sleep(1.75)
-        proc = capture((x, y + 150, w, h - 195), path, seconds)
+        # The window's own drawing (pcsx2_ref.grab): no focus, and it can be covered or on another display.
+        proc = r.record_start(path, 30, crop=(0, 150, w, h - 195), seconds=seconds)
     t = threading.Thread(target=start_capture)
     t.start()
     cmp.record_ps2(name)

@@ -127,7 +127,7 @@ def main():
         afs = AfsArchive(iso, "GDATA.AFS")
         read = lambda slot: iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"])
         texts = parse_messages(read(MSG_SLOT))
-        for mission in range(1, 21):
+        for mission in range(1, 22):   # 21: the Bloody Palace (its rooms' cameras: the portals' reveal, the bosses' entrances and exits)
             for room, kind, body in message_blocks(script_ops(read(EVENT_SLOT + mission))):
                 name = f"{room:03d}"
                 if name not in gen_rooms.SLOTS:
@@ -152,7 +152,8 @@ def main():
     flat, table = [], []
     for mission, room, kind, body in blocks:
         table.append((mission, room, kind, len(flat), len(body)))
-        flat += [(op, *(args + [0, 0, 0, 0])[:4]) for op, args in body]
+        # MsgOp holds shorts: the few wider values (the Palace's ops 0x73 / 0x74 colours, which messages.c skips) are clamped.
+        flat += [(op, *(max(-32768, min(32767, v)) for v in (args + [0, 0, 0, 0])[:4])) for op, args in body]
     lines += [f"#define MSG_OP_COUNT {len(flat)}", "static const MsgOp msg_ops[] = {"]
     lines += ["    " + " ".join("{%d,%d,%d,%d,%d}," % t for t in flat[k:k + 8]) for k in range(0, len(flat), 8)] + ["};"]
     lines += [f"#define MSG_BLOCK_COUNT {len(table)}", "static const MsgBlock msg_blocks[] = {"]

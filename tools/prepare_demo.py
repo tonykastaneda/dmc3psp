@@ -360,6 +360,88 @@ def align(blob: bytearray, n: int = 16) -> int:
 AXIS_CODE = {"Y": 0, "X": 1, "NY": 2, "NX": 3, "Z": 4, "NZ": 5}
 
 
+ROPE_SIZE = 84
+ROPE_ISO = None        # set by main: the stage's own SCM comes from its GDATA slot
+ROPE_STAGES = {}       # slot -> stage name (stNNN), from the timeline's Model tracks (bake_cast)
+
+
+def stage_node_world(stage: str, node: int, work: Path):
+    """A stage SCM node's world place (its records composed from the root, R = Rz Ry Rx: scm_rig's)."""
+    import math
+    path = work / "model" / f"{stage}.scm"
+    if path.exists():
+        data = path.read_bytes()
+    else:
+        from gen_rooms import SLOTS
+        from dmc3_image import AfsArchive, Iso9660
+        from prepare_stage import pac_entries
+        slot = SLOTS.get(stage[2:])
+        if slot is None or ROPE_ISO is None:
+            return None
+        iso = Iso9660(ROPE_ISO)
+        afs = AfsArchive(iso, "GDATA.AFS")
+        data = bytes(pac_entries(iso.read_file("GDATA.AFS", afs.entries[slot]["offset"], afs.entries[slot]["size"]))[2])
+    skel, _mesh, order, rot = scm_rig(data)
+    if not 0 <= node < skel["count"]:
+        return None
+
+    def rmat(rx, ry, rz):
+        cx, sx, cy, sy, cz, sz = math.cos(rx), math.sin(rx), math.cos(ry), math.sin(ry), math.cos(rz), math.sin(rz)
+        mm = lambda a, b: [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+        return mm(mm([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]], [[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]]),
+                  [[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
+    world, mats = {}, {}
+    for r in order:
+        p, loc, m = skel["parents"][r], skel["local"][r], rmat(*rot[r])
+        if p < 0:
+            world[r], mats[r] = list(loc), m
+        else:
+            mp = mats[p]
+            world[r] = [world[p][i] + sum(mp[i][k] * loc[k] for k in range(3)) for i in range(3)]
+            mats[r] = [[sum(mp[i][k] * m[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+    return world[node]
+
+
+def pack_rope(clip, work: Path, label: str) -> bytes:
+    """A model clip's ClothSim1D (FUN_002ec400's .clt: 'ClothSim1D n length', Gravity, SpringForce, Damping,
+    MaxSpeed, FloorLevel) and its two ends, ClothSim1DCnsPos0 / CnsPos1 ([slot, bone] each), as an 84-byte trailer:
+    "R1D1", i32 n, f32 length, gravity x y z, spring, damping, max speed, floor, i32 slot0, bone0, slot1, bone1,
+    u32 fixed (bit 0 / 1: that end is a stage node, not a cast actor's bone), f32 end0[3], end1[3] (its world place)."""
+    name = clip.get("ClothSim1D")
+    if not isinstance(name, str) or not name.lower().endswith(".clt"):
+        return b""
+    path = next((p for p in (work / "model" / name, work / "motion" / name) if p.exists()), None)
+    if path is None:
+        print(f"    {label} ClothSim1D {name}: missing")
+        return b""
+    vals = {"Gravity": [0.0, -1.0, 0.0], "SpringForce": [0.0], "Damping": [1.0], "MaxSpeed": [50.0], "FloorLevel": [0.0]}
+    n, length = 0, 0.0
+    for line in path.read_text(encoding="latin1").splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        if parts[0] == "ClothSim1D" and len(parts) >= 3:
+            n, length = int(float(parts[1])), float(parts[2])
+        elif parts[0] in vals:
+            vals[parts[0]] = [float(x) for x in parts[1:]]
+    c0, c1 = clip.get("ClothSim1DCnsPos0"), clip.get("ClothSim1DCnsPos1")
+    if n < 2 or not isinstance(c0, list) or not isinstance(c1, list):
+        return b""
+    n = min(n, 16)
+    fixed, ends = 0, [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+    for k, (s, b) in enumerate(((int(c0[0]), int(c0[1])), (int(c1[0]), int(c1[1])))):
+        if s in ROPE_STAGES:
+            place = stage_node_world(ROPE_STAGES[s], b, work)
+            if place is not None:
+                fixed |= 1 << k
+                ends[k] = place
+    print(f"    {label} ClothSim1D {name}: {n} x {length}, ends {c0} {c1}" +
+          (f" (stage nodes at {[[round(v) for v in e] for i, e in enumerate(ends) if fixed >> i & 1]})" if fixed else ""))
+    return b"R1D1" + struct.pack("<if3f4f4iI6f", n, length, *vals["Gravity"][:3], vals["SpringForce"][0], vals["Damping"][0],
+                                 vals["MaxSpeed"][0], vals["FloorLevel"][0], int(c0[0]), int(c0[1]), int(c1[0]), int(c1[1]),
+                                 fixed, *ends[0], *ends[1])
+
+
 def pack_cloth_block(model_clips, motion_clips, work: Path, bone_count: int, label: str) -> bytes:
     """The slot's chains (docs/CUTSCENES.md). A model clip's .clt is the chain until a motion clip names another.
     ResetClt / ClothMode are events on the demo clock. A bad Bone line is skipped, not fatal."""
@@ -378,24 +460,18 @@ def pack_cloth_block(model_clips, motion_clips, work: Path, bone_count: int, lab
             index[key] = -1
             return -1
         text = path.read_text(encoding="latin1")
-        # A line can carry two Bone records ("Bone 6 Bone 8 X", demo 53's motion pl101_01.clt). The first
-        # one's axis token is the next record's keyword, so it takes the next bone's axis.
+        # A line can carry two Bone records ("Bone 6 Bone 8 X", demo 53's motion pl101_01.clt). The game's
+        # tokeniser (FUN_0022fca0) binds the first bone, then reads the next token as its axis: "Bone" isn't one, so
+        # the node keeps the axis it had (+0x1c0, written only here; zero-initialised: X, the game's code 0
+        # [inferred]); then "8" and "X" are no keyword and are skipped, so bone 8 isn't in the chain.
         fixed = []
         for line in text.splitlines():
             parts = line.split()
-            if not parts or parts[0] != "Bone" or parts.count("Bone") < 2:
+            if not parts or parts[0] != "Bone" or len(parts) < 3 or parts[2] in AXIS_CODE:
                 fixed.append(line)
                 continue
-            idxs = [i for i, token in enumerate(parts) if token == "Bone"]
-            chunks = [parts[i: idxs[n + 1] if n + 1 < len(idxs) else None] for n, i in enumerate(idxs)]
-            known = [c[2] if len(c) >= 3 and c[2] in AXIS_CODE else None for c in chunks]
-            for n, chunk in enumerate(chunks):
-                if len(chunk) < 2:
-                    continue
-                axis = known[n] or next((a for a in known[n + 1:] if a), None) or next((a for a in known if a), "Y")
-                if known[n] is None:
-                    print(f"    {label} {name}: Bone {chunk[1]} takes axis {axis}")
-                fixed.append(f"Bone {chunk[1]} {axis}")
+            print(f"    {label} {name}: '{line.strip()}' binds bone {parts[1]} (axis X kept), the rest skipped")
+            fixed.append(f"Bone {parts[1]} X")
         text = "\n".join(fixed)
         try:
             cloths = psm.parse_cloths(text)
@@ -556,6 +632,9 @@ def bake_cast(timeline, files, blob: bytearray, work: Path = None):
         cns = clip.get("CnsPos")
         cloth = pack_cloth_block(model["clips"], (tracks.get(("Motion", slot)) or {"clips": []})["clips"],
                                  work, skel["count"], name)
+        rope = pack_rope(clip, work, name)
+        if rope:   # the ClothSim1D trailer rides the cloth block's end (demo_cloth.c demo_rope_*)
+            cloth = (cloth or struct.pack("<2I", 0, 0)) + rope
         actors.append({"slot": slot, "name": name, "skel": skel, "mesh": mesh, "tex": tex, "motions": motions,
                        "parent": cns[0] if isinstance(cns, list) else -1, "bone": cns[1] if isinstance(cns, list) else 0,
                        "pos": clip.get("Pos") or [0.0, 0.0, 0.0], "rot": clip.get("Rot") or [0.0, 0.0, 0.0],
@@ -854,6 +933,27 @@ def bake_fog(timeline) -> bytes:
     return bytes(out)
 
 
+SCREEN_KINDS = {"FCS": 1, "DOF": 2, "SGA": 3, "BGA": 4}
+
+
+def bake_screen_effects(timeline) -> bytes:
+    """ScrEfc FCS / DOF / SGA / BGA clips: {f32 start, life (Life / ClipScale), u8 kind (1 FCS, 2 DOF, 3 SGA, 4 BGA),
+    Power, Alpha, Feedback, u32 Color, f32 a, b, c, d}. FCS: Distance, OutStartZ, OutEndZ, Range; DOF: StartZ, EndZ;
+    SGA: Scale, Attenuate, DirNum, DirOffset."""
+    clips = sorted((c for t in timeline["tracks"] if t["kind"] == "ScrEfc" for c in t["clips"]
+                    if str(c.get("Id", "")) in SCREEN_KINDS), key=lambda c: float(c.get("SetFrame", 0.0)))
+    out = bytearray(b"SFX1" + struct.pack("<I", len(clips)))
+    for c in clips:
+        kind = SCREEN_KINDS[str(c["Id"])]
+        life = max(float(c.get("Life", 1.0)) / (float(c.get("ClipScale", 1.0) or 1.0)), 1.0)
+        f = lambda key: float(c.get(key, 0.0) or 0.0)
+        vals = {1: (f("Distance"), f("OutStartZ"), f("OutEndZ"), f("Range")), 2: (f("StartZ"), f("EndZ"), 0.0, 0.0),
+                3: (f("Scale"), f("Attenuate"), f("DirNum"), f("DirOffset")), 4: (0.0, 0.0, 0.0, 0.0)}[kind]
+        out += struct.pack("<2f4BI4f", f("SetFrame"), life, kind, int(f("Power")) & 0xFF, int(f("Alpha")) & 0xFF,
+                           int(f("Feedback")) & 0xFF, int(c.get("Color", 0) or 0) & 0xFFFFFFFF, *vals)
+    return bytes(out)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("iso", type=Path)
@@ -866,6 +966,12 @@ def main():
     work = Path(os.environ.get("DMC3_DEMO_WORK") or ROOT / "build" / "demo") / str(args.demo)
     demo_unpack.unpack(args.iso, args.demo, work)
     timeline = json.loads((work / "timeline.json").read_text(encoding="utf-8"))
+    global ROPE_ISO
+    ROPE_ISO = args.iso
+    ROPE_STAGES.clear()   # the stage's slot (a rope's end can be one of its nodes)
+    ROPE_STAGES.update({t.get("slot"): str(c.get("Model"))[:-4].lower() for t in timeline["tracks"] if t["kind"] == "Model"
+                        for c in t["clips"] if str(c.get("Model", "")).lower().startswith("st")
+                        and str(c.get("Model", "")).lower().endswith(".scm")})
     if args.audio_only:
         args.output.mkdir(parents=True, exist_ok=True)
         bake_audio(args.iso, timeline, args.output, args.demo)
@@ -913,6 +1019,8 @@ def main():
     blob += struct.pack("<I", len(events))
     for frame, obj, hidden in events:
         blob += struct.pack("<f2H", frame, obj, hidden)
+    # Then the ScrEfc screen passes: "SFX1", u32 count, then 32-byte records by start (post_fx.c, demo_post_fx).
+    blob += bake_screen_effects(timeline)
     tex_at, tex_count, actor_at, actor_count, resident, fx = bake_cast(timeline, files, blob, work)
     struct.pack_into("<4s11I", blob, 0, b"DMO3", len(camera), cam_at_offset, tex_at, tex_count, actor_at, actor_count,
                      resident, sub_at, len(subs), fade_at, len(fades))

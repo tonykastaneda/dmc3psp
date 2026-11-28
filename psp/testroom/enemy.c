@@ -94,6 +94,7 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO };
  * docs/VANGUARD_SPEC.md. */
 #define DANTE_BULLET_DAMAGE 10.0f
 float enemy_bullet_damage = DANTE_BULLET_DAMAGE;   /* bullets.c sets the shot's record's damage (its kind) */
+float enemy_melee_damage = -1.0f;   /* combat.c: the sword's attack record's damage (-1: the port's 1 / 2 units) */
 /* Bosses' health from their classes' parameter blocks (+0x2c, the value FUN_002f0560 starts the health with). */
 #define NEVAN_MAX 7000
 #define BEOWULF_MAX 10000
@@ -273,10 +274,14 @@ static void giga_note(const char *what, int a, float b);
 static const char *hold_motion;
 static void hold_take(int need) {
     hold_new = 1; hold_need = need; hold_broken = 0; hold_owner = e;
-    hold_motion = e->kind == ENEMY_NEVAN ? "nvh-20" : e->kind == ENEMY_SOUL ? "seh-12" : 0;
+    hold_motion = e->kind == ENEMY_NEVAN ? "nvh-20" : e->kind == ENEMY_SOUL ? "seh-12" : e->kind == ENEMY_ARACHNE ? "arh-00" : 0;
     giga_note("hold", need, (float)e->kind);
 }
 const char *enemy_hold_motion(void) { return hold_motion; }
+/* Dante's side (combat.c): the holder's facing, and its struggle count started afresh (FUN_00254a10). */
+static int hold_reset;
+int enemy_hold_yaw(float *yaw) { if (!hold_owner || !hold_owner->active) return 0; *yaw = hold_owner->yaw; return 1; }
+int enemy_hold_reset_take(void) { int r = hold_reset; hold_reset = 0; return r; }
 static void hold_let_go(int how) { if (hold_owner == e) { hold_end = how; hold_from[0] = e->pos[0]; hold_from[1] = e->pos[2]; hold_owner = 0; } }
 static int hold_freed(void) { int r = hold_owner == e && hold_broken; if (r) { hold_broken = 0; hold_owner = 0; } return r; }
 int enemy_hold_take(int *need) { if (!hold_new) return 0; hold_new = 0; *need = hold_need; return 1; }
@@ -374,6 +379,9 @@ static void pawn_hit(HitKind kind);
 static int ar_init(void);
 static void ar_rudra_spawn(void);
 static void ar_spawn(void);
+/* EST 47 / 48 (the Palace's rooms 428-432): classes 29 / 30, FUN_002acf40 -> FUN_0039ee10(.., 0x10, 2, 1 / 2), one brother
+ * alone (+0x2dd5 1 Agni, 2 Rudra) holding both swords (+0x2f40 = 2). enemy_add_class sets this for the spawn. */
+static int ar_solo_spawn, ar_solo[2];
 static void ar_update(float f, float px, float py, float pz);
 static void ar_hit(HitKind kind, float hit_from_x, float hit_from_z);
 static float ar_health_total(float *maximum);
@@ -726,7 +734,9 @@ int enemy_add_class(int spawn_class, float x, float z) {
     for (i = 0; i < ENEMY_MAX; ++i) {
         if (!enemies[i].active) {
             e = &enemies[i];
+            ar_solo_spawn = spawn_class == 47 || spawn_class == 48;
             spawn_one(kind, x, z);
+            ar_solo_spawn = 0;
             if (hp && e->active) e->health = (short)(ENEMY_HEALTH * hp / 250);
             e = selected;
             return 1;
@@ -926,7 +936,8 @@ int enemy_kind_for_class(int spawn_class) {
     if (spawn_class == 40) return ENEMY_KING;
     if (spawn_class == 36) return ENEMY_KNIGHT;
     if (spawn_class == 38) return ENEMY_ROOK;
-    if (spawn_class == 45) return ENEMY_AGNI;
+    if (spawn_class == 45 || spawn_class == 47) return ENEMY_AGNI;
+    if (spawn_class == 48) return ENEMY_RUDRA;
     if (spawn_class == 41) return ENEMY_GIGAPEDE;
     if (spawn_class == 43) return ENEMY_CERBERUS;
     if (spawn_class == 58) return ENEMY_VERGIL;
@@ -1933,6 +1944,10 @@ void enemy_hit(HitKind kind, float from_x, float from_z) {
              * ENEMY_HEALTH): kept until it makes a whole one. It still flinches it as a light hit. */
             e->bullet_hp += enemy_bullet_damage;
             if (e->bullet_hp >= 250.0f / ENEMY_HEALTH) { e->bullet_hp -= 250.0f / ENEMY_HEALTH; --e->health; }
+        } else if (enemy_melee_damage >= 0.0f) {
+            /* Dante's attack record's damage (combat.c), carried as a bullet's is (250 a Pride's ENEMY_HEALTH). */
+            e->bullet_hp += enemy_melee_damage;
+            while (e->bullet_hp >= 250.0f / ENEMY_HEALTH) { e->bullet_hp -= 250.0f / ENEMY_HEALTH; --e->health; }
         } else e->health = (short)(e->health - (kind == HIT_LIGHT ? 1 : 2));
         if (e->health <= 0) {
             e->air = 0;
@@ -4810,16 +4825,19 @@ static void ar_statue(int which) {
     ar_brains[which].set = which;   /* each his own sword until the pedestal */
 }
 
-static void ar_rudra_spawn(void) { ar_statue(1); }
+static void ar_rudra_spawn(void) { ar_statue(1); ar_solo[1] = ar_solo_spawn; }
 
 /* The one spawn (class 27) brings both: Agni here, Rudra beside him. In the arena they stand where FUN_0039fa30
  * puts them: Agni (+0x2dd4 = 0) at (2900, 2125), Rudra at (2120, 2125). */
 static void ar_spawn(void) {
     Enemy *agni = e;
     int k, arena = ar_arena();
+    ar_solo[0] = ar_solo_spawn;
+    if (ar_solo_spawn) { ar_statue(0); return; }   /* EST 47: Agni alone */
     if (arena) { agni->pos[0] = 2900.0f; agni->pos[2] = 2125.0f; }
     else agni->pos[0] += 180.0f;
     ar_statue(0);
+    ar_solo[1] = 0;
     for (k = 0; k < ENEMY_MAX; ++k) {
         Enemy *o = &enemies[k];
         if (o->active) continue;
@@ -4889,6 +4907,9 @@ static void ar_update(float f, float px, float py, float pz) {
             float at[3] = {e->pos[0], e->pos[1] + 150.0f, e->pos[2]};
             fx_dust(at); fx_explosion(at);
             ar_brain_reset(b, e->kind == ENEMY_AGNI ? 0 : 1);
+            /* Alone from the start (EST 47 / 48): both swords and the survivor's brain, never the pair's. He stands as a
+             * statue and wakes as the pair do [estimate: FUN_0039ee10's flag 0x10 isn't traced]. */
+            if (ar_solo[e->kind == ENEMY_AGNI ? 0 : 1]) { b->set = 2; b->paired = 0; ar_pair_survivor(b); }
             ar_formation_time = 0.0f;
             ar_side = fabsf(4000.0f - pz) <= fabsf(2200.0f - pz) ? 1 : 2;
             ar_go(AR_OPENING);   /* +0x2de7: the pair's opening first (FUN_003aedd0) */
@@ -6735,8 +6756,8 @@ static void beowulf_hit_glue(HitKind kind, float from_x, float from_z) {
  * most 3, up at most 1) in its hovering actions (0x10000000).
  * Its bite holds Dante (FUN_0021f2e0, combat_hold) and its hold (7) drains his Devil Trigger (FUN_0021eae0: 20 a frame,
  * 1000 a rune [inferred]) until he struggles 60 points free (8) or its time's up (9, the burst).
- * Stand-ins: he isn't lifted or turned with it (FUN_0049dac0's states: up 15 a frame less 0.64, for 18 frames); the
- * struggle's count isn't reset as the hold starts (FUN_00254a10 in 7); the rank-0 teleport (4) reappears ahead of his
+ * Dante's side of the bite (his lift and turn, FUN_0049dac0's states) is combat.c's; the struggle starts afresh as
+ * the hold (7) starts (FUN_00254a10). Stand-ins: the rank-0 teleport (4) reappears ahead of his
  * facing, not the camera's; 16 (a dodge when he does move 0x11 near it) isn't triggered. */
 enum { SE_HOVER = 0, SE_COME = 1, SE_KNOCK = 2, SE_KNOCK2 = 3, SE_BLINK = 4, SE_CLOSE = 5, SE_BITE = 6, SE_HOLD = 7,
        SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DEATH = 30 };
@@ -6915,7 +6936,7 @@ static void soul_update_glue(float f, float px, float py, float pz) {
          * 9, the burst. */
         held = 1;
         if (hold_freed()) { se_go(SE_FREED); return; }   /* FUN_00254a20: past 60, 8 */
-        if (e->step == 0) { e->timer = se_time(a); e->step = 1; }
+        if (e->step == 0) { e->timer = se_time(a); e->step = 1; hold_reset = 1; }   /* FUN_00254a10 */
         se_dt_drain += 20.0f * f;
         if (e->timer <= 0.0f) { se_go(SE_BURST); return; }
         break;

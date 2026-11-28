@@ -54,6 +54,7 @@ static int inside(int a, float x, float y, float z) {
     }
     return !(pos && neg);
 }
+int msg_in_area(int a, float x, float y, float z) { return inside(a, x, y, z); }   /* op 0x0f, this room's */
 static const char *text_of(int id) {
     int i;
     for (i = 0; i < MSG_TEXT_COUNT; ++i) if (msg_texts[i].id == id) return msg_texts[i].text;

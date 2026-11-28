@@ -162,10 +162,22 @@ typedef struct {
     /* Held by an enemy (his action 0x2e, FUN_0021f2e0): the mash toward breaking free (FUN_00254a20, +0x4a4c /
      * +0x4a4e) and the stick's last direction (+0x4a4a). */
     int held, held_mash, held_need, held_dir, held_free, held_loop;
+    /* Whose hold (HOLD_*), its step in the holder's sequence, that step's clock, his lift's speed, the struggle's
+     * show (the Arachne's index 2 for 10 frames), and the motion that ends it (broken free, let go, thrown). */
+    int held_kind, held_step, held_leaving;
+    float held_clock, held_vy, held_struggle;
     float fade_seconds;    /* this move's blend in from the last pose (0: a cut) */
+    /* His attack caps on now (the script's ops 0x10-0x1F; kind 1 caps of tools/gen_dante_caps.py): which, frames
+     * left (a negative: while the script runs), the attack record (ops 6 / 7), the enemies each activation has hit. */
+    unsigned char cap_on[8];
+    float cap_left[8];
+    int cap_count, attack_record, script_caps;
+    unsigned int cap_hit_mask;
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */
+/* His posed bones last frame (model space: positions and rotations), for his attack caps. */
+void combat_set_bones(const float (*world_pos)[3], const float (*world_rot)[3][3], int count);
 void combat_reset(Combat *combat);
 /* Consumes attack input, advances the current move and applies root motion to
  * the player. Call before player_update; player->attacking is set here. */
@@ -180,6 +192,15 @@ int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z
  * While held he can't move or attack; combat_hold_broken says he's mashed free (and lets go); combat_release ends it
  * from the holder's side. */
 void combat_hold(Combat *c, Player *player, int need, int motion);   /* motion: the holder's for him, or -1 */
+/* The same by the holder's motion name: "nvh-20" (Nevan), "seh-12" (the Soul Eater), "arh-00" (the Arachne) run
+ * their holders' sequences for him (FUN_003b8810, FUN_0049dac0, FUN_003f8080). */
+void combat_hold_named(Combat *c, Player *player, int need, const char *motion);
+/* Each frame he's held: the holder's facing (the Soul Eater turns him to its own, FUN_0049dac0), radians. */
+void combat_hold_face(Combat *c, Player *player, float yaw);
+/* The holder starts its struggle count afresh (FUN_00254a10). */
+void combat_hold_reset(Combat *c);
+/* Let go (how 1) or thrown (2): his end of it as FUN_0022b9b0 plays it. */
+void combat_release_how(Combat *c, Player *player, int how);
 int combat_held(const Combat *c);
 int combat_hold_broken(Combat *c, Player *player);
 void combat_release(Combat *c, Player *player);
@@ -187,6 +208,7 @@ void combat_release(Combat *c, Player *player);
 extern int combat_dante_can_die;
 /* Frames he has lain dead, 0 while alive. */
 float combat_dead_frames(const Combat *c);
+void combat_revive(Combat *c, Player *player);   /* full health; he gets up from the knockdown */
 void combat_update(Combat *combat, Player *player, const PlayerInput *input, float dt);
 const char *combat_move_name(MoveId move);
 /* Takes the shots fired since the last call; 0 if none. */

@@ -25,5 +25,7 @@ void coat_joint(int index, float out[3], int *parent_index);
 
 /* A coat bone in Dante's model space, for what hangs from it (Ebony & Ivory's holsters). */
 void coat_bone_matrix(int bone, float r[3][3], float t[3]);
+/* The coat's bones' rest positions (its own model space), for what's laid out in it (its SHW hulls: shadow.c). */
+const float (*coat_bone_rest(void))[3];
 
 #endif
