@@ -1177,7 +1177,8 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   over its motion's frames 0-30), 59 → 75 (`004aca20` → `004bb2d0` / `004bb3a0`: script 101 sinks it, then 300 cm
   from Dante at a random angle facing him, 50 frames later script 100 brings it up, +0xcd set from its frame 45 to
   95). Its scripts 100+ are its bank's group 1, playing its own motions (ids 100+: PAC [36]; the hundreds pick the
-  PAC). The hit-script pairs come from +0xc (0x5ce1f0), installed at enemy+0x2304.
+  PAC). The hit-script pairs come from +0xc (0x5ce1f0), installed at enemy+0x2304. Its hit windows use the Abyss's
+  damage and reactions from `0x5cdde0`, including the sweep's 600-damage record 3.
 - **Soul Eater in the port** (`ENEMY_SOUL`, enemy.c's soul_*; `tools/prepare_soul_eater.py`): its body, motions (seNN,
   PAC [8]), six wing chains (em016_00.clt: X / NX axes, no gravity, stiffness 0.1, no length limit; cloth.c), scripts
   ([6], one per action; a wait to the motion's end ends one), caps, records (500, 3000), action table (`0x5c14f0`,

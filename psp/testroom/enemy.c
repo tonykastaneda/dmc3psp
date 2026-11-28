@@ -2300,6 +2300,12 @@ static void test_attack(float px, float py, float pz) {
                     land_attack(r->reaction >= 500.0f);
                     landed_damage = r->damage;
                     landed_kind = r->kind;
+                } else if (e->kind == ENEMY_ABYSS && e->hit_type < sizeof abyss_ai_attacks / sizeof abyss_ai_attacks[0]) {
+                    const EnemyAiAttack *r = &abyss_ai_attacks[e->hit_type];
+                    land_attack(r->reaction >= 500.0f);
+                    landed_damage = r->damage;
+                    landed_kind = r->kind;
+                    giga_note("abyss_record", e->hit_type, r->damage);
                 } else if (e->kind == ENEMY_GREED && (e->hit_type == 9 || e->hit_type == 10)) {
                     land_attack(0);
                     landed_damage = e->hit_type == 9 ? 600 : 400;
