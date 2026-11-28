@@ -431,6 +431,10 @@ static void release_script(Combat *c, int action) {
     }
 }
 
+#include "dante_caps_runtime.h"
+extern int combat_no_caps;
+static void caps_clear(Combat *c);
+static void cap_add(Combat *c, int cap, int frames);
 static void start_move(Combat *c, MoveId move, int action) {
     const Motion *m;
     if ((move == MOVE_RG_BLOCK || move == MOVE_RG_AIR_BLOCK) && c->move != MOVE_RG_BLOCK && c->move != MOVE_RG_HOLD &&
@@ -500,6 +504,14 @@ static void start_move(Combat *c, MoveId move, int action) {
     /* The script's first segments run at once even when they wait for frames
      * before the start frame (the game only waits for frames still ahead). */
     c->next_event = 0;
+    caps_clear(c);
+    c->script_caps = 0;
+    if (c->script >= 0) {
+        const ScriptData *sd = &script_data[c->script];
+        int k;
+        for (k = 0; k < sd->count; ++k)
+            if (sd->events[k].kind == EV_CAP && sd->events[k].a < DANTE_CAP_COUNT && dante_caps[sd->events[k].a].kind == 1) c->script_caps = !combat_no_caps;
+    }
     motion_root(m, c->frame, c->last_root);
 }
 
@@ -802,7 +814,9 @@ static int run_events(Combat *c) {
             if (e->a && !c->active) ++hits;
             c->active = e->a;
             c->window_bits = e->b;
-        } else if (e->kind == EV_HIT && (c->active || !script_has_active(sd))) {
+        } else if (e->kind == EV_CAP) cap_add(c, e->a, e->b);
+        else if (e->kind == EV_ATTACK) c->attack_record = e->a;
+        else if (e->kind == EV_HIT && (c->active || !script_has_active(sd))) {
             /* Window 0 byte 2 0x2n re-arms the attack: a new hit inside an
              * active window, or each stab of a move without one (Million Stab). */
             ++hits;
@@ -812,6 +826,101 @@ static int run_events(Combat *c) {
 }
 
 void (*combat_hit_fn)(const Player *player, float reach, int kind);
+
+/* ---- His attack caps (FUN_0024fff0: GDATA 0 chunks 6 / 7 into his collider, FUN_002942e0). A script's ops 0x10-0x1F
+ * turn caps on for their frames; a kind-1 cap is a sphere on a bone (its place in the bone's frame, its radius) that
+ * hits what it touches, each enemy once an activation. Tested against the port's body (48 cm about the enemy's
+ * middle, feet to 180 cm [estimate]: the enemies' own hurt caps aren't read); bosses and the big enemies keep the
+ * old reach in front of him. */
+#define CAP_BODY_RADIUS 48.0f
+int combat_no_caps;   /* tests: "nocaps 1", the old reach for every enemy */
+static const float (*cap_bone_pos)[3];
+static const float (*cap_bone_rot)[3][3];
+static int cap_bone_count;
+void combat_set_bones(const float (*world_pos)[3], const float (*world_rot)[3][3], int count) {
+    cap_bone_pos = world_pos; cap_bone_rot = world_rot; cap_bone_count = count;
+}
+/* A cap's middle in the world (coat.c's bone_point: model space turned by his yaw, then at his place). */
+static int cap_world(const Player *player, int cap, float out[3]) {
+    const DanteCap *k;
+    float v[3], m[3], c = cosf(player->yaw), s = sinf(player->yaw);
+    int i;
+    if (cap < 0 || cap >= DANTE_CAP_COUNT || !cap_bone_pos) return 0;
+    k = &dante_caps[cap];
+    if (k->bone >= cap_bone_count) return 0;
+    for (i = 0; i < 3; ++i)
+        m[i] = cap_bone_rot[k->bone][i][0] * k->x + cap_bone_rot[k->bone][i][1] * k->y + cap_bone_rot[k->bone][i][2] * k->z
+             + cap_bone_pos[k->bone][i];
+    v[0] = c * m[0] + s * m[2]; v[1] = m[1]; v[2] = -s * m[0] + c * m[2];
+    out[0] = player->x + v[0]; out[1] = player->y + v[1]; out[2] = player->z + v[2];
+    return 1;
+}
+static int cap_body_kind(int kind) {
+    return kind == ENEMY_PRIDE || kind == ENEMY_GLUTTONY || kind == ENEMY_LUST || kind == ENEMY_SLOTH || kind == ENEMY_WRATH
+        || kind == ENEMY_GREED || kind == ENEMY_ENIGMA || kind == ENEMY_GOYLE || kind == ENEMY_ENVY || kind == ENEMY_PAWN
+        || kind == ENEMY_DULLAHAN || kind == ENEMY_ABYSS || kind == ENEMY_SOUL || kind == ENEMY_KNIGHT || kind == ENEMY_FALLEN;
+}
+/* Does any attack cap on now touch the selected enemy (at e)? */
+static int caps_touch(const Combat *c, const Player *player, const float e[3]) {
+    int i;
+    for (i = 0; i < c->cap_count; ++i) {
+        float p[3], dx, dz, dy, r = dante_caps[c->cap_on[i]].radius + CAP_BODY_RADIUS;
+        if (!cap_world(player, c->cap_on[i], p)) continue;
+        dx = p[0] - e[0]; dz = p[2] - e[2];
+        dy = p[1] < e[1] ? e[1] - p[1] : p[1] > e[1] + 180.0f ? p[1] - (e[1] + 180.0f) : 0.0f;
+        if (dx * dx + dz * dz + dy * dy < r * r) return 1;
+    }
+    return 0;
+}
+/* How far in front of him his caps reach now (the props', the Gigapede's), 0 if none are on. */
+static float caps_reach(const Combat *c, const Player *player) {
+    float best = 0.0f;
+    int i;
+    for (i = 0; i < c->cap_count; ++i) {
+        float p[3], d;
+        if (!cap_world(player, c->cap_on[i], p)) continue;
+        d = sqrtf((p[0] - player->x) * (p[0] - player->x) + (p[2] - player->z) * (p[2] - player->z)) + dante_caps[c->cap_on[i]].radius;
+        if (d > best) best = d;
+    }
+    return best;
+}
+static void caps_clear(Combat *c) { c->cap_count = 0; c->cap_hit_mask = 0; c->attack_record = 0; }
+static void cap_add(Combat *c, int cap, int frames) {
+    int i;
+    if (cap >= DANTE_CAP_COUNT || dante_caps[cap].kind != 1) return;
+    for (i = 0; i < c->cap_count && c->cap_on[i] != cap; ++i) {}
+    if (i == c->cap_count) { if (c->cap_count >= 8) return; ++c->cap_count; }
+    c->cap_on[i] = (unsigned char)cap;
+    c->cap_left[i] = frames >= 255 ? -1.0f : (float)frames;
+    c->cap_hit_mask = 0;   /* a new activation hits again */
+}
+/* Each frame: the caps on test every enemy they haven't hit this activation; then their frames run down. */
+static void caps_update(Combat *c, const Player *player, float frames) {
+    const MoveDef *d = &moves[c->move];
+    int i, k;
+    if (!c->cap_count || d->hit_kind < 0 || !c->script_caps) return;
+    {
+        float reach = caps_reach(c, player);
+        if (reach > 0.0f && combat_hit_fn && !c->cap_hit_mask) combat_hit_fn(player, reach, d->hit_kind);
+    }
+    enemy_set_hit_weapon(player->melee_weapon);
+    for (i = 0; i < ENEMY_MAX && i < 32; ++i) {
+        float e[3];
+        if (c->cap_hit_mask >> i & 1) continue;
+        enemy_select(i);
+        if (!enemy_active() || !cap_body_kind(enemy_kind())) continue;
+        enemy_position(e);
+        if (!caps_touch(c, player, e)) continue;
+        enemy_hit((HitKind)d->hit_kind, player->x, player->z);
+        c->cap_hit_mask |= 1u << i;
+        ++c->hits_dealt;
+    }
+    for (k = 0, i = 0; i < c->cap_count; ++i) {
+        if (c->cap_left[i] >= 0.0f && (c->cap_left[i] -= frames) <= 0.0f) continue;
+        c->cap_on[k] = c->cap_on[i]; c->cap_left[k] = c->cap_left[i]; ++k;
+    }
+    c->cap_count = k;
+}
 
 static void deal_hit(Combat *c, const Player *player) {
     const MoveDef *d = &moves[c->move];
@@ -833,6 +942,7 @@ static void deal_hit(Combat *c, const Player *player) {
             }
             continue;
         }
+        if (c->script_caps && cap_body_kind(enemy_kind())) continue;   /* his caps hit these (caps_update) */
         enemy_position(e);
         dx = e[0] - player->x; dz = e[2] - player->z;
         dist = sqrtf(dx * dx + dz * dz);
@@ -1637,6 +1747,7 @@ void combat_update(Combat *c, Player *player, const PlayerInput *input, float dt
     }
     c->flag = 0;
     hits = run_events(c);
+    caps_update(c, player, dt * MOTION_FPS);
     if (d->flag_air && c->flag == 1) {
         memcpy(c->air_v, d->flag_v, sizeof(c->air_v));
         c->air = 1;

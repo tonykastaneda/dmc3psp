@@ -167,9 +167,17 @@ typedef struct {
     int held_kind, held_step, held_leaving;
     float held_clock, held_vy, held_struggle;
     float fade_seconds;    /* this move's blend in from the last pose (0: a cut) */
+    /* His attack caps on now (the script's ops 0x10-0x1F; kind 1 caps of tools/gen_dante_caps.py): which, frames
+     * left (a negative: while the script runs), the attack record (ops 6 / 7), the enemies each activation has hit. */
+    unsigned char cap_on[8];
+    float cap_left[8];
+    int cap_count, attack_record, script_caps;
+    unsigned int cap_hit_mask;
 } Combat;
 
 int combat_init(void);     /* resolves motions and scripts; 0 if the moveset is missing */
+/* His posed bones last frame (model space: positions and rotations), for his attack caps. */
+void combat_set_bones(const float (*world_pos)[3], const float (*world_rot)[3][3], int count);
 void combat_reset(Combat *combat);
 /* Consumes attack input, advances the current move and applies root motion to
  * the player. Call before player_update; player->attacking is set here. */

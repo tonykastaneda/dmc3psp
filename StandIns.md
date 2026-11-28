@@ -45,8 +45,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Enemy health and Dante's damage**: Dante's hits are 42 light / 84 heavy (×1.1, Easy ×2, guns 20%) for every boss
   [inferred], a bullet its record's 10 (Ebony & Ivory's, 0x5a5a30 +4) against every enemy, kept in fractions of a unit by the Hells and the like; health is the Pride's 6 light hits by eye and
   the rest in proportion to their parameter blocks. `enemy.c`, `vergil_boss.c`, `geryon_boss.c`.
-- **Hit detection on Dante's moves**: every generated move uses one stand-in reach; Quicksilver and Doppelganger styles
-  aren't compared with the game; shotgun spread and tracers are stand-in effects. MOVESET_RE.md, `combat.c`.
+- **Hit detection on Dante's moves**: his moves hit with their own attack caps (GDATA 0 chunks 6 / 7, switched on by
+  the scripts' ops 0x10-0x1F), but the ordinary enemies' bodies are the port's 48 cm cylinder (their hurt caps aren't
+  read), bosses and the big enemies still take the old 260 cm reach, and the attack records (ops 6 / 7: damage, hit
+  kind) aren't applied. Quicksilver and Doppelganger styles aren't compared with the game; shotgun spread and tracers
+  are stand-in effects. MOVESET_RE.md, `combat.c`.
 - **Stand-in guard motion** without a loop range. `combat.c` ~1436.
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.

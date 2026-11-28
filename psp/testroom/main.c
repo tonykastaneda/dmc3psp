@@ -2407,6 +2407,7 @@ static void cmp_load(void) {
                 shop_state.bought[5]=(unsigned char)(purple<0?0:purple>7?7:purple);
             }
         }
+        else if (strncmp(line, "nocaps ", 7) == 0) { extern int combat_no_caps; combat_no_caps = atoi(line + 7); }
         else if (strncmp(line, "holdme ", 7) == 0) sscanf(line + 7, "%d %d %d", &cmp_hold_at, &cmp_hold_kind, &cmp_hold_need);   /* tests: "holdme frame kind need" (0 Nevan, 1 Soul Eater, 2 Arachne) */
         else if (strncmp(line, "letgo ", 6) == 0) sscanf(line + 6, "%d %d", &cmp_letgo_at, &cmp_letgo_how);   /* tests: "letgo frame how" (1 let go, 2 thrown) */
         else if (strncmp(line, "hitme ", 6) == 0 && cmp_hitme_count < 8) {
@@ -5401,6 +5402,7 @@ int main(int argc, char *argv[]) {
                 player.z += -s * anim.idle_root_step[0] + c * anim.idle_root_step[1];
             }
             anim_pose(&anim, &player, &combat, &pose, time);
+            combat_set_bones((const float (*)[3])pose.world_pos, (const float (*)[3][3])pose.world_rot, 32);   /* his attack caps */
         } else {
             pose_procedural(&pose, &player, time);
         }
