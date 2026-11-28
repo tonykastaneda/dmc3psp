@@ -278,7 +278,7 @@ script and the generic key-item tables in `gen_rooms.py`. 204, 205 and 207 run t
 - **205's and 207's bladed pillars** hurt on touch from their COLLISION cylinders (`atk`, `platk`; `parse_hazards`),
   once a second; the 700 damage is an estimate. Their blades turn as the pillar model's own looping motion has them
   (four rings, two and four turns either way every 240 frames; `gimmicks.spin_parts`, `gimmick_models.c`).
-- Mission Clear comes as Nevan falls (`CLEAR_ROOMS`), not by 210's door 1 and demo 24. 206's item 31 isn't in.
+- With Nevan beaten, Mission Clear (and demo 24) comes at 210's door 1 (`boss_exit_reached` in main.c). 206's item 31 isn't in.
 - **Arachnes** (em010, GDATA 121, pack 5 in the table at 0x58e740) have their own model, motions and class (`enemy.c` The Arachne, ENEMY_SPECS H):
   they run at Dante, lunge and leap. Which motion is which is read from their root paths; their class's decision
   tables, the web shot and the spiderlings aren't in. Health is an estimate.
@@ -349,8 +349,8 @@ In the port: the route plays from 212 to Mission Clear in PPSSPP. Stand-ins and 
   charge on all fours, a leaping rush, a stomp that sends a pillar rolling at Dante, and a volley of light feathers
   after his body flashes; super armour, a gauge staggers him. Which motion is which is read from their root paths;
   timings, health and damage are estimates, and the pillars are glows that can't be broken.
-- **Soul Eaters** (class 16, em016) are their own port (ENEMY_SOUL). Mission Clear comes as Beowulf falls, not by
-  demo 30 at the shiny object.
+- **Soul Eaters** (class 16, em016) are their own port (ENEMY_SOUL). With Beowulf beaten, Mission Clear (and demo
+  30) comes as Dante crosses 217's area 0 again.
 
 ### Mission 13: "Chaos' warm welcome"
 

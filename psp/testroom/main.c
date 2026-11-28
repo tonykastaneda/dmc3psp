@@ -3715,6 +3715,13 @@ static void hazards_update(float dt, Player *player) {
     }
 }
 
+/* After the boss: EventTbl09 clears Mission 9 at 210's door 1 (demo 24), EventTbl11 Mission 11 as Dante crosses 217's
+ * area 0 again (demo 30). The demos play at the clear (mission_clear_demos). */
+static int boss_exit_reached(int mission, const Player *player) {
+    if (enemy_alive_count() > 0) return 0;
+    if (mission == 9) return fabsf(player->x - 744.0f) < 160.0f && fabsf(player->z - 3390.0f) < 120.0f;   /* door 1's box */
+    return player->x > 1911.0f && player->x < 4011.0f && player->z > 1629.0f && player->z < 1729.0f;    /* area 0 */
+}
 /* Each frame in a mission. Returns 1 when it's cleared. Doors stay shut while there's a fight on. */
 static int mission_update(float dt, unsigned int pressed, Player *player, FollowCamera *camera) {
     const MissionInfo *info = &missions[mission_choice.mission - 1];
@@ -4130,7 +4137,7 @@ static int mission_update(float dt, unsigned int pressed, Player *player, Follow
         }
         return 0; /* The timed ending, not the arena's dummy exit, clears M20. */
     }
-    if (info->clear_room == mission_room && (mission_choice.mission != 12 || !item_is(34, 0)) && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
+    if (info->clear_room == mission_room && (mission_choice.mission != 12 || !item_is(34, 0)) && (mission_choice.mission!=10 || mission10_clear_area(player->x,player->y,player->z)) && ((mission_choice.mission != 9 && mission_choice.mission != 11) || mission_clear_wait > 0.0f || boss_exit_reached(mission_choice.mission, player)) && (mission_choice.mission!=8 || (m8_boss_started && leviathan_boss_dying()))) {
         /* This mission ends with this room's boss. */
         mission_clear_wait += dt;
         return mission_clear_wait > 2.0f;
