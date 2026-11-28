@@ -317,6 +317,19 @@ From the class set-ups and the factory table, decoded in `docs/ENEMY_SPECS.md`:
 - **Every Seven Hell** shares this code, the scripts (chunk 38) and the `hl-NN` motions. Each has its own body
   (em000.pac [1] Pride, [5] Gluttony, [8] Lust, [13] Sloth, [18] Wrath, [19] Greed) and decision table.
   `tools/gen_enemy_ai.py` reads the Pride's, Gluttony's (`0x5ab9d0`) and Sloth's (`0x5b0e60`) tables.
+- **Hell Greed:** CComEm005 has its own plan dispatcher (`003dc9f0`). Both lists at
+  `0x5b0330` select plan 27. Actions 6 and 5 play group 1 scripts 2, 3 and 4 using em000 [37].
+  Script 3 drives the coffin's melee windows. Once it ends, action 6 releases coffins after 60
+  and 180 frames. Only rank buckets 3–5 release a third coffin at 120 (`003de480`).
+- **Hell Wrath:** plan 26 runs script 53 and turns toward Dante. A full gauge picks list 0 or 1 at
+  `0x5b1460`. With a slot inside 350 cm it ignites (plan 39, script 54). Script completion
+  (`00373d80`) and lethal hits (`00372950`) both send event 9. Its shell (`0037c830`) delays seven
+  frames, then enables a 450 cm sphere for three frames with record 7 (`0x5b1070`, 1500 damage).
+  The port uses its own explosion visual and places the sphere at the actor origin.
+- **Hell Lust:** EST 8–11 start plan 25 (`003692e0`). Action 39 circles or turns before it picks from
+  `0x5acc10` at 350 and 550 cm. Plan 36 plays scripts 75 and 7. Plan 50 (`00378120`) runs scripts 77–79,
+  jumps back at 20 cm/frame with initial lift 18 and gravity −1.5, then lunges with script 50. Its initial
+  forward speed is 30 and decays by a tenth each frame. Script 50 enables its scythe caps at frame 16.
 - **Hell Sloth:** plans 46 to 49. Warps (actions 41, 42, 43) hide it from frame 44 to 54 of `hl-46` and put it
   900, 600 or 300 cm from Dante at a random angle. The warp strike (57) reappears 300 cm away into the Pride's
   swing from its frame 25.
