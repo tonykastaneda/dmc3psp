@@ -2292,6 +2292,7 @@ static int focus_cmp;
 static int cmp_death;
 static int cmp_hit_frame = -1, cmp_hit_kind, cmp_hit_damage = 500;   /* "hitme f kind damage": hit Dante from 1 m ahead */
 static int cmp_hitme[8][3], cmp_hitme_count;   /* up to 8 "hitme" lines */
+static int cmp_hold_at = -1, cmp_hold_kind, cmp_hold_need = 9999, cmp_letgo_at = -1, cmp_letgo_how = 1;
 #define CMP_MAX_EVENTS 64
 #define CMP_MAX_FRAMES 18000
 static struct { char button[12]; int first, last, every; } cmp_events[CMP_MAX_EVENTS];   /* every: pressed again each n frames (mashing) */
@@ -2406,6 +2407,8 @@ static void cmp_load(void) {
                 shop_state.bought[5]=(unsigned char)(purple<0?0:purple>7?7:purple);
             }
         }
+        else if (strncmp(line, "holdme ", 7) == 0) sscanf(line + 7, "%d %d %d", &cmp_hold_at, &cmp_hold_kind, &cmp_hold_need);   /* tests: "holdme frame kind need" (0 Nevan, 1 Soul Eater, 2 Arachne) */
+        else if (strncmp(line, "letgo ", 6) == 0) sscanf(line + 6, "%d %d", &cmp_letgo_at, &cmp_letgo_how);   /* tests: "letgo frame how" (1 let go, 2 thrown) */
         else if (strncmp(line, "hitme ", 6) == 0 && cmp_hitme_count < 8) {
             cmp_hitme[cmp_hitme_count][2] = 500;
             if (sscanf(line + 6, "%d %d %d", &cmp_hitme[cmp_hitme_count][0], &cmp_hitme[cmp_hitme_count][1], &cmp_hitme[cmp_hitme_count][2]) >= 2) ++cmp_hitme_count;
@@ -5229,7 +5232,17 @@ int main(int argc, char *argv[]) {
                 /* A hold on Dante (Nevan's kiss): taken, his health drained, his struggle, let go or thrown. */
                 int need, end;
                 float hx, hz, drained = enemy_take_hold_drain();
-                if (enemy_hold_take(&need)) combat_hold(&combat, &player, need, enemy_hold_motion() ? motion_find(enemy_hold_motion()) : -1);
+                if (enemy_hold_take(&need)) combat_hold_named(&combat, &player, need, enemy_hold_motion());
+                if (focus_cmp && frames == cmp_hold_at) {
+                    static const char *const names[3] = {"nvh-20", "seh-12", "arh-00"};
+                    combat_hold_named(&combat, &player, cmp_hold_need, names[cmp_hold_kind % 3]);
+                }
+                if (focus_cmp && frames == cmp_letgo_at) combat_release_how(&combat, &player, cmp_letgo_how);
+                if (enemy_hold_reset_take()) combat_hold_reset(&combat);   /* FUN_00254a10 as the Soul Eater's hold starts */
+                {
+                    float holder_yaw;
+                    if (combat_held(&combat) && enemy_hold_yaw(&holder_yaw)) combat_hold_face(&combat, &player, holder_yaw);
+                }
                 if (combat_held(&combat) && drained > 0.0f) {
                     player.health -= drained;
                     if (player.health < 1.0f) player.health = combat_dante_can_die ? 0.0f : 1.0f;
@@ -5243,11 +5256,8 @@ int main(int argc, char *argv[]) {
                 }
                 if (combat_hold_broken(&combat, &player)) enemy_hold_broken();
                 end = enemy_hold_end(&hx, &hz);
-                if (end && combat_held(&combat)) {
-                    combat_release(&combat, &player);
-                    /* Thrown (his action 0x16) [stand-in: a knockdown without damage]. */
-                    if (end == 2) combat_player_hit_kind(&combat, &player, hx, hz, 2, 0.0f);
-                }
+                if (end && combat_held(&combat)) combat_release_how(&combat, &player, end);   /* let go, or thrown (FUN_0022b9b0) */
+                (void)hx; (void)hz;
             }
                 if(leviathan_boss_drain_trigger(dt*60,player.devil))player.devil=0;
                 orbs_set_sink(leviathan_boss_orb_sink,leviathan_boss_collect_orbs);
@@ -5692,6 +5702,7 @@ int main(int argc, char *argv[]) {
                     { char pl[128]; spheres_status(pl, sizeof pl); fprintf(report, "%s\n", pl); }
                     { char cl[320]; credits_fight_status(cl, sizeof cl); fprintf(report, "%s\n", cl); }
                     { size_t t, l; char hp[320], hl[48]; heap_probe(&t, &l); fprintf(report, "heap free_kb=%u largest_kb=%u\n", (unsigned)(t / 1024u), (unsigned)(l / 1024u)); { int st[5]; sfx_step_stats(st); fprintf(report, "footsteps played=%d material=%d missing=%d room_sounds=%d room_missing=%d\n", st[0], st[1], st[2], st[3], st[4]); }
+                    { static int holds_seen; (void)holds_seen; fprintf(report, "held now=%d kind=%d step=%d leaving=%d mash=%d/%d y=%.0f\n", combat.held, combat.held_kind, combat.held_step, combat.held_leaving, combat.held_mash, combat.held_need, player.y); }
                       path_in_game_dir(hp, sizeof hp, "HEAPSTAT.TXT"); snprintf(hl, sizeof hl, "room %d free_kb %u", mission_mode ? room_number(mission_room) : -1, (unsigned)(t / 1024u)); heapstat_dump(hp, hl); }
                     { char bp[160]; bp_status(bp,sizeof bp); fprintf(report,"%s\n",bp); }
                     { char bm_[200]; enemy_big_moves(bm_, sizeof bm_); fprintf(report, "%s\n", bm_); }

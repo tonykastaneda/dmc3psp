@@ -8,12 +8,11 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 
 ## Systems that touch everything
 
-- **Dante held** (his action 0x2e, `combat_hold`): Nevan's kiss holds him and he mashes free as the game counts it,
-  and he plays her held motion (her pack's [3] slot 20, as the game hands it him), but breaking free doesn't play
-  her [3] 21, her throw at the end is a knockdown without damage, and other blows pass him while he's held. The Soul
-  Eater's bite holds him too (60 to break free) in its held loop ([9] 12), without its lift (10, 11) or end (14). The
-  Arachne's web still holds him in the heavy flinch stopped at frame 10 (its motions, [15], aren't wired).
-  `combat.c` held_update, `enemy.c` hold_take.
+- **Dante held** (his action 0x2e, `combat_hold_named`): his side of each hold is the game's: Nevan's [3] 20 and 21
+  (broken free) and her throw (FUN_0022b9b0: turned about, then his own knockdown, no damage); the Soul Eater's lift,
+  10, 11, the held loop and 14 as it lets go, turned toward it (FUN_0049dac0); the Arachne's [15] 0, 1 and 2 as he
+  struggles (FUN_003f8080). Stand-ins: the Arachne's index 4 (its web's end) and the Soul Eater's let-go root motion
+  aren't played, and a blow while he's held takes its damage without moving him [inferred]. `combat.c` held_update.
 - **Real-time cutscenes** (docs/CUTSCENES.md) play at missions' openings and clears and at the bosses' entrances and
   defeats that stay in their room, with English subtitles (centred, not at the PS2's x), fades and their own sound (voices and music), but: cloth steps in world space (no wind, ClothSim1D not run; ClothMode 1 rides the hips, because bone 0 stays at the origin, and Dante's 23-bone coat gets the body capsules; a chain that never sets the key trails the pose; demo 53's pl101_01.clt jams two Bone records on one line and bone 6 takes bone 8's X); a CnsPos piece's root on its parent bone [inferred]; an entrance demo plays on entering the room, not in its area; demos between rooms play as Dante arrives in the
   next; demo stages are coarser than rooms (subdivision) to fit memory. PortJobs. Their Light track lights the cast
@@ -103,7 +102,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
   [estimate]; its spear is straight at his chest (the shell isn't decoded). `fallen.c`, `enemy.c` ~5383.
 - **Dullahan**: which script is which [inferred]. `dullahan.c`.
-- **Soul Eater**: Dante is held from its bite and struggles free (above), but isn't lifted or turned with it, and his struggle's count isn't reset as the hold starts; the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
+- **Soul Eater**: Dante is held from its bite and struggles free (above); the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
   dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena

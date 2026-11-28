@@ -105,6 +105,8 @@ float enemy_take_dt_drain(void);
  * enemy_hold_broken: he mashed free. */
 int enemy_hold_take(int *need);
 const char *enemy_hold_motion(void);   /* Dante's motion while held (the holder's), or 0 */
+int enemy_hold_yaw(float *yaw);        /* the holder's facing, 0 if none */
+int enemy_hold_reset_take(void);       /* the holder started its struggle count afresh this frame */
 float enemy_take_hold_drain(void);
 int enemy_hold_end(float *from_x, float *from_z);
 void enemy_hold_broken(void);

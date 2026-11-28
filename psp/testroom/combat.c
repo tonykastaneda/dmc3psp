@@ -1235,20 +1235,80 @@ static void start_knockdown(Combat *c, Player *player, int kind) {
  * the holder's: FUN_0021f2e0 hands him a motion bank from its own pack and FUN_0021f3a0 an index in it, played by
  * FUN_002500d0 (group 0x20). With none (a holder whose motions aren't wired), the heavy flinch held at its 10th frame. */
 #define HELD_POSE_FRAME 10.0f
+enum { HOLD_OTHER, HOLD_NEVAN, HOLD_SOUL, HOLD_ARACHNE };
+/* The motion of index n in the holder's bank for him ("nvh-NN", "seh-NN", "arh-NN"), or -1. */
+static int held_motion(int kind, int n) {
+    char name[16];
+    snprintf(name, sizeof name, "%s-%02d", kind == HOLD_NEVAN ? "nvh" : kind == HOLD_SOUL ? "seh" : "arh", n);
+    return kind == HOLD_OTHER ? -1 : motion_find(name);
+}
+static void held_play(Combat *c, int kind, int n) {
+    int m = held_motion(kind, n);
+    if (m < 0 || !motion_get(m)) return;
+    if (m != c->motion || !c->held_loop) { c->motion = m; c->script = -1; c->script_bank = -1; c->frame = 0.0f; }
+    c->held_loop = 1;
+}
+static int held_motion_done(const Combat *c) {
+    const Motion *m = motion_get(c->motion);
+    return !m || c->frame >= m->end_frame;
+}
+static void held_end(Combat *c, Player *player) {
+    c->held = c->held_free = 0; c->held_leaving = 0; c->held_kind = HOLD_OTHER;
+    end_move(c, player);
+}
 static void held_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
-    int dir = -1;
+    int dir = -1, pressed;
+    float f = dt * MOTION_FPS;
     player->attacking = 1;
+    if (c->held_leaving) {
+        /* His end of it (FUN_0022b9b0): the motion to its end, then he's his own again. Thrown, he turns about
+         * first and then plays his own knockdown (group 1, 9) before getting up. */
+        c->frame += f;
+        if (held_motion_done(c)) {
+            if (c->held_leaving == 2) {
+                int m = motion_find("3-09");
+                c->held_leaving = 3;
+                if (m >= 0) { c->motion = m; c->frame = 0.0f; return; }
+            }
+            if (c->held_leaving == 4) player->yaw += (float)M_PI;   /* the Soul Eater's let-go: turned about at its end */
+            held_end(c, player);
+        }
+        return;
+    }
     if (input->stick_x * input->stick_x + input->stick_y * input->stick_y > (STICK_TILT_NEUTRAL / STICK_TILT_SCALE) * (STICK_TILT_NEUTRAL / STICK_TILT_SCALE))
         dir = (int)floorf((atan2f(input->stick_x, input->stick_y) + (float)M_PI) / ((float)M_PI / 4.0f) + 0.5f) & 7;
+    pressed = (input->melee != 0) + (input->gun != 0) + (input->style_action != 0) + (input->jump != 0);
     if (dir != c->held_dir) ++c->held_mash;
     c->held_dir = dir;
-    c->held_mash += 2 * ((input->melee != 0) + (input->gun != 0) + (input->style_action != 0) + (input->jump != 0));
+    c->held_mash += 2 * pressed;
     if (c->held_mash > c->held_need) c->held_free = 1;
-    c->frame += dt * MOTION_FPS;
-    if (c->held_loop) {
+    c->frame += f;
+    c->held_clock += f;
+    if (c->held_kind == HOLD_SOUL) {
+        /* FUN_0049dac0: 0xf lifting him (up at 15 a frame less 0.64 a frame, 18 frames), 10 for 55 frames, 11 to its
+         * end, then 12 held. */
+        if (c->held_step == 0) {
+            player->y += c->held_vy * f; c->held_vy -= 0.64f * f; player->vy = 0.0f; player->on_ground = 0;
+            if (c->held_clock >= 18.0f) { c->held_step = 1; c->held_clock = 0.0f; held_play(c, HOLD_SOUL, 10); }
+        } else if (c->held_step == 1) {
+            if (c->held_clock >= 55.0f) { c->held_step = 2; c->held_clock = 0.0f; held_play(c, HOLD_SOUL, 11); c->held_loop = 0; }
+        } else if (c->held_step == 2) {
+            if (held_motion_done(c)) { c->held_step = 3; held_play(c, HOLD_SOUL, 12); }
+        }
+        if (c->held_step > 0) { player->vy = 0.0f; player->on_ground = 0; }
+    } else if (c->held_kind == HOLD_ARACHNE) {
+        /* FUN_003f8080: index 0 as the web takes him, to its end; then 1, or 2 for 10 frames after each struggle. */
+        if (c->held_step == 0) {
+            if (held_motion_done(c)) { c->held_step = 1; held_play(c, HOLD_ARACHNE, 1); }
+        } else {
+            if (pressed || dir != -1) c->held_struggle = 10.0f; else c->held_struggle -= f;
+            held_play(c, HOLD_ARACHNE, c->held_struggle > 0.0f ? 2 : 1);
+        }
+    }
+    if (c->held_loop || c->held_kind != HOLD_OTHER) {
         const Motion *m = motion_get(c->motion);
         float span = m ? m->end_frame - m->loop_start : 0.0f;
-        if (span > 0.0f) while (c->frame > m->end_frame) c->frame -= span;
+        if (c->held_loop && span > 0.0f) while (c->frame > m->end_frame) c->frame -= span;
     } else if (c->frame > HELD_POSE_FRAME) c->frame = HELD_POSE_FRAME;
 }
 
@@ -1261,19 +1321,49 @@ void combat_hold(Combat *c, Player *player, int need, int motion) {
     c->held_loop = motion >= 0 && motion_get(motion);
     if (c->held_loop) { c->motion = motion; c->script = -1; c->script_bank = -1; c->frame = 0.0f; }
     c->held = 1; c->held_mash = 0; c->held_need = need; c->held_dir = -1; c->held_free = 0;
+    c->held_kind = HOLD_OTHER; c->held_step = 0; c->held_leaving = 0; c->held_clock = 0.0f; c->held_vy = 0.0f;
+    c->held_struggle = 0.0f;
 }
-int combat_held(const Combat *c) { return c->held; }
+void combat_hold_named(Combat *c, Player *player, int need, const char *motion) {
+    int kind = !motion ? HOLD_OTHER : !strncmp(motion, "nvh", 3) ? HOLD_NEVAN : !strncmp(motion, "seh", 3) ? HOLD_SOUL
+             : !strncmp(motion, "arh", 3) ? HOLD_ARACHNE : HOLD_OTHER;
+    combat_hold(c, player, need, motion ? motion_find(motion) : -1);
+    c->held_kind = kind;
+    if (kind == HOLD_SOUL) { c->held_vy = 15.0f; held_play(c, HOLD_SOUL, 15); c->held_loop = 0; }
+    if (kind == HOLD_ARACHNE) { held_play(c, HOLD_ARACHNE, 0); c->held_loop = 0; }
+}
+void combat_hold_face(Combat *c, Player *player, float yaw) {
+    /* FUN_00359c00: toward the holder's facing at most 1092 / 65536 of a turn a frame (6 degrees). */
+    float d;
+    if (!c->held || c->held_leaving || c->held_kind != HOLD_SOUL) return;
+    d = atan2f(sinf(yaw - player->yaw), cosf(yaw - player->yaw));
+    if (d > 0.1047f) d = 0.1047f;
+    if (d < -0.1047f) d = -0.1047f;
+    player->yaw += d;
+}
+void combat_hold_reset(Combat *c) { if (c->held) c->held_mash = 0; }
+int combat_held(const Combat *c) { return c->held && !c->held_leaving; }
 int combat_hold_broken(Combat *c, Player *player) {
-    if (!c->held || !c->held_free) return 0;
-    c->held = c->held_free = 0;
-    end_move(c, player);
+    if (!c->held || !c->held_free || c->held_leaving) return 0;
+    c->held_free = 0;
+    /* Free: Nevan hands him 0x15 (her [3] 21, FUN_003b8810), the Soul Eater lets him go (14). */
+    if (c->held_kind == HOLD_NEVAN && held_motion(HOLD_NEVAN, 21) >= 0) { held_play(c, HOLD_NEVAN, 21); c->held_loop = 0; c->held_leaving = 1; return 1; }
+    if (c->held_kind == HOLD_SOUL && held_motion(HOLD_SOUL, 14) >= 0) { held_play(c, HOLD_SOUL, 14); c->held_loop = 0; c->held_leaving = 4; return 1; }
+    held_end(c, player);
     return 1;
 }
-void combat_release(Combat *c, Player *player) {
-    if (!c->held) return;
-    c->held = c->held_free = 0;
-    end_move(c, player);
+void combat_release_how(Combat *c, Player *player, int how) {
+    if (!c->held || c->held_leaving) return;
+    if (how == 2 && c->held_kind == HOLD_NEVAN) {
+        /* Thrown (her 0x16, which her bank hasn't: FUN_0022b9b0 turns him about, then his own knockdown). */
+        player->yaw += (float)M_PI;
+        c->held_leaving = 2; c->frame = 1.0e9f;
+        return;
+    }
+    if (c->held_kind == HOLD_SOUL && held_motion(HOLD_SOUL, 14) >= 0) { held_play(c, HOLD_SOUL, 14); c->held_loop = 0; c->held_leaving = 4; return; }
+    held_end(c, player);
 }
+void combat_release(Combat *c, Player *player) { combat_release_how(c, player, 1); }
 
 static int knockdown_update(Combat *c, Player *player, const PlayerInput *input, float dt) {
     const float *fl = knock_flags[c->kd_far];
@@ -1871,7 +1961,11 @@ float combat_dead_frames(const Combat *c) { return c->dead_time; }
 int combat_player_hit_kind(Combat *c, Player *player, float from_x, float from_z, int kind, float damage) {
     float to_attacker;
     int front, down;
-    if (c->held) return 1;   /* held: other blows pass [the port's: what the game does isn't read] */
+    if (c->held) {
+        /* Held: the blow's damage lands, he stays in the holder's grip [inferred: his reaction isn't read]. */
+        if (!c->held_leaving && damage > 0.0f) { player->health -= damage; if (player->health < 1.0f) player->health = combat_dante_can_die ? 0.0f : 1.0f; }
+        return 1;
+    }
     if (c->move == MOVE_HIT || c->move == MOVE_HIT_HEAVY || c->move == MOVE_HIT_AIR ||
         c->move == MOVE_HIT_ALT || c->move == MOVE_HIT_BACK || c->move == MOVE_HIT_HEAVY_BACK ||
         c->move == MOVE_DOWN || c->move == MOVE_DOWN_FAR || c->move == MOVE_GET_UP || c->move == MOVE_GET_UP_FAR ||
