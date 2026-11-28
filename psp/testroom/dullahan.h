@@ -2,7 +2,7 @@
 #define DMC3PSP_TESTROOM_DULLAHAN_H
 /* Dullahan (CEm012, EST 30), native em012 model/motions with a separate shield/charge brain. */
 
-enum { DULLAHAN_M_IDLE, DULLAHAN_M_RUN, DULLAHAN_M_LUNGE, DULLAHAN_M_POUNCE, DULLAHAN_M_FLINCH, DULLAHAN_M_KNOCK,
+enum { DULLAHAN_M_IDLE, DULLAHAN_M_CHARGE, DULLAHAN_M_STRIKE, DULLAHAN_M_FLINCH, DULLAHAN_M_KNOCK,
        DULLAHAN_M_DEATH, DULLAHAN_M_COUNT };
 extern const char *const dullahan_motion_names[DULLAHAN_M_COUNT];   /* tools/prepare_skinned_model.py DULLAHAN_MOTIONS */
 
@@ -24,6 +24,6 @@ void dullahan_spawn(DullahanBrain *b, int health);
 void dullahan_think(DullahanBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks);
 /* A hit from (fx, fz): returns 1 if it died. */
 int dullahan_hit(DullahanBrain *b, int heavy, float fx, float fz, int mortal);
-int dullahan_loops(int motion);   /* idle and run loop */
+int dullahan_loops(int motion);   /* the tracking pose loops */
 
 #endif

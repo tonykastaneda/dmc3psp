@@ -700,12 +700,13 @@ from table `0x5bf814`):
 - **Guns** (hit record byte 2 = 1): stone gauge +0x448 += 2 × power, shots +0x44c += power; over 60 shots: gauge
   +120, a flinch (7). Over `0x5bf244[band]` (**150** near and mid, 200 far) it turns to stone (0xf). Capped
   at 1000.
-- The gauge drains `0x5bf248[rank]` a frame as stone (1.0 at rank 0) and `0x5bf24c` as flesh (0.2).
+- The gauge drains by distance band: 1 / 1.2 / 1.5 per frame as stone and 0.2 / 0.25 / 0.25 as flesh (
+  `0x5bf248` and `0x5bf24c` in `0039cb30`).
 - **Sword** (byte 2 = 0): the split check `FUN_0039e460`: not stone, the cooldown +0x454 run out (it drains
   1e6 / max(d, 1000)² a frame, d = distance to Dante), fewer of its class than +0x461, a 75% roll, splits left.
   Else a flinch by hit type. On stone: states 0x13 / 0x15.
 
-**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above. The shots' bullets fly at 25 a frame for 120 frames [estimate]; it shoots
+**In the port** (`psp/testroom/enemy.c`, "Blood-goyle"): all of the above. The blood bullets fly 30 cm per frame for 30 frames (`00459ce0`, `00459eb0`); it shoots
 instead of diving half the time from beyond 500 cm. The dodge from aimed guns is taken from Dante's shots (within 500 hovering, 300
 approaching, 50/50 left or right). The decision tables are the game's (below).
 
@@ -1157,10 +1158,11 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   0x7a (by distance, 0-12.5 a frame; landing records 5 / 8), the wall's 0x73, 0x79 (four web shots ringing Dante at
   150, `004f46d0` / `004f4a60`: falling 0.8, 100 cm, holding him 300 frames) and 0x7b (the drop, 2 a frame), 0x88,
   its reaction (40% of hits, `0x5c6aa0`: motion 10 / 11 and back 23, or 6 and back 7) and death (0x14, motion 0x1e).
-  Stand-ins: its hits' bones (a sphere 100 ahead), the flag 4 taken as its scripts' first event, the wall's normal (the
-  ray's way back, flattened) and its pose on a wall (turned 90 degrees, facing it), 0x6d's swing on its web line (a
-  leap), 0x6f's sideways speed (8), the struggle against a web (35 [inferred]), its hit-on-a-wall fall (0x7d unread),
-  root motion ×1.5 (+0x1fc9 [inferred]); 0x76's spiderlings and 0x78's charge have weight 0 at rank 0 (not ported).
+  Attack 0x77 reads both flag-4 events for cap 9 on bone 9. Attack 0x7a reads flag 4 for cap 9 on bone 9 and
+  cap 10 on bone 2. The port mirrors bone 9 for the second rig. Root translation ×1.5 is the default spawn's
+  multiplier in `00402ba0`. Stand-ins: the wall normal (the ray's way back, flattened) and its pose on the wall
+  (turned 90 degrees, facing it), 0x6d's web-line swing (a leap), 0x6f's sideways speed (8), the struggle against a web
+  (35 [inferred]), and its hit-on-a-wall fall (0x7d unread); 0x76's spiderlings and 0x78's charge have weight 0 at rank 0 (not ported).
 - **Abyss in the port** (`ENEMY_ABYSS`; EST 24): its own body ([1], 23 bones, the Hells' skeleton) and scythe ([26], texture [25]), its own scripts [38] and caps [39] / [40] (`tools/gen_enemy_ai.py`: `abyss_ai_ops`), the Hells'
   motions (its [35] is theirs byte for byte), health **1500** (block `0x5ce060` +0x2c, from its pointer block
   `0x61a678`, laid out as the Pride's `0x618c28`: records `0x5cdde0`, blocks `0x5ce060` / `0x5ce110`, script map
@@ -1175,12 +1177,13 @@ From the EST table `0x599690` (pairs class, pack) and the pack table `0x58e740` 
   over its motion's frames 0-30), 59 → 75 (`004aca20` → `004bb2d0` / `004bb3a0`: script 101 sinks it, then 300 cm
   from Dante at a random angle facing him, 50 frames later script 100 brings it up, +0xcd set from its frame 45 to
   95). Its scripts 100+ are its bank's group 1, playing its own motions (ids 100+: PAC [36]; the hundreds pick the
-  PAC). The hit-script pairs come from +0xc (0x5ce1f0), installed at enemy+0x2304.
+  PAC). The hit-script pairs come from +0xc (0x5ce1f0), installed at enemy+0x2304. Its hit windows use the Abyss's
+  damage and reactions from `0x5cdde0`, including the sweep's 600-damage record 3.
 - **Soul Eater in the port** (`ENEMY_SOUL`, enemy.c's soul_*; `tools/prepare_soul_eater.py`): its body, motions (seNN,
   PAC [8]), six wing chains (em016_00.clt: X / NX axes, no gravity, stiffness 0.1, no length limit; cloth.c), scripts
   ([6], one per action; a wait to the motion's end ends one), caps, records (500, 3000), action table (`0x5c14f0`,
   0x2c each: time and random by rank, turn in degrees a frame, the decision list `0x5c14d0` → `0x5c14a0`: rank 0
-  always 1, in Dante's view 0), its sight and showing (+0x4bc / +0x4c4), hover (+0x4b4 / +0x4b8), its actions 0-15
+  always 1, in Dante's view 0), its 240-degree sight cone and showing (+0x4bc / +0x4c4), hover (+0x4b4 / +0x4b8), its actions 0–16
   and death (`0049c2a0`). The hold (7) drains his Devil Trigger (+0x28c4, FUN_0021eae0 20 a frame) and, its time up,
   bursts (9: record 1, 3000). Its bite holds Dante (`combat_hold`) and 60 struggle points free him (`004331b0`: `00254a10` / `00254a20`). Stand-ins: he isn't lifted or turned with it (`0049dac0`), the rank-0
   teleport's camera angle (his facing), 16's trigger, the cone's width (±60 degrees).
@@ -1243,8 +1246,9 @@ bank (groups 0, 1, 3 used), [11] / [12] caps and shapes. Code: new `002d7e60`, c
 (`tools/prepare_beowulf.py`; group g script n is entry 16 g + n), so his motions, hit windows and damage are the
 game's; the choice, phases, roar, the movement rules, stagger's end, the volley's flags, counts and wind, and the
 feathers' flight above (the runner now keeps each enemy's flag set 0: `tools/prepare_cerberus.py` packs an op3's
-flags 2-4 into its c). Stand-ins: the run's stop at once rather than at a stride's event, his charge (4) from the run
-isn't taken, a feather's start heading from his body's centre 200 up [inferred], their burst effect.
+flags 2-4 into its c). Run script 0:7 checks for a stop or charge on its stride events at 112 and 139. The port uses its
+stage ray for the forward wall check. A feather's starting heading from his body's centre 200 up is inferred and its
+burst effect remains unported.
 
 ---
 

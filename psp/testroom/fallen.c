@@ -7,7 +7,7 @@
 #define PI 3.14159265f
 #define UNITS (2.0f * PI / 65536.0f)
 
-/* Script ids (em011 [7]): 0:0 hover 001, 3:1 throw 301, 3:4 lunge 308, 3:2 slashes 303, 1:1 reaction 101,
+/* Script ids (em011 [7]): 0:0 hover 001, 3:1 thrust 301, 3:4 lunge 308, 3:2 slashes 303, 1:1 reaction 101,
  * 1:5 the fall 104, 0:5 rising 304, 2:0 appearing 200, 2:1 dying 202, 0:2 drift 002. */
 const char *const fallen_motion_names[FALLEN_M_COUNT] = {
     "fa200", "fa001", "fa002", "fa101", "fa104", "fa304", "fa301", "fa308", "fa303", "fa202"
@@ -17,7 +17,7 @@ int fallen_loops(int motion) { return motion == FALLEN_M_HOVER || motion == FALL
 /* The AI's states (+0x139a, FUN_00342ea0's switch). */
 enum {
     S_APPEAR = 0x0e, S_THINK = 0x16, S_HOVER = 0x17, S_REACT = 0x18, S_GROUND = 0x1a, S_FALL = 0x1e, S_RISE = 0x1f,
-    S_THROW = 0x20, S_SLASH_A = 0x22, S_SLASH_B = 0x23, S_SLASH_C = 0x24, S_LUNGE = 0x27, S_DEATH = 0x40
+    S_THRUST = 0x20, S_SLASH_A = 0x22, S_SLASH_B = 0x23, S_SLASH_C = 0x24, S_LUNGE = 0x27, S_DEATH = 0x40
 };
 
 /* The scheduler's lists (config 0x5c3280, rank 0): flying (list 0, 0x5c2f90...) 0x27 80 / 0x20 20 (60 / 40 beyond
@@ -28,8 +28,7 @@ enum {
 #define TURN_HOVER (0x400 * UNITS)   /* FUN_003441f0(.., 0x400) */
 #define LUNGE_WIND 13.0f       /* FUN_00347470: 0x41500000 */
 #define LUNGE_SPEED 20.0f      /* 0x41a00000, falling 1 a frame */
-#define THROW_TURN (0x71c * UNITS)   /* FUN_00346bd0 */
-#define ATTACK_REST 180.0f     /* FUN_003442c0 hands the manager 3.0 (seconds) */
+#define THRUST_TURN (0x71c * UNITS)   /* FUN_00346bd0 */
 /* [estimates] The class's damage handler isn't decoded: */
 #define GUARD_BREAK 8.0f       /* front hits the closed wings take before he drops */
 #define GROUND_TIME 600.0f     /* frames on the ground before he rises again */
@@ -57,6 +56,7 @@ static void play(FallenBrain *b, int motion) {
 }
 static void set_state(FallenBrain *b, int state) {
     b->state = state;
+    b->attack_frames = 0.0f;
     b->timer = 0.0f;
     b->step = 0;
     switch (state) {
@@ -66,7 +66,7 @@ static void set_state(FallenBrain *b, int state) {
     case S_REACT: play(b, FALLEN_M_REACT); break;
     case S_FALL: play(b, FALLEN_M_FALL); break;
     case S_RISE: play(b, FALLEN_M_RISE); break;
-    case S_THROW: play(b, FALLEN_M_THROW); break;
+    case S_THRUST: play(b, FALLEN_M_THRUST); break;
     case S_LUNGE: play(b, FALLEN_M_LUNGE); break;
     case S_SLASH_A: case S_SLASH_B: case S_SLASH_C: play(b, FALLEN_M_SLASHES); break;
     case S_DEATH: play(b, FALLEN_M_DEATH); break;
@@ -78,7 +78,7 @@ int fallen_appearing(const FallenBrain *b) { return b->state == S_APPEAR; }   /*
 
 void fallen_spawn(FallenBrain *b, int health) {
     b->health = health;
-    b->land = b->spear = b->remove = 0;
+    b->remove = 0;
     b->mode = 0;
     b->gauge = b->guard_hits = 0.0f;
     b->side = 0;
@@ -88,8 +88,7 @@ void fallen_spawn(FallenBrain *b, int health) {
 }
 
 /* FUN_00344cc0: a point 320 from Dante, 67.5-90 deg off the way he faces (0x3000 + rand 0x1000), alternating sides. */
-static void hover_goal(FallenBrain *b, float px, float py, float pz, float (*unit)(void)) {
-    float facing = atan2f(b->pos[0] - px, b->pos[2] - pz);   /* [approximation: from him, not his facing] */
+static void hover_goal(FallenBrain *b, float px, float py, float pz, float facing, float (*unit)(void)) {
     float off = (0x3000 + unit() * 0x1000) * UNITS;
     float a = facing + (b->side ? off : -off);
     b->goal[0] = px + sinf(a) * HOVER_RADIUS;
@@ -104,25 +103,20 @@ static void fill_gauge(FallenBrain *b, float d, float f) {
 static int pick(FallenBrain *b, float d, float (*unit)(void)) {
     float r = unit() * 100.0f;
     if (b->mode == 1) return r < 57.0f ? S_SLASH_A : r < 78.0f ? S_SLASH_B : S_SLASH_C;
-    if (d > 1200.0f) return r < 60.0f ? S_LUNGE : S_THROW;
-    if (d > 900.0f) return r < 70.0f ? S_LUNGE : S_THROW;
-    if (d > 800.0f) return r < 75.0f ? S_LUNGE : S_THROW;
-    return r < 80.0f ? S_LUNGE : S_THROW;
+    if (d > 1200.0f) return r < 60.0f ? S_LUNGE : S_THRUST;
+    if (d > 900.0f) return r < 70.0f ? S_LUNGE : S_THRUST;
+    if (d > 800.0f) return r < 75.0f ? S_LUNGE : S_THRUST;
+    return r < 80.0f ? S_LUNGE : S_THRUST;
 }
-/* The attack records (0x40 each from 0x5c2dd0, FUN_00342224's cap set-up): damage at +4, reaction at +0x1c (heavy
- * from 500). Record 0 (the throw) 900, 2 (the first two slashes) 500, 4 (the lunge) 700, 5 (the last slash) 800;
- * all have reactions under 500: light hits. */
-static void strike(FallenBrain *b, float px, float py, float pz, float reach, float damage, int attacks) {
-    float hx = b->pos[0] + sinf(b->yaw) * 120.0f - px, hz = b->pos[2] + cosf(b->yaw) * 120.0f - pz;
-    if (attacks && hx * hx + hz * hz < reach * reach && fabsf(py + 100.0f - (b->pos[1] + 100.0f)) < 220.0f) {
-        b->land = 1;
-        b->land_damage = damage;
-    }
+static void fallen_arm(FallenBrain *b, int record, float frames) {
+    b->attack_record = record;
+    b->attack_frames = frames;
 }
 
-void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (*unit)(void), int attacks, int *token) {
+void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float player_yaw,
+                  float (*unit)(void), int attacks, int *token) {
     float dx = px - b->pos[0], dz = pz - b->pos[2], d = sqrtf(dx * dx + dz * dz);
-    b->land = b->spear = 0;
+    if (b->attack_frames > 0.0f) b->attack_frames -= f;
     b->timer += f;
     /* The hover's bob: +0x1348 turns 256 units a frame, y moves sin x 2 a frame. */
     if (b->mode != 1 && b->state != S_DEATH) {
@@ -140,7 +134,7 @@ void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (
         break;
     case S_HOVER: {
         float gx, gy, gz, l;
-        if (b->step == 0 || b->step == 1) { b->side ^= 1; hover_goal(b, px, py, pz, unit); b->step = 2; }
+        if (b->step == 0 || b->step == 1) { b->side ^= 1; hover_goal(b, px, py, pz, player_yaw, unit); b->step = 2; }
         gx = (b->goal[0] - b->pos[0]) / 30.0f * f;
         gz = (b->goal[2] - b->pos[2]) / 30.0f * f;
         gy = b->goal[1] - b->pos[1];
@@ -177,16 +171,15 @@ void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (
     case S_LUNGE:
         /* Action 0x15 (3:4, motion 308): 13 frames turning 0x100 a frame, then a dash from 20 a frame slowing by 1;
          * attack record 4 on frames 35-45. */
-        if (b->timer < LUNGE_WIND) { turn_to(b, px, pz, 0x100 * UNITS * 4.0f, f); b->speed = LUNGE_SPEED; }
+        if (b->timer < LUNGE_WIND) { turn_to(b, px, pz, 0x100 * UNITS, f); b->speed = LUNGE_SPEED; }
         else if (b->speed > 0.0f) { forward(b, b->speed, f); b->speed -= f; }
-        if (b->step == 0 && b->frame >= 35.0f) { b->step = 1; strike(b, px, py, pz, 200.0f, 700.0f, attacks); }   /* record 4 */
+        if (b->step == 0 && b->frame >= 35.0f) { b->step = 1; fallen_arm(b, 4, 10.0f); }
         if (b->done) set_state(b, S_THINK);
         break;
-    case S_THROW:
-        /* Action 0xf (3:1, motion 301): turns 0x71c, and at frame 33 (attack record 0) the spear flies. */
-        if (b->step == 0) { b->yaw = wrap(b->yaw + THROW_TURN); b->step = 1; }
-        if (b->step == 1 && b->timer < 33.0f) turn_to(b, px, pz, 0.1f, f);
-        if (b->step == 1 && b->frame >= 33.0f) { b->step = 2; if (attacks) b->spear = 1; }
+    case S_THRUST:
+        /* Action 0xf (00346bd0, script 3:1): a single turn then an eight-frame spear thrust. */
+        if (b->step == 0) { b->yaw = wrap(b->yaw + THRUST_TURN); b->step = 1; }
+        if (b->step == 1 && b->frame >= 33.0f) { b->step = 2; fallen_arm(b, 0, 8.0f); }
         if (b->done) set_state(b, S_THINK);
         break;
     case S_SLASH_A: case S_SLASH_B: case S_SLASH_C:
@@ -194,9 +187,9 @@ void fallen_think(FallenBrain *b, float f, float px, float py, float pz, float (
          * at 10 a frame [0x41200000]. */
         if (b->timer < 20.0f) turn_to(b, px, pz, 0.08f, f);
         if (b->state != S_SLASH_A && b->frame < 90.0f && d > 150.0f) forward(b, 10.0f, f);
-        if (b->step == 0 && b->frame >= 25.0f) { b->step = 1; strike(b, px, py, pz, 220.0f, 500.0f, attacks); }   /* record 2 */
-        if (b->step == 1 && b->frame >= 60.0f) { b->step = 2; strike(b, px, py, pz, 220.0f, 500.0f, attacks); }   /* record 2 */
-        if (b->step == 2 && b->frame >= 90.0f) { b->step = 3; strike(b, px, py, pz, 240.0f, 800.0f, attacks); }   /* record 5 */
+        if (b->step == 0 && b->frame >= 25.0f) { b->step = 1; fallen_arm(b, 2, 34.0f); }
+        if (b->step == 1 && b->frame >= 60.0f) { b->step = 2; fallen_arm(b, 2, 29.0f); }
+        if (b->step == 2 && b->frame >= 90.0f) { b->step = 3; fallen_arm(b, 5, 20.0f); }
         if (b->done) set_state(b, S_THINK);
         break;
     case S_REACT:

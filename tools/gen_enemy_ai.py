@@ -194,6 +194,7 @@ def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
              "typedef struct { unsigned char plan; float weight; } EnemyAiPick;",
              "typedef struct { unsigned char count; EnemyAiPick picks[8]; } EnemyAiRow;",
              "typedef struct { unsigned char kind, bone; float x, y, z, radius; } EnemyAiCap;",
+             "typedef struct { float damage, reaction; int kind; } EnemyAiAttack;",
              f"#define ENEMY_AI_BANDS {len(bands) + 1}",
              "static const EnemyAiOp enemy_ai_ops[] = {"]
     lines += [f"    {{{o},{x},{b},{c}}}," for o, x, b, c in ops]
@@ -264,6 +265,11 @@ def write_header(path, pack, executable, envy_pack=None, abyss_pack=None):
         # The Abyss (em006, GDATA 118): the Hells' motions and caps layout, its own scripts [38] and caps [39] / [40].
         # FUN_0041c240 installs the block's +0xc at enemy+0x2304 for the hit-script lookup.
         abyss_hit_scripts = elf.word(0x61A678 + 0x0C)
+        attack_table = elf.word(0x61A678)
+        attack_end = elf.word(0x61A678 + 4)
+        lines += ["static const EnemyAiAttack abyss_ai_attacks[] = {" +
+                  ",".join("{%s,%s,%d}" % (real(elf.real(a + 4)), real(elf.real(a + 0x1c)), elf.word(a + 0x18))
+                           for a in range(attack_table, attack_end, 0x40)) + "};"]
         abyss_caps = read_caps(abyss_pack)
         abyss_ops, abyss_starts = compile_scripts(abyss_pack[SCRIPT_CHUNK], abyss_caps, motion_limit=200)
         # Its own scripts (group 1, ids 100+: 100 the rise, 101 the sink, 102 the sweep), after the shared ones.

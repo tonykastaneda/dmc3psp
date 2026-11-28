@@ -324,7 +324,7 @@ static void goyle_update(float f, float px, float py, float pz);
 static void goyle_hit(HitKind kind, float from_x, float from_z);
 static void giga_note(const char *what, int a, float b);
 void enemy_test_note(const char *what, int a, float b) { giga_note(what, a, b); }
-static int goyle_bullet(const float from[3], const float to[3]);
+static int straight_projectile(const float from[3], const float to[3], float speed, float life);
 static int enemy_giga_part(int k, float out[3]);
 static void enemy_giga_struck(const float at[3], float damage);
 #define GIGA_PARTS_PUBLIC 8
@@ -2300,6 +2300,12 @@ static void test_attack(float px, float py, float pz) {
                     land_attack(r->reaction >= 500.0f);
                     landed_damage = r->damage;
                     landed_kind = r->kind;
+                } else if (e->kind == ENEMY_ABYSS && e->hit_type < sizeof abyss_ai_attacks / sizeof abyss_ai_attacks[0]) {
+                    const EnemyAiAttack *r = &abyss_ai_attacks[e->hit_type];
+                    land_attack(r->reaction >= 500.0f);
+                    landed_damage = r->damage;
+                    landed_kind = r->kind;
+                    giga_note("abyss_record", e->hit_type, r->damage);
                 } else if (e->kind == ENEMY_GREED && (e->hit_type == 9 || e->hit_type == 10)) {
                     land_attack(0);
                     landed_damage = e->hit_type == 9 ? 600 : 400;
@@ -3497,10 +3503,8 @@ static void enigma_hit(HitKind kind, float from_x, float from_z) {
  *   while the gauge drains 1 a frame (0.2 as flesh). At 0 it comes back to life (18). Sword hits on the
  *   statue knock it up (19, vy 23, fall 0.7) and it shatters when its health is gone.
  * Simplified: the decision tables (0x5bf814) are a fixed choice; its blood shots (state 13) and the
- * dodge from aimed guns aren't in; damage to Dante is the default; three times the damage on stone is
- * inferred, not decoded. */
+ * aiming dodge uses the port's gun event and sword damage on stone still uses the port's multiplier. */
 #define GOYLE_HEALTH (ENEMY_HEALTH * 300 / 250)
-#define GOYLE_STONE_AT 150.0f
 #define GOYLE_MAX_OUT 5
 #define GOYLE_SPLITS 5
 enum { G_HOVER = 0, G_STRAFE_L = 2, G_STRAFE_R = 3, G_APPROACH = 4, G_BACK = 5, G_FLINCH = 6, G_FLINCH_HEAVY = 7,
@@ -3521,6 +3525,11 @@ static int goyle_init(void) {
         if (goyle_motion[i] < 0) return 0;
     }
     return 1;
+}
+
+/* 0x5bf240: distance, shot count, stone threshold and the two gauge decay rates. */
+static int goyle_band(float distance) {
+    return distance < 350.0f ? 0 : distance < 700.0f ? 1 : 2;
 }
 
 static int goyle_count(void) {
@@ -3628,7 +3637,10 @@ static void goyle_update(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, s = sinf(e->yaw), c = cosf(e->yaw);
     int stone = e->action == G_STONE || e->action == G_STONE_FALL || e->action == G_STATUE || e->action == G_STONE_HIT;
     /* The stone gauge drains; so does the split cooldown, faster the nearer he is. */
-    if (e->goyle_stone > 0.0f) { e->goyle_stone -= (stone ? 1.0f : 0.2f) * f; if (e->goyle_stone < 0.0f) e->goyle_stone = 0.0f; }
+    if (e->goyle_stone > 0.0f) {
+        static const float decay[2][3] = {{0.2f, 0.25f, 0.25f}, {1.0f, 1.2f, 1.5f}};
+        e->goyle_stone = fmaxf(0.0f, e->goyle_stone - decay[stone][goyle_band(d)] * f);
+    }
     if (e->goyle_shots > 0.0f) e->goyle_shots -= f;
     if (e->goyle_split > 0.0f) { float dd = d < 1000.0f ? 1000.0f : d; e->goyle_split -= 1.0e6f / (dd * dd) * f; }
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
@@ -3681,29 +3693,30 @@ static void goyle_update(float f, float px, float py, float pz) {
         if (e->done) {
             --e->goyle_splits;
             e->goyle_split = 300.0f;
-            e->vel[0] = 10.0f;
             goyle_state(G_SPLIT);
             goyle_split_off();
         }
         break;
     case G_SPLIT: case G_EMERGE:
         /* Thrown apart, frames 11-40 (FUN_00430330 / 00430480). */
-        if (e->frame > 11.0f && e->frame < 40.0f) { e->pos[0] -= s * e->vel[0] * f; e->pos[2] -= c * e->vel[0] * f; }
+        if (e->frame > 11.0f && e->frame < 40.0f) move_local((e->action == G_SPLIT ? 10.0f : -10.0f) * f, 0, 0);
         if (e->done) goyle_decide(d);
         break;
     case G_SHOOT:
         /* State 13: Shl00 (FUN_004404a0) emits, 27-32 frames into its life, 2 / 3 / 4 Shl01 blood bullets by
          * distance band (under 350, under 700, further; 0x5bf242) at Dante's place +-100 cm each way. They fly
-         * straight and burst on a wall (FUN_00459eb0). Their speed and life aren't decoded: 25 a frame and 120. */
+         * straight and burst on a wall (FUN_00459eb0). FUN_00459ce0 sets speed and lifetime to 30. */
         goyle_turn_to(px, pz, 0.1f, f);
         if (!e->step && e->timer > 28.0f) {
-            int k, n = d < 350.0f ? 2 : d < 700.0f ? 3 : 4;
+            int k, n = 2 + goyle_band(d);
             e->step = 1;
             for (k = 0; k < n; ++k) {
                 float from[3] = {e->pos[0] + s * 60.0f, e->pos[1] + 150.0f, e->pos[2] + c * 60.0f};
                 float to[3] = {px + ai_unit() * 200.0f - 100.0f, py + 100.0f + ai_unit() * 200.0f - 100.0f, pz + ai_unit() * 200.0f - 100.0f};
-                goyle_bullet(from, to);
+                int shot = straight_projectile(from, to, 30.0f, 30.0f);
+                if (shot >= 0) arrows[shot].damage = 1000.0f;   /* +4 of record 0, 0x5bf310 */
             }
+            giga_note("goyle_volley", n, 30.0f);
         }
         if (e->done) goyle_state(G_HOVER);
         break;
@@ -3783,15 +3796,15 @@ void enemy_gun_aimed(float x, float z) {
     e = was;
 }
 
-static int goyle_bullet(const float from[3], const float to[3]) {
+static int straight_projectile(const float from[3], const float to[3], float speed, float life) {
     int i;
     float dx = to[0] - from[0], dy = to[1] - from[1], dz = to[2] - from[2], l = sqrtf(dx * dx + dy * dy + dz * dz) + 0.01f;
     for (i = 0; i < ARROW_MAX && arrows[i].active; ++i) {}
     if (i >= ARROW_MAX) return -1;
     memset(&arrows[i], 0, sizeof(arrows[i]));
-    arrows[i].active = 1; arrows[i].type = 4; arrows[i].life = 120.0f;
+    arrows[i].active = 1; arrows[i].type = 4; arrows[i].life = life;
     memcpy(arrows[i].pos, from, sizeof(arrows[i].pos));
-    arrows[i].vel[0] = dx / l * 25.0f; arrows[i].vel[1] = dy / l * 25.0f; arrows[i].vel[2] = dz / l * 25.0f;
+    arrows[i].vel[0] = dx / l * speed; arrows[i].vel[1] = dy / l * speed; arrows[i].vel[2] = dz / l * speed;
     return i;
 }
 
@@ -3804,11 +3817,10 @@ static void goyle_split_off(void) {
         e = o;
         spawn_one(ENEMY_GOYLE, parent->pos[0], parent->pos[2]);
         o->pos[1] = parent->pos[1];
-        o->yaw = wrap_angle(parent->yaw + PI);
+        o->yaw = parent->yaw;
         o->health = parent->health;
         o->goyle_splits = parent->goyle_splits;
         o->goyle_split = 300.0f;
-        o->vel[0] = 10.0f;
         goyle_state(G_EMERGE);
         break;
     }
@@ -3822,12 +3834,14 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
     if (e->plan == P_DEATH) return;
     e->yaw = atan2f(from_x - e->pos[0], from_z - e->pos[2]);   /* knocked away from him */
     if (gun) {
-        /* The stone gauge: twice the shot's power (a pistol shot's 5, inferred), capped at 1000; each 60 shot
-         * at it is a flinch and 120 more. */
-        e->goyle_stone += 10.0f; e->goyle_shots += 5.0f;
+        static const float threshold[3] = {150.0f, 150.0f, 200.0f};
+        float distance = hypotf(from_x - e->pos[0], from_z - e->pos[2]);
+        /* 0039d9e0 reads the incoming shot record's +4 for both gauges. */
+        e->goyle_stone += enemy_bullet_damage * 2.0f;
+        e->goyle_shots += enemy_bullet_damage;
         if (e->goyle_shots > 60.0f) { e->goyle_stone += 120.0f; e->goyle_shots = 0.0f; if (!stone) { e->vel[0] = 4.0f; goyle_state(G_FLINCH_HEAVY); } }
         if (e->goyle_stone > 1000.0f) e->goyle_stone = 1000.0f;
-        if (!stone && e->goyle_stone > GOYLE_STONE_AT) { e->vel[0] = 0.0f; e->vel[1] = 0.0f; goyle_state(G_STONE); }
+        if (!stone && e->goyle_stone > threshold[goyle_band(distance)]) { e->vel[0] = 0.0f; e->vel[1] = 0.0f; goyle_state(G_STONE); }
         if (mortal && ai_unit() < 0.15f) --e->health;   /* bullets barely hurt it */
     } else if (stone) {
         /* Struck stone: up it goes, and it takes three times the damage. */
@@ -3839,7 +3853,6 @@ static void goyle_hit(HitKind kind, float from_x, float from_z) {
         if (e->health > 0 && e->goyle_split <= 0.0f && e->goyle_splits > 0 && goyle_count() < GOYLE_MAX_OUT && ai_unit() < 0.75f) {
             --e->goyle_splits;
             e->goyle_split = 300.0f;
-            e->vel[0] = 10.0f;
             goyle_state(G_SPLIT);
             fx_explosion(at);
             goyle_split_off();
@@ -5800,20 +5813,46 @@ typedef struct { int on, owner, holding; float pos[3], vel[3], life, hold; int f
 static AnWeb an_webs[AN_WEBS];
 static float an_gate[ENEMY_MAX], an_wall[ENEMY_MAX][3], an_target[ENEMY_MAX][3];
 static unsigned char an_loops[ENEMY_MAX], an_on_wall[ENEMY_MAX], an_tries[ENEMY_MAX], an_shot[ENEMY_MAX];
-static float an_hit_frames[ENEMY_MAX], an_hit_damage[ENEMY_MAX];   /* a hit its state armed (FUN_00294480) */
-/* Its state code arms its hits on script event 4 (FUN_00294480(set, 9, frames, bone)): a sphere of 64 (+0x2258)
- * at a front bone [placed 100 ahead, 60 up: the bones (+0x818 / +0x8c8) aren't mapped]. */
-static void an_arm(int record, float frames) { an_hit_frames[e - enemies] = frames; an_hit_damage[e - enemies] = an_attacks[record].damage; }
+typedef struct { float time; unsigned char cap, record, bone, mirrored; } AnHit;
+static AnHit an_hits_live[ENEMY_MAX][2];
+
+/* 004016c0 / 00402200 pass a posed rig matrix when creating caps 9 and 10.
+ * The PSP has one rig. Reflect its local X for the opposing rig's bone 9. */
+static void an_arm(int slot, int cap, int record, int bone, int mirrored, float time) {
+    an_hits_live[e - enemies][slot] = (AnHit){time, cap, record, bone, mirrored};
+    giga_note("arachne_cap", cap * 100 + record, time);
+}
+
 static void an_hits(float px, float py, float pz, float f) {
-    int me = (int)(e - enemies);
-    float at[3], dx, dy, dz;
-    if (an_hit_frames[me] <= 0.0f) return;
-    an_hit_frames[me] -= f;
-    at[0] = e->pos[0] + sinf(e->yaw) * 100.0f; at[1] = e->pos[1] + 60.0f; at[2] = e->pos[2] + cosf(e->yaw) * 100.0f;
-    dx = px - at[0]; dy = py + 100.0f - at[1]; dz = pz - at[2];
-    if (attacks_on && dx * dx + dy * dy + dz * dz < (64.0f + DANTE_RADIUS + 60.0f) * (64.0f + DANTE_RADIUS + 60.0f)) {
-        land_attack(0); landed_damage = an_hit_damage[me]; landed_x = e->pos[0]; landed_z = e->pos[2];
-        an_hit_frames[me] = 0.0f;
+    AnHit *hits = an_hits_live[e - enemies];
+    if (hits[0].time <= 0.0f && hits[1].time <= 0.0f) return;
+    if (attacks_on) evaluate_pose();
+    for (int i = 0; i < 2; ++i) {
+        AnHit *hit = &hits[i];
+        const EnemyAiCap *cap = &an_caps[hit->cap];
+        const ArAttack *record = &an_attacks[hit->record];
+        const float (*rot)[3] = world_rot[hit->bone].m;
+        const float *pos = world_pos[hit->bone];
+        float x, y, z, dx, dy, dz, reach;
+        if (hit->time <= 0.0f) continue;
+        hit->time -= f;
+        if (!attacks_on) continue;
+        x = pos[0] + rot[0][0] * cap->x + rot[0][1] * cap->y + rot[0][2] * cap->z;
+        y = pos[1] + rot[1][0] * cap->x + rot[1][1] * cap->y + rot[1][2] * cap->z;
+        z = pos[2] + rot[2][0] * cap->x + rot[2][1] * cap->y + rot[2][2] * cap->z;
+        if (hit->mirrored) x = -x;
+        dx = e->pos[0] + cosf(e->yaw) * x + sinf(e->yaw) * z - px;
+        dz = e->pos[2] - sinf(e->yaw) * x + cosf(e->yaw) * z - pz;
+        y += e->pos[1];
+        dy = y - fminf(py + DANTE_HIGH, fmaxf(py + DANTE_LOW, y));
+        reach = cap->radius + DANTE_RADIUS;
+        if (dx * dx + dy * dy + dz * dz < reach * reach) {
+            land_attack(record->reaction >= 500.0f);
+            landed_damage = record->damage;
+            landed_kind = record->kind;
+            hits[0].time = hits[1].time = 0.0f;
+            return;
+        }
     }
 }
 typedef struct { unsigned char action, weight; } AnPick;
@@ -5851,7 +5890,10 @@ static int an_pick(const AnPick *t, int n) {
     for (i = 0; i < n && t[i].action; ++i) { if (r < t[i].weight) return t[i].action; r -= t[i].weight; }
     return t[0].action;
 }
-static void an_play(int index) { script_play(an_motion_script[index]); }
+static void an_play(int index) {
+    memset(an_hits_live[e - enemies], 0, sizeof an_hits_live[0]);
+    script_play(index >= 0 && index < AN_MOTION_ROWS ? an_motion_script[index] : an_motion_script[0]);
+}
 /* FUN_00402a30: toward Dante at this rate a frame, unless he's within 15 degrees of its facing. */
 static void an_turn(float px, float pz, float rate, float f) {
     float rel = wrap_angle(atan2f(px - e->pos[0], pz - e->pos[2]) - e->yaw);
@@ -6112,20 +6154,26 @@ static void arachne_update_glue(float f, float px, float py, float pz) {
         break;
     case 0x77:
         an_turn(px, pz, 0.04f, f);
-        /* FUN_004016c0: record 0 (600), 4 frames, as its script opens flag 4 [taken as its first event] */
-        if (script_event && !e->step) { e->step = 1; an_arm(0, 4.0f); }
+        /* The two flag-4 values use bone 9 from opposite rigs (004016c0). */
+        if (e->flags[4] == 1 || e->flags[4] == 2) {
+            an_arm(0, 9, 0, 9, e->flags[4] == 1, 4.0f);
+            e->flags[4] = 0;
+        }
         if (e->done) an_decide(px, py, pz);
         break;
     case 0x79:
-        if (!an_shot[me] && script_event) { an_shot[me] = 1; an_webs_launch(px, py, pz); }
+        if (!an_shot[me] && e->flags[0] == 1) { an_shot[me] = 1; an_webs_launch(px, py, pz); }
         if (e->done) an_go(0x7b, px, py, pz);   /* FUN_00401cc0: done, it drops onto him */
         break;
     case 0x7a:
         an_turn(px, pz, 0.2f, f);
         if (e->step == 0) { move_local(0.0f, 0.0f, e->vel[2] * f); if (e->done) { e->step = 1; an_play(0x30); } }
         else {
-            /* FUN_00402200: records 5 (600) and 8 (400), 30 frames, on flag 4 [its first event] */
-            if (script_event && e->step == 1) { e->step = 2; an_arm(5, 30.0f); }
+            if (e->flags[4] == 1) {
+                e->flags[4] = 0;
+                an_arm(0, 9, 5, 9, 1, 30.0f);
+                an_arm(1, 10, 8, 2, 0, 30.0f);
+            }
             if (e->done) an_decide(px, py, pz);
         }
         break;
@@ -6449,7 +6497,7 @@ static const signed char bw_action_script[28] = {
     BW_SCRIPT_OF(3, 0), BW_SCRIPT_OF(3, 1), BW_SCRIPT_OF(3, 2), BW_SCRIPT_OF(3, 3), BW_SCRIPT_OF(3, 4), BW_SCRIPT_OF(3, 5),
     BW_SCRIPT_OF(3, 6), BW_SCRIPT_OF(3, 7), BW_SCRIPT_OF(3, 8), BW_SCRIPT_OF(3, 9), BW_SCRIPT_OF(1, 0), BW_SCRIPT_OF(0, 7),
     BW_SCRIPT_OF(3, 11), BW_SCRIPT_OF(3, 12), BW_SCRIPT_OF(3, 13), BW_SCRIPT_OF(3, 14)};
-enum { BW_IDLE = 0, BW_RUN = 2, BW_STAGGER = 8, BW_DEATH = 9, BW_WALK = 11, BW_ROAR = 0x16 };
+enum { BW_IDLE = 0, BW_RUN = 2, BW_STOP = 3, BW_CHARGE = 4, BW_STAGGER = 8, BW_DEATH = 9, BW_WALK = 11, BW_ROAR = 0x16 };
 typedef struct { unsigned char action, weight; } BwPick;
 typedef struct { float angle, half, reach; BwPick picks[5]; } BwSector;   /* degrees; half 0: any side; reach 0: any */
 static const BwSector bw_sectors[3][3] = {
@@ -6460,7 +6508,8 @@ static const BwSector bw_sectors[3][3] = {
 static const float bw_phase_at[2] = {0.73f, 0.47f};
 #define BW_FEATHERS 12
 static struct { int on, state, index, homing, turn; float pos[3], dir[3], speed, wait, home, life, born; } bw_feathers[BW_FEATHERS];
-static int bw_phase, bw_last, bw_gauge;
+static int bw_phase, bw_last, bw_gauge, bw_run_charges;
+static float bw_run_clock;   /* run time, paused during action 4 */
 static float bw_shots;   /* his shot tally (+0x38d4) */
 static int bw_shot_once;             /* his first shot hit (+0x3903) */
 static float bw_gate;   /* his attack gate (+0x130; block 0x5b8900): opens past 300 (difficulty under 369) */
@@ -6481,6 +6530,14 @@ static int bw_init(void) {
 
 static void bw_go(int action) {
     giga_note("beowulf", action, (float)e->health);
+    if (action == BW_RUN && e->action != BW_CHARGE) {
+        bw_run_charges = 0;
+        bw_run_clock = 0.0f;
+    }
+    if (action == BW_CHARGE) {
+        ++bw_run_charges;
+        e->yaw_rate = e->yaw;   /* the heading the charge's root travels along (002dedc0) */
+    }
     e->action = (unsigned char)action;
     e->timer = 0.0f;
     e->wake = 0.0f;
@@ -6625,6 +6682,7 @@ static void bw_feather(int bone, int index) {
 static void beowulf_update_glue(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, root[3], rel;
     int a = e->action;
+    float previous_frame = e->frame;
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
     script_event = 0;
     script_tick(f, root);
@@ -6667,13 +6725,56 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
         if (d < 550.0f && fabsf(rel) < 100.0f) { bw_go(0x18); return; }
         if (e->timer > 300.0f) { bw_go(BW_IDLE); return; }
         break;
-    case BW_RUN:
-        /* FUN_002dade0: turning 637 a frame (0x619688) for 30 frames (0x619690), then 218 (0x619698); after 180
-         * (0x619694), or Dante beyond 3000 (0x5b8cb4), it stops (3) [at its next stride's event in the game]. */
+    case BW_RUN: {
+        /* Script 0:7 emits flag 1 at 112 and 139, with a repeating stride from the MOT's loop_from.
+         * The general runner wraps at the clip's start; account for the stride's later first frame. */
+        int wrapped = e->frame < previous_frame;
+        bw_run_clock += f;
+        if (wrapped) {
+            const Motion *m = motion_get(e->motion);
+            float start[3], end[3];
+            motion_root(m, e->frame, start);
+            e->frame += m->loop_from - m->loop_start;
+            motion_root(m, e->frame, end);
+            root[0] += end[0] - start[0];
+            root[2] += end[2] - start[2];
+        }
+        if (previous_frame <= 110.0f && e->frame > 110.0f) {
+            e->hit_left[0] = 1.0e6f;
+            e->hit_cap[0] = 15;
+            e->hit_type = 7;
+            e->hit_done = 0;
+        }
+        if ((previous_frame <= 112.0f && e->frame > 112.0f) ||
+            (previous_frame <= 139.0f && (e->frame > 139.0f || wrapped))) {
+            float from[3] = {e->pos[0], e->pos[1] + 100.0f, e->pos[2]};
+            float to[3] = {from[0] + sinf(e->yaw) * 300.0f, from[1], from[2] + cosf(e->yaw) * 300.0f}, hit;
+            if (bw_run_clock > 210.0f) { bw_go(BW_STOP); return; }
+            if ((bw_run_charges < 3 && d <= 3000.0f && fabsf(rel) > 90.0f) ||
+                (stage_loaded() && stage_raycast(from, to, &hit))) { bw_go(BW_CHARGE); return; }
+            if (d > 3000.0f || fabsf(rel) > 90.0f) { bw_go(BW_STOP); return; }
+        }
         goyle_turn_to(px, pz, e->timer < 30.0f ? BW_TURN_MID : BW_TURN_SLOW, f);
         move_local(root[0], 0.0f, root[2]);
-        if (e->timer > 210.0f || d > 3000.0f) { bw_go(3); return; }
         break;
+    }
+    case BW_CHARGE: {
+        float yaw = e->yaw;
+        if (e->timer < 60.0f) {
+            float angle = wrap_angle(atan2f(dx, dz) - yaw);
+            if (angle < 0.0f) angle += 2.0f * PI;
+            yaw = wrap_angle(yaw + fminf(ANGLE(0x71c), angle / (60.0f - e->timer)) * f);
+        }
+        if (e->timer >= 60.0f && e->flags[1] == 1) {
+            e->flags[1] = 0;
+            if (ai_unit() < (bw_phase == 0 ? 0.0f : 0.4f)) { bw_go(0x12); return; }
+        }
+        e->yaw = e->yaw_rate;
+        move_local(root[0], 0.0f, root[2]);
+        e->yaw = yaw;
+        if (e->done) { bw_go(BW_RUN); e->frame = 110.0f; e->timer = 30.0f; return; }
+        break;
+    }
     case 0x17:
         goyle_turn_to(px, pz, BW_TURN_MID, f);
         move_local(root[0], 0.0f, root[2]);
@@ -6757,12 +6858,17 @@ static void beowulf_hit_glue(HitKind kind, float from_x, float from_z) {
  * Its bite holds Dante (FUN_0021f2e0, combat_hold) and its hold (7) drains his Devil Trigger (FUN_0021eae0: 20 a frame,
  * 1000 a rune [inferred]) until he struggles 60 points free (8) or its time's up (9, the burst).
  * Dante's side of the bite (his lift and turn, FUN_0049dac0's states) is combat.c's; the struggle starts afresh as
- * the hold (7) starts (FUN_00254a10). Stand-ins: the rank-0 teleport (4) reappears ahead of his
- * facing, not the camera's; 16 (a dodge when he does move 0x11 near it) isn't triggered. */
+ * the hold (7) starts (FUN_00254a10). The blink uses the camera's heading, and the dodge
+ * checks Dante's gun move as the port's equivalent of +0x284a == 0x11. */
 enum { SE_HOVER = 0, SE_COME = 1, SE_KNOCK = 2, SE_KNOCK2 = 3, SE_BLINK = 4, SE_CLOSE = 5, SE_BITE = 6, SE_HOLD = 7,
-       SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DEATH = 30 };
-static float se_dante_yaw, se_dt_drain;
-void enemy_set_dante_yaw(float yaw) { se_dante_yaw = yaw; }
+       SE_FREED = 8, SE_BURST = 9, SE_SPIN = 12, SE_ARRIVE = 13, SE_LATCH = 14, SE_SHOWN = 15, SE_DODGE = 16, SE_DEATH = 30 };
+static float se_dante_yaw, se_camera_yaw, se_dt_drain;
+static int se_dante_gun_move;
+void enemy_set_dante_view(float yaw, float camera_yaw, int gun_move) {
+    se_dante_yaw = yaw;
+    se_camera_yaw = camera_yaw;
+    se_dante_gun_move = gun_move;
+}
 float enemy_take_dt_drain(void) { float d = se_dt_drain; se_dt_drain = 0.0f; return d; }
 
 static int se_init(void) {
@@ -6788,10 +6894,10 @@ static void se_go(int a) {
     script_play(a == SE_DEATH ? 2 : a == SE_ARRIVE ? 13 : a);
 }
 
-/* FUN_00359b40: is it within his facing's cone (+-60 degrees) [the cone's width is read as 0x5555 either way]. */
+/* FUN_00359b40 halves the supplied 0xaaab before comparing the turn (±120 degrees). */
 static int se_seen(float px, float pz) {
     float d = wrap_angle(atan2f(e->pos[0] - px, e->pos[2] - pz) - se_dante_yaw);
-    return fabsf(d) < PI / 3.0f;
+    return fabsf(d) <= ANGLE(0x5555);
 }
 
 /* FUN_0049dea0 at rank 0: in his view, hover (0); out of it, come for him (1). */
@@ -6838,7 +6944,27 @@ static void soul_update_glue(float f, float px, float py, float pz) {
         return;
     }
     if (e->se_hit_pending && (a == SE_HOVER || a == SE_COME)) { e->se_hit_pending = 0; se_go(SE_SHOWN); a = SE_SHOWN; }
+    if ((a == SE_HOVER || a == SE_COME) && e->se_sight <= 0.0f && se_dante_gun_move &&
+        hypotf(d, py - e->pos[1]) < 200.0f) {
+        se_go(SE_DODGE);
+        a = SE_DODGE;
+    }
     switch (a) {
+    case SE_DODGE:
+        /* FUN_00433c20: back away for 30 frames while facing him. */
+        hover = 1;
+        if (e->step == 0) {
+            e->se_vel[0] = (ai_unit() - 0.5f) * 5.0f;
+            e->se_vel[1] = 0.5f;
+            e->se_vel[2] = -12.0f;
+            e->timer = 30.0f;
+            e->step = 1;
+        }
+        goyle_turn_to(px, pz, turn, f);
+        e->se_vel[2] = fminf(0.0f, e->se_vel[2] + f);
+        se_move(f);
+        if (e->timer <= 0.0f) se_decide(px, pz);
+        break;
     case SE_HOVER:
         hover = 1;
         if (e->step == 0) { e->timer = se_time(a); e->step = 1; e->wake = 0.0f; }
@@ -6877,9 +7003,15 @@ static void soul_update_glue(float f, float px, float py, float pz) {
         if (e->step == 1) {
             e->veil = 1.0f - (e->timer > 0.0f ? e->timer : 0.0f) / 10.0f;
             if (e->timer <= 0.0f) {
-                float ang = se_dante_yaw + (ai_unit() - 0.5f) * (PI / 4.0f), r = 400.0f + 500.0f * ai_unit(), g;
-                e->se_to[0] = px + sinf(ang) * r; e->se_to[2] = pz + cosf(ang) * r;
-                e->se_to[1] = (floor_under(px, py + 100.0f, pz, &g) ? g : py) + 100.0f;
+                float ang = se_camera_yaw + (ai_unit() - 0.5f) * (PI / 4.0f);
+                float r = 400.0f + 500.0f * ai_unit(), ground, hit;
+                float from[3] = {e->pos[0], e->pos[1] + 100.0f, e->pos[2]};
+                float target[3] = {px + sinf(ang) * r, py + 100.0f, pz + cosf(ang) * r};
+                if (floor_under(px, py + 100.0f, pz, &ground)) target[1] = ground + 100.0f;
+                if (!stage_loaded() || !stage_raycast(from, target, &hit)) {
+                    memcpy(e->se_to, target, sizeof e->se_to);
+                    giga_note("soul_blink", (int)r, ang);
+                } else memcpy(e->se_to, e->pos, sizeof e->se_to);
                 e->timer = 10.0f; e->step = 2; e->veil = 1.0f;
             }
         } else if (e->step == 2) {
@@ -7028,10 +7160,7 @@ static void soul_hit_glue(HitKind kind) {
 #include "fallen.h"
 extern int testroom_frame;
 static FallenBrain fallen_brain[ENEMY_MAX];
-static int fallen_spear[ENEMY_MAX];             /* its spear's arrow slot + 1 (0: none) */
-static float fallen_spear_at[ENEMY_MAX][3];
 static int fallen_motion_id[FALLEN_M_COUNT] = {-2};
-static float fallen_rest;   /* FUN_003442c0: the enemy manager lets one attack, then rests 3 s */
 static void fallen_play(int m, int restart) {
     int id;
     if (fallen_motion_id[0] == -2) { int k; for (k = 0; k < FALLEN_M_COUNT; ++k) fallen_motion_id[k] = motion_find(fallen_motion_names[k]); }
@@ -7057,16 +7186,11 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     FallenBrain *b = &fallen_brain[e - enemies];
     const Motion *m;
     float g;
-    int token = fallen_rest <= 0.0f, had = token;
+    int token = attack_slots_available(&attack_slots), had = token;
     /* The brain keeps its own position: take back where the walls left it (body_move), or each frame it puts the
      * body back where they stopped it and the sweep runs the whole way again (6 m, 25 ms a frame, Mission 15's 222).
      * Not while it comes in through the wall (0xe), which isn't walled (below). */
     if (!fallen_appearing(b)) { b->pos[0] = e->pos[0]; b->pos[2] = e->pos[2]; }
-    {
-        int k;   /* the clock runs once a frame: on the first Fallen's turn */
-        for (k = 0; k < ENEMY_MAX && !(enemies[k].active && enemies[k].kind == ENEMY_FALLEN); ++k) {}
-        if (&enemies[k] == e && fallen_rest > 0.0f) fallen_rest -= f;
-    }
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
     if (e->motion >= 0) {
         m = motion_get(e->motion);
@@ -7078,14 +7202,15 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     }
     if (floor_under(b->pos[0], b->pos[1] + 100.0f, b->pos[2], &g)) b->floor_y = g;
     b->frame = e->frame; b->done = e->done;
-    fallen_think(b, f, px, py, pz, ai_unit, attacks_on && e->plan != P_DEATH, &token);
-    if (had && !token) fallen_rest = 180.0f;   /* this one attacked */
+    fallen_think(b, f, px, py, pz, se_dante_yaw, ai_unit, attacks_on && e->plan != P_DEATH, &token);
+    if (had && !token) attack_slots_take(&attack_slots, ATTACK_TOKEN_SECONDS);   /* FUN_003442c0 */
     {
         static int last_state[ENEMY_MAX];   /* tests: each change of state, in VERGIL_LOG.TXT */
         int k = (int)(e - enemies);
-        if (last_state[k] != b->state || b->land || b->spear || (testroom_frame % 60) == 0) {
+        if (last_state[k] != b->state || (testroom_frame % 60) == 0) {
             char line[128];
-            snprintf(line, sizeof(line), "fallen %d state %#x mode %d land %d spear %d hp %d gauge %.0f rest %.0f atk %d", k, b->state, b->mode, b->land, b->spear, b->health, b->gauge, fallen_rest, attacks_on);
+            snprintf(line, sizeof(line), "fallen %d state %#x mode %d hp %d gauge %.0f atk %d",
+                     k, b->state, b->mode, b->health, b->gauge, attacks_on);
             vergil_boss_note(line, b->pos[0], b->pos[1], b->pos[2], py);
             last_state[k] = b->state;
         }
@@ -7095,20 +7220,26 @@ static void fallen_update_glue(float f, float px, float py, float pz) {
     e->air = fallen_flying(b);
     if (fallen_appearing(b)) e->placed = 1;   /* through the wall: a placement, not a walled move */
     if (b->restart || fallen_motion_id[b->want] != e->motion) { fallen_play(b->want, b->restart); b->restart = 0; }
-    if (b->land) { land_attack(b->land == 2); landed_damage = b->land_damage; }   /* its attack record's damage */
-    if (b->spear) {
-        /* Its spear (action 0xf's record 0), straight at his chest [approximation: the shell isn't decoded]. */
-        float from[3] = {e->pos[0] + sinf(e->yaw) * 60.0f, e->pos[1] + 180.0f, e->pos[2] + cosf(e->yaw) * 60.0f};
-        float to[3] = {px, py + 100.0f, pz};
-        { int k = goyle_bullet(from, to); if (k >= 0) { arrows[k].damage = 900.0f; fallen_spear[e - enemies] = k + 1; } }   /* record 0 (0x5c2dd0): 900 */
-        nfx_spawn(NFX_FALLEN, 0x367, from, e->yaw, 0);
-    }
-    /* Its spear's effects (CEm011Shl00, FUN_0045a330; em011's pack, nfx bank 10): V0x367 as it's let go, V0x368 where it
-     * ends (it hits, or flies 2000 out). */
-    {
-        int k = fallen_spear[e - enemies] - 1;
-        if (k >= 0 && arrows[k].active) memcpy(fallen_spear_at[e - enemies], arrows[k].pos, sizeof(float) * 3);
-        else if (k >= 0) { nfx_spawn(NFX_FALLEN, 0x368, fallen_spear_at[e - enemies], e->yaw, 0); fallen_spear[e - enemies] = 0; }
+    if (b->attack_frames > 0.0f && attacks_on) {
+        /* FUN_003421f0 installs caps 10..13: four radius-40 spheres along bone 9's +Z. */
+        static const float damage[] = {900, 0, 500, 0, 700, 800};   /* 0x5c2dd0, records 0/2/4/5 */
+        static const int kind[] = {0, 0, 0, 0, 2, 3};
+        evaluate_pose();
+        for (int k = 1; k <= 4; ++k) {
+            float local[3] = {0.0f, 0.0f, 80.0f * k}, at[3], dx, dy, dz;
+            royal_bone_world(9, local, at);
+            dx = at[0] - px;
+            dy = at[1] - fminf(py + DANTE_HIGH, fmaxf(py + DANTE_LOW, at[1]));
+            dz = at[2] - pz;
+            if (dx * dx + dy * dy + dz * dz < (40.0f + DANTE_RADIUS) * (40.0f + DANTE_RADIUS)) {
+                land_attack(0);   /* the four records' reaction strength is 300 */
+                landed_damage = damage[b->attack_record];
+                landed_kind = kind[b->attack_record];
+                giga_note("fallen_record", b->attack_record, landed_damage);
+                b->attack_frames = 0.0f;
+                break;
+            }
+        }
     }
     if (b->remove) e->active = 0;
 }

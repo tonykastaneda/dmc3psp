@@ -95,7 +95,7 @@ void enemy_update(float dt, float px, float py, float pz);
 /* Final enemy contact solve after Dante's body/wall pass; never moves Dante. */
 void enemy_finish_collisions(float px, float py, float pz);
 /* Dante's facing, for those that hide from his gaze (the Soul Eater); set before enemy_update. */
-void enemy_set_dante_yaw(float yaw);
+void enemy_set_dante_view(float yaw, float camera_yaw, int gun_move);
 /* Devil Trigger drained from Dante since the last call, in the game's units (1000 a rune) [the Soul Eater's hold]. */
 float enemy_take_dt_drain(void);
 /* An enemy holding Dante (FUN_0021f2e0, his action 0x2e: Nevan's kiss). main asks each frame:

@@ -95,19 +95,16 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   the port's launch is native kind 3 (light knock) and its heavy / slam kinds 4 / 7 (heavy knock) [inferred]; their
   death (CEm017's 0x406d50) is a 60-frame sink; damage taken is the port's 1 / 2 a hit.
 - **Hell Greeds**: the coffin's flight, landing, summon cap and visuals are estimates. Summons use Prides and the coffins cannot be broken. `greed.inc`.
-- **Blood-goyle**: its bullets fly at 25 a frame for 120 frames [estimate]; the split timing [estimate]; its rest
-  value 5 and stone's triple damage [inferred]. ENEMY_SPECS.md D.
-- **Arachne**: its class is ported (ENEMY_SPECS H); stand-ins: its hits' bones (a sphere 100 ahead), flag 4 taken as
-  its scripts' first event, the wall's normal (the ray back, flattened) and its pose there (turned 90 degrees), 0x6d's
+- **Blood-goyle**: sword damage scaling, projectile hit volume and the simplified bullet emitter. ENEMY_SPECS.md D.
+- **Arachne**: its class is ported (ENEMY_SPECS H); stand-ins: the second rig's attack bone is mirrored from the first rig, the wall's normal (the ray back, flattened) and its pose there (turned 90 degrees), 0x6d's
   web-line swing (a leap), 0x6f's speed (8), the web's struggle count (35 [inferred]), its fall when struck on a wall,
-  root motion x1.5 [inferred]; its web's held effect sits at Dante's middle, not his bone; spiderlings (0x76) and the charge (0x78) never chosen at rank 0.
+  and its web's held effect sits at Dante's middle, not his bone; spiderlings (0x76) and the charge (0x78) never chosen at rank 0.
   `enemy.c` The Arachne, PortJobs.
-- **Fallen**: its damage handler isn't decoded [estimates]; facing taken from Dante, not his facing; on the ground it
-  closes 3 a frame to 320 from him; its wings take front hits [approximation]; health 1500 by the port's scale
-  [estimate]; its spear is straight at his chest (the shell isn't decoded). `fallen.c`, `enemy.c` ~5383.
-- **Dullahan**: which script is which [inferred]. `dullahan.c`.
-- **Soul Eater**: Dante is held from its bite and struggles free (above); the rank-0 blink reappears ahead of Dante's facing, not the camera's; its
-  dodge (16) isn't triggered (needs Dante's move 0x11); the gaze cone ±60° [inferred]; 1000 DT a rune [inferred].
+- **Fallen**: its damage handler, 3 cm per frame ground approach, and front-hit wing guard are approximations. The
+  higher-rank spear projectile (action 0x16) is unported. `fallen.c`, `enemy.c` ~5383.
+- **Dullahan**: the attack choice and shield collision volume are approximations. `dullahan.c`, MISSION10_SPEC.md.
+- **Soul Eater**: dodge action 16 uses the port's gun move classification for Dante's state 0x11. DT drain conversion
+  (1000 units per rune) is inferred.
   `enemy.c` soul_*.
 - **Jester**: all three encounters and his second set run; stand-ins: the charge (0x7f) turns at the port's arena
   clamp, his throws are taken to end on the floor (+0x4818) [inferred], the second set's effects and room flag aren't
@@ -128,8 +125,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
 - **Beowulf**: which of Dante's blows are his kind-4 records (the port's heavy, slam, launch [inferred]); a feather heads
-  out from his centre 200 up [inferred] and its burst isn't drawn; the run stops at once, not at its next stride's event; his charge (4) from the
-  run isn't taken. `enemy.c` Beowulf, PortJobs.
+  out from his centre 200 up [inferred] and its burst isn't drawn. The charge's wall probe uses the port's stage ray. `enemy.c` Beowulf, PortJobs.
 - **Lady**: her grapple (0x1d), native hook/skinned cable and its direction (0044b780), and ledge mode (0x1e) are ported;
   her ledges now use the room's authored box collision; FUN_00449120 taken as the ledge nearest Dante; the hop's landing 0x0e plays 0x61's (its slot is
   empty); 0x8f fires one pistol shot [inferred];  what 0x1b / 0x1c fire (a rocket, a
