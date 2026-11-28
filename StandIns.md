@@ -70,8 +70,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   object's +0x10) and the other classes' +0x114 handlers aren't read (Lady's and the Enigma's do nothing); and Release's damage from the gauge (+0x2a1c) aren't carried (the port's blows are in
   units of health).
 - **Blade trails** (`fx.c` mtrails): the game's trail models bent through the last 11 weapon frames, type 0 added and types 1 / 2
-  alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the rotations blended linearly and renormalised [FUN_00133ab0 not
-  read]. NATIVE_FX.md "Blade trails".
+  alpha-blended (the glow's +0x68 parameters 5 / 5 aren't read); the frames between samples are FUN_00133ab0's (y and z
+  blended, the frame rebuilt round z by FUN_00133890). NATIVE_FX.md "Blade trails".
 - **Devil Trigger** (`update_devil_fx`): the game's V0xdc / E0x140 / V0x3c on his hips, by position and yaw only; the
   PS2's lattice burst as it ends isn't played (its source isn't found).
 - **Gimmick models**: crest switches and seal boards are their own models (`gimmick_models.c`), but a switch's flames
