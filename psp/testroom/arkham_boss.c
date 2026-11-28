@@ -2,6 +2,7 @@
 
 #include "enemy.h"
 #include "fx.h"
+#include "cloth.h"
 #include "motion.h"
 #include "swizzle.h"
 
@@ -600,8 +601,31 @@ static int load_data(void) {
         memcpy(indices[i], m->indices, sizeof(unsigned short) * m->indices_count);
         for (j = 0; j < m->vertices; ++j) { vertices[i][j].u = m->uvs[j].u; vertices[i][j].v = m->uvs[j].v; }
     }
-    /* The Legion is drawn in its rest pose [approximation: it has no motions of its own in the pack] */
+    /* The Legion has no motions; its tail (bones 2-6) is a chain (CEm033's +0x9e0, em033_00.clt: gravity -0.08, spring
+     * 0.02, max speed 50, stiffness 0.45, axis Z) that rides the root each frame (FUN_00230150), so in every Legion it
+     * settles the same way under gravity. Settle it once here and draw them all in that pose. Not shown: the settling
+     * as one appears, and the bone FUN_003ed840 pulls (-70 y, -20 z) in its states 4 and 5. */
     build(&arkham_parts[PART_LEGION], -1, 0.0f, legion_pose);
+    {
+        const ArkhamMesh *m = &arkham_parts[PART_LEGION];
+        static ClothJoint joint[8];
+        ClothParams params = {-0.08f, 0.02f, 50.0f, 0.45f, 2, 1, 1};
+        int step, b;
+        for (step = 0; step <= 600; ++step) {
+            for (b = 2; b <= 6 && b < m->bone_count; ++b) {
+                int p = m->parents[b];
+                float rest[3] = {m->local[b].x, m->local[b].y, m->local[b].z};
+                const float *pp = p >= 2 ? joint[p].pos : legion_pose[p].p;
+                const ClothM3 *pr = p >= 2 ? &joint[p].rot : (const ClothM3 *)legion_pose[p].m;
+                if (step == 0) cloth_rest(&joint[b], pp, pr, rest);
+                else cloth_step(&joint[b], pp, pr, rest, &params, 0, 0);
+            }
+        }
+        for (b = 2; b <= 6 && b < m->bone_count; ++b) {
+            memcpy(legion_pose[b].p, joint[b].pos, sizeof(legion_pose[b].p));
+            memcpy(legion_pose[b].m, joint[b].rot.m, sizeof(legion_pose[b].m));
+        }
+    }
     skin_part(PART_LEGION, legion_pose);
     for (i = 0; i < ARKHAM_TEXTURE_COUNT; ++i) {
         const Dmc3Texture *t = &arkham_textures[i];

@@ -25,8 +25,9 @@ value under 700).
   `FUN_00489590` / `FUN_00489670`, the Doppelganger's, delayed `0x594bd8`[level]: 1, 30, 60 frames).
   **In the port** (`main.c` partner, `vergil_boss_draw_partner`): as the second round begins (9000) a second Player /
   Combat beside Dante takes Dante's input a frame late and hits Arkham as Dante's blows do. Stand-ins: Dante's moveset
-  (Vergil's player moveset, `CPlVergil` / pl001, isn't ported) on Vergil's body (em035 [1], Dante's bone layout), no coat
-  or Yamato, untouchable, his shots not fired.
+  (Vergil's player moveset, `CPlVergil` / pl001, isn't ported) on Vergil's body (em035 [1], Dante's bone layout),
+  untouchable, his shots not fired. He wears the boss's coat (its .clt chains, as VERGIL_SPEC) and scabbard, and
+  Yamato is in his right hand while a move plays or the sword is out, else sheathed (the boss's attach records).
 - The phase byte `+0x15d1` follows his health (`3d4540`): over 9000 → 0, over 3000 → 1, else 2.
 
 ## 2. The states (`+0x1424`, `3d2220`'s switch; `3d3760` sets one and starts its script)
@@ -73,13 +74,18 @@ Sections 1-3 at variant 0. Approximations:
   simplified homing shells, with native record 5 (1500). The former 700-damage wide burst is replaced by the
   decoded mouth capture, hold and drain; full cap-flag/held-handle release is approximated by a damaging rescue hit.
 - **Legions:** four/five/five by phase at frames 90 and 165 (count table 5c23b8, 4e9b50), with native
-  summon-clock reloads 3000/2700/2400 (5c2390, 3d7dc0). They still fly at an estimated 8 per frame, are drawn
-  rigid and die to one blade hit. Their contact uses native radius 40 and record 0 (300); the combined
+  summon-clock reloads 3000/2700/2400 (5c2390, 3d7dc0). They still fly at an estimated 8 per frame and die to one
+  blade hit. **Their pose:** CEm033 (ctor `3e9340`, vtable `0x60bad0`, alive update `3e9cd0` with its own states
+  0-10) has no motions; its tail, bones 2-6, is a chain (+0x9e0, `FUN_0022f1d0`; em033_00.clt: gravity −0.08,
+  spring 0.02, max speed 50, stiffness 0.45, axis Z) ridden with the root, so it only settles under gravity, the same
+  in every Legion. The port settles it once (600 steps) and draws them all in that pose. Not shown: the settling as
+  one appears, and `3ed840`'s pull on a bone (−70 y, −20 z) in its states 4 / 5. Their contact uses native radius 40 and record 0 (300); the combined
   horizontal/height collision test remains simpler than the native collision engine.
 - **Damage taken:** as Vergil's (42 light, 84 heavy, × 1.1; Easy × 2).
-- **The second round:** at 9000 he pauses 120 frames (demo 53 isn't played) and fights on at 9000; Vergil joins
+- **The second round:** at 9000 he pauses 120 frames, demo 53 plays (`main.c`, queued as the partner joins), and he
+  fights on at 9000; Vergil joins
   as above.
-- **Death:** the room clears and Mission Clear follows (demo 328 isn't played).
+- **Death:** the room clears; the clear plays movie 328 (m19_c00, `main.c`), then Mission Clear.
 
 ## 5. Checked in PPSSPP (2026-11-14)
 

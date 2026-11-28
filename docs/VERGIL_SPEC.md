@@ -103,14 +103,58 @@ Turning (`4e5140`, table `0x5df650`): toward Dante at 10° a frame over the firs
 ## 5. In the port (`psp/testroom/vergil_boss.c`, `tools/prepare_vergil.py`)
 
 All of section 4 at rank 0, variant 0. Approximations:
-- **Hit reactions:** CEm035's own (reaction table `0x5dcc90`, the hit handler) aren't decoded. Between attacks a
-  light hit plays reaction 2 or 3 and a heavy one 0x12; during attacks he doesn't flinch. Hits from the front
-  during the guard are blocked.
+- **Hit reactions:** decoded below ("Hit reactions"); Dante's per-blow gauge values are estimates. Hits from the
+  front during the guard are blocked.
 - **Damage taken:** Cerberus's per-hit values (42 light, 84 heavy, × 1.1; Easy × 2), guns 20%.
 - **Air movement:** vertical root motion and the fixed downward Helm Breaker vector now follow the decoded update below; floor collision still uses the port's room-floor query.
-- **Cloth:** the coat is rigid on body bone 3; the scabbard's cord hangs straight down.
-- **Effects:** the teleport's 0x338 and the sword trails aren't drawn (a hit spark marks the teleport).
-- **Death:** he plays reaction 1:11 and the mission clears; demo 322 isn't played.
+- **Cloth:** the coat (pl001_02.clt, [4]: two chains on its 39-bone rig hung from body bone 3) and the scabbard's
+  cord (wp005.clt, [30]: bones 3-6, axis X) run as the game's chains through `demo_cloth.c` (the cutscene cloth,
+  slots 60 / 61), baked by `prepare_vergil.py`. They run in his model space, as riding the owner's root each frame
+  (FUN_00230150) amounts to, with demo.c's body capsules for Dante's 24-bone layout (FUN_00230130's own capsules for
+  CEm035 aren't read [inferred the same]). The M13 / M20 forms' cloth isn't run. Cost in PPSSPP (room 144, Vergil
+  fighting): about 0.2 ms a frame.
+- **Effects:** em035.pac entry 57 is his effect pack, exported as nfx bank 27 (`tools/native_fx.py`). V0x338 plays
+  on the body's second bone as he vanishes and, turned half round, as he appears (`4dac60`, `4ddbf0`); the slashes
+  `4e0fc0` starts with an action ride his root bone until the next action: 0x1a V0x2fc, 0x1b V0x2fd, 0x1c V0x2fe,
+  0x47 V0x2ff, 0x2a V0x300 + V0x32e, 0x27 V0x34f (Mission 7 only). Not played: the effects' time scale (+0x14 from
+  +0xb534), the turned-aside blow's V0x32d, and the other variants' effects. The effects aren't compared with a PS2
+  capture yet.
+- **Death:** he plays reaction 1:11 and the mission clears; the clear plays 322 (a movie, m07's clear, `main.c`).
+
+## Hit reactions (decoded 2026-11-27)
+
+Decompiled from a scratch copy of the Ghidra project. The chain, for one of Dante's blows:
+- **The hit handler** `4e6d20` (vtable 0x613580 +0xc4) switches on the action's hit mode `+0xb9a3` (vfunc +0x30c `4e77e0`),
+  which `4e0fc0` sets per action: **2** for 0x56 / 0x57 / 0x61 / 0x62 (the Devil Trigger change: the blow is turned
+  aside, effect 0x32d, or 0x377 in state 0x41), **1** for 0x75 (nothing taken), **0** for the rest. Mode 0 hands the
+  blow to the damage component and the hit-effect component (`+0xb87c`, vtable 0x606650, initialised with
+  **`0x5dcc90`**: five 8-byte rows of u16 pairs {3, 0x15f} {3, 0x1c} / {3, 0x4}, effect-like ids [inferred]; it is
+  not a reaction table).
+- **The damage component** `+0xb864` (vtable 0x605730, the same class as Dante's), `2f17a0`: HP −= record +4 ×
+  weapon share; the **stun gauge** (+0xb818, full 60, param block +0x30) −= record +0xc; the **flinch gauge**
+  (+0xb81c, full 60, +0x34) −= record +0x14 (each × the weapon's share from the param block, × 1.1 on record +8's %
+  roll). HP gone → vfunc +0x24; else the stun gauge empty → +0x28 (both refill); else the flinch gauge empty →
+  +0x2c (it refills); else +0x30. `2f1750` refills both once 180 frames pass without a blow.
+- **+0x28 / +0x2c** go to the AI sub-object +0x130 (`0032a540` / `0032a800`), which send a **reaction code** to
+  setState (vfunc +0x2f8, `4dee00`): by the blow's kind (5 → 4/5, 3 → 7, 6 → 0xc) or, for the rest, by where it came
+  from: **0 / 2 from the front, 1 / 3 from behind** (the flinch / the stun gauge). In the air (+0xb9a0) the flinch
+  gauge sends 7 / 8 / 9. **+0x30** (`4e6b20`) only sends 8 for a blow in the air during a reaction: never for him.
+- **The gate** `4e51e0` (in setState, codes 0-0xc, 0x12, 0x13): no reaction for a shot (+0xbb52, the blow's byte 2),
+  in actions 0x27 / 0x5f / 0x6f (+0xb9a0), in Devil Trigger's form, in states 0x44 / 0x32. Then `4e52f0`: frames
+  flinching (+0xbb0c) past their limit (+0xbb10) → **the brace**; already flinching (0x36 / 0x37) → flinch again;
+  the body script's **window 1 byte 4 = 1** (the finishers' tails, 0x47, 0x52, the dives' recoveries) → a new budget
+  of **600 frames and 12 points** (gp-0x576c / -0x5764; 900 / 15 from states 0x34 / 0x35, `4e77f0`, unreached in
+  Mission 7) and flinch; anywhere else (standing, strafing, the start of an attack) → the brace.
+- **States:** 0x36 (`4db5d0`) plays reaction **0x11 or 2** (50/50), 0x37 (`4db750`) reaction **3** (codes 1 / 3,
+  unless already in 0x37); both run the budget's clock and brace once its points pass 12 (`4e5540`; a blow while
+  flinching adds 1, 2 if its +0xc is 60 or more). **The brace, 0x32** (`4daf90`): action **0x3d** (vr3-40), facing
+  Dante, both gauges held full; after 60 frames a lunge is answered (guard / away); its end → think.
+
+In the port: all of the above, except that Dante's attack records aren't decoded (pl chunk 7 holds his collision
+shapes, not records), so a light blow takes **20 / 30** from the gauges and a heavy one (finishers, launch, slam)
+**60 / 60** [estimates], guns 20% of that; the record +8 roll and the blow kinds 3 / 5 / 6 aren't read. Checked in
+PPSSPP (`vr_react`, Mission 7, `onvergil 30`, Rebellion every 10 frames): flinches in 0x1a / 0x1c / 0x47's tails,
+re-flinches inside the budget, the brace on blows at 0x18's start.
 
 ## 6. Checked on the PS2 (2026-11-14)
 

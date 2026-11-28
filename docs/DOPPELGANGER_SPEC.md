@@ -60,9 +60,15 @@ The pick of section 3 and the light of section 2, at rank 0. Approximations:
   within 400. The damage values are estimates (the records aren't read).
 - **The meteor:** a 40-frame arc onto the crest, which shuts as he lands. The pick to go shut a crest is taken a third
   of the time a lit crest has a dark opposite [the walkthrough's frequency, estimated].
-- **Sinking and rising:** hidden for 40-50 frames; up in the middle of the nearest dark sixth, or 150 behind Dante.
-- **Drawing:** dark (the texture modulated to a quarter) unless lit; the coat rigid on the hips, the sword in the
-  right hand (bone 9). The lights themselves aren't drawn: an open crest sparkles.
+- **Sinking and rising:** hidden for 40-50 frames (the travel underground is a jump), then up at the centre (`0x5b7950`)
+  of the region `3c4c40` picks: table `0x5b7a40` read from entry region × 6 + 6 down to region × 6 + 1, the first that's a
+  region and dark. As the game reads it that's the region itself, then the middle (6), then one neighbour (from 0:
+  5; from 1-4: the next; from 5: 0), and from the middle 0, 5, 4, 3, 2, 1; none dark, he doesn't sink (`3c4dd0`
+  returns 0). Out of Dante's shadow, 150 behind him.
+- **Drawing:** dark (the texture modulated to a quarter) unless lit; the coat on the hips (its rig's root at body
+  bone 1, its bone 1 at bone 3's place, 19 up), its tails (bones 3-4, 6-7) swinging as em031_01.clt's chain
+  (gravity 0, spring 0.02, max speed 50, stiffness 0.2) through `demo_cloth.c` in his model space, as Vergil's coat
+  (slot 62); the sword in the right hand (bone 9). The lights themselves aren't drawn: an open crest sparkles.
 - **Death:** motion 32 and the room clears; demo 48 and the Doppelganger style (item 35) aren't given.
 
 ## 5. Checked in PPSSPP (2026-11-14)

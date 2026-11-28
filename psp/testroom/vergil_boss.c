@@ -1,8 +1,10 @@
 #include "vergil_boss.h"
 
+#include "demo_cloth.h"
 #include "enemy.h"
 #include "fx.h"
 #include "motion.h"
+#include "nfx.h"
 #include "swizzle.h"
 
 #include <pspgu.h>
@@ -40,7 +42,7 @@ enum { OP_PLAY, OP_WAIT, OP_HIT, OP_GOTO, OP_EVENT, OP_ATTACK, OP_WINDOW4 };
 enum {
     S_THINK = 0x17, S_DEATH = 0x18, S_STRAFE = 0x1d, S_IDLE = 0x1f, S_TAUNT = 0x20,
     S_COMBO_A = 0x21, S_COMBO_B = 0x22, S_COMBO_C = 0x25, S_UPPER = 0x29, S_DASH = 0x2d, S_BEHIND = 0x31,
-    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_FLINCH = 0x50, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_FORCE_A=0x23, S_FORCE_B=0x24, S_JUDGMENT=0x30, S_ROUND_TRIP=0x3a, S_DIVE=0x3b, S_RETREAT=0x2e, S_CUT_RANDOM=0x3f, S_CUT_RING=0x40, S_STORM=0x3c, S_DT=0x39
+    S_GUARD = 0x33, S_LEAP = 0x3d, S_AWAY = 0x3e, S_BRACE = 0x32, S_FLINCH = 0x36, S_FLINCH_BACK = 0x37, S_APPROACH = 0x19, S_BEOWULF_WARP=0x2b, S_BEOWULF=0x2f, S_FORCE_A=0x23, S_FORCE_B=0x24, S_JUDGMENT=0x30, S_ROUND_TRIP=0x3a, S_DIVE=0x3b, S_RETREAT=0x2e, S_CUT_RANDOM=0x3f, S_CUT_RING=0x40, S_STORM=0x3c, S_DT=0x39
 };
 
 typedef struct { float m[3][3], p[3]; } Transform;
@@ -64,6 +66,12 @@ static struct {
     int tick, variant, dt, dt_unlocked, m13_chain, m20_low, m20_temp_dt, repeats, waves, cut_index, sword, sword_hit;
     float dt_left,dt_cooldown, cut[3], dive_height, retreat_speed, retreat_distance;
     float sword_pos[3], sword_dir[3], sword_age, sword_spin, sword_wait, sword_rehit;
+    /* The damage component (+0xb864, vtable 0x605730): the stun and flinch gauges (+0xb818 / +0xb81c) and the frames
+     * since the last blow (+0x10). The flinch budget (4e52f0): frames flinching (+0xbb0c) against its limit (+0xbb10),
+     * points taken while flinching (+0xbb14) against theirs (+0xbb18). The brace's clock (+0xbb08). */
+    float stun_gauge, flinch_gauge, since_blow, flinch_time, flinch_limit, flinch_points, flinch_cap, brace_time;
+    float cloth_clock;   /* 60 a second, for the coat's and the cord's chains */
+    int posed_tick;      /* the tick the update last posed him in */
 } vb;
 
 static int motion_ids[4][100];
@@ -126,6 +134,13 @@ static const float gauge_bands[3][2] = {{350.0f, 20.0f}, {400.0f, 4.0f}, {500.0f
 #define DASH_NEAR 300.0f              /* DAT_0061aa3c */
 #define BLOCK_HOLD 15.0f              /* 0x5dfad0[rank 0] */
 #define LEAP_SPEED 45.0f              /* DAT_0061a8f0 */
+/* Hit reactions (docs/VERGIL_SPEC.md, "Hit reactions"). */
+#define STUN_FULL 60.0f               /* param block 0x5dca50 +0x30 */
+#define FLINCH_FULL 60.0f             /* +0x34 */
+#define GAUGE_REFILL 180.0f           /* FUN_002f1750: both refill once 180 frames pass without a blow */
+#define FLINCH_LIMIT 600.0f           /* gp-0x576c (0x61aa04): frames of flinching a window allows */
+#define FLINCH_CAP 12.0f              /* gp-0x5764 (0x61aa0c): points taken while flinching before the brace */
+#define BRACE_REACT 60.0f             /* DAT_0061aa20: frames into the brace before a lunge is answered */
 
 static float wrap_angle(float a) {
     while (a > PI) a -= 2.0f * PI;
@@ -314,7 +329,9 @@ static void script_tick(ScriptPlayer *p, float frames, float *dx, float *dy, flo
 }
 
 /* ---- Actions: FUN_004e0fc0's banks ---------------------------------------------------------------------- */
+static void action_effects(int action);
 static void set_action(int action) {
+    action_effects(action);
     int bank, script;
     vb.action = action;
     vb.action_time = 0.0f;
@@ -341,12 +358,47 @@ static void turn_toward_dante(float frames) {
     if (vb.action_time >= 30.0f) return;
     vb.yaw = wrap_angle(vb.yaw + fmaxf(-step, fminf(step, diff)));
 }
+/* Where a body bone is in the world (its pose from the last draw). */
+static void bone_world(int bone, float out[3]) {
+    local_to_world(body_pose[bone].p, out);
+}
+/* FUN_004dac60 / 004ddbf0: V0x338 on the body's second bone (model +4) as he goes, and turned half round
+ * (FUN_00105760(pi)) as he comes back. */
 static void hide(int on) {
     if (on != vb.hidden) {
-        float at[3] = {vb.pos[0], vb.pos[1] + 100.0f, vb.pos[2]};
-        fx_hit_spark(at);   /* stands in for effect 0x338 [approximation] */
+        float at[3];
+        bone_world(1, at);
+        int fx = nfx_spawn(NFX_VERGIL, 0x338, at, on ? vb.yaw : wrap_angle(vb.yaw + PI), 0);
+        vergil_boss_note("fx338", (float)fx, at[0], at[1], at[2]);
     }
     vb.hidden = on;
+}
+/* FUN_004e0fc0: the slash an action starts on his body (model +0's matrix, effect +0x3a held), ended by the next
+ * action. */
+static int slash_fx[2];
+static void action_effects(int action) {
+    static const unsigned short slashes[][3] = {{0x1a, 0x2fc, 0}, {0x1b, 0x2fd, 0}, {0x1c, 0x2fe, 0}, {0x47, 0x2ff, 0},
+                                                {0x2a, 0x300, 0x32e}, {0x27, 0x34f, 0}};
+    unsigned i;
+    float at[3];
+    for (i = 0; i < 2; ++i) if (slash_fx[i]) { nfx_kill(slash_fx[i]); slash_fx[i] = 0; }
+    if (vb.variant != 0) return;   /* Mission 7's sword; the other variants' weapons aren't sorted out */
+    for (i = 0; i < sizeof(slashes) / sizeof(slashes[0]); ++i) {
+        if (slashes[i][0] != action) continue;
+        bone_world(0, at);
+        slash_fx[0] = nfx_spawn(NFX_VERGIL, slashes[i][1], at, vb.yaw, 1);
+        if (slashes[i][2]) slash_fx[1] = nfx_spawn(NFX_VERGIL, slashes[i][2], at, vb.yaw, 1);
+        vergil_boss_note("slash", (float)slashes[i][1], (float)slash_fx[0], (float)nfx_live_elements(), 0.0f);
+    }
+}
+static void action_effects_follow(void) {
+    float at[3];
+    int i;
+    bone_world(0, at);
+    for (i = 0; i < 2; ++i) if (slash_fx[i]) {
+        if (!nfx_alive(slash_fx[i])) slash_fx[i] = 0;
+        else nfx_move(slash_fx[i], at, vb.yaw);
+    }
 }
 /* FUN_004e5ff0: move toward a point at TRAVEL_SPEED a frame; 1 once there. */
 static int travel(const float target[3], float frames) {
@@ -676,7 +728,23 @@ static void ai_step(float f) {
         else if(vb.step==1 && act==ACT_DONE){vb.step=2;vb.dt=1;vb.dt_unlocked=1;vb.dt_left=vb.variant==2?660:840;vb.timer=vb.variant==2?60:240;set_action(0x57);}
         else if(vb.step==2 && (vb.timer-=f)<=0){if(vb.variant==2)vb.dt_left=600;set_state(S_THINK);}
         break;
-    case S_FLINCH:                                  /* [approximation] the hit reaction isn't decoded */
+    case S_FLINCH:                                  /* FUN_004db5d0: reaction 0x11 or 2, 50/50 */
+    case S_FLINCH_BACK:                             /* FUN_004db750: reaction 3 (a blow from behind) */
+        if (vb.step == 0) {
+            vb.step = 1;
+            set_action(vb.state == S_FLINCH_BACK ? 3 : (unit_random() < 0.5f ? 0x11 : 2));
+        } else if (act == ACT_DONE) { set_state(S_THINK); break; }
+        /* FUN_004e5540: the flinch's clock runs; past 12 points of blows he braces instead. */
+        vb.flinch_time += f;
+        if (vb.flinch_points > vb.flinch_cap) set_state(S_BRACE);
+        break;
+    case S_BRACE:                                   /* FUN_004daf90: action 0x3d (vr3-40), facing Dante */
+        if (vb.step == 0) { vb.step = 1; vb.brace_time = 0.0f; set_action(0x3d); break; }
+        vb.yaw = angle_to_dante();                  /* FUN_00359c00 at 16384 a frame: a quarter turn, so at once */
+        vb.brace_time += f;
+        if (vb.brace_time > BRACE_REACT && dante_lunges()) { react(); break; }
+        vb.stun_gauge = STUN_FULL;                  /* he holds both gauges full while braced */
+        vb.flinch_gauge = FLINCH_FULL;
         if (act == ACT_DONE) set_state(S_THINK);
         break;
     case S_DEATH:
@@ -722,6 +790,41 @@ static void attach(int bone, float x, float y, float z, float rx, float ry, floa
     offset.p[0] = x; offset.p[1] = y; offset.p[2] = z;
     multiply(out, &body_pose[bone], &offset);
 }
+/* A piece's chains (demo_cloth.c, the game's chain step) in his model space: the game rides its chains with the
+ * owner's root each frame (FUN_00230150), so only the body's own motion and gravity swing them, which model space
+ * gives directly. The body capsules are the ones demo.c gives a coat on Dante's 24-bone body (FUN_00230130). */
+static void run_cloth(int which, const VergilMesh *mesh, Transform *pose, const Transform *base) {
+    static const struct { int bone; float a[3], b[3], r; } src[] = {
+        {3, {0.0f, 20.0f, 10.0f}, {0.0f, -40.0f, 10.0f}, 15.0f},
+        {2, {0.0f, -5.0f, 0.0f}, {0.0f, -15.0f, 0.0f}, 18.0f},
+        {15, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {16, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {19, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {20, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+    };
+    float wp[40 * 3], wr[40 * 9], local[40 * 3], bp[3], br[9];
+    ClothCapsule caps[6];
+    int i, k, n = mesh->bone_count < 40 ? mesh->bone_count : 40;
+    for (i = 0; i < 6; ++i) {
+        transform_point(&body_pose[src[i].bone], src[i].a, caps[i].a);
+        transform_point(&body_pose[src[i].bone], src[i].b, caps[i].b);
+        caps[i].radius = src[i].r;
+    }
+    for (i = 0; i < n; ++i) {
+        memcpy(wp + i * 3, pose[i].p, sizeof(float) * 3);
+        memcpy(wr + i * 9, pose[i].m, sizeof(float) * 9);
+        local[i * 3] = mesh->local[i].x; local[i * 3 + 1] = mesh->local[i].y; local[i * 3 + 2] = mesh->local[i].z;
+    }
+    memcpy(bp, base->p, sizeof(bp));
+    memcpy(br, base->m, sizeof(br));
+    demo_cloth_apply(DEMO_CLOTH_GAMEPLAY + which, bp, br, 0, 0, wp, wr, mesh->parents, local, n,
+                     which ? vergil_cord_cloth : vergil_coat_cloth,
+                     which ? sizeof(vergil_cord_cloth) : sizeof(vergil_coat_cloth), floorf(vb.cloth_clock), caps, 6);
+    for (i = 0; i < n; ++i) {
+        memcpy(pose[i].p, wp + i * 3, sizeof(float) * 3);
+        for (k = 0; k < 3; ++k) memcpy(pose[i].m[k], wr + i * 9 + k * 3, sizeof(float) * 3);
+    }
+}
 static void evaluate_poses(void) {
     static MotionSample current, previous;
     Transform at;
@@ -730,10 +833,11 @@ static void evaluate_poses(void) {
     if (vb.body.fade > 0.0f && vb.body.previous_motion >= 0)
         motion_sample(motion_get(vb.body.previous_motion), vb.body.previous_frame, &previous);
     build_skeleton(&vergil_parts[vb.variant==2 && vb.dt?PART_M20_DT_BODY:PART_BODY], &current, vb.body.fade > 0.0f ? &previous : 0, vb.body.fade, 0, body_pose, 1);
-    /* The coat hangs from body bone 3 (its cloth is bound to the bone list's entry 3, as Dante's is);
-     * drawn rigid [approximation: no cloth]. */
+    /* The coat hangs from body bone 3 (its cloth is bound to the bone list's entry 3, as Dante's is) and swings
+     * as pl001_02.clt's chains. */
     memset(&current, 0, sizeof(current));
     build_skeleton(&vergil_parts[PART_COAT], &current, 0, 0.0f, &body_pose[3], coat_pose, 0);
+    if (!vb.dt) run_cloth(0,&vergil_parts[PART_COAT], coat_pose, &body_pose[3]);
     {int b;for(b=0;b<11;++b)beowulf_pose[b]=body_pose[vergil_beowulf_bodymap[b]];}
     if(vb.variant==2 && vb.dt){
         /* Native DT attachments; cloth uses authored rest poses until its drivers are ported. */
@@ -744,21 +848,8 @@ static void evaluate_poses(void) {
     /* Scabbard in the left hand (0x5dc010: bone 13); Yamato in it (0x5dbfe0) or drawn in the right (0x5dc0a0). */
     attach(13, 19.0f, -0.5f, 11.0f, 0.0f, 3.84f, 0.0f, &at);
     build_skeleton(&vergil_parts[PART_SCABBARD], &current, 0, 0.0f, &at, scabbard_pose, 0);
-    {
-        /* Its cord (bones 2-6, cloth wp005.clt) runs along -x from the knot at bone 2: hang it straight down
-         * from there [approximation: no cloth]. Rz(90) takes -x to -y. */
-        const VergilMesh *m = &vergil_parts[PART_SCABBARD];
-        int i, k;
-        for (i = 3; i < m->bone_count && i < 7; ++i) {
-            float d[3] = {m->rest[i].x - m->rest[2].x, m->rest[i].y - m->rest[2].y, m->rest[i].z - m->rest[2].z};
-            identity(&scabbard_pose[i]);
-            scabbard_pose[i].m[0][0] = 0.0f; scabbard_pose[i].m[0][1] = -1.0f;
-            scabbard_pose[i].m[1][0] = 1.0f; scabbard_pose[i].m[1][1] = 0.0f;
-            for (k = 0; k < 3; ++k)
-                scabbard_pose[i].p[k] = scabbard_pose[2].p[k] + scabbard_pose[i].m[k][0] * d[0] +
-                                        scabbard_pose[i].m[k][1] * d[1] + scabbard_pose[i].m[k][2] * d[2];
-        }
-    }
+    /* Its cord (bones 3-6 off the knot at bone 2) swings as wp005.clt's chain. */
+    run_cloth(1, &vergil_parts[PART_SCABBARD], scabbard_pose, &at);
     if (vb.yamato_drawn) attach(9, -7.5f, -2.0f, 0.0f, 0.0f, 0.0f, 0.0f, &at);
     build_skeleton(&vergil_parts[PART_YAMATO], &current, 0, 0.0f, &at, yamato_pose, 0);
     if(vb.variant==2){
@@ -839,16 +930,38 @@ static int part_visible(int i){
 }
 /* Mission 19's partner Vergil (CPlVergil, ARKHAM_SPEC 1): his body (em035 [1], Dante's 24-bone layout) posed by the
  * bone transforms of a player Pose (main.c's partner, playing Dante's moves a frame late) and drawn where he stands.
- * His coat and Yamato aren't posed [stand-in]. */
+ * His coat swings as the boss's does; Yamato sits in its scabbard on bone 13, in his right hand (bone 9, the boss's
+ * drawn record 0x5dc0a0) while he attacks. His moves are still Dante's [stand-in: CPlVergil's moveset isn't ported]. */
 static int load_data(void);   /* the model's buffers, made at the first spawn (below) */
+static int partner_drawn, partner_fresh = 1;
+void vergil_boss_partner_drawn(int drawn) { partner_drawn = drawn; }
+void vergil_boss_partner_reset(void) { partner_fresh = 1; }
 void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], float x, float y, float z, float yaw) {
+    static const int parts[] = {PART_BODY, PART_COAT, PART_SCABBARD, PART_YAMATO};
+    MotionSample rest;
+    Transform at;
     int b, k, j;
     if (vb.active) return;   /* the boss's own buffers are in use */
     if (!load_data()) return;
+    if (partner_fresh) {
+        partner_fresh = 0;
+        vb.cloth_clock = 0.0f;
+        demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY);
+        demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY + 1);
+    }
+    vb.cloth_clock += 1.0f;   /* a draw a 60 Hz frame */
     for (b = 0; b < 24; ++b) {
         for (k = 0; k < 3; ++k) { for (j = 0; j < 3; ++j) body_pose[b].m[k][j] = rot[b][k][j]; body_pose[b].p[k] = pos[b][k]; }
     }
-    skin_part(PART_BODY);
+    memset(&rest, 0, sizeof(rest));
+    build_skeleton(&vergil_parts[PART_COAT], &rest, 0, 0.0f, &body_pose[3], coat_pose, 0);
+    run_cloth(0, &vergil_parts[PART_COAT], coat_pose, &body_pose[3]);
+    attach(13, 19.0f, -0.5f, 11.0f, 0.0f, 3.84f, 0.0f, &at);
+    build_skeleton(&vergil_parts[PART_SCABBARD], &rest, 0, 0.0f, &at, scabbard_pose, 0);
+    run_cloth(1, &vergil_parts[PART_SCABBARD], scabbard_pose, &at);
+    if (partner_drawn) attach(9, -7.5f, -2.0f, 0.0f, 0.0f, 0.0f, 0.0f, &at);
+    build_skeleton(&vergil_parts[PART_YAMATO], &rest, 0, 0.0f, &at, yamato_pose, 0);
+    for (b = 0; b < 4; ++b) skin_part(parts[b]);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
     {
@@ -867,14 +980,14 @@ void vergil_boss_draw_partner(const float rot[][3][3], const float pos[][3], flo
     sceGuTexMode(GU_PSM_T8, 0, 0, 1);
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
-    draw_part(PART_BODY);
+    for (b = 0; b < 4; ++b) draw_part(parts[b]);
     sceGuDisable(GU_ALPHA_TEST);
 }
 
 void vergil_boss_draw(void) {
     int i;
     if (!vb.active || vb.hidden) return;
-    evaluate_poses();
+    if (vb.posed_tick != vb.tick) evaluate_poses();   /* the update's pose, chains and all, when it's this tick's */
     for (i = 0; i < VERGIL_PART_COUNT; ++i) if(part_visible(i))skin_part(i);
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
@@ -940,7 +1053,33 @@ int vergil_boss_attack_landed(float *from_x, float *from_z, int *heavy, float *d
     return 1;
 }
 static int interruptible(void) {
-    return vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT || vb.state == S_APPROACH || vb.state == S_FLINCH;
+    return vb.state == S_THINK || vb.state == S_STRAFE || vb.state == S_IDLE || vb.state == S_TAUNT || vb.state == S_APPROACH || vb.state == S_FLINCH || vb.state == S_FLINCH_BACK;
+}
+/* FUN_004e51e0 (with FUN_004e52f0) on a reaction code: 0 none, 1 the brace (state 0x32), 2 a flinch. */
+static int reaction_gate(int melee) {
+    if (!melee) return 0;                           /* +0xbb52: only a blow with byte 2 = 0, not a shot */
+    /* +0xb9a0: 0x27 (the upper slash), 0x5f (the dive), 0x6f (the storm's dive) take blows without reacting. */
+    if (vb.action == 0x27 || vb.action == 0x5f || vb.action == 0x6f) return 0;
+    if (vb.dt) return 0;                            /* Devil Trigger's form doesn't flinch */
+    if (vb.state == 0x44 || vb.state == S_BRACE) return 0;
+    if (vb.flinch_time > vb.flinch_limit) return 1; /* the flinch has gone on too long */
+    if (vb.state == S_FLINCH || vb.state == S_FLINCH_BACK) return 2;
+    /* The body script's window 1 byte 4 = 1 marks a stretch he can be flinched in (the finishers' tails, 0x47,
+     * the recovery of the dive): it opens a new budget, 600 frames and 12 points. */
+    if (vb.body.window4 == 1) {
+        vb.flinch_time = 0.0f; vb.flinch_limit = FLINCH_LIMIT;
+        vb.flinch_points = 0.0f; vb.flinch_cap = FLINCH_CAP;
+        return 2;
+    }
+    return 1;                                       /* anywhere else (standing, strafing, mid-attack): the brace */
+}
+/* FUN_004dee00 on the codes of FUN_0032a540 / FUN_0032a800: 1 and 3 (from behind) play reaction 3 (unless he's
+ * already in it), the rest 0x11 or 2. */
+static void reaction(int behind, int melee) {
+    int gate = reaction_gate(melee);
+    trace(gate == 2 ? "react_flinch" : gate == 1 ? "react_brace" : "react_none");
+    if (gate == 1) set_state(S_BRACE);
+    else if (gate == 2) set_state(behind && vb.state != S_FLINCH_BACK ? S_FLINCH_BACK : S_FLINCH);
 }
 int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     float at[3] = {vb.pos[0], vb.pos[1] + 110.0f, vb.pos[2]}, damage, toward;
@@ -951,6 +1090,12 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     if (vb.state == S_GUARD && vb.action == 0x51 && fabsf(wrap_angle(toward - vb.yaw)) < PI / 2.0f) {
         vb.blocked = 1;
         trace("blocked");
+        return 0;
+    }
+    /* FUN_004e6d20 by the action's hit mode (+0xb9a3, set in FUN_004e0fc0): 2 for 0x56 / 0x57 / 0x61 / 0x62 (the
+     * Devil Trigger change) turns the blow aside (effect 0x32d), 1 for 0x75 takes nothing. */
+    if (vb.action == 0x56 || vb.action == 0x57 || vb.action == 0x61 || vb.action == 0x62 || vb.action == 0x75) {
+        trace("deflected");
         return 0;
     }
     /* As Cerberus's: a light hit 42, a heavy one 84, x1.1; Easy x2. Guns: the param block's 20% [inferred]. */
@@ -976,11 +1121,25 @@ int vergil_boss_hit(int kind, float from_x, float from_z, int mortal) {
     if(vb.variant>=1 && kind!=HIT_PISTOL && interruptible() && ++vb.m13_chain>=3){
         vb.m13_chain=0;set_state(vb.variant==2?S_BEHIND:S_BEOWULF_WARP);return 0;
     }
-    /* Flinches only between attacks [approximation: CEm035's reaction table 0x5dcc90 isn't decoded]. */
-    if (kind != HIT_PISTOL && interruptible()) {
-        set_state(S_FLINCH);
-        vb.step = 1;
-        set_action(kind == HIT_LIGHT || kind == HIT_AIR ? ((vb.tick & 1) ? 3 : 2) : 0x12);
+    {
+        /* FUN_002f17a0: each blow takes its record's +0xc from the stun gauge and +0x14 from the flinch gauge (by the
+         * weapon's share: guns 20). Dante's records aren't decoded, so a light blow takes 20 / 30 and a heavy one
+         * 60 / 60 [estimates]. The stun gauge emptying (FUN_0032a540) comes first and refills both; the flinch gauge
+         * (FUN_0032a800) refills itself. Either sends a reaction code by where the blow came from; a blow that
+         * empties neither does nothing to him (his +0x30, FUN_004e6b20, only reacts in the air). */
+        int heavy = kind == HIT_HEAVY || kind == HIT_LAUNCH || kind == HIT_SLAM;
+        float share = kind == HIT_PISTOL ? 0.2f : 1.0f, stun = (heavy ? 60.0f : 20.0f) * share;
+        int behind = fabsf(wrap_angle(toward - vb.yaw)) >= PI / 2.0f;
+        int code = 0;
+        /* FUN_004e6d20: while he flinches, a blow adds 1 to the budget's points, 2 if its +0xc is 60 or more. */
+        if (vb.state == S_FLINCH || vb.state == S_FLINCH_BACK) vb.flinch_points += stun >= 60.0f ? 2.0f : 1.0f;
+        vb.since_blow = 0.0f;
+        vb.stun_gauge -= stun;
+        vb.flinch_gauge -= (heavy ? 60.0f : 30.0f) * share;
+        if (vb.stun_gauge <= 0.0f) { vb.stun_gauge = STUN_FULL; vb.flinch_gauge = FLINCH_FULL; code = 1; }
+        else if (vb.flinch_gauge <= 0.0f) { vb.flinch_gauge = FLINCH_FULL; code = 1; }
+        vergil_boss_note("gauges", vb.stun_gauge, vb.flinch_gauge, (float)code, (float)behind);
+        if (code) reaction(behind, kind != HIT_PISTOL);
     }
     return 0;
 }
@@ -999,6 +1158,8 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     if(vb.variant==1 && vb.dt_unlocked && !vb.dt && vb.hp>0 && vb.hp<max_health()*.75f && (vb.dt_cooldown-=frames)<=0 && vb.state==S_THINK){vb.dt_unlocked=0;}
 
     vb.dante[0] = px; vb.dante[1] = py; vb.dante[2] = pz;
+    /* FUN_002f1750: 180 frames without a blow refill both gauges. */
+    if ((vb.since_blow += frames) > GAUGE_REFILL) { vb.stun_gauge = STUN_FULL; vb.flinch_gauge = FLINCH_FULL; }
     if (attacks && !vb.dying){ai_step(frames);if(vb.variant==2)m20_roundtrip(frames);}
     vb.action_time += frames;
     script_tick(&vb.body, frames*(vb.variant==2 && vb.dt?1.2f:1.0f), &dx, &dy, &dz);
@@ -1007,6 +1168,8 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     vb.pos[0] += c * dx + s * dz;
     vb.pos[2] += -s * dx + c * dz;
     vb.pos[1] += dy;
+    action_effects_follow();
+    vb.cloth_clock += frames;
     /* 4e27a0: fixed downward step, not accelerated gravity. +b9a0 suppresses it
      * for uppercut/Helm Breaker (27/5f) and airborne M20 entry (6f); 55 is hidden travel. */
     if (vb.action!=0x27 && vb.action!=0x5f && vb.action!=0x6f && vb.action!=0x55)
@@ -1026,12 +1189,17 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     if (vb.state==S_UPPER || vb.state==S_LEAP) trace("air");
     if (!vb.hidden && !vb.dying) {
         evaluate_poses();
+        vb.posed_tick = vb.tick;
         test_attack_caps(px, py, pz);
     }
 }
 void vergil_boss_spawn(float x, float y, float z) {
     if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     memset(&vb, 0, sizeof(vb));
+    slash_fx[0] = slash_fx[1] = 0;
+    vb.posed_tick = -1;
+    demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY);
+    demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY + 1);
     vb.active = 1;
     vb.variant=boss_variant;
     vb.pos[0] = x; vb.pos[1] = vb.floor_y = y; vb.pos[2] = z;
@@ -1043,6 +1211,7 @@ void vergil_boss_spawn(float x, float y, float z) {
     vb.centre[1] = y;
     vb.yaw = PI;
     vb.hp = max_health();
+    vb.stun_gauge = STUN_FULL; vb.flinch_gauge = FLINCH_FULL;   /* the budget starts at 0 / 0 (FUN_004d27d0) */
     vb.body.motion = vb.body.previous_motion = -1;
     vb.last_wander = -1;
     vb.state = S_THINK;

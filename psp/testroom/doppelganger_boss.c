@@ -1,5 +1,6 @@
 #include "doppelganger_boss.h"
 
+#include "demo_cloth.h"
 #include "enemy.h"
 #include "fx.h"
 #include "motion.h"
@@ -193,23 +194,22 @@ static void move_forward(float speed, float f) {
     db.pos[0] += sinf(db.yaw) * speed * f;
     db.pos[2] += cosf(db.yaw) * speed * f;
 }
-/* A dark place to come up in: the sixth behind Dante if it's dark, else any dark one [inferred: FUN_003c4dd0 picks
- * the nearest dark region]. */
-static int dark_region_near(float x, float z) {
-    int i, best = -1;
-    float bd = 1e9f;
-    for (i = 0; i < 6; ++i) {
-        float dx = crest_pos[i][0] - x, dz = crest_pos[i][1] - z, d = dx * dx + dz * dz;
-        if (!db.lit[i] && d < bd) { bd = d; best = i; }
-    }
-    return best;
+/* The dark region to go to (FUN_003c4c40, from FUN_003c4dd0): the shorts of table 0x5b7a40 read from entry
+ * region*6+6 down to region*6+1, the first that's a region (not -1) and dark. As the game reads it, that's region
+ * r's own entry and then the middle (6) and one neighbour, and from the middle 0, 5, 4, 3, 2, 1. -1: none, and he
+ * doesn't sink. */
+static int dark_region_from(int mine) {
+    static const signed char table[48] = {1, 5, 6, -1, -1, -1, 0, 2, 6, -1, -1, -1, 1, 3, 6, -1, -1, -1, 2, 4, 6, -1, -1, -1,
+                                          3, 5, 6, -1, -1, -1, 4, 0, 6, -1, -1, -1, 0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0};
+    int k;
+    if (mine < 0 || mine > 6) return -1;
+    for (k = mine * 6 + 6; k > mine * 6; --k) if (table[k] >= 0 && !region_lit(table[k])) return table[k];
+    return -1;
 }
+/* He heads for the region's centre (0x5b7950, by FUN_003c4840's distance and FUN_003c48f0's angle). */
 static void point_in_region(int r, float out[3]) {
-    if (r < 0 || r > 5) { out[0] = CENTRE_X; out[2] = CENTRE_Z; }
-    else {
-        out[0] = CENTRE_X + (crest_pos[r][0] - CENTRE_X) * 0.6f;
-        out[2] = CENTRE_Z + (crest_pos[r][1] - CENTRE_Z) * 0.6f;
-    }
+    if (r < 0 || r > 6) { out[0] = CENTRE_X; out[2] = CENTRE_Z; }
+    else { out[0] = doppel_regions[r][0]; out[2] = doppel_regions[r][1]; }
     out[1] = db.floor_y;
 }
 
@@ -222,7 +222,9 @@ static void think(void) {
     float d = dist2(db.pos, db.dante);
     int mine = region(db.pos[0], db.pos[2]), his = region(db.dante[0], db.dante[2]), i;
     if (db.lit[6]) { set_state(S_ALL_LIT); return; }
-    if (region_lit(mine) && db.stagger_cool <= 0.0f) { set_state(S_SINK); db.flee_to = dark_region_near(db.pos[0], db.pos[2]); return; }
+    if (region_lit(mine) && db.stagger_cool <= 0.0f && dark_region_from(mine) >= 0) {
+        set_state(S_SINK); db.flee_to = dark_region_from(mine); return;
+    }
     if (!region_lit(his) && d > 700.0f) { set_state(S_EMERGE); return; }
     for (i = 0; i < 6; ++i) if (db.lit[i] && !db.lit[opposite[i]] && unit_random() < 0.35f) {
         db.flee_to = i;
@@ -391,6 +393,44 @@ static void build_skeleton(const DoppelgangerMesh *mesh, const MotionSample *s, 
         else multiply(&out[i], &out[mesh->parents[i]], &local);
     }
 }
+static float cloth_clock;   /* 60 a second, the coat's chain */
+static void transform_point(const Transform *t, const float p[3], float out[3]) {
+    int i;
+    for (i = 0; i < 3; ++i) out[i] = t->p[i] + t->m[i][0] * p[0] + t->m[i][1] * p[1] + t->m[i][2] * p[2];
+}
+static void coat_cloth(const Transform *base) {
+    /* demo.c's body capsules for Dante's 24-bone layout, which his body has. */
+    static const struct { int bone; float a[3], b[3], r; } src[] = {
+        {3, {0.0f, 20.0f, 10.0f}, {0.0f, -40.0f, 10.0f}, 15.0f},
+        {2, {0.0f, -5.0f, 0.0f}, {0.0f, -15.0f, 0.0f}, 18.0f},
+        {15, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {16, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {19, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+        {20, {0.0f, 0.0f, 0.0f}, {0.0f, -50.0f, 0.0f}, 10.0f},
+    };
+    const DoppelgangerMesh *mesh = &doppel_parts[PART_COAT];
+    float wp[9 * 3], wr[9 * 9], local[9 * 3], bp[3], br[9];
+    ClothCapsule caps[6];
+    int i, k, n = mesh->bone_count < 9 ? mesh->bone_count : 9;
+    for (i = 0; i < 6; ++i) {
+        transform_point(&body_pose[src[i].bone], src[i].a, caps[i].a);
+        transform_point(&body_pose[src[i].bone], src[i].b, caps[i].b);
+        caps[i].radius = src[i].r;
+    }
+    for (i = 0; i < n; ++i) {
+        memcpy(wp + i * 3, coat_pose[i].p, sizeof(float) * 3);
+        memcpy(wr + i * 9, coat_pose[i].m, sizeof(float) * 9);
+        local[i * 3] = mesh->local[i].x; local[i * 3 + 1] = mesh->local[i].y; local[i * 3 + 2] = mesh->local[i].z;
+    }
+    memcpy(bp, base->p, sizeof(bp));
+    memcpy(br, base->m, sizeof(br));
+    demo_cloth_apply(DEMO_CLOTH_GAMEPLAY + 2, bp, br, 0, 0, wp, wr, mesh->parents, local, n,
+                     doppel_coat_cloth, sizeof(doppel_coat_cloth), floorf(cloth_clock), caps, 6);
+    for (i = 0; i < n; ++i) {
+        memcpy(coat_pose[i].p, wp + i * 3, sizeof(float) * 3);
+        for (k = 0; k < 3; ++k) memcpy(coat_pose[i].m[k], wr + i * 9 + k * 3, sizeof(float) * 3);
+    }
+}
 static void evaluate_poses(void) {
     static MotionSample current, previous;
     Transform at;
@@ -398,10 +438,11 @@ static void evaluate_poses(void) {
     else memset(&current, 0, sizeof(current));
     if (db.fade > 0.0f && db.previous_motion >= 0) motion_sample(motion_get(db.previous_motion), db.previous_frame, &previous);
     build_skeleton(&doppel_parts[PART_BODY], &current, db.fade > 0.0f ? &previous : 0, db.fade, 0, body_pose);
-    /* The coat (its cloth, em031_01.clt) hangs from the hips, bone 1 [approximation: rigid] */
+    /* The coat hangs from the hips, bone 1 (its bone 1 at the body's bone 3, 19 up), its tails swinging as
+     * em031_01.clt's chain: demo_cloth.c in his model space, as Vergil's coat (vergil_boss.c run_cloth). */
     at = body_pose[1];
-    at.p[1] -= 0.0f;
     build_skeleton(&doppel_parts[PART_COAT], 0, 0, 0.0f, &at, coat_pose);
+    coat_cloth(&at);
     /* His sword in the right hand, bone 9, as Vergil's drawn Yamato (-7.5, -2, 0) [inferred] */
     {
         Transform offset;
@@ -556,11 +597,14 @@ void doppelganger_boss_update(float frames, float px, float py, float pz, int at
         if (r > 1050.0f) { db.pos[0] = CENTRE_X + dx / r * 1050.0f; db.pos[2] = CENTRE_Z + dz / r * 1050.0f; }
     }
     if (trace_on && (db.tick % 60) == 0) trace("tick");
+    cloth_clock += frames;
 }
 static int load_data(void);   /* the model's buffers, made at the first spawn (below) */
 void doppelganger_boss_spawn(float x, float y, float z) {
     if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     memset(&db, 0, sizeof(db));
+    cloth_clock = 0.0f;
+    demo_cloth_reset_slot(DEMO_CLOTH_GAMEPLAY + 2);
     db.active = 1;
     db.pos[0] = x; db.pos[1] = db.floor_y = y; db.pos[2] = z;
     db.yaw = PI;
