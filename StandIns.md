@@ -120,9 +120,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   mark (57 / 58) aren't picked (their shots aren't decoded); the pedestal's sword flash (0x3b3 / 0x3b4) isn't shown and
   the landings' effects (0x2c, 0x2e5) are dust; the slam hurting within 300 as record 12 [estimate], its effects at
   the hand's floor point [estimate]. `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
-- **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
-  (FUN_003ba660) charges the bats about her (+0x1b7: their touch takes record 7, 500, not 0's 300), which the port
-  doesn't keep, so it does nothing; Shl03-05's shapes beyond their numbers; the teleport's darkening is a draw colour
+- **Nevan**: 23's swarm leaves from her formation slots (FUN_003b9c40's wide table, turned toward Dante; the table choice flag +0x1b2 taken as 0 [inferred]) and homes as decoded, its vectors taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
+  (FUN_003ba660) charges the bats about her (+0x1b7: record 7, 500, not 0's 300, on their next swarm, till
+  they come home), as the port now does; Shl03-05's shapes beyond their numbers; the teleport's darkening is a draw colour
   toward black [inferred: the material words' GS meaning], its G0xe / G0x93 100 up from her [estimate: her bone +0x724];
   her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
