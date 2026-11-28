@@ -49,7 +49,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Shadows**: sizes per kind fitted by eye [estimates]; props have none; the game's SHW records aren't decoded.
   `enemy.c` shadow_radius.
 - **Effects**: many particle programs and model effects are motes, glows or `fx_explosion` (the Jester's
-  trap ring, Geryon's missiles, Vergil's 0x338, Cerberus's unported
+  trap ring, Geryon's missiles, Cerberus's unported
   particle programs). NATIVE_FX.md, VANGUARD_EFFECTS.md, CERBERUS_SPEC.md.
 - **P effects** (particle programs, `pfx.c`, NATIVE_FX.md "P effects"): the GS blend 0x41 taken as Cd - Cs As; a
   camera-facing emitter's axes from the eye and world up (not the camera's own up); fake
@@ -130,7 +130,8 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   [inferred]; her flinches and knock-back gauge. `lady_boss.c`, PortJobs.
 - **Cerberus**: the breath's mist generators stand in as E284 clouds; the punch's P58 / P59 take the paw's offsets in
   the body's frame. NATIVE_FX.md, CERBERUS_SPEC.md.
-- **Vergil**: effect 0x338 is a hit spark; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
+- **Vergil**: his effects (0x338, the slashes) play from his pack but follow his bones by position only (no bone
+  rotation) [approximation]; air movement now consumes vertical root motion and uses the decoded fixed downward dive/floor pull (VERGIL_SPEC.md); his hit reaction
   is decoded (gauges, flinch windows, the brace), but Dante's blows take estimated amounts from his gauges (Dante's
   attack records aren't decoded); his coat and Yamato's sheath drawn
   rigid (no cloth); his long reaction (motion 111) where the demo takes over. `vergil_boss.c`.

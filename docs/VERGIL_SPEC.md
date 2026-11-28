@@ -108,7 +108,12 @@ All of section 4 at rank 0, variant 0. Approximations:
 - **Damage taken:** Cerberus's per-hit values (42 light, 84 heavy, × 1.1; Easy × 2), guns 20%.
 - **Air movement:** vertical root motion and the fixed downward Helm Breaker vector now follow the decoded update below; floor collision still uses the port's room-floor query.
 - **Cloth:** the coat is rigid on body bone 3; the scabbard's cord hangs straight down.
-- **Effects:** the teleport's 0x338 and the sword trails aren't drawn (a hit spark marks the teleport).
+- **Effects:** em035.pac entry 57 is his effect pack, exported as nfx bank 27 (`tools/native_fx.py`). V0x338 plays
+  on the body's second bone as he vanishes and, turned half round, as he appears (`4dac60`, `4ddbf0`); the slashes
+  `4e0fc0` starts with an action ride his root bone until the next action: 0x1a V0x2fc, 0x1b V0x2fd, 0x1c V0x2fe,
+  0x47 V0x2ff, 0x2a V0x300 + V0x32e, 0x27 V0x34f (Mission 7 only). Not played: the effects' time scale (+0x14 from
+  +0xb534), the turned-aside blow's V0x32d, and the other variants' effects. The effects aren't compared with a PS2
+  capture yet.
 - **Death:** he plays reaction 1:11 and the mission clears; demo 322 isn't played.
 
 ## Hit reactions (decoded 2026-11-27)

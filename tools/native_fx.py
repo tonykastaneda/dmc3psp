@@ -315,6 +315,10 @@ def main():
     # 26 em021's pack (GDATA 128, PAC entry 1): the Queen's charge V0x31b / V0x242 (FUN_00437ab0) and the King's blast
     # V0x36c / V0x233 (FUN_0043ea30, 0043ebe0). docs/CHESS_ROYALS_SPEC.md.
     summary.append(write_bank(lines, 26, records(pac_list(read(128))[1]), (0x31b, 0x242, 0x36c, 0x233), ()))
+    # 27 em035's pack (GDATA 139, PAC entry 57): Vergil's. V0x338 as he vanishes and appears (FUN_004dac60, 004ddbf0);
+    # the slashes FUN_004e0fc0 starts with an action on his body: 0x1a V0x2fc, 0x1b V0x2fd, 0x1c V0x2fe, 0x47 V0x2ff,
+    # 0x2a V0x300 + V0x32e, 0x27 V0x34f. docs/VERGIL_SPEC.md "Effects".
+    summary.append(write_bank(lines, 27, records(pac_list(read(139))[57]), (0x338, 0x2fc, 0x2fd, 0x2fe, 0x2ff, 0x300, 0x32e, 0x34f), ()))
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / "native_fx_runtime.h").write_text("\n".join(lines) + "\n", encoding="ascii")
     # The blade trails' models (docs/NATIVE_FX.md "Blade trails"): M34 (Dante's pack), M30 / M31 (A&R's), 33 bones in a
@@ -340,7 +344,7 @@ def main():
                "static const unsigned short trail_m%d_indices[] = {%s};" % (m, ", ".join(map(str, idx))),
                "#define TRAIL_M%d_VERTICES %d" % (m, len(verts)), "#define TRAIL_M%d_INDICES %d" % (m, len(idx))]
     (args.output / "trail_runtime.h").write_text("\n".join(tl) + "\n", encoding="ascii")
-    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 25, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), summary):
+    for bank, (v, e, t, m, skipped) in zip((0, 1, 2, 4, 5, 25, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27), summary):
         print(f"bank {bank}: {v} V, {e} E, {skipped['P']} P, {t} textures, {m} models; missing: {skipped['G']} G children")
 
 

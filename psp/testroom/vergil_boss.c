@@ -3,6 +3,7 @@
 #include "enemy.h"
 #include "fx.h"
 #include "motion.h"
+#include "nfx.h"
 #include "swizzle.h"
 
 #include <pspgu.h>
@@ -325,7 +326,9 @@ static void script_tick(ScriptPlayer *p, float frames, float *dx, float *dy, flo
 }
 
 /* ---- Actions: FUN_004e0fc0's banks ---------------------------------------------------------------------- */
+static void action_effects(int action);
 static void set_action(int action) {
+    action_effects(action);
     int bank, script;
     vb.action = action;
     vb.action_time = 0.0f;
@@ -352,12 +355,47 @@ static void turn_toward_dante(float frames) {
     if (vb.action_time >= 30.0f) return;
     vb.yaw = wrap_angle(vb.yaw + fmaxf(-step, fminf(step, diff)));
 }
+/* Where a body bone is in the world (its pose from the last draw). */
+static void bone_world(int bone, float out[3]) {
+    local_to_world(body_pose[bone].p, out);
+}
+/* FUN_004dac60 / 004ddbf0: V0x338 on the body's second bone (model +4) as he goes, and turned half round
+ * (FUN_00105760(pi)) as he comes back. */
 static void hide(int on) {
     if (on != vb.hidden) {
-        float at[3] = {vb.pos[0], vb.pos[1] + 100.0f, vb.pos[2]};
-        fx_hit_spark(at);   /* stands in for effect 0x338 [approximation] */
+        float at[3];
+        bone_world(1, at);
+        int fx = nfx_spawn(NFX_VERGIL, 0x338, at, on ? vb.yaw : wrap_angle(vb.yaw + PI), 0);
+        vergil_boss_note("fx338", (float)fx, at[0], at[1], at[2]);
     }
     vb.hidden = on;
+}
+/* FUN_004e0fc0: the slash an action starts on his body (model +0's matrix, effect +0x3a held), ended by the next
+ * action. */
+static int slash_fx[2];
+static void action_effects(int action) {
+    static const unsigned short slashes[][3] = {{0x1a, 0x2fc, 0}, {0x1b, 0x2fd, 0}, {0x1c, 0x2fe, 0}, {0x47, 0x2ff, 0},
+                                                {0x2a, 0x300, 0x32e}, {0x27, 0x34f, 0}};
+    unsigned i;
+    float at[3];
+    for (i = 0; i < 2; ++i) if (slash_fx[i]) { nfx_kill(slash_fx[i]); slash_fx[i] = 0; }
+    if (vb.variant != 0) return;   /* Mission 7's sword; the other variants' weapons aren't sorted out */
+    for (i = 0; i < sizeof(slashes) / sizeof(slashes[0]); ++i) {
+        if (slashes[i][0] != action) continue;
+        bone_world(0, at);
+        slash_fx[0] = nfx_spawn(NFX_VERGIL, slashes[i][1], at, vb.yaw, 1);
+        if (slashes[i][2]) slash_fx[1] = nfx_spawn(NFX_VERGIL, slashes[i][2], at, vb.yaw, 1);
+        vergil_boss_note("slash", (float)slashes[i][1], (float)slash_fx[0], (float)nfx_live_elements(), 0.0f);
+    }
+}
+static void action_effects_follow(void) {
+    float at[3];
+    int i;
+    bone_world(0, at);
+    for (i = 0; i < 2; ++i) if (slash_fx[i]) {
+        if (!nfx_alive(slash_fx[i])) slash_fx[i] = 0;
+        else nfx_move(slash_fx[i], at, vb.yaw);
+    }
 }
 /* FUN_004e5ff0: move toward a point at TRAVEL_SPEED a frame; 1 once there. */
 static int travel(const float target[3], float frames) {
@@ -1082,6 +1120,7 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
     vb.pos[0] += c * dx + s * dz;
     vb.pos[2] += -s * dx + c * dz;
     vb.pos[1] += dy;
+    action_effects_follow();
     /* 4e27a0: fixed downward step, not accelerated gravity. +b9a0 suppresses it
      * for uppercut/Helm Breaker (27/5f) and airborne M20 entry (6f); 55 is hidden travel. */
     if (vb.action!=0x27 && vb.action!=0x5f && vb.action!=0x6f && vb.action!=0x55)
@@ -1107,6 +1146,7 @@ void vergil_boss_update(float frames, float px, float py, float pz, int attacks)
 void vergil_boss_spawn(float x, float y, float z) {
     if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     memset(&vb, 0, sizeof(vb));
+    slash_fx[0] = slash_fx[1] = 0;
     vb.active = 1;
     vb.variant=boss_variant;
     vb.pos[0] = x; vb.pos[1] = vb.floor_y = y; vb.pos[2] = z;
