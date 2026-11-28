@@ -6497,7 +6497,7 @@ static const signed char bw_action_script[28] = {
     BW_SCRIPT_OF(3, 0), BW_SCRIPT_OF(3, 1), BW_SCRIPT_OF(3, 2), BW_SCRIPT_OF(3, 3), BW_SCRIPT_OF(3, 4), BW_SCRIPT_OF(3, 5),
     BW_SCRIPT_OF(3, 6), BW_SCRIPT_OF(3, 7), BW_SCRIPT_OF(3, 8), BW_SCRIPT_OF(3, 9), BW_SCRIPT_OF(1, 0), BW_SCRIPT_OF(0, 7),
     BW_SCRIPT_OF(3, 11), BW_SCRIPT_OF(3, 12), BW_SCRIPT_OF(3, 13), BW_SCRIPT_OF(3, 14)};
-enum { BW_IDLE = 0, BW_RUN = 2, BW_STAGGER = 8, BW_DEATH = 9, BW_WALK = 11, BW_ROAR = 0x16 };
+enum { BW_IDLE = 0, BW_RUN = 2, BW_STOP = 3, BW_CHARGE = 4, BW_STAGGER = 8, BW_DEATH = 9, BW_WALK = 11, BW_ROAR = 0x16 };
 typedef struct { unsigned char action, weight; } BwPick;
 typedef struct { float angle, half, reach; BwPick picks[5]; } BwSector;   /* degrees; half 0: any side; reach 0: any */
 static const BwSector bw_sectors[3][3] = {
@@ -6508,7 +6508,8 @@ static const BwSector bw_sectors[3][3] = {
 static const float bw_phase_at[2] = {0.73f, 0.47f};
 #define BW_FEATHERS 12
 static struct { int on, state, index, homing, turn; float pos[3], dir[3], speed, wait, home, life, born; } bw_feathers[BW_FEATHERS];
-static int bw_phase, bw_last, bw_gauge;
+static int bw_phase, bw_last, bw_gauge, bw_run_charges;
+static float bw_run_clock;   /* run time, paused during action 4 */
 static float bw_shots;   /* his shot tally (+0x38d4) */
 static int bw_shot_once;             /* his first shot hit (+0x3903) */
 static float bw_gate;   /* his attack gate (+0x130; block 0x5b8900): opens past 300 (difficulty under 369) */
@@ -6529,6 +6530,14 @@ static int bw_init(void) {
 
 static void bw_go(int action) {
     giga_note("beowulf", action, (float)e->health);
+    if (action == BW_RUN && e->action != BW_CHARGE) {
+        bw_run_charges = 0;
+        bw_run_clock = 0.0f;
+    }
+    if (action == BW_CHARGE) {
+        ++bw_run_charges;
+        e->yaw_rate = e->yaw;   /* the heading the charge's root travels along (002dedc0) */
+    }
     e->action = (unsigned char)action;
     e->timer = 0.0f;
     e->wake = 0.0f;
@@ -6673,6 +6682,7 @@ static void bw_feather(int bone, int index) {
 static void beowulf_update_glue(float f, float px, float py, float pz) {
     float dx = px - e->pos[0], dz = pz - e->pos[2], d = sqrtf(dx * dx + dz * dz), g, root[3], rel;
     int a = e->action;
+    float previous_frame = e->frame;
     if (e->fade > 0.0f) { e->fade -= e->fade_rate * f; if (e->fade < 0.0f) e->fade = 0.0f; }
     script_event = 0;
     script_tick(f, root);
@@ -6715,13 +6725,56 @@ static void beowulf_update_glue(float f, float px, float py, float pz) {
         if (d < 550.0f && fabsf(rel) < 100.0f) { bw_go(0x18); return; }
         if (e->timer > 300.0f) { bw_go(BW_IDLE); return; }
         break;
-    case BW_RUN:
-        /* FUN_002dade0: turning 637 a frame (0x619688) for 30 frames (0x619690), then 218 (0x619698); after 180
-         * (0x619694), or Dante beyond 3000 (0x5b8cb4), it stops (3) [at its next stride's event in the game]. */
+    case BW_RUN: {
+        /* Script 0:7 emits flag 1 at 112 and 139, with a repeating stride from the MOT's loop_from.
+         * The general runner wraps at the clip's start; account for the stride's later first frame. */
+        int wrapped = e->frame < previous_frame;
+        bw_run_clock += f;
+        if (wrapped) {
+            const Motion *m = motion_get(e->motion);
+            float start[3], end[3];
+            motion_root(m, e->frame, start);
+            e->frame += m->loop_from - m->loop_start;
+            motion_root(m, e->frame, end);
+            root[0] += end[0] - start[0];
+            root[2] += end[2] - start[2];
+        }
+        if (previous_frame <= 110.0f && e->frame > 110.0f) {
+            e->hit_left[0] = 1.0e6f;
+            e->hit_cap[0] = 15;
+            e->hit_type = 7;
+            e->hit_done = 0;
+        }
+        if ((previous_frame <= 112.0f && e->frame > 112.0f) ||
+            (previous_frame <= 139.0f && (e->frame > 139.0f || wrapped))) {
+            float from[3] = {e->pos[0], e->pos[1] + 100.0f, e->pos[2]};
+            float to[3] = {from[0] + sinf(e->yaw) * 300.0f, from[1], from[2] + cosf(e->yaw) * 300.0f}, hit;
+            if (bw_run_clock > 210.0f) { bw_go(BW_STOP); return; }
+            if ((bw_run_charges < 3 && d <= 3000.0f && fabsf(rel) > 90.0f) ||
+                (stage_loaded() && stage_raycast(from, to, &hit))) { bw_go(BW_CHARGE); return; }
+            if (d > 3000.0f || fabsf(rel) > 90.0f) { bw_go(BW_STOP); return; }
+        }
         goyle_turn_to(px, pz, e->timer < 30.0f ? BW_TURN_MID : BW_TURN_SLOW, f);
         move_local(root[0], 0.0f, root[2]);
-        if (e->timer > 210.0f || d > 3000.0f) { bw_go(3); return; }
         break;
+    }
+    case BW_CHARGE: {
+        float yaw = e->yaw;
+        if (e->timer < 60.0f) {
+            float angle = wrap_angle(atan2f(dx, dz) - yaw);
+            if (angle < 0.0f) angle += 2.0f * PI;
+            yaw = wrap_angle(yaw + fminf(ANGLE(0x71c), angle / (60.0f - e->timer)) * f);
+        }
+        if (e->timer >= 60.0f && e->flags[1] == 1) {
+            e->flags[1] = 0;
+            if (ai_unit() < (bw_phase == 0 ? 0.0f : 0.4f)) { bw_go(0x12); return; }
+        }
+        e->yaw = e->yaw_rate;
+        move_local(root[0], 0.0f, root[2]);
+        e->yaw = yaw;
+        if (e->done) { bw_go(BW_RUN); e->frame = 110.0f; e->timer = 30.0f; return; }
+        break;
+    }
     case 0x17:
         goyle_turn_to(px, pz, BW_TURN_MID, f);
         move_local(root[0], 0.0f, root[2]);

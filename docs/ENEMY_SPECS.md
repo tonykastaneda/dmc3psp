@@ -1246,8 +1246,9 @@ bank (groups 0, 1, 3 used), [11] / [12] caps and shapes. Code: new `002d7e60`, c
 (`tools/prepare_beowulf.py`; group g script n is entry 16 g + n), so his motions, hit windows and damage are the
 game's; the choice, phases, roar, the movement rules, stagger's end, the volley's flags, counts and wind, and the
 feathers' flight above (the runner now keeps each enemy's flag set 0: `tools/prepare_cerberus.py` packs an op3's
-flags 2-4 into its c). Stand-ins: the run's stop at once rather than at a stride's event, his charge (4) from the run
-isn't taken, a feather's start heading from his body's centre 200 up [inferred], their burst effect.
+flags 2-4 into its c). Run script 0:7 checks for a stop or charge on its stride events at 112 and 139. The port uses its
+stage ray for the forward wall check. A feather's starting heading from his body's centre 200 up is inferred and its
+burst effect remains unported.
 
 ---
 

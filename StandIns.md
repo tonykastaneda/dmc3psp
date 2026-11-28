@@ -125,8 +125,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
 - **Beowulf**: which of Dante's blows are his kind-4 records (the port's heavy, slam, launch [inferred]); a feather heads
-  out from his centre 200 up [inferred] and its burst isn't drawn; the run stops at once, not at its next stride's event; his charge (4) from the
-  run isn't taken. `enemy.c` Beowulf, PortJobs.
+  out from his centre 200 up [inferred] and its burst isn't drawn. The charge's wall probe uses the port's stage ray. `enemy.c` Beowulf, PortJobs.
 - **Lady**: her grapple (0x1d), native hook/skinned cable and its direction (0044b780), and ledge mode (0x1e) are ported;
   her ledges now use the room's authored box collision; FUN_00449120 taken as the ledge nearest Dante; the hop's landing 0x0e plays 0x61's (its slot is
   empty); 0x8f fires one pistol shot [inferred];  what 0x1b / 0x1c fire (a rocket, a
