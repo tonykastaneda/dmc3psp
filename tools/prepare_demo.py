@@ -378,24 +378,18 @@ def pack_cloth_block(model_clips, motion_clips, work: Path, bone_count: int, lab
             index[key] = -1
             return -1
         text = path.read_text(encoding="latin1")
-        # A line can carry two Bone records ("Bone 6 Bone 8 X", demo 53's motion pl101_01.clt). The first
-        # one's axis token is the next record's keyword, so it takes the next bone's axis.
+        # A line can carry two Bone records ("Bone 6 Bone 8 X", demo 53's motion pl101_01.clt). The game's
+        # tokeniser (FUN_0022fca0) binds the first bone, then reads the next token as its axis: "Bone" isn't one, so
+        # the node keeps the axis it had (+0x1c0, written only here; zero-initialised: X, the game's code 0
+        # [inferred]); then "8" and "X" are no keyword and are skipped, so bone 8 isn't in the chain.
         fixed = []
         for line in text.splitlines():
             parts = line.split()
-            if not parts or parts[0] != "Bone" or parts.count("Bone") < 2:
+            if not parts or parts[0] != "Bone" or len(parts) < 3 or parts[2] in AXIS_CODE:
                 fixed.append(line)
                 continue
-            idxs = [i for i, token in enumerate(parts) if token == "Bone"]
-            chunks = [parts[i: idxs[n + 1] if n + 1 < len(idxs) else None] for n, i in enumerate(idxs)]
-            known = [c[2] if len(c) >= 3 and c[2] in AXIS_CODE else None for c in chunks]
-            for n, chunk in enumerate(chunks):
-                if len(chunk) < 2:
-                    continue
-                axis = known[n] or next((a for a in known[n + 1:] if a), None) or next((a for a in known if a), "Y")
-                if known[n] is None:
-                    print(f"    {label} {name}: Bone {chunk[1]} takes axis {axis}")
-                fixed.append(f"Bone {chunk[1]} {axis}")
+            print(f"    {label} {name}: '{line.strip()}' binds bone {parts[1]} (axis X kept), the rest skipped")
+            fixed.append(f"Bone {parts[1]} X")
         text = "\n".join(fixed)
         try:
             cloths = psm.parse_cloths(text)

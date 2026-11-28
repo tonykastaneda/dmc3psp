@@ -497,8 +497,14 @@ and, when `ResetCltLevel` is above 0, step that many times at the pose held for 
 above 32 is capped; the game's update just before the snap is overwritten by it). Each bone keeps its own axis, NY
 included. These scripts' wind is 0 and they name no capsules. A coat on Dante's 23-bone body still gets the
 gameplay capsules (spine and both legs), so the chains can't hang through him. `ClothSim1D` is not run. A Bone line whose axis token
-is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`);
-bone 8 is X and bone 6 takes that axis.
+is not an axis is skipped. Demo 53's motion `pl101_01.clt` puts two Bone records on one line (`Bone 6 Bone 8 X`).
+The game's tokeniser (`FUN_0022fca0`) binds bone 6 and reads the next token as its axis (`X` 0, `Y` 1, `Z` 2, `NX` 3,
+`NY` 4, `NZ` 5, strings at `0x6186a0`); `Bone` is none, so the node keeps its axis byte (+0x1c0, written only there:
+zero, X [inferred]); `8` and `X` are no keyword and are skipped, so bone 8 isn't in the chain. `prepare_demo` now
+reads it so. The capsules: the cutscene Dante (pl100 / pl101, 23 bones) has the gameplay Dante's bones 0-22 in the
+same order and places, so the coat's capsule list (`FUN_00230130`, list `0x5949d0`) sits on his own spine and legs;
+whether a cutscene model applies capsules at all isn't read. Wind: every demo script's Wind is 0, so there is
+nothing to blow.
 
 
 **Clears**: each mission's clear demos (the AFTER_DEMO sections ending in mission_clear and the demos chained into them):
