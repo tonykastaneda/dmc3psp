@@ -28,6 +28,8 @@
 #include "nevan_boss.h"
 #include "fx.h"
 #include "nfx.h"
+#include "stage.h"
+void enemy_test_note(const char *what, int a, float b);   /* enemy.h's: a line in the test log */
 
 const char *const nevan_motion_names[NEVAN_M_COUNT] = {
     "nv200", "nv210", "nv211", "nv212", "nv213", "nv214", "nv216", "nv217", "nv224", "nv225", "nv230", "nv240",
@@ -85,6 +87,7 @@ static void act(NevanBrain *b, int a) {
         float at[3] = {b->pos[0], b->pos[1] + 100.0f, b->pos[2]};
         nfx_spawn(NFX_NEVAN, (a == 21 ? 0x1a8 : 0x97) | 0x8000, at, b->yaw, 0);
     }
+    b->shade = 0.0f;   /* her materials as they are, whatever broke off a teleport */
     b->action = a;
     b->want = scripts[a].motion;
     b->restart = 1;
@@ -551,8 +554,10 @@ static void attack_event(NevanBrain *b, float px, float py, float pz, int attack
         for (i = 0; i < 12; ++i) if (b->orbs[i].on && b->orbs[i].state == 0) b->orbs[i].state = 1;
         break;
     }
-    /* 29 and 38: their floor lightning started with the action (field_update); the event (5) calls FUN_003ba660,
-     * not decoded. */
+    /* 29 and 38: their floor lightning started with the action (field_update); the event (5) calls FUN_003ba660:
+     * each of the 16 bats about her (+0x4db0) that's out (+0x4df0) and not on a swarm (+0x1b5) is charged
+     * (FUN_003c9a50: +0x1b7), so its touch takes record 7 (500) for record 0 (300) (FUN_003c96d0). The port doesn't
+     * keep the bats about her, so there's nothing to charge [stand-in]. */
     case 30: shell(b, mine, 0.0f, 57.0f, 300.0f, 800.0f, 1, 0.0f, 0.0f, px, py, pz); break;      /* Shl03, record 3: to 134 */
     case 32: shell(b, his, 50.0f, 30.0f, 70.0f, 500.0f, 0, 0.0f, 0.0f, px, py, pz); break;       /* Shl04, record 4 */
     case 35: break;   /* the kiss: its rush is in nevan_think */
@@ -654,13 +659,24 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
         if (b->timer > idle_frames[b->phase]) next_move(b, d, unit);
         break;
     case 7: case 8: case 9:
-        /* FUN_003b5870, by its steps (+6): 0-1 30 frames on her materials (+0x9c / +0xa0 0 to 128: not decoded, so
-         * not shown), 2 her alpha (+0x5161) down over 30, 3 placed (FUN_003ba790) and turned to him, 4-5 15 frames
-         * away, 6 her alpha back over 30, 7 the materials back over 30, then the next move. */
+        /* FUN_003b5870, by its steps (+6): 0 sets the RGB of both colour words of each of her four models' materials
+         * to black (CModel +0x94 / +0x98, FUN_00281800 / 281810) and starts G0xe on her bone (+0x724); 1 brings
+         * their alpha (+0x9c / +0xa0) from 0 to 128 over 30 frames: she darkens to black [inferred: what the words
+         * do in the GS]; 2 her alpha (+0x5161) down over 30, 3 placed (FUN_003ba790) and turned to him, 4 G0x93 at the
+         * bone, 4-5 15 frames away, 6 her alpha back over 30, 7 the materials back over 30, then the next move. */
         b->wait -= f;
         switch (b->step) {
-        case 0: b->step = 1; b->wait = 30.0f; break;
-        case 1: if (b->wait < 0.0f) { b->step = 2; b->wait = 30.0f; } break;
+        case 0: {
+            float at[3] = {b->pos[0], b->pos[1] + 100.0f, b->pos[2]};   /* the bone (+0x724), 100 up [estimate] */
+            nfx_spawn(NFX_NEVAN, 0x0e | 0x8000, at, b->yaw, 0);
+            { extern int testroom_frame; enemy_test_note("nevan teleport at frame", testroom_frame, b->pos[2]); }
+            b->step = 1; b->wait = 30.0f;
+            break;
+        }
+        case 1:
+            b->shade = b->wait > 0.0f ? 1.0f - b->wait / 30.0f : 1.0f;
+            if (b->wait < 0.0f) { b->step = 2; b->wait = 30.0f; enemy_test_note("nevan shaded", a, b->shade); }
+            break;
         case 2:
             b->alpha = b->wait > 0.0f ? b->wait / 30.0f : 0.0f;
             if (b->wait < 0.0f) b->step = 3;
@@ -671,26 +687,41 @@ void nevan_think(NevanBrain *b, float f, float px, float py, float pz, float (*u
                 if (pz > 2500.0f) { b->pos[0] = 2500.0f; b->pos[1] = 300.0f; b->pos[2] = 1200.0f; }
                 else { b->pos[0] = 2500.0f; b->pos[1] = 178.0f; b->pos[2] = 3800.0f; }
             } else {
-                /* 400 (7) or 1000 (8) cm beyond him, on the line from the room's middle (2500, 2500); the floor
-                 * under 400 up. [The game stops her short of a wall by a ray from where she was; here she keeps to
-                 * the stage.] */
+                /* FUN_003ba790: 400 (7) or 1000 (8) cm beyond him, on the line from (2500, 100, 2500) through him
+                 * (FUN_00359c80); the floor under that point from 400 up (FUN_00201c70). A ray from where she is
+                 * (400 up) to it (FUN_00201da0): if a wall's in the way she goes to where it hits, its floor again.
+                 * She stands at the floor's height. With no floor under the point the game keeps a stale height;
+                 * the port keeps 400 and the stage's bounds there. */
                 float cx = px - 2500.0f, cz = pz - 2500.0f, l = sqrtf(cx * cx + cz * cz), r = a == 8 ? 1000.0f : 400.0f;
+                float from[3] = {b->pos[0], 400.0f, b->pos[2]}, to[3], t, y;
                 if (l < 1.0f) { cx = 0.0f; cz = 1.0f; l = 1.0f; }
-                b->pos[0] = px + cx / l * r; b->pos[2] = pz + cz / l * r;
-                b->pos[1] = 400.0f;
-                keep_on_stage(b);
+                to[0] = px + cx / l * r; to[1] = 400.0f; to[2] = pz + cz / l * r;
+                if (stage_raycast(from, to, &t)) {
+                    to[0] = from[0] + (to[0] - from[0]) * t;
+                    to[2] = from[2] + (to[2] - from[2]) * t;
+                }
+                b->pos[0] = to[0]; b->pos[2] = to[2];
+                if (stage_floor(to[0], 400.0f, to[2], 0.0f, &y)) b->pos[1] = y;
+                else { b->pos[1] = 400.0f; keep_on_stage(b); }
             }
             b->placed = 1;
+            enemy_test_note("nevan placed", (int)b->pos[0], b->pos[2]);
             turn_to(b, px, pz);
             b->hidden = 1; b->step = 4;
             break;
-        case 4: b->step = 5; b->wait = 15.0f; break;
+        case 4: {
+            float at[3] = {b->pos[0], b->pos[1] + 100.0f, b->pos[2]};
+            nfx_spawn(NFX_NEVAN, 0x93 | 0x8000, at, b->yaw, 0);
+            b->step = 5; b->wait = 15.0f;
+            break;
+        }
         case 5: if (b->wait < 0.0f) { b->step = 6; b->wait = 30.0f; b->hidden = 0; } break;
         case 6:
             b->alpha = b->wait > 0.0f ? 1.0f - b->wait / 30.0f : 1.0f;
             if (b->wait < 0.0f) { b->step = 7; b->wait = 30.0f; b->alpha = 1.0f; }
             break;
         default:
+            b->shade = b->wait > 0.0f ? b->wait / 30.0f : 0.0f;   /* the materials back */
             if (b->wait < 0.0f) {
                 /* Moves 14 and 22 go on to 27 and 38 (+0x4e16); the rest take the pattern's next move. */
                 if (b->move == 14) { b->pattern = -1; act(b, 27); }

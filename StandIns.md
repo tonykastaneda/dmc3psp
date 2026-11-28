@@ -116,8 +116,10 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   the landings' effects (0x2c, 0x2e5) are dust; the slam hurting within 300 as record 12 [estimate], its effects at
   the hand's floor point [estimate]. `agni_rudra.c`, `enemy.c` Agni & Rudra, PortJobs.
 - **Nevan**: 23's swarm homes as decoded, but leaves from her chest (her formation isn't kept) and its vectors are taken in her frame [inferred]; breaking free of the kiss doesn't play her [3] 21 (above); 29 / 38's event 5
-  (FUN_003ba660) isn't read; Shl03-05's shapes beyond their numbers; the teleport's material steps (+0x9c / +0xa0)
-  aren't shown; her 7 / 8 teleports keep to the stage instead of the game's wall ray; her bats are glows; her speed
+  (FUN_003ba660) charges the bats about her (+0x1b7: their touch takes record 7, 500, not 0's 300), which the port
+  doesn't keep, so it does nothing; Shl03-05's shapes beyond their numbers; the teleport's darkening is a draw colour
+  toward black [inferred: the material words' GS meaning], its G0xe / G0x93 100 up from her [estimate: her bone +0x724];
+  her speed
   carried between moves isn't confirmed. `nevan_boss.c`.
 - **Beowulf**: which of Dante's blows are his kind-4 records (the port's heavy, slam, launch [inferred]); a feather heads
   out from his centre 200 up [inferred] and its burst isn't drawn; the run stops at once, not at its next stride's event; his charge (4) from the

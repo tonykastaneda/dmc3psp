@@ -274,8 +274,10 @@ def main():
     # 6 em008's pack (GDATA 120, PNST chunk 24): the Hell Vanguard's P312 only (its V / E are vanguard_fx.py's).
     summary.append(write_bank(lines, 6, records(pnst_entries(read(120))[24]), (), (), (312,)))
     # 7 em028's effect pack (GDATA 133, PAC entry 9): Nevan's. Action 22's V0x199 (FUN_003b6c90) and her bats' P
-    # (FUN_003c9870: P203 / P235 / P251 at random on each).
-    summary.append(write_bank(lines, 7, records(pac_list(read(133))[9]), (409, 0x110, 0x1a8 | G_FLAG, 0x97 | G_FLAG), (),
+    # (FUN_003c9870: P203 / P235 / P251 at random on each). G0xe / G0x93: her teleport's start and its arrival
+    # (FUN_003b5870 steps 0 and 4).
+    summary.append(write_bank(lines, 7, records(pac_list(read(133))[9]), (409, 0x110, 0x1a8 | G_FLAG, 0x97 | G_FLAG,
+                                                                          0x0e | G_FLAG, 0x93 | G_FLAG), (),
                               (203, 235, 251)))
     # 8 em034's pack (GDATA 138, PAC entry 28): Lady's rocket (CEm034Shl02: V0x179 in flight, V0x21f as it bursts).
     summary.append(write_bank(lines, 8, records(pac_list(read(138))[28]), (0x179, 0x21f), ()))
