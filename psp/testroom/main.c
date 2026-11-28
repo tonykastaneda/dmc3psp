@@ -92,6 +92,8 @@ int testroom_frame;
 #include "mission18.h"
 #include "secret_missions.h"
 #include "shadow.h"
+#include "gameover.h"
+#include "savegame.h"
 #include "credit.h"   /* DO NOT REMOVE: the owner's credit on the Options screen */
 
 PSP_MODULE_INFO("DMC3TestRoom", 0, 1, 0);
@@ -592,6 +594,7 @@ enum { DEBUG_SPEED, DEBUG_DUMMIES, DEBUG_KIND, DEBUG_ACTION, DEBUG_ANIM, DEBUG_O
 static int dummy_anim_auto = 1;
 static void mission_gimmicks_draw(void);
 static ShopState shop_state;   /* the Red Orbs and what's been bought, for this session */
+static int keep_session;   /* tests ("keepsession 1"): New Game keeps the script's orbs, to save them */
 /* Each kind's max health, from the class parameter blocks (docs/ENEMY_SPECS.md, docs/SHOP.md): what its red
  * orbs are worked out from. Lust, Wrath and Greed are inferred. */
 static int kind_max_health(int kind) {
@@ -1595,10 +1598,11 @@ scene_done:
         }
     }
     if (player->weapon_wheel) draw_weapon_wheel(player);
+    if (gameover_active()) gameover_draw();
     if (debug_open) draw_debug_menu(anim.viewer);
     if (pause_active) pause_draw();
     if (door_prompt_time > 0.0f && !pause_active && !debug_open) door_prompt_draw();
-    if (mission_mode && !pause_active && !debug_open) caption_draw();
+    if (mission_mode && !pause_active && !debug_open && !gameover_active()) caption_draw();
     sceGuFinish();
     {
         unsigned int t = sceKernelGetSystemTimeLow();
@@ -2456,6 +2460,9 @@ static void cmp_load(void) {
             if (sscanf(line + 6, "%d %d %d", &cmp_hitme[cmp_hitme_count][0], &cmp_hitme[cmp_hitme_count][1], &cmp_hitme[cmp_hitme_count][2]) >= 2) ++cmp_hitme_count;
         }
         else if (strncmp(line, "death ", 6) == 0) cmp_death = atoi(line + 6);   /* "death 1": Dante can die in this scene */
+        else if (strncmp(line, "keepsession ", 12) == 0) keep_session = atoi(line + 12);
+        else if (strncmp(line, "autosave ", 9) == 0) savegame_auto = atoi(line + 9);   /* tests: saves without the dialog */
+        else if (strncmp(line, "yelloworbs ", 11) == 0) shop_state.owned[7] = (unsigned char)atoi(line + 11);   /* tests: Yellow Orbs held */
         else if (strncmp(line, "camyaw ", 7) == 0) cmp_camera_yaw = atoi(line + 7);
         else if (strncmp(line, "testcam ", 8) == 0)
             cmp_test_camera = sscanf(line + 8, "%f %f %f %f %f %f", &cmp_test_eye[0], &cmp_test_eye[1], &cmp_test_eye[2],
@@ -3630,8 +3637,11 @@ static int script_run(float dt, float floor_y) {
 }
 
 /* Into another room: its stage, Dante at the start the door names, and the room's script from the top. */
+static int room_entry_start;   /* the start he came into this room at: the Game Over's Continue puts him back there */
 static void enter_room(int room, int start, Player *player, FollowCamera *camera) {
     int m10_previous=mission_room>=0?room_number(mission_room):-1;
+    room_entry_start = start;
+    gameover_reset();
     char path[320];
     
     float palace_start[4];
@@ -4427,7 +4437,39 @@ static void start_debug_room(const MenuChoice *choice, Player *player, FollowCam
     
 }
 
+/* ---- Saves (savegame.c): what's kept, from and back into the session. */
+static void savegame_capture(const MenuChoice *c) {
+    savegame.red_orbs = shop_state.red_orbs;
+    memcpy(savegame.owned, shop_state.owned, sizeof savegame.owned);
+    memcpy(savegame.bought, shop_state.bought, sizeof savegame.bought);
+    savegame.blue_fragments = shop_state.blue_fragments;
+    if (c->mission >= 1 && c->mission <= 20) savegame.last_mission = (unsigned char)c->mission;
+    savegame.last_difficulty = (unsigned char)(c->difficulty & 1);
+    savegame.turbo = (unsigned char)(c->turbo != 0);
+    if (bp_best_floor() > savegame.bp_best) savegame.bp_best = bp_best_floor();
+}
+static int save_hook(MenuChoice *c) { savegame_capture(c); return savegame_save_dialog(); }
+static int load_hook(MenuChoice *c) {
+    if (!savegame_load_dialog()) return 0;
+    shop_state.red_orbs = savegame.red_orbs;
+    memcpy(shop_state.owned, savegame.owned, sizeof shop_state.owned);
+    memcpy(shop_state.bought, savegame.bought, sizeof shop_state.bought);
+    shop_state.blue_fragments = savegame.blue_fragments;
+    c->mission = savegame.last_mission >= 1 && savegame.last_mission <= 20 ? savegame.last_mission : 1;
+    c->difficulty = savegame.last_difficulty & 1;
+    c->turbo = savegame.turbo;
+    bp_set_best(savegame.bp_best);
+    return 1;
+}
+static int new_hook(MenuChoice *c) {
+    (void)c;
+    savegame_clear();
+    if (!keep_session) memset(&shop_state, 0, sizeof shop_state);
+    return 1;
+}
+
 static void start_mission(const MenuChoice *choice, Player *player, FollowCamera *camera) {
+    gameover_reset();
     bp_reset(choice->mission==BLOODY_PALACE_MISSION);
     enemy_set_attack_slot_limit(1);   /* Includes the Debug Room path, which skips enter_room. */
     if (focus_cmp) bp_test_start(cmp_bp_floor,cmp_bp_visits,cmp_bp_boss,cmp_bp_group);
@@ -4450,6 +4492,7 @@ static void start_mission(const MenuChoice *choice, Player *player, FollowCamera
     /* What he'd own by this mission in the real game. A test can add to it: "ownall 1", an "item" that's a weapon
      * or a style, or the weapon it starts with ("melee", "gun"). */
     player_own_mission(choice->mission);
+    player_owned |= savegame.got;   /* what a loaded save had got in play */
     if (cmp_ownall) player_owned = OWN_EVERYTHING;
     {
         int c;
@@ -4577,6 +4620,8 @@ int main(int argc, char *argv[]) {
     sfx_init(game_dir);
     credits_fight_init(game_dir);
     bp_init(game_dir);
+    savegame_init(game_dir);
+    menu_save_hook = save_hook; menu_load_hook = load_hook; menu_new_hook = new_hook;
     motions_loaded = motion_init();
     anim_reset(&anim);
     combat_reset(&combat);
@@ -4944,6 +4989,28 @@ int main(int argc, char *argv[]) {
                 msg_fill_env(&env, &player, 0, 0);
                 msg_event_skip(&env, 0);
                 debug_pressed &= ~PSP_CTRL_START;
+            } else if (gameover_active()) {
+                /* Dante is dead (gameover.c): the world holds while the prompt and the menu are up. */
+                GameOverAction action = gameover_update(debug_pressed, dt);
+                if (action == GAMEOVER_REBIRTH) {
+                    float chest[3] = {player.x, player.y + 100.0f, player.z};
+                    if (shop_state.owned[7]) --shop_state.owned[7];
+                    combat_revive(&combat, &player);
+                    fx_explosion(chest);   /* the game's burst of light rays [stand-in] */
+                } else if (action == GAMEOVER_CONTINUE && mission_room != ROOM_NONE) {
+                    enter_room(mission_room, room_entry_start, &player, &camera);
+                    combat_revive(&combat, &player);
+                } else if (action == GAMEOVER_RESTART) start_mission(&mission_choice, &player, &camera);
+                else if (action == GAMEOVER_END) {
+                    menu_draw_buffer = draw_buffer;
+                    music_menu(129);
+                    menu_run_from_mission_select(&mission_choice, NULL, NULL);
+                    play_intro(mission_choice.mission);
+                    start_mission(&mission_choice, &player, &camera);
+                    draw_buffer = menu_draw_buffer;
+                    last_time = sceKernelGetSystemTimeLow();
+                }
+                was_open = 1;
             } else if (mission_mode && !debug_open && (debug_pressed & PSP_CTRL_START)) {
                 pause_open();
                 pause_active = 1;
@@ -5148,6 +5215,12 @@ int main(int argc, char *argv[]) {
                 if (mission_choice.mission == 13) play_movie("MOVIES/D325.MOV");
                 if (mission_choice.mission == 19) play_movie("MOVIES/D328.MOV");
                 music_menu(130);   /* Result.adx: the results (0x82) */
+                if (mission_choice.mission >= 1 && mission_choice.mission <= 20 && !focus) {
+                    /* Progress for the next save (savegame.c). */
+                    savegame.cleared[mission_choice.difficulty & 1] |= 1u << (mission_choice.mission - 1);
+                    savegame.got |= player_owned;
+                    if (mission_choice.mission < 20) savegame.last_mission = (unsigned char)(mission_choice.mission + 1);
+                }
                 menu_mission_clear(cmp_menu ? menu_script_pad : NULL, cmp_menu ? menu_clear_shot : NULL);
                 if(focus_cmp && cmp_stop_on_clear)cmp_frames=frames;
                 else {
@@ -5299,10 +5372,9 @@ int main(int argc, char *argv[]) {
             {
                 unsigned int ai_start = sceKernelGetSystemTimeLow();
                 vergil_boss_dante(combat.action, player.yaw);
-                /* During a script's event the enemies wait (a stand-in: what the game's event mode stops in
-                 * them isn't decoded), so they don't set on a Dante who can't move. */
-                if (!(mission_mode && msg_event_on()))
-                    enemy_set_dante_yaw(player.yaw);
+                /* The game's event mode (op 49, FUN_0023e450) doesn't stop the enemies: their task category runs on.
+                 * What it stops is below (no blow lands while an event is on). */
+                enemy_set_dante_yaw(player.yaw);
             PROF_MARK();
             if (!credits_fight_frozen()) enemy_update(player.quicksilver ? dt * 0.1f : dt, player.x, player.y, player.z);
             PROF_END(3);
@@ -5357,9 +5429,14 @@ int main(int argc, char *argv[]) {
             /* Death only in real play (and scenes that ask for it): test scenes rely on him lasting. After he has
              * lain dead 150 frames the mission starts again (an approximation of the Game Over / Continue screen). */
             combat_dante_can_die = mission_mode && ((!focus && !autotest) || cmp_death);
-            if (combat_dead_frames(&combat) > 150.0f) start_mission(&mission_choice, &player, &camera);
+            /* A second after he lies dead, the Game Over (gameover.c), with the Yellow Orbs he holds. */
+            if (combat_dead_frames(&combat) > 60.0f && !gameover_active()) gameover_start(shop_state.owned[7]);
             {
             int landed = enemy_attack_landed(&from_x, &from_z, &heavy), blow_kind = 0;
+            /* While a script's event is on the game sets ctx+8, and its hit manager resolves nothing (FUN_002fa1f0 /
+             * FUN_002fa380 / FUN_002f9c50 return no record): no blow lands on Dante. Its attack shells (task category
+             * 4) stop too; the port's projectiles aren't held [not ported]. */
+            if (mission_mode && msg_event_on()) landed = 0;
             float blow_damage = 0.0f;
             if (landed) { blow_kind = enemy_attack_kind(heavy); blow_damage = enemy_attack_damage(); }
             { int h; for (h = 0; h < cmp_hitme_count; ++h) if (cmp_hitme[h][0] == frames) { cmp_hit_frame = frames; cmp_hit_kind = cmp_hitme[h][1]; cmp_hit_damage = cmp_hitme[h][2]; } }

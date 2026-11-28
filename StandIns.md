@@ -38,8 +38,9 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
   se / se_3d play in the blocks messages.c runs when they're the room's (kind 0), the system's (1) or Dante's (4)
   bank (not placed); the enemies' banks (types 2-6), the scripts' type 7 sounds and the blocks messages.c doesn't
   keep, the other gimmicks' sounds and the sounds' distance falloff (FUN_0033d8d0) aren't in yet. MUSIC.md. GAME_FLOW.md.
-- **No saves**; **Game Over / Continue**: Dante goes down and the mission restarts 150 frames later. GAME_FLOW.md.
-- **Event mode**: during a script's event the enemies wait (what the game's event mode stops isn't read).
+- **Saves** (`savegame.c`, GAME_FLOW.md "Saves"): the PSP's save utility, not the game's own save screen. Mission Select's Save / Load and the title's Load Game; no saving from the pause menu yet (its Save Data stays locked). Progress is written only when the player saves.
+- **Game Over** (`gameover.c`, GAME_FLOW.md "Game Over"): the game's flow, measured on PCSX2. The lettering is the port's menu font, not the game's art for these words, and the orb is the item shop's Yellow Orb icon. Rebirth's burst of light rays is the port's explosion. End skips GameOver.sfd (not converted). Gold Orb mode isn't modelled: Yellow Orbs only.
+- **Event mode** (EVENT_SCRIPTS.md "What event mode stops"): Dante's input is off and no blow lands, as in the game; the enemies keep moving. The game also stops its attack shells (task category 4, and 5 when the event's first argument is 1). The port's projectiles aren't held, and category 5 isn't identified.
   `main.c` ~4296, EVENT_SCRIPTS.md.
 - **Enemy health and Dante's damage**: Dante's hits are 42 light / 84 heavy (×1.1, Easy ×2, guns 20%) for every boss
   [inferred], a bullet its record's 10 (Ebony & Ivory's, 0x5a5a30 +4) against every enemy, kept in fractions of a unit by the Hells and the like; health is the Pride's 6 light hits by eye and

@@ -310,13 +310,23 @@ so a message gated on one reads it as clear: 003's seal text (10003, flag 33 set
 lit. Sounds, effects, enemy groups, doors, gimmicks and items given or taken in these blocks are skipped (the
 missions' code does those). A Divinity Statue's shop takes the O press first, so 005's statue text (10010) doesn't show.
 
-**Events** (49 .. 4c): while one is on, Dante takes no input, the enemies wait (a stand-in: what the game's event
-mode stops in them isn't decoded) and, while a cut is up, the HUD is hidden. The cuts (4d / 4e, waited on by 4f),
+**Events** (49 .. 4c): while one is on, Dante takes no input, no blow lands on him (below), the enemies keep moving and,
+while a cut is up, the HUD is hidden. The cuts (4d / 4e, waited on by 4f),
 zones on and off (75), the follow camera's settings and turn (77, 76) and Dante's warps (59 to a POS record, 5b to
 a spot) run as docs/CAMERA.md "Event cameras" describes. START skips an event the script lets him skip (49's second
 argument, 4a's 0x100 / 0x200): the block jumps to its 4c, keeping on the way only what changes state (flags,
 counters, zones, warps), as `FUN_0020f880` replays. Test runs (FOCUS cmp) skip every event at once unless the
 scene says `events 1`, so their timed inputs stay right.
+
+**What event mode stops** (op 49 in `FUN_0020be20` -> `FUN_0023e450(cam_mgr, arg0)`; op 4c -> `FUN_0023e6e0`):
+- Event bytes: evt+0x9a = 1 (the player's input off; START skips while +0x9b, op 49's second argument, is set).
+- Context bytes: ctx+8 = 1, ctx+9 = 1 and 0x1e5710d = 1, all cleared at 4c.
+- ctx+8: the hit manager's list walks (`FUN_002fa1f0`, `FUN_002fa380`, `FUN_002f9c50`, records at +0x1018) return nothing while it's set, so no attack collision is resolved, either way.
+- ctx+9: objects such as `FUN_0030ff50`'s and `FUN_00325850`'s leave out their `FUN_00195eb0(0x61ab98, obj)` registration (a per-frame list) [its use isn't traced].
+- Task categories: `FUN_00195cf0` sets a category's stop bit in the task manager (0x6a2530 +0x450), and `FUN_001955b0` skips a stopped category. Argument 0 stops category 4; argument 1 stops categories 4 and 5, and also sets the player's +0x28b5 (`FUN_002e1100(player, 0)`). 4c releases every category (`FUN_00195d50`).
+- Category 4 holds the attack shells (the classes that set +0x45 = 4: the Hells' `0037c6b0` / `0037c830`, and others at `0040d160`, `00417340`, `00468580`). Category 5 isn't identified. The enemies (+0x45 = 3) aren't stopped.
+- The room's door seals: every `CStageSet` of kind 5 (SEAL, by `FUN_002ffdf0`'s order) gets its vtable +0xc with 1 at 49, and +0xc 2 then +0x10 0 at 4c.
+- The port: Dante's input off and no blow landing (`main.c`). Not held: its projectiles (category 4) and the seals' event mode.
 
 Op 17 / 18 (the encounter cleared) is true only once a fight has been on in this visit and is over (the PS2's
 enemy manager needs a group started, +0x1b), so a victory camera doesn't play on entering a quiet room; the

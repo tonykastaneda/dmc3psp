@@ -208,6 +208,7 @@ void combat_release(Combat *c, Player *player);
 extern int combat_dante_can_die;
 /* Frames he has lain dead, 0 while alive. */
 float combat_dead_frames(const Combat *c);
+void combat_revive(Combat *c, Player *player);   /* full health; he gets up from the knockdown */
 void combat_update(Combat *combat, Player *player, const PlayerInput *input, float dt);
 const char *combat_move_name(MoveId move);
 /* Takes the shots fired since the last call; 0 if none. */

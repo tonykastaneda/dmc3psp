@@ -35,6 +35,15 @@ void bp_init(const char *directory) {
     fclose(f);
 }
 int bp_best_floor(void) { return best_floor; }
+/* A loaded save's best (savegame.c): kept if it beats the one on file, and written there too. */
+void bp_set_best(int floor) {
+    FILE *f;
+    if (floor<=best_floor || floor>9999) return;
+    best_floor=floor;
+    if (!best_path[0]) return;
+    f=fopen(best_path,"w"); if (!f) return;
+    if (fprintf(f,"BPB1 %d\n",best_floor)>0 && !fclose(f)) saved_floor=best_floor;
+}
 static void record_floor(void) {
     FILE *f; int written, closed;
     if (test_run) return;   /* Scripted starts/warps must never overwrite the player's record. */
