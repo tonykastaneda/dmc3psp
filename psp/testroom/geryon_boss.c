@@ -40,6 +40,7 @@
 #define VTYPE (GU_TEXTURE_32BITF | GU_NORMAL_32BITF | GU_VERTEX_32BITF | GU_INDEX_16BIT | GU_TRANSFORM_3D)
 
 extern unsigned int enemy_ai_random(void);
+static float unit_random(void) { return (float)enemy_ai_random() * 2.3283064e-10f; }
 extern int testroom_frame;
 
 enum { PART_HORSE, PART_CART, PART_MISSILE, PART_SPHERE, PART_SMALL };
@@ -53,7 +54,8 @@ enum {
 #define STUN_FULL 800.0f     /* param block 0x5d6bf0 +0x30 */
 #define FLINCH_FULL 500.0f   /* +0x34 */
 /* What the port's states are doing (the PS2 keeps this in the action and its sub-step +6). */
-enum { S_IDLE, S_CHARGE, S_TURN_BACK, S_SPHERES, S_HIDDEN, S_MISSILES, S_SHOCK, S_GALLOP, S_TURN, S_LEAVE, S_SWITCH, S_DEATH, S_FLINCH };
+enum { S_IDLE, S_CHARGE, S_TURN_BACK, S_SPHERES, S_HIDDEN, S_MISSILES, S_SHOCK, S_GALLOP, S_TURN, S_LEAVE, S_SWITCH, S_DEATH, S_FLINCH,
+       S_ABOUT, S_BACK };
 
 typedef struct { float m[3][3], p[3]; } Transform;
 typedef struct { float u, v, nx, ny, nz, x, y, z; } Vertex;
@@ -66,6 +68,9 @@ static struct {
     float pos[3], yaw, hp, timer, floor_y, axis_dir, leave_yaw;
     float stun_gauge, flinch_gauge, since_blow;   /* the damage component's gauges (+0x30 / +0x34 full) */
     int flinches;                                 /* +0x978: flinch codes since the last shockwave */
+    int next_gallop;                              /* +0x97a: 2 the gallop 0x10, 1 0x11, 0 a coin */
+    int short_run, after_spheres;                 /* +0x8fc 0x800 (after a turn) / 0x100 (after the spheres) */
+    float run_len;
     float dante[3], centre[3];
     Player horse, cart;
     Shell shells[SHELLS];
@@ -294,6 +299,9 @@ static void start_charge(void) {
         gb.axis_dir = bridge_t(gb.dante) >= bridge_t(gb.pos) ? 1.0f : -1.0f;
         gb.yaw = gb.axis_dir > 0.0f ? axis : wrap_angle(axis + PI);
     }
+    /* 4c0fd0 on the ground: 65 frames, 30 after a turn (0x800), 10 after the spheres (0x100); +0x97a cleared. */
+    gb.run_len = gb.after_spheres ? 10.0f : gb.short_run ? 30.0f : CHARGE_TIME;
+    if (gb.phase == 1) gb.next_gallop = 0;
     set_action(A_CHARGE, 1);
     set_state(S_CHARGE);
 }
@@ -306,7 +314,9 @@ static void think_bridge(void) {
 /* Phase 1's think (4c0c50), once its script is over (the spheres' check came as it started, go_think): the gallop
  * round the centre. */
 static void think_ground(void) {
-    gb.side = !gb.side;   /* +0x97a: the gallops alternate */
+    /* +0x97a: 2 the gallop 0x10, 1 0x11; 0 (a run cleared it) a coin, remembered. */
+    if (gb.next_gallop == 0) gb.next_gallop = unit_random() < 0.5f ? 1 : 2;
+    gb.side = gb.next_gallop == 1;
     gb.laps = GALLOP_WINDOWS; gb.gallop_clip=0; gb.window_time=0;
     set_action(gb.side ? A_GALLOP_R : A_GALLOP_L, 1);
     set_state(S_GALLOP);
@@ -348,9 +358,30 @@ static void ai_step(float f) {
             float t = bridge_t(gb.pos), past = (t - bridge_t(gb.dante)) * gb.axis_dir * 7354.0f;
             bridge_clamp();
             if (past > 1000.0f || t <= 0.0f || t >= 1.0f) { set_action(A_TURN_BACK, 0); set_state(S_TURN_BACK); }
-        } else {
-            if (gb.timer < 20.0f) turn_toward(angle_to(gb.dante), 182.0f * UNITS * f);
-            if (gb.timer >= CHARGE_TIME) go_think();
+        } else if (gb.timer >= gb.run_len) {
+            /* 4c0fd0's end: after the spheres a gallop by a coin (+0x97a set), after a turn action 10 (then the
+             * missiles), else the spheres (8). It runs straight: no turning. */
+            if (gb.after_spheres) {
+                gb.after_spheres = 0;
+                gb.next_gallop = unit_random() < 0.5f ? 1 : 2;
+                gb.side = gb.next_gallop == 1;
+                gb.laps = GALLOP_WINDOWS; gb.gallop_clip = 0; gb.window_time = 0;
+                set_action(gb.side ? A_GALLOP_R : A_GALLOP_L, 1);
+                set_state(S_GALLOP);
+            } else if (gb.short_run) {
+                gb.short_run = 0;
+                set_action(10, 0);
+                set_state(S_ABOUT);
+            } else { set_action(A_SPHERES, 0); set_state(S_SPHERES); }
+        }
+        break;
+    case S_ABOUT:   /* 10 (4c1e10): its script, then turned half round, the missiles (0xb) */
+        if (gb.horse.done) { gb.yaw = wrap_angle(gb.yaw + PI); set_action(A_MISSILES, 0); set_state(S_MISSILES); }
+        break;
+    case S_BACK:    /* 9 (4c1af0, with 0x200 set): its script, then 0x12 (the spheres again) or the short run */
+        if (gb.horse.done) {
+            if (unit_random() < 0.5f) { set_action(A_CAST, 0); set_state(S_SPHERES); }
+            else { gb.after_spheres = 1; start_charge(); }
         }
         break;
     case S_TURN_BACK:
@@ -373,8 +404,8 @@ static void ai_step(float f) {
             gb.pos[2] = gb.centre[2] + cosf(a) * GALLOP_NEAR;
             gb.yaw = angle_to(gb.dante);
             gb.hidden = 0;
-            set_action(A_MISSILES, 0);
-            set_state(S_MISSILES);
+            set_action(A_HIDE, 0);   /* 9 */
+            set_state(S_BACK);
         }
         break;
     case S_MISSILES:
@@ -426,14 +457,14 @@ static void ai_step(float f) {
         break;
     }
     case S_TURN:
-        /* 5 / 6: round to Dante, then the straight run (4). */
-        turn_toward(angle_to(gb.dante), 728.0f * UNITS * f);
-        move_forward(RUN_SPEED * 0.5f, f);
-        if (gb.horse.done) {
-            /* On the ring, facing in: every other time that's 4c0c50's case for the spheres (then hidden, then
-             * the missiles), else the straight run [approximation: the order is the port's]. */
-            if (gb.think_count++ & 1) { set_action(A_SPHERES, 0); set_state(S_SPHERES); }
-            else start_charge();
+        /* 5 / 6 (4c1250 / 4c1380): 60 frames turning 382 units a frame (5 one way, 6 the other) at 25 a frame;
+         * +0x97a 2 / 1 and flag 0x800, then the straight run (4: 30 frames, then 10 and the missiles). */
+        gb.yaw = wrap_angle(gb.yaw + (gb.action == A_TURN_L ? -382.0f : 382.0f) * UNITS * f);
+        move_forward(RUN_SPEED, f);
+        if (gb.timer >= 60.0f) {
+            gb.next_gallop = gb.action == A_TURN_L ? 2 : 1;
+            gb.short_run = 1;
+            start_charge();
         }
         break;
     case S_LEAVE:

@@ -88,8 +88,14 @@ Sections 3-5 at rank 0. Approximations:
   the shockwave the second (+0x978); none while +0x8fc has 0x4000000 [not read]. `384d20` also starts 0xd on a
   blow of kind 3 / 4 / 5 / 7 with its argument 6 [not read]. Dante's blows take 20 / 30 (light) or 60 / 60 (heavy)
   from the gauges [estimates: his records aren't decoded].
-- **Phase 1:** gallop laps → turn (5 / 6) → alternately the straight run or the spheres (then hidden 120 frames,
-  back on the ring behind Dante, then two volleys of 4 missiles). The missiles rise 30 frames and home at 18 a
+- **Phase 1:** as decoded: gallop 0x10 / 0x11 → turn 5 / 6 (`4c1250` / `4c1380`: 60 frames turning 382 units a
+  frame each way at 25 a frame; +0x97a 2 / 1, flag 0x800) → the straight run 4 (`4c0fd0`: 65 frames, 30 with 0x800,
+  10 with 0x100; +0x97a cleared) → with 0x800 action 10 (`4c1e10`: its script, then half round) → the missiles 0xb →
+  think; a plain run → the spheres 8; a run with 0x100 → a gallop by a coin. Think (as it starts, beyond 800 and
+  facing the centre: the spheres; else the gallop +0x97a names, a coin when 0). The spheres → hidden 120 frames →
+  back on the ring behind Dante → 9 (`4c1af0`, 0x100 and 0x200 set: half the time 0x12, the spheres again, else
+  the 10-frame run). Not read: flag 0x80 (think → the run), 9's count +0x979 without 0x200. The missiles are two
+  volleys of 4 [the volleys are the port's]. The missiles rise 30 frames and home at 18 a
   frame; the spheres drift at Dante at 7 a frame and hurt (they don't stop time).
 - **Damage he deals** (the attack records aren't decoded): running into Dante 600, heavy; a missile 300, heavy; a
   sphere 150; the shockwave 500, heavy.
