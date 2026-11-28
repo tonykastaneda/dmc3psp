@@ -33,4 +33,9 @@ typedef struct { float hum; int down_armed; } GimSwitchSound;
 void gim_switch_hit_sound(GimSwitchSound *s);
 void gim_switch_sounds(GimSwitchSound *s, float charge, float window, int lit, float frames);
 
+/* Turning props (205's / 207's bladed pillars): a part's tag, its axis (x, z), radians a frame about y. */
+void gim_spins_clear(void);
+void gim_spin_add(int tag, float x, float z, float rate);
+void gim_spins_update(float frames);
+
 #endif

@@ -631,22 +631,32 @@ def main() -> None:
     # Secret Mission 12's blocks (st611): its DUMMY blocks are drawn too, and the moving ones tagged 160 + their set
     # number for the runtime to pose (gen_rooms.py block_sets, psp/testroom/blocks.c).
     block_tags = {}
-    if args.slot == 954:
+    if args.slot in (954, 436):   # st611, and Mission 17's 128 (its God-cubes)
         import gen_rooms
         extra = ("DUMMY",)
         for bs, motion in gen_rooms.block_sets(game_text.replace("\r", ""), stage[5]):
             block_tags[bs["number"]] = gen_rooms.BLOCK_TAG + bs["number"] if motion else 0
+    spin_parts, spin_rest = (gimmicks.spin_parts(game_text, stage[5]) if args.slot in gimmicks.SPIN_SLOTS and len(stage) > 5
+                             else ([], {}))
+    bone_parts, bone_rest = (gimmicks.bone_parts(game_text, stage[5], gimmicks.BONE_SETS[args.slot])
+                             if args.slot in gimmicks.BONE_SETS and len(stage) > 5 else ([], {}))
+    spin_rest.update(bone_rest)
     for s, kind, tris in (gimmicks.placed(game_text, stage[5], extra, static_efm=680 <= args.slot <= 732) if len(stage) > 5 else []):
+        if s["index"] in spin_rest:
+            tris = spin_rest[s["index"]]   # its turning parts are baked below under their own tags
         if args.slot == 752 and s["kind"] == "STAY" and s["number"] in (100, 101, 102, 103):
             import gen_rooms   # Mission 19's hourglass parts, posed by psp/testroom/mission19.c
             if s["model"] in gen_rooms.HOURGLASS_MODELS:
                 numbers[s["index"]] = gen_rooms.HOURGLASS_TAG + s["model"]
-        if args.slot == 954 and s["kind"] in ("STAY", "DUMMY"):
+        if args.slot in (954, 436) and s["kind"] in ("STAY", "DUMMY"):
             if s["box"] is None or s["model"] is None or s["model"] > 32:
                 if s["kind"] == "DUMMY":
                     continue
             elif block_tags.get(s["number"]):
                 numbers[s["index"]] = block_tags[s["number"]]
+        # Mission 19's mirrors in 405 (STAY 445-452): tags 304-311, hidden as each breaks (mission19.c).
+        if args.slot == 756 and s["kind"] == "STAY" and 445 <= s["number"] <= 452:
+            numbers[s["index"]] = 304 + s["number"] - 445
         # M10's two rotating bridge arms and the lake's rising bridge.
         if args.slot == 516 and s["kind"] == "STAY" and s["number"] in (1,2):
             numbers[s["index"]] = 239 + s["number"]
@@ -670,6 +680,13 @@ def main() -> None:
     # Crest switches and seals from their own models, each part under its own tag (psp/testroom/gimmick_models.c).
     if len(stage) > 5 and not args.scm:
         gim_batches, _ = gimmicks.switches_and_seals(game_text, stage[5])
+        for tag, tris in bone_parts:
+            gim_batches.append((None, "BONES", tag, tris))
+        for tag, pivot, rate, tris in spin_parts:
+            gim_batches.append((None, "SPIN", tag, tris))
+        needle = gimmicks.needle_model(game_text, stage[5])
+        if needle:
+            gim_batches.append((None, "NEEDLE", gimmicks.NEEDLE_TAG, needle))
         for s, kind, tag, tris in gim_batches:
             by_texture = {}
             for tri, texture in tris:

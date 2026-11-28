@@ -28,6 +28,9 @@ int sm_clock_text(char *out, int size, int *urgent);
 void sm_hit(float x, float y, float z, float yaw, float reach);   /* a melee hit's frame */
 void sm_test_layout(int n);              /* tests: Secret Mission 10 uses crystal layout n */
 void sm_draw(void);                     /* the entry markers and goals, world space */
+/* A main mission's light-beam puzzle (CStageSetCrystal): Mission 9's 203. Room by number; no: the set's layout. */
+void sm_crystal_room(int room, const float origin[3], const float reset[3], int no);
+int sm_crystal_solved(int room);
 void sm_status(char *out, int size);
 
 #endif

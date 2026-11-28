@@ -525,6 +525,58 @@ void stage_draw_group(int tag, unsigned int src_fix, unsigned int dst_fix) {
     sceGuTexWrap(GU_CLAMP, GU_CLAMP);
     sceGuTexMode(GU_PSM_8888, 0, 0, 0);
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuDisable(GU_TEXTURE_2D);   /* main.c's gimmick pass draws untextured after it */
+}
+
+/* One gimmick tag's batches drawn once more, placed by a world matrix (3 x 4 row-major): the spike traps' panels. Opaque
+ * batches as the stage's; alpha-tested ones tested, blended ones blended. */
+void stage_draw_group_at(int tag, const float m[12]) {
+    const TexEntry *textures;
+    const Batch *batches;
+    const Chunk *chunks;
+    const unsigned char *vertices;
+    ScePspFMatrix4 w;
+    unsigned int i, k;
+    if (!header) return;
+    textures = (const TexEntry *)(blob + header->tex_table);
+    batches = (const Batch *)(blob + header->batch_table);
+    vertices = blob + header->vertex_offset;
+    chunks = (const Chunk *)(blob + header->chunk_table);
+    w.x.x = m[0]; w.x.y = m[4]; w.x.z = m[8];  w.x.w = 0.0f;
+    w.y.x = m[1]; w.y.y = m[5]; w.y.z = m[9];  w.y.w = 0.0f;
+    w.z.x = m[2]; w.z.y = m[6]; w.z.z = m[10]; w.z.w = 0.0f;
+    w.w.x = m[3]; w.w.y = m[7]; w.w.z = m[11]; w.w.w = 1.0f;
+    sceGumMatrixMode(GU_MODEL);
+    sceGumLoadMatrix(&w);
+    sceGuDisable(GU_LIGHTING);
+    sceGuEnable(GU_TEXTURE_2D);
+    sceGuEnable(GU_DEPTH_TEST);
+    if (stage_double) sceGuEnable(GU_FRAGMENT_2X); else sceGuDisable(GU_FRAGMENT_2X);
+    sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
+    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+    sceGuColor(0xffffffff);
+    for (i = 0; i < header->batches; ++i) {
+        const Batch *b = &batches[i];
+        if ((int)b->pad[0] != tag) continue;
+        bind_texture(&textures[b->texture]);
+        if (b->flags & BATCH_ALPHA) sceGuEnable(GU_ALPHA_TEST); else sceGuDisable(GU_ALPHA_TEST);
+        if (batch_blend(b->flags)) { sceGuEnable(GU_BLEND); sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0); sceGuDepthMask(GU_TRUE); }
+        else { sceGuDisable(GU_BLEND); sceGuDepthMask(GU_FALSE); }
+        for (k = 0; k < b->chunk_count; ++k) {
+            const Chunk *c = &chunks[b->chunk_first + k];
+            sceGumDrawArray(GU_TRIANGLES, GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                            (int)c->count, 0, vertices + (size_t)c->first * 24);
+        }
+    }
+    sceGumLoadIdentity();
+    sceGuDisable(GU_FRAGMENT_2X);
+    sceGuDisable(GU_BLEND);
+    sceGuDepthMask(GU_FALSE);
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    sceGuTexMode(GU_PSM_8888, 0, 0, 0);
+    sceGuTexFilter(GU_LINEAR, GU_LINEAR);
+    sceGuDisable(GU_TEXTURE_2D);   /* main.c's gimmick pass draws untextured after it */
 }
 
 /* ---- collision (the stage's HITS triangles) ---- */

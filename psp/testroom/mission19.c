@@ -93,14 +93,17 @@ static void mr_enter(int room, int done) {
     mr_on = room == 405;
     mr_struck = 0;
     if (!mr_on) return;
-    for (i = 0; i < 8; ++i) { mr_broken[i] = done; mr_health[i] = 1000.0f; if (done) stage_hide_group(445 + i); }
+    for (i = 0; i < 8; ++i) { mr_broken[i] = done; mr_health[i] = 1000.0f; if (done) stage_set_group_mode(304 + i, 2); }   /* STAY 445 + i: tools/prepare_stage.py tags 304-311 */
     mr_breaks = done ? 2 : 0;
     mr_state = done ? 2 : 1;
     mr_lit = mr_rand(8);
     mr_clock = 420.0f;
 }
 
-void m19_test_mirror(int k) { if (mr_on && k >= 0 && k < 8 && !mr_broken[k]) { mr_lit = k; mr_clock = 1e9f; } }   /* tests: "mirrorlit k" */
+void m19_test_mirror(int k) {   /* tests: "mirrorlit frame k" lights mirror k; k + 8 breaks it */
+    if (mr_on && k >= 8 && k < 16 && !mr_broken[k - 8]) { mr_lit = k - 8; mr_health[mr_lit] = -1.0f; return; }
+    if (mr_on && k >= 0 && k < 8 && !mr_broken[k]) { mr_lit = k; mr_clock = 1e9f; }
+}
 
 void m19_mirror_hit(float x, float y, float z, float yaw, float reach, int heavy) {
     const float *m;
@@ -132,7 +135,7 @@ static void mr_update(float f) {
     if (mr_health[mr_lit] < 0.0f && !mr_broken[mr_lit]) {
         float at[3] = {mirror_at[mr_lit][0], 325.0f, mirror_at[mr_lit][2]};
         mr_broken[mr_lit] = 1;
-        stage_hide_group(445 + mr_lit);
+        stage_set_group_mode(304 + mr_lit, 2);   /* its STAY (445 + k), tag 304 + k */
         nfx_spawn(NFX_MIRROR, 0x1ea, at, mirror_at[mr_lit][3] * 0.0174533f, 0);   /* the shatter (FUN_00462f90), P113 */
         if (++mr_breaks > 1) { mr_state = 2; enemy_mirror_kill(); return; }
         for (i = 0; i < 8; ++i) if (!mr_broken[i]) mr_health[i] = 1000.0f;

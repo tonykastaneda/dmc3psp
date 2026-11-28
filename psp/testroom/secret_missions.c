@@ -24,10 +24,12 @@
  *   9  608  let no enemy escape: the wagons below, a stand-in for CStageSetTruck
  * The award, a Blue Orb Fragment, is only named: the port has no Devil Trigger gauge to lengthen yet. */
 #include <math.h>
+#include <string.h>
 #include <stdio.h>
 #include <pspctrl.h>
 #include "secret_missions.h"
 #include "fx.h"
+#include "sfx.h"
 #include "nfx.h"
 #include <stdlib.h>
 #include "crystal_runtime.h"
@@ -69,8 +71,9 @@ static const SecretMission secrets[12] = {
  * crystals back (the guide's flame panel). Crystals are glows, the beam a line: their models aren't converted. */
 #define GRID 20
 #define CELL 200.0f
-static const float crystal_origin[3] = {1700.0f, 164.0f, 299.0f}, crystal_reset[3] = {2102.0f, 150.0f, 1685.0f};
+static float crystal_origin[3] = {1700.0f, 164.0f, 299.0f}, crystal_reset[3] = {2102.0f, 150.0f, 1685.0f};
 static int layout = -1, solved;
+static int crystal_room = -1;   /* a main mission's puzzle (Mission 9's 203, "no 0"), or -1 */
 static unsigned char present[24];
 static signed char grid[GRID][GRID];   /* [y][x]: the crystal there, or -1 */
 static short beam[32][2], beam_count;
@@ -125,9 +128,24 @@ static int forced_layout = -1;
 void sm_test_layout(int n) { forced_layout = n; }
 
 static void crystal_start(void) {
+    static const float origin[3] = {1700.0f, 164.0f, 299.0f}, reset[3] = {2102.0f, 150.0f, 1685.0f};
+    memcpy(crystal_origin, origin, sizeof origin); memcpy(crystal_reset, reset, sizeof reset);
+    crystal_room = -1;
     layout = forced_layout >= 0 && forced_layout < 8 ? forced_layout : 2 + rand() % 6;   /* "no 2": one of 2-7 */
     crystal_reset_all();
 }
+
+/* A main mission's beam puzzle: the room's CRYSTAL set at origin, its layout ("no" 0 and 1 are fixed layouts; FUN_0041f160
+ * picks one of 2-7 for "no 2"), struck back by the switch at reset. Solved stays solved while it's the same room's. */
+void sm_crystal_room(int room, const float origin[3], const float reset[3], int no) {
+    if (crystal_room == room && layout == no) return;
+    memcpy(crystal_origin, origin, sizeof crystal_origin); memcpy(crystal_reset, reset, sizeof crystal_reset);
+    crystal_room = room;
+    layout = no;
+    crystal_reset_all();
+}
+int sm_crystal_solved(int room) { return crystal_room == room && solved; }
+static int crystal_here(void);
 
 /* ---- Secret Mission 6's red orbs: every item record in 605 (tools/gen_rooms.py write_secret_orbs), most of them in
  * the air over the drop, where only Air Raid reaches (player.c). CItemOrb's update (FUN_002f2fa0) sets an orb
@@ -154,9 +172,13 @@ static void orbs_draw(void) {
 
 /* ---- Secret Mission 9's wagons. 608 is Dante on a rail wagon (STAY 4, a riding box; start 0 on it) beside a second
  * track: its TRUCK set (100) places the enemies' wagon at em_base (10000, 1325, 11625), 7.25 m off his line, with a
- * 400 x 100 x 200 hit box. The wagons' timetable and riders are in CStageSetTruck's code, not decoded; the port runs
- * the walkthrough's: eight wagons one after another (Wraths, with a Pride or a Lust on some), passing from 35 m ahead
- * to 35 m behind at 2.5 m a second [estimate]. A wagon that goes by with anyone still on it fails the mission; all
+ * 400 x 100 x 200 hit box. Each enemies' wagon is a CStageSetTruckEnemy (made by an event op through FUN_00486940;
+ * run by FUN_004878d0): it comes in at its speed to its stop angle, stops there while it has riders (up to three)
+ * or, timed, until its clock runs out, then leaves at its second speed; a timed one that leaves with riders takes
+ * them away (escaped: the truck's +0x195). It sounds 0x5c / 0x5d by turns every 30 frames (room bank, bank 0x28).
+ * What isn't found is the op's caller for 608 (its wagons' stop angles, speeds, clocks and riders): the port runs
+ * eight wagons (the walkthrough's: Wraths, with a Pride or a Lust on some) coming in from 35 m at 2.5 m a second,
+ * stopping beside Dante for 10 s and leaving [estimates]; one that leaves with anyone on it fails the mission, all
  * eight emptied clears it. The wagon is drawn as glows: its model (the set's em_model 2) isn't converted. */
 #define WAGONS 8
 #define WAGON_Z 11625.0f
@@ -164,12 +186,15 @@ static void orbs_draw(void) {
 #define WAGON_FROM 13500.0f
 #define WAGON_TO 6500.0f
 #define WAGON_SPEED 250.0f
+#define WAGON_STOP 10000.0f   /* beside Dante (his wagon at the truck's base) */
+#define WAGON_WAIT 10.0f      /* seconds stopped [estimate] */
 static const signed char wagon_riders[WAGONS][3] = {
     {ENEMY_WRATH, ENEMY_WRATH, ENEMY_PRIDE}, {ENEMY_WRATH, ENEMY_PRIDE, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_LUST},
     {ENEMY_WRATH, ENEMY_LUST, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_LUST}, {ENEMY_WRATH, -1, -1},
     {ENEMY_WRATH, ENEMY_WRATH, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_WRATH}};
 static int wagon, wagon_live, wagon_result;
-static float wagon_x, wagon_gap;
+static float wagon_x, wagon_gap, wagon_wait, wagon_sound;
+static int wagon_tick;
 static void wagons_start(void) { wagon = 0; wagon_live = 0; wagon_result = 0; wagon_gap = 2.0f; }
 static void wagons_update(float dt) {
     float dx;
@@ -182,8 +207,17 @@ static void wagons_update(float dt) {
         enemy_spawn_height(WAGON_DECK + 100.0f);
         for (k = 0; k < 3; ++k) if (wagon_riders[wagon][k] >= 0) enemy_add_kind(wagon_riders[wagon][k], wagon_x - 120.0f + 120.0f * k, WAGON_Z);
         wagon_live = 1;
+        wagon_wait = WAGON_WAIT;
     }
-    dx = -WAGON_SPEED * dt;
+    if ((wagon_sound += dt * 60.0f) >= 30.0f) {   /* FUN_004878d0: 0x5c / 0x5d by turns */
+        wagon_sound = 0.0f;
+        sfx_play_room(wagon_tick ? 0x5d : 0x5c, 0x28, 0.0f, 1.0f);
+        wagon_tick = !wagon_tick;
+    }
+    /* In to its stop, stopped for its clock, then away. */
+    dx = wagon_x > WAGON_STOP || wagon_wait <= 0.0f ? -WAGON_SPEED * dt : 0.0f;
+    if (wagon_x - WAGON_SPEED * dt <= WAGON_STOP && wagon_x > WAGON_STOP) dx = WAGON_STOP - wagon_x;
+    if (dx == 0.0f) wagon_wait -= dt;
     wagon_x += dx;
     enemy_ride(wagon_x - 200.0f, wagon_x + 200.0f, WAGON_Z - 100.0f, WAGON_Z + 100.0f, dx, WAGON_DECK);
     if (enemy_alive_count() == 0) { wagon_live = 0; ++wagon; wagon_gap = 1.5f; return; }
@@ -214,7 +248,7 @@ static char caption_buf[48];
 
 static void say(const char *text, float seconds) { caption = text; caption_time = seconds; }
 
-void sm_reset(void) { current = -1; ending = 0; caption = 0; caption_time = 0.0f; }
+void sm_reset(void) { current = -1; ending = 0; caption = 0; caption_time = 0.0f; crystal_room = -1; layout = -1; }
 int sm_active(void) { return current >= 0; }
 
 static int rule_met(const SecretMission *s, const SmView *v) {
@@ -317,6 +351,12 @@ const char *sm_caption(float *alpha) {
     return caption;
 }
 
+static int crystal_here(void) {
+    if (layout < 0) return 0;
+    if (current >= 0) return secrets[current].rule == R_CRYSTAL && crystal_seen == 600 + current && !ending;
+    return crystal_room >= 0 && crystal_seen == crystal_room;
+}
+
 static void crystal_draw(void) {
     int k;
     float still[3] = {0.0f, 0.0f, 0.0f};
@@ -337,7 +377,7 @@ static void crystal_draw(void) {
 }
 
 void sm_draw(void) {
-    if (current >= 0 && secrets[current].rule == R_CRYSTAL && crystal_seen == 600 + current && layout >= 0) crystal_draw();
+    if (crystal_here() || (current >= 0 && secrets[current].rule == R_CRYSTAL && crystal_seen == 600 + current && layout >= 0)) crystal_draw();
     if (current >= 0 && secrets[current].rule == R_ORBS && crystal_seen == 600 + current && !ending) orbs_draw();
     if (current >= 0 && secrets[current].rule == R_WAGONS && crystal_seen == 600 + current && !ending) wagons_draw();
     /* The red structure: a red glow where one can be entered. */
@@ -353,7 +393,7 @@ void sm_draw(void) {
 /* A melee hit's frame: Secret Mission 10's crystals (relays and the cover break) and its reset switch. */
 void sm_hit(float x, float y, float z, float yaw, float reach) {
     int k;
-    if (current < 0 || secrets[current].rule != R_CRYSTAL || crystal_seen != 600 + current || layout < 0 || ending) return;
+    if (!crystal_here()) return;
     {
         float dx = crystal_reset[0] - x, dz = crystal_reset[2] - z;
         if (dx * dx + dz * dz < (reach + 80.0f) * (reach + 80.0f) && fabsf(crystal_reset[1] - y) < 300.0f) {

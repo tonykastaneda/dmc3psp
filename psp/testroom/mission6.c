@@ -17,7 +17,7 @@
  * The Essences lie as the game's key-item glint (V160, gimmick_models.c); the switches are their own models.
  * Stand-ins: the barrier is a purple mist on each enemy and makes them take no damage (the walkthrough: "lighting the two
  * structures removes the barriers"; what the barrier does in the game, through each enemy's vfunc +0x114, isn't
- * decoded). The pillars don't rise, and the cameras, messages and the demo aren't in. */
+ * decoded). The cameras, messages and the demo aren't in. */
 #include <math.h>
 #include <string.h>
 #include <pspgu.h>
@@ -49,6 +49,50 @@ static int warrior_done;
 static float caption_time;
 static const char *caption;
 static float spin;
+
+/* ---- 124's pillars (STAY 110, 111: model 4) and stair (STAY 112: model 5, four steps), from EventTbl06 block 1:
+ * gimmick_cmd2c [110, 1] as the fight starts, then (a camera and 60 frames on) [111, 1] and [112, 1]; cleared,
+ * [110 / 111 / 112, 2]. Motion 1 raises a pillar 300 over frames 2-120 and the steps 425 / 500 / 600 / 750 over
+ * 20-140 / 50-170 / 69-200 / 90-235; motion 2 lowers them (1-120; 30-148 / 70-190 / 100-230 / 130-275). The keys
+ * are Hermite: the port eases each with a smoothstep. The switches ride on the pillars (their joint 1). The camera's
+ * length before 111 rises isn't read (60 frames here [estimate]). */
+#define PILLAR_TAG(n) (128 + (n) - 100)   /* tools/gimmicks.py story_tag */
+#define STEP_TAG 300                       /* tools/gimmicks.py BONE_TAG: 112's steps, bones 1-4 */
+static float rise_clock = -1.0f, lower_clock = -1.0f;
+static float ease(float t, float t0, float t1) {
+    float u = t <= t0 ? 0.0f : t >= t1 ? 1.0f : (t - t0) / (t1 - t0);
+    return u * u * (3.0f - 2.0f * u);
+}
+/* How high pillar p (0: 110, 1: 111) is now, 0-300. */
+static float pillar_rise(int p) {
+    float up, t;
+    if (rise_clock < 0.0f) return 0.0f;
+    t = rise_clock - (p ? 120.0f : 0.0f);
+    up = 300.0f * ease(t, 2.0f, 120.0f);
+    if (lower_clock >= 0.0f) up *= 1.0f - ease(lower_clock, 1.0f, 120.0f);
+    return up;
+}
+static float step_rise(int b) {
+    static const float top[4] = {425, 500, 600, 750}, up0[4] = {20, 50, 69, 90}, up1[4] = {140, 170, 200, 235};
+    static const float dn0[4] = {30, 70, 100, 130}, dn1[4] = {148, 190, 230, 275};
+    float h;
+    if (rise_clock < 0.0f) return 0.0f;
+    h = top[b] * ease(rise_clock - 120.0f, up0[b], up1[b]);
+    if (lower_clock >= 0.0f) h *= 1.0f - ease(lower_clock, dn0[b], dn1[b]);
+    return h;
+}
+static void pillars_pose(void) {
+    static const float pivot[3] = {0.0f, 0.0f, 0.0f}, still[3] = {0.0f, 0.0f, 0.0f};
+    int k;
+    for (k = 0; k < 2; ++k) {
+        float move[3] = {0.0f, pillar_rise(k), 0.0f};
+        stage_set_group_motion(PILLAR_TAG(110 + k), pivot, move, still);
+    }
+    for (k = 0; k < 4; ++k) {
+        float m[12] = {1, 0, 0, 0, 0, 1, 0, step_rise(k), 0, 0, 1, 0};
+        stage_set_group_matrix(STEP_TAG + k, m);
+    }
+}
 
 /* ---- 124's crest switches (CStageSetSwitch, docs/BAR_CRANK_SPEC.md section 3). Attached to pillars 110 (3400, 0,
  * 2500) and 111 (1400, 0, 2500, turned 180), at their joint 1 (-112, -160, 0) facing the room's middle. The joint's
@@ -105,6 +149,7 @@ int m6_enter(int room) {
         restart = next == 4;
     }
     wisdom_from_self = 0;
+    if (room == 124) { rise_clock = warrior_done ? -1.0f : 0.0f; lower_clock = -1.0f; }   /* block 1 starts as he comes in */
     if (room == 124 && !warrior_done) {
         /* Block 1: the switches go dark (thread 2 clears flags 32-34), the barrier goes up, group 0 comes. */
         for (i = 0; i < 2; ++i) {
@@ -187,6 +232,12 @@ int m6_update(float dt, unsigned int pressed, float x, float y, float z, int on_
     int e;
     float frames = dt * 60.0f;
     spin += frames;
+    if (room_now == 124) {
+        if (rise_clock >= 0.0f) rise_clock += frames;
+        if (lower_clock >= 0.0f) lower_clock += frames;
+        if (warrior_done && rise_clock >= 0.0f && lower_clock < 0.0f) lower_clock = 0.0f;   /* cleared: motion 2 */
+        for (e = 0; e < 2; ++e) sw[e].y = sw_place[e][1] - 300.0f + pillar_rise(e);
+    }
     if (caption_time > 0.0f) caption_time -= dt;
     for (e = 0; e < 3; ++e) {
         if (essence_at[e].room != room_now || !item_shown(e) || fight_on || !near_item(e, x, y, z)) continue;
@@ -314,6 +365,7 @@ static void switch_draw(const Switch *s, int number) {
 }
 
 void m6_draw(void) {
+    if (room_now == 124) pillars_pose();
     int e, i;
     for (e = 0; e < 3; ++e) {
         /* A key item (CItemKey): its effect V160; the port's glow (a soft core and sparks) only if that can't start. */
@@ -331,8 +383,8 @@ void m6_draw(void) {
         }
     }
     if (room_now == 124 && warrior_done) {
-        /* Done: the switches stay on their pillars, still (as baked unlit) [the lit state after the fight isn't read]. */
-        for (i = 0; i < 2; ++i) { Switch still = sw[i]; still.x = sw_place[i][0]; still.y = sw_place[i][1]; still.z = sw_place[i][2]; still.yaw = sw_place[i][3]; switch_draw(&still, 100 + i); }
+        /* Done: the switches stay on their pillars, gone down with them (still, as baked unlit). */
+        for (i = 0; i < 2; ++i) { Switch still = sw[i]; still.x = sw_place[i][0]; still.y = sw_place[i][1] - 300.0f + pillar_rise(i); still.z = sw_place[i][2]; still.yaw = sw_place[i][3]; switch_draw(&still, 100 + i); }
     }
     if (room_now == 124 && !warrior_done) {
         float feet[16][3];

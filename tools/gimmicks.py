@@ -448,3 +448,113 @@ def switches_and_seals(game_text, pnst):
             batches.append((s, s["kind"], first + part, tris))
         gims.append((s, s["kind"], first, attached))
     return batches, gims
+
+
+# The spike traps (CStageSetNeedle): the set's model, a spiked panel, baked once in model space for
+# psp/testroom/needles.c to draw at each panel's place.
+NEEDLE_TAG = 318
+
+
+def needle_model(game_text, pnst):
+    """[(tri, texture)] of the room's NEEDLE set's model at the origin, or []."""
+    found = models(pnst)
+    for s in parse_game(game_text):
+        if s["kind"] == "NEEDLE" and s["model"] in found:
+            return model_triangles(found[s["model"]])
+    return []
+
+
+# Turning props: a STAY set whose model's own looping motion (PNST slot 10N+1) only turns bones about y, as 205's and
+# 207's bladed pillars (four rings of blades, two and four turns either way every 240 frames). Each turning bone's
+# objects are baked under their own tag (SPIN_TAG on, four a set) for psp/testroom/gimmick_models.c to turn about the
+# set's axis; the rest of the model stays in the stage as it was. Only these rooms' stages (by slot).
+SPIN_SLOTS = (532, 540)
+SPIN_TAG = 272
+SPIN_MAX = 46
+
+
+def spin_sets(game_text, pnst):
+    """{set index: {bone: radians a frame}} for the turning STAY sets."""
+    out = {}
+    for s in parse_game(game_text):
+        if s["kind"] != "STAY" or s["model"] is None:
+            continue
+        bones = set_motion_bones(pnst, s["model"])
+        if not bones:
+            continue
+        rates = {}
+        for bone, (place, axes) in bones.items():
+            for axis, keys in axes:
+                if axis == 4 and len(keys) >= 2 and keys[-1][0] > keys[0][0]:
+                    rates[bone] = (keys[-1][1] - keys[0][1]) / (keys[-1][0] - keys[0][0])
+        if rates:
+            out[s["index"]] = rates
+    return out
+
+
+def spin_parts(game_text, pnst):
+    """([(tag, pivot (x, y, z), radians a frame, [(tri, texture)])], {set index: [(tri, texture)] of its unturned
+    objects}) in world space."""
+    found = models(pnst)
+    turning = spin_sets(game_text, pnst)
+    parts, rest, tag = [], {}, SPIN_TAG
+    for s in parse_game(game_text):
+        if s["index"] not in turning or s["model"] not in found or found[s["model"]][:4] != b"SCM ":
+            continue
+        r, sc, p = _rotation(s["rot"]), s["scale"], s["pos"]
+        by_bone = {}
+        for obj in parse_scm(found[s["model"]], True)["objects"]:
+            bone = obj["node"] if obj["node"] in turning[s["index"]] else None
+            for m in obj["submeshes"]:
+                for f in m["faces"]:
+                    vs = []
+                    for i in f:
+                        v = m["positions"][i]
+                        x, y, z = v[0] * sc[0], v[1] * sc[1], v[2] * sc[2]
+                        vs.append((p[0] + r[0][0] * x + r[0][1] * y + r[0][2] * z,
+                                   p[1] + r[1][0] * x + r[1][1] * y + r[1][2] * z,
+                                   p[2] + r[2][0] * x + r[2][1] * y + r[2][2] * z) + tuple(m["uvs"][i]) + tuple(m["colors"][i]))
+                    by_bone.setdefault(bone, []).append((tuple(vs), m["texture"]))
+        rest[s["index"]] = by_bone.pop(None, [])
+        for bone, tris in sorted(by_bone.items()):
+            if tag >= SPIN_TAG + SPIN_MAX:
+                rest[s["index"]] += tris
+                continue
+            parts.append((tag, tuple(p), turning[s["index"]][bone], tris))
+            tag += 1
+    return parts, rest
+
+
+# Props whose model's bones move apart (124's stair, STAY 112, model 5: four steps rising by its motions 1 and 2):
+# each bone's objects baked under their own tag (BONE_TAG + bone - 1) for the runtime to raise (mission6.c).
+BONE_SETS = {420: (112,)}
+BONE_TAG = 300
+
+
+def bone_parts(game_text, pnst, numbers):
+    """([(tag, [(tri, texture)])], {set index: [(tri, texture)] of its other objects}) for the STAY sets numbered."""
+    found = models(pnst)
+    parts, rest = [], {}
+    for s in parse_game(game_text):
+        if s["kind"] != "STAY" or s["number"] not in numbers or s["model"] not in found or found[s["model"]][:4] != b"SCM ":
+            continue
+        r, sc, p = _rotation(s["rot"]), s["scale"], s["pos"]
+        by_bone = {}
+        for obj in parse_scm(found[s["model"]], True)["objects"]:
+            for m in obj["submeshes"]:
+                for f in m["faces"]:
+                    vs = []
+                    for i in f:
+                        v = m["positions"][i]
+                        x, y, z = v[0] * sc[0], v[1] * sc[1], v[2] * sc[2]
+                        vs.append((p[0] + r[0][0] * x + r[0][1] * y + r[0][2] * z,
+                                   p[1] + r[1][0] * x + r[1][1] * y + r[1][2] * z,
+                                   p[2] + r[2][0] * x + r[2][1] * y + r[2][2] * z) + tuple(m["uvs"][i]) + tuple(m["colors"][i]))
+                    by_bone.setdefault(obj["node"], []).append((tuple(vs), m["texture"]))
+        rest[s["index"]] = by_bone.pop(0, []) + by_bone.pop(None, [])
+        for bone, tris in sorted(by_bone.items()):
+            if 1 <= bone <= 8:
+                parts.append((BONE_TAG + bone - 1, tris))
+            else:
+                rest[s["index"]] += tris
+    return parts, rest
