@@ -651,5 +651,9 @@ When a head's HP goes below 0:
   the heads no push shape, and lowered heads swallowed him.
 - **Walls.** Every body push is followed by Dante's swept wall pass, so a push can't put him inside the scenery.
 - **Effects.** The shells and moves play em025's own effects. See [NATIVE_FX.md](NATIVE_FX.md) for the ids,
-  call sites, the punch's P58 / P59 (pfx.c) and the breath mist's stand-in.
+  call sites and the punch's P58 / P59 (pfx.c, placed in the paw's frame). The breath's events play the game's
+  generators (2a2530): ev1 G44 scaled 1.8 at (0, 40, −200) riding head bone 3; ev2 G23 at bone 4, left there,
+  ended at ev4; ev5 V66 (0x42) at (0, 0, 150) held and, in phase 0, G45 scaled 1.2 at (0, −100, −350) riding bone 4 at
+  height 100; ev6 V78 (0x4e) at (0, −180, −200) riding; ev8 G23 riding; all end with the breath. The effects take
+  the body's turn, not the bone's flipped matrix [approximation].
 

@@ -22,6 +22,8 @@ int nfx_spawn_e(int b, int e, const float p[3], float y, int l) {(void)b;(void)e
 void nfx_move(int h, const float p[3], float y) {(void)h;(void)p;(void)y;}
 void nfx_scale(int h, float s) {(void)h;(void)s;}
 void nfx_kill(int h) {(void)h;}
+int nfx_alive(int h) {return h != 0;}
+int nfx_spawn_p(int b, int p, const float at[3], float y, int l) {(void)b;(void)p;(void)at;(void)y;(void)l;return ++nfx_handles;}
 
 int main(void) {
     int phase, id, i;

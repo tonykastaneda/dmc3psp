@@ -104,9 +104,10 @@ Effect ids are those its code passes to `FUN_00208590(type, id, ...)` (type 0 P,
 
 | Punch, ev2-5 at the paw | P58 (0x3a) at 2 and 4, P59 (0x3b) at 3 and 5: ×1.4 (-50, 10, 0), ×1.2 (-40, 0, 70), ×1.2 (-40, 0, 70), ×1 (-20, 20, 0) in the paw's frame | `002a0510` |
 
-Stand-in: **the breath mist** (G44/G23/G45, generators of V73 / E281 / V75 started in `002a2530`): E284 clouds along
-the breath spheres and the phase-1 sweep box, where and how often the port's choice. The punch's mist takes the
-paw's offsets in the body's frame and doesn't ride the paw [estimate].
+**The breath mist** (G44 / G23 / G45, generators of V73 / E281 / V75, and V66 / V78, started by `002a2530`'s
+events on the breathing head's bones 3 / 4): played from bank 1 (CERBERUS_SPEC "Effects"). The punch's mist is placed
+in the paw's frame and doesn't ride it, as the game's mode 0. Both take the body's turn, not their bone's
+[approximation].
 
 ## Not done
 

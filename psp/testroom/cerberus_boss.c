@@ -912,12 +912,7 @@ static void update_shells(float f, float px, float py, float pz) {
             s->pos[0] = s->base[0] + t * 0.08f * s->dir[0];
             s->pos[2] = s->base[2] + t * 0.002f * s->dir[2];
             s->life -= f;
-            if (s->puff <= 0.0f) {
-                /* The breath's mist is G44/G23 (generators, not ported): em025's E284 cloud stands in. */
-                float mist[3] = {s->pos[0], cb.pos[1] + 40.0f, s->pos[2]};
-                nfx_scale(nfx_spawn_e(NFX_CERBERUS, 284, mist, unit_random() * 6.28f, 0), 1.4f + unit_random() * 0.6f);
-                s->puff = 9.0f;
-            }
+            /* Its mist is the generators the breath's events start at the head (breath_events). */
             if (s->cooldown <= 0.0f && sphere_hit(s->pos, 100.0f, px, py, pz)) {
                 land_attack(&cerberus_attacks[6], s->pos);
                 s->cooldown = 50.0f;
@@ -927,12 +922,6 @@ static void update_shells(float f, float px, float py, float pz) {
             float local[3];
             for (k = 0; k < 3; ++k) s->pos[k] += s->vel[k] * f;
             s->life -= f;
-            if (s->puff <= 0.0f) {
-                float c = cosf(cb.yaw), sn = sinf(cb.yaw), along = (unit_random() - 0.5f) * 1400.0f;
-                float mist[3] = {s->pos[0] + sn * along, cb.pos[1] + 40.0f, s->pos[2] + c * along};
-                nfx_scale(nfx_spawn_e(NFX_CERBERUS, 284, mist, unit_random() * 6.28f, 0), 1.6f + unit_random() * 0.6f);
-                s->puff = 8.0f;
-            }
             world_to_local(px, py + 90.0f, pz, local);
             {
                 float centre[3];
@@ -1286,6 +1275,57 @@ static void update_action(float f, float px, float py, float pz) {
         finish_move();
     }
 }
+/* FUN_002a2530, the breath's script events (window 0 byte 0), on the breathing head's bones 3 / 4 (+0x1bdc /
+ * +0x1be0): 1 G44 (0x2c) scaled 1.8 at (0, 40, -200) riding bone 3; 2 G23 (0x17) at bone 4, left there; 4 ends
+ * it; 5 V66 (0x42) at (0, 0, 150) held, and on the bridge-less first phase (+0x8928 = 0) G45 (0x2d) scaled 1.2 at
+ * (0, -100, -350) riding a copy of bone 4 whose height is set to 100 (+0xaa74); 6 V78 (0x4e) at (0, -180, -200)
+ * riding; 8 G23 riding bone 4. They end with the breath. The effects' own turn is the body's [approximation: the
+ * matrices are flipped (-1, 1, -1) about the bone]. */
+typedef struct { int h, bone, ride, ground; float off[3]; } BreathFx;
+static BreathFx breath_fx_list[6];
+static void breath_point(const BreathFx *b, float out[3]) {
+    const Transform *t = &head_pose[0][b->bone];
+    float l[3];
+    int k;
+    for (k = 0; k < 3; ++k) l[k] = t->p[k] + t->m[k][0] * b->off[0] + t->m[k][1] * b->off[1] + t->m[k][2] * b->off[2];
+    local_to_world(l, out);
+    if (b->ground) out[1] = cb.pos[1] + 100.0f + b->off[1];
+}
+static void breath_add(int slot, int id, int bone, int ride, int ground, float x, float y, float z, float scale) {
+    BreathFx *b = &breath_fx_list[slot];
+    float at[3];
+    if (b->h) nfx_kill(b->h);
+    b->bone = bone; b->ride = ride; b->ground = ground; b->off[0] = x; b->off[1] = y; b->off[2] = z;
+    breath_point(b, at);
+    b->h = nfx_spawn(NFX_CERBERUS, id, at, cb.yaw, slot == 2);   /* V66 is held (+0x3a) */
+    if (b->h && scale != 1.0f) nfx_scale(b->h, scale);
+}
+static void breath_events(int event) {
+    static const char *names[9] = {"breath0", "breath1", "breath2", "breath3", "breath4", "breath5", "breath6",
+                                   "breath7", "breath8"};
+    if (event >= 0 && event <= 8) trace(names[event]);
+    switch (event) {
+    case 1: breath_add(0, 0x2c | 0x8000, 3, 1, 0, 0.0f, 40.0f, -200.0f, 1.8f); break;
+    case 2: breath_add(1, 0x17 | 0x8000, 4, 0, 0, 0.0f, 0.0f, 0.0f, 1.0f); break;
+    case 4: if (breath_fx_list[1].h) { nfx_kill(breath_fx_list[1].h); breath_fx_list[1].h = 0; } break;
+    case 5:
+        breath_add(2, 0x42, 4, 0, 0, 0.0f, 0.0f, 150.0f, 1.0f);
+        if (cb.phase == 0) breath_add(3, 0x2d | 0x8000, 4, 1, 1, 0.0f, -100.0f, -350.0f, 1.2f);
+        break;
+    case 6: breath_add(4, 0x4e, 4, 1, 0, 0.0f, -180.0f, -200.0f, 1.0f); break;
+    case 8: breath_add(5, 0x17 | 0x8000, 4, 1, 0, 0.0f, 0.0f, 0.0f, 1.0f); break;
+    default: break;
+    }
+}
+static void breath_fx_update(void) {
+    int i;
+    for (i = 0; i < 6; ++i) {
+        BreathFx *b = &breath_fx_list[i];
+        if (!b->h) continue;
+        if (cb.action != CB_BREATH || cb.dying || !nfx_alive(b->h)) { if (nfx_alive(b->h)) nfx_kill(b->h); b->h = 0; continue; }
+        if (b->ride) { float at[3]; breath_point(b, at); nfx_move(b->h, at, cb.yaw); }
+    }
+}
 static void process_body_events(float px, float py, float pz) {
     int i;
     (void)px; (void)py; (void)pz;
@@ -1294,13 +1334,16 @@ static void process_body_events(float px, float py, float pz) {
         if (op != 3) continue;
         if ((cb.body.script == 50 || cb.body.script == 51) && event >= 2 && event <= 5) {
             /* FUN_002a0510 ev2-5: the ice mist off the paw, P58 (0x3a) at 2 and 4, P59 (0x3b) at 3 and 5 (pfx.c), each
-             * scaled and offset in the paw's frame (taken as the body's [estimate]); they don't ride the paw after. */
+             * a local matrix (scale, offset) on the paw bone's matrix (+0x90, mode 0: placed as it starts, not
+             * riding after): the offset is in the paw's frame. The P's own turn is the body's [approximation]. */
             static const float mist[4][4] = {{1.4f, -50.0f, 10.0f, 0.0f}, {1.2f, -40.0f, 0.0f, 70.0f},
                                              {1.2f, -40.0f, 0.0f, 70.0f}, {1.0f, -20.0f, 20.0f, 0.0f}};
             const float *m = mist[event - 2];
             float local[3], at[3];
-            int h, paw = cb.body.script == 50 ? 16 : 21;
-            local[0] = body_pose[paw].p[0] + m[1]; local[1] = body_pose[paw].p[1] + m[2]; local[2] = body_pose[paw].p[2] + m[3];
+            int h, k, paw = cb.body.script == 50 ? 16 : 21;
+            for (k = 0; k < 3; ++k)
+                local[k] = body_pose[paw].p[k] + body_pose[paw].m[k][0] * m[1] + body_pose[paw].m[k][1] * m[2] +
+                           body_pose[paw].m[k][2] * m[3];
             local_to_world(local, at);
             h = nfx_spawn_p(NFX_CERBERUS, (event & 1) ? 59 : 58, at, cb.yaw, 0);
             if (h) nfx_scale(h, m[0]);
@@ -1310,7 +1353,7 @@ static void process_body_events(float px, float py, float pz) {
             /* FUN_002a0510 ev1: V115 (0x73), the ice bursting off the paw as it lands. */
             cfx_bone(115, cb.body.script == 50 ? 16 : 21);
         }
-        else if (cb.body.script == 40 && event == 5) start_breath();
+        else if (cb.body.script == 40) { breath_events(event); if (event == 5) start_breath(); }
         else if (cb.body.script == 35 && event >= 3 && event <= 9) {
             /* FUN_002a3710: the ice rising round it before the icicles. V151 (0x97) under the body,
              * V150 (0x96) at each front paw (bones 16 and 21), then E251 (0xfb) at the paws and chest. */
@@ -1392,6 +1435,7 @@ static int boss_step(float f, float px, float py, float pz, int attacks) {
         script_tick(&cb.body, 0, f * speed);
         for (i = 0; i < 3; ++i) if (cb.head_alive[i]) script_tick(&cb.heads[i], cb.roles[i] + 1, f * speed);
         update_action(f, px, py, pz);
+        breath_fx_update();
         /* V320 stays at the mouth while the breath lasts. */
         if (cb.breath_fx) {
             if (cb.action == CB_BREATH && cb.head_alive[0]) {
@@ -1432,6 +1476,7 @@ void cerberus_boss_spawn(void) {
     if (!load_data()) return;   /* its model's buffers, first time (load_data) */
     int i, j;
     memset(&cb, 0, sizeof(cb));
+    memset(breath_fx_list, 0, sizeof(breath_fx_list));
     cb.active = 1;
     cb.pos[0] = HOME_X;
     cb.pos[2] = HOME_Z;
