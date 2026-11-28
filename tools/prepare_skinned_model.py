@@ -1026,6 +1026,7 @@ def main() -> None:
     for weapon, slot, chunk in ((0, 97, 4), (1, 98, 4), (2, 99, 4), (3, 100, 3), (6, 103, 3), (7, 104, 3)):
         motions.extend(mots_in_pac(weapon_packs[slot][chunk], f"w{weapon}-"))
     motions.extend(mots_in_pac(enemy_pack[ENEMY_MOTIONS], "hl-"))
+    motions.extend(mots_in_pac(enemy_pack[37], "gr-"))   # CEm005 group 1
     for chunk in (6,7,8,9):
         motions.extend(mots_in_pac(dullahan_pack[chunk], f"du{chunk}"))
     # The Fallen's: "faBNN", its scripts' motion id B*100+NN (PACs [3]-[6] are B 0-3).

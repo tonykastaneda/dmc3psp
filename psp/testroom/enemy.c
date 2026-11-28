@@ -63,6 +63,7 @@ enum {  /* The actions this enemy uses, by the game's numbers. */
     A_STEP_LEFT = 22, A_STEP_RIGHT = 23, A_STEP_BACK = 24, A_TAUNT_A = 58, A_TAUNT_B = 59,
     /* The Sloth's and the Gluttony's (build/hdref/enemy_specs.md): warps to 900, 600 and 300 cm from Dante,
      * the warp strike, the Gluttony's wind-up and its spew. */
+    A_GREED_CAST = 6, A_WRATH_APPROACH = 32, A_WRATH_IGNITE = 33, A_LUST_CIRCLE = 39, A_LUST_HOP = 25, A_LUST_STRIKE = 50,
     A_WARP_FAR = 41, A_WARP_MID = 42, A_WARP_NEAR = 43, A_WARP_STRIKE = 57, A_WIND_UP = 56, A_SPEW = 31,
     /* The Abyss's (its AI clone's handlers, vtable 0x612220): 35 a taunt (FUN_004b5470), 74 its sweep (FUN_004bafe0),
      * 75 its sink and rise (FUN_004bb2d0). */
@@ -72,6 +73,7 @@ enum {  /* Its plans. PLAN_STAND is ours: the debug menu's dummies that don't at
     P_FLINCH_FRONT = 0, P_FLINCH_BACK = 1, P_LAUNCHED = 2, P_LAUNCHED_BACK = 3, P_LAUNCH_UP = 7, P_AIR_HIT_HEAVY = 8, P_AIR_HIT = 9,
     P_DEATH = 20, P_DECIDE = 23, P_WATCH = 24, P_SWING = 27, P_SWING_WIDE = 28, P_LEAP = 32, P_STEP_LEFT = 33, P_STEP_RIGHT = 34,
     P_STEP_BACK = 35, P_TAUNT_A = 51, P_TAUNT_B = 52, PLAN_STAND = 200,
+    P_WRATH_WATCH = 26, P_WRATH_IGNITE = 39, P_LUST_WATCH = 25, P_LUST_HOP = 36, P_LUST_STRIKE = 50,
     P_SPEW = 37, P_SPEW_WOUND = 45, P_WARP_STRIKE = 46, P_WARP_FAR = 47, P_WARP_MID = 48, P_WARP_NEAR = 49,
     /* The Abyss's own picks (0x5ce910's rows): plans 40, 58, 59 run actions 35, 74, 75 (FUN_004abfc0, FUN_004ac980,
      * FUN_004aca20). */
@@ -236,6 +238,9 @@ static float dante_y;   /* this frame's, for attacks that test his height in the
 /* Each kind's decision table: the Seven Hells share the rest of their logic. */
 static const EnemyAiClass *ai_class(void) {
     switch (e->kind) {
+    case ENEMY_GREED: return &enemy_ai_classes[AI_CLASS_GREED];
+    case ENEMY_WRATH: return &enemy_ai_classes[AI_CLASS_WRATH];
+    case ENEMY_LUST: return &enemy_ai_classes[AI_CLASS_LUST];
     case ENEMY_GLUTTONY: return &enemy_ai_classes[AI_CLASS_GLUTTONY];
     case ENEMY_SLOTH: return &enemy_ai_classes[AI_CLASS_SLOTH];
     case ENEMY_ENVY: return &enemy_ai_classes[AI_CLASS_ENVY];
@@ -362,7 +367,7 @@ static void nevan_hit_glue(HitKind kind, float from_x, float from_z);
 static void arachne_update_glue(float f, float px, float py, float pz);
 static void arachne_hit_glue(HitKind kind, float from_x, float from_z);
 static int pawn_init(void);
-static void greed_tick(int slot, float f, float px, float pz);
+static int greed_cast(float f, float px, float pz);
 static void coffins_update(float f);
 static void coffins_reset(void);
 static void knight_spawn(void);
@@ -1147,7 +1152,12 @@ static void script_play_op(const EnemyAiOp *op) {
         m = op->a < k->motion_count ? k->motions[op->a] : -1;
         if (m < 0) return;   /* an empty or unexported motion slot */
     } else {
-        if (e->kind == ENEMY_ABYSS && op->a >= 100 && op->a < 100 + AB_MOTIONS) {
+        if (e->kind == ENEMY_GREED && op->a >= 100 && op->a < 110) {
+            char name[] = "gr-00";
+            name[4] += op->a - 100;
+            m = motion_find(name);
+            if (m < 0) return;
+        } else if (e->kind == ENEMY_ABYSS && op->a >= 100 && op->a < 100 + AB_MOTIONS) {
             /* The Abyss's own motions, its scripts' ids 100+ (PAC [36]: "abNN"). */
             static int ab_motion[AB_MOTIONS] = {-2};
             if (ab_motion[0] == -2) {
@@ -1339,10 +1349,27 @@ static void action_enter(int a) {
         break;
     case A_WALK: {
         unsigned int r = ai_random() % 3u;
-        script_play(r == 2u ? 3 : r == 1u ? 2 : 1);
+        if (e->kind == ENEMY_GREED) {
+            e->yaw_rate = (r & 1u) ? 1 : -1;
+            script_play(100);
+        } else script_play(r == 2u ? 3 : r == 1u ? 2 : 1);
         break;
     }
-    case A_DEATH: script_play(31); break;
+    case A_GREED_CAST: script_play(102); break;
+    case A_WRATH_APPROACH: script_play(53); break;
+    case A_WRATH_IGNITE: script_play(54); break;
+    case A_LUST_HOP: script_play(75); break;
+    case A_LUST_STRIKE: script_play(77); break;
+    case A_DEATH:
+        if (e->kind == ENEMY_WRATH) {
+            /* Event 9 creates the blast at death or the end of script 54.
+             * Its shell waits seven frames before enabling record 7 for three. */
+            e->hidden = 1;
+            e->timer = 7.0f;
+            e->hit_left[0] = e->hit_left[1] = 0;
+            fx_explosion(e->pos);
+        } else script_play(31);
+        break;
     case A_SWING: script_play(47); break;
     case A_SWING_WIDE: script_play(48); break;
     case A_LEAP:
@@ -1366,7 +1393,7 @@ static void action_enter(int a) {
     case A_SPEW: script_play(52); e->timer = 0.0f; break;        /* hl-52 */
     default: break;
     }
-    if (a != A_WARP_FAR && a != A_WARP_MID && a != A_WARP_NEAR && a != A_WARP_STRIKE) e->hidden = 0;
+    if (!(a == A_DEATH && e->kind == ENEMY_WRATH) && a != A_WARP_FAR && a != A_WARP_MID && a != A_WARP_NEAR && a != A_WARP_STRIKE) e->hidden = 0;
 }
 
 /* The Sloth reappears this far from Dante at a random angle, on the floor under him, facing him. */
@@ -1483,10 +1510,34 @@ static int action_update(float px, float pz, float f) {
             if (e->done) action_enter(A_NONE);
             return 1;
         }
+    case A_GREED_CAST: return greed_cast(f, px, pz);
     case A_WALK:
+        if (e->kind == ENEMY_GREED) {
+            float distance = hypotf(px-e->pos[0], pz-e->pos[2]);
+            if (distance < 550 || distance > 650) {
+                float bearing = atan2f(px-e->pos[0], pz-e->pos[2]) +
+                                e->yaw_rate * ANGLE(distance < 550 ? 0x471c : 0x2aab);
+                turn(e->pos[0]+sinf(bearing), e->pos[2]+cosf(bearing), 182, f);
+            }
+            return 1;
+        }
         turn(px, pz, 0x100, f);
         return 1;
     case A_DEATH:
+        if (e->kind == ENEMY_WRATH) {
+            float dx = px - e->pos[0], dz = pz - e->pos[2];
+            float dy = fmaxf(0, fmaxf(dante_y + DANTE_LOW - e->pos[1], e->pos[1] - dante_y - DANTE_HIGH));
+            e->timer -= f;
+            if (e->timer < 0 && e->step == 0) { e->timer = 3; e->step = 1; }
+            if (e->step && e->timer < 0) e->active = 0;
+            else if (e->step == 1 && attacks_on && dx*dx + dy*dy + dz*dz < (450+DANTE_RADIUS)*(450+DANTE_RADIUS)) {
+                land_attack(1);
+                landed_damage = 1500;
+                landed_kind = 3;
+                e->step = 2;
+            }
+            return 0;
+        }
         /* Collapses, then goes. Its body fading out isn't in yet. */
         if (e->done) e->active = 0;
         return 1;
@@ -1537,6 +1588,63 @@ static int action_update(float px, float pz, float f) {
     case A_TAUNT_B:
         if (e->done) action_enter(A_NONE);
         return 1;
+    case A_WRATH_APPROACH:
+        turn(px, pz, 0x100, f);
+        return 1;
+    case A_WRATH_IGNITE:
+        if (e->done) {
+            plan_set(P_DEATH);
+            died();
+        }
+        return 0;
+    case A_LUST_CIRCLE:
+        if (e->step == 0) {
+            float d = angle_to(px, pz);
+            if (fabsf(d) >= ANGLE(0x38e3)) {
+                script_play(4);
+                e->yaw_rate = d / 25.0f;
+                e->step = 1;
+            } else {
+                script_play((ai_random() & 1u) ? 9 : 8);
+                e->step = 2;
+            }
+        } else {
+            if (e->step == 1 && e->frame >= 3 && e->frame <= 28) e->yaw += e->yaw_rate * f;
+            if (e->step == 2) turn_window(px, pz, 25, 30, ANGLE(2731), f);
+            if (e->done) action_enter(A_NONE);
+        }
+        return 1;
+    case A_LUST_HOP:
+        if (e->done) {
+            if (e->step == 0) { script_play(7); e->step = 1; }
+            else action_enter(A_NONE);
+        }
+        return 1;
+    case A_LUST_STRIKE:
+        if (e->step == 0) {
+            turn_window(px, pz, 0, 3, ANGLE(1820), f);
+            if (e->done) {
+                script_play(78);
+                set_physics(0, 18, -20, -1.5f);
+                physics(f);
+                e->step = 1;
+            }
+        } else if (e->step == 1) {
+            physics(f);
+            if (e->vel[1] < 0 && on_floor()) {
+                e->pos[1] = e->floor_y;
+                script_play(79);
+                e->step = 2;
+            }
+        } else if (e->step == 2) {
+            turn_window(px, pz, 0, 32767, ANGLE(1820), f);
+            if (e->done) { script_play(50); e->vel[2] = 30; e->step = 3; }
+        } else {
+            move_local(0, 0, e->vel[2] * f);
+            e->vel[2] -= e->vel[2] * f * 0.1f;
+            if (e->done) action_enter(A_NONE);
+        }
+        return 0;
     case A_AB_TAUNT:
         /* FUN_004b5570: turning to him at most 0x100 a frame. */
         turn(px, pz, 0x100, f);
@@ -1650,7 +1758,8 @@ static void plan_run_action(int action) {
 static void plan_update(float px, float pz, float f) {
     switch (e->plan) {
     case P_DECIDE:
-        plan_set(attacks_on ? P_WATCH : PLAN_STAND);
+        plan_set(!attacks_on ? PLAN_STAND : e->kind == ENEMY_LUST ? P_LUST_WATCH :
+                 e->kind == ENEMY_WRATH ? P_WRATH_WATCH : P_WATCH);
         break;
     case PLAN_STAND:
         if (e->plan_step == 0) {
@@ -1660,16 +1769,23 @@ static void plan_update(float px, float pz, float f) {
         }
         if (attacks_on) plan_set(P_DECIDE);
         break;
+    case P_WRATH_WATCH:
+    case P_LUST_WATCH:
     case P_WATCH: {
         /* Walk and watch. Time spent near him, in front of him, fills a gauge; full, it decides. */
         float dx = px - e->pos[0], dz = pz - e->pos[2], distance = sqrtf(dx * dx + dz * dz), d;
         int i, column = 0;
         if (e->plan_step == 0) {
-            action_enter(A_WALK);
+            action_enter(e->plan == P_LUST_WATCH ? A_LUST_CIRCLE :
+                         e->plan == P_WRATH_WATCH ? A_WRATH_APPROACH : A_WALK);
             e->plan_step = 1;
         }
         if (!attacks_on) { plan_set(P_DECIDE); break; }
-        if (e->pushed) {
+        if (e->plan == P_LUST_WATCH && e->action != A_LUST_CIRCLE && fabsf(angle_to(px,pz)) > ANGLE(0x2aaa)) {
+            plan_set(P_DECIDE);
+            break;
+        }
+        if (e->pushed && e->plan == P_WATCH && e->kind != ENEMY_GREED) {
             /* Crowded out: straight into a leap, without the gauge or the lists. */
             plan_set(P_LEAP);
             break;
@@ -1684,7 +1800,10 @@ static void plan_update(float px, float pz, float f) {
                 }
             }
             while (column < 6 && ai->times[column] <= AI_RANK) ++column;
-            if (e->gauge > ai->thresholds[column < 6 ? column : 5]) decide(distance);
+            if (e->plan != P_LUST_WATCH || e->action != A_LUST_CIRCLE) {
+                if (e->gauge > ai->thresholds[column < 6 ? column : 5]) decide(distance);
+                else if (e->plan == P_LUST_WATCH) plan_set(P_DECIDE);
+            }
         }
         break;
     }
@@ -1698,7 +1817,7 @@ static void plan_update(float px, float pz, float f) {
     case P_LAUNCH_UP: e->wake = 0.0f; plan_run_action(A_LAUNCH_UP); break;
     case P_AIR_HIT_HEAVY: plan_run_action(A_AIR_HIT_HEAVY); break;
     case P_AIR_HIT: plan_run_action(A_AIR_HIT); break;
-    case P_SWING: plan_run_action(A_SWING); break;
+    case P_SWING: plan_run_action(e->kind == ENEMY_GREED ? A_GREED_CAST : A_SWING); break;
     case P_SWING_WIDE: plan_run_action(A_SWING_WIDE); break;
     case P_LEAP:
         if (e->plan_step == 0) {
@@ -1721,6 +1840,9 @@ static void plan_update(float px, float pz, float f) {
     case P_WARP_NEAR: plan_run_action(A_WARP_NEAR); break;
     case P_SPEW: plan_run_action(A_SPEW); break;
     case P_AB_TAUNT: plan_run_action(A_AB_TAUNT); break;
+    case P_WRATH_IGNITE: plan_run_action(A_WRATH_IGNITE); break;
+    case P_LUST_STRIKE: plan_run_action(A_LUST_STRIKE); break;
+    case P_LUST_HOP: plan_run_action(A_LUST_HOP); break;
     case P_AB_SWEEP: plan_run_action(A_AB_SWEEP); break;
     case P_AB_SINK: plan_run_action(A_AB_SINK); break;
     case P_SPEW_WOUND:
@@ -1959,7 +2081,7 @@ static int body_airborne(const Enemy *a) {
     /* pawn.inc's PW_RISE/PW_FALL use their own hop physics, not Enemy.air. */
     if (a->kind == ENEMY_PAWN) return a->action == 1 || a->action == 2 ||
         (a->plan == P_DEATH && a->pos[1] > a->floor_y + .5f);
-    return a->air || (a->action == A_LEAP && a->step == 1);
+    return a->air || ((a->action == A_LEAP || a->action == A_LUST_STRIKE) && a->step == 1);
 }
 
 void enemy_audit_start(const char *path) {
@@ -2172,6 +2294,14 @@ static void test_attack(float px, float py, float pz) {
                     land_attack(r->reaction >= 500.0f);
                     landed_damage = r->damage;
                     landed_kind = r->kind;
+                } else if (e->kind == ENEMY_GREED && (e->hit_type == 9 || e->hit_type == 10)) {
+                    land_attack(0);
+                    landed_damage = e->hit_type == 9 ? 600 : 400;
+                    landed_kind = 0;
+                } else if (e->kind == ENEMY_LUST && e->hit_type == 3) {
+                    land_attack(0);
+                    landed_damage = 800;
+                    landed_kind = 0;
                 } else if ((e->kind == ENEMY_PRIDE || e->kind == ENEMY_ENVY) && e->hit_type < 2) {
                     /* OP6 selects an attack record, not a heavy flag.
                      * Pride *0x618c28 = 0x5a7600; Envy *0x61a6b0 =
@@ -2316,7 +2446,7 @@ static void update_one(float dt, float px, float py, float pz) {
     /* The floor, and falling onto it when not in a jump of its own. */
     {
         float g;
-        int leaping = e->action == A_LEAP && e->step == 1;
+        int leaping = (e->action == A_LEAP || e->action == A_LUST_STRIKE) && e->step == 1;
         if (!e->air && !leaping && e->plan != P_DEATH) keep_apart(px, py, pz, f);
         else e->pushed = 0;
         if (floor_under(e->pos[0], e->pos[1], e->pos[2], &g)) e->floor_y = g;
@@ -2597,7 +2727,6 @@ void enemy_update(float dt, float px, float py, float pz) {
             e->cloth_frames += dt * 60.0f;   /* the chains step at the game's 60 fps (FUN_003b38e0, once a frame) */
             if (e->cloth_frames > 4.0f) e->cloth_frames = 4.0f;
         }
-        if (e->active && e->kind == ENEMY_GREED) greed_tick(i, dt * MOTION_FPS, px, pz);
         /* The room's walls, as for Dante: swept along everything that moved it this frame (its walk, root
          * motion, knockback, being pushed by him or the others), in steps of at most 15 cm, so a launch or a
          * shove can't carry it through. A spawn or a jump past 6 m is a placement, not a move: checked where it
