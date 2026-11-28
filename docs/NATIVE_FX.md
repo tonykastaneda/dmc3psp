@@ -138,8 +138,10 @@ in the paw's frame and doesn't ride it, as the game's mode 0. Both take the body
   straight down onto the floor under him and fills what the hulls cover once (the framebuffer's alpha as a stencil:
   zeroed under them with the colour masked, then filled where still zero), black at 128 (the header's 0.5) fading
   as the disc did. Estimates: the light's direction (straight down) and the fill; the game draws a shadow volume
-  from the neighbours, not traced. The coat's hulls aren't used yet (they need coat.c's bones). Cost in PPSSPP, M2
-  street: about 75 µs of draw a frame over the disc. Tests: `blobshadow 1` brings the disc back.
+  from the neighbours, not traced. The coat's 17 hulls ride the coat's bones (`coat_bone_matrix`, in the coat's
+  rest space, `coat_bone_rest`). Cost in PPSSPP, M2 street: about 75 µs of draw a frame over the disc for the body,
+  about 0.2 ms with the coat. Tests: `blobshadow 1` brings the disc back. Stills: `analysis/testroom/shw_coat_400.png`
+  against `shw_blob_400.png`, the fill shown red in `shw_dbg_400.png` (body only).
   The zone's shadow type isn't decoded.
 - How they're drawn: one untextured draw for all of them (8-sided disc, solid to half the radius, then a ramp to
   nothing, in the vertex colours), on the **drawn** floor (`stage_shown_floor`: the mesh's floor triangles can sit

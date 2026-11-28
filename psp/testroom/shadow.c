@@ -7,6 +7,7 @@
 #include <math.h>
 
 #include "shadow.h"
+#include "coat.h"
 #include "dante_shadow_runtime.h"
 
 typedef struct { unsigned int color; float x, y, z; } HullVertex;
@@ -19,22 +20,28 @@ int dante_shadow_draw(const Player *player, const Pose *pose, const float (*rest
     HullVertex *v;
     int h, i, k, n = 0;
     if (!DANTE_HULL_COUNT || !alpha) return DANTE_HULL_COUNT != 0;
-    /* Each hull's points on its bone (skin_mesh's rigid case), then turned by his yaw and placed at him (bone_point). */
-    for (h = 0; h < DANTE_HULL_COUNT; ++h) {
-        const DanteHull *hull = &dante_hulls[h];
-        int b = hull->bone < 32 ? hull->bone : 0;
-        const float (*r)[3] = pose->world_rot[b].m;
+    /* Each hull's points on its bone (skin_mesh's rigid case), then turned by his yaw and placed at him (bone_point):
+     * the body's on his bones (rest: his model's), the coat's on the coat's (coat_bone_matrix, its own rest pose). */
+    for (h = 0; h < DANTE_HULL_COUNT + DANTE_COAT_HULL_COUNT; ++h) {
+        int coat = h >= DANTE_HULL_COUNT;
+        const DanteHull *hull = coat ? &dante_coat_hulls[h - DANTE_HULL_COUNT] : &dante_hulls[h];
+        const float (*bone_rest)[3] = coat ? coat_bone_rest() : rest;
+        float coat_r[3][3], coat_t[3];
+        const float (*r)[3], *t;
+        int b = hull->bone;
+        if (coat) { coat_bone_matrix(b, coat_r, coat_t); r = coat_r; t = coat_t; }
+        else { if (b >= 32) b = 0; r = pose->world_rot[b].m; t = pose->world_pos[b]; }
         for (i = hull->first; i < hull->first + hull->count; ++i) {
             const float *p = dante_hull_points[i];
-            float d[3] = {p[0] - rest[b][0], p[1] - rest[b][1], p[2] - rest[b][2]}, m[3];
-            for (k = 0; k < 3; ++k) m[k] = r[k][0] * d[0] + r[k][1] * d[1] + r[k][2] * d[2] + pose->world_pos[b][k];
+            float d[3] = {p[0] - bone_rest[b][0], p[1] - bone_rest[b][1], p[2] - bone_rest[b][2]}, m[3];
+            for (k = 0; k < 3; ++k) m[k] = r[k][0] * d[0] + r[k][1] * d[1] + r[k][2] * d[2] + t[k];
             points[i][0] = player->x + c * m[0] + s * m[2];
             points[i][1] = player->z - s * m[0] + c * m[2];
         }
     }
     v = sceGuGetMemory(sizeof(HullVertex) * 3 * tri_count);
-    for (h = 0; h < DANTE_HULL_COUNT; ++h) {
-        const DanteHull *hull = &dante_hulls[h];
+    for (h = 0; h < DANTE_HULL_COUNT + DANTE_COAT_HULL_COUNT; ++h) {
+        const DanteHull *hull = h >= DANTE_HULL_COUNT ? &dante_coat_hulls[h - DANTE_HULL_COUNT] : &dante_hulls[h];
         for (i = hull->first_tri; i < hull->first_tri + hull->tris; ++i)
             for (k = 0; k < 3; ++k) {
                 const float *p = points[hull->first + dante_hull_tris[i][k]];
