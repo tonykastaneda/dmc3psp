@@ -29,6 +29,7 @@
 #include <pspctrl.h>
 #include "secret_missions.h"
 #include "fx.h"
+#include "sfx.h"
 #include "nfx.h"
 #include <stdlib.h>
 #include "crystal_runtime.h"
@@ -171,9 +172,13 @@ static void orbs_draw(void) {
 
 /* ---- Secret Mission 9's wagons. 608 is Dante on a rail wagon (STAY 4, a riding box; start 0 on it) beside a second
  * track: its TRUCK set (100) places the enemies' wagon at em_base (10000, 1325, 11625), 7.25 m off his line, with a
- * 400 x 100 x 200 hit box. The wagons' timetable and riders are in CStageSetTruck's code, not decoded; the port runs
- * the walkthrough's: eight wagons one after another (Wraths, with a Pride or a Lust on some), passing from 35 m ahead
- * to 35 m behind at 2.5 m a second [estimate]. A wagon that goes by with anyone still on it fails the mission; all
+ * 400 x 100 x 200 hit box. Each enemies' wagon is a CStageSetTruckEnemy (made by an event op through FUN_00486940;
+ * run by FUN_004878d0): it comes in at its speed to its stop angle, stops there while it has riders (up to three)
+ * or, timed, until its clock runs out, then leaves at its second speed; a timed one that leaves with riders takes
+ * them away (escaped: the truck's +0x195). It sounds 0x5c / 0x5d by turns every 30 frames (room bank, bank 0x28).
+ * What isn't found is the op's caller for 608 (its wagons' stop angles, speeds, clocks and riders): the port runs
+ * eight wagons (the walkthrough's: Wraths, with a Pride or a Lust on some) coming in from 35 m at 2.5 m a second,
+ * stopping beside Dante for 10 s and leaving [estimates]; one that leaves with anyone on it fails the mission, all
  * eight emptied clears it. The wagon is drawn as glows: its model (the set's em_model 2) isn't converted. */
 #define WAGONS 8
 #define WAGON_Z 11625.0f
@@ -181,12 +186,15 @@ static void orbs_draw(void) {
 #define WAGON_FROM 13500.0f
 #define WAGON_TO 6500.0f
 #define WAGON_SPEED 250.0f
+#define WAGON_STOP 10000.0f   /* beside Dante (his wagon at the truck's base) */
+#define WAGON_WAIT 10.0f      /* seconds stopped [estimate] */
 static const signed char wagon_riders[WAGONS][3] = {
     {ENEMY_WRATH, ENEMY_WRATH, ENEMY_PRIDE}, {ENEMY_WRATH, ENEMY_PRIDE, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_LUST},
     {ENEMY_WRATH, ENEMY_LUST, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_LUST}, {ENEMY_WRATH, -1, -1},
     {ENEMY_WRATH, ENEMY_WRATH, -1}, {ENEMY_WRATH, ENEMY_WRATH, ENEMY_WRATH}};
 static int wagon, wagon_live, wagon_result;
-static float wagon_x, wagon_gap;
+static float wagon_x, wagon_gap, wagon_wait, wagon_sound;
+static int wagon_tick;
 static void wagons_start(void) { wagon = 0; wagon_live = 0; wagon_result = 0; wagon_gap = 2.0f; }
 static void wagons_update(float dt) {
     float dx;
@@ -199,8 +207,17 @@ static void wagons_update(float dt) {
         enemy_spawn_height(WAGON_DECK + 100.0f);
         for (k = 0; k < 3; ++k) if (wagon_riders[wagon][k] >= 0) enemy_add_kind(wagon_riders[wagon][k], wagon_x - 120.0f + 120.0f * k, WAGON_Z);
         wagon_live = 1;
+        wagon_wait = WAGON_WAIT;
     }
-    dx = -WAGON_SPEED * dt;
+    if ((wagon_sound += dt * 60.0f) >= 30.0f) {   /* FUN_004878d0: 0x5c / 0x5d by turns */
+        wagon_sound = 0.0f;
+        sfx_play_room(wagon_tick ? 0x5d : 0x5c, 0x28, 0.0f, 1.0f);
+        wagon_tick = !wagon_tick;
+    }
+    /* In to its stop, stopped for its clock, then away. */
+    dx = wagon_x > WAGON_STOP || wagon_wait <= 0.0f ? -WAGON_SPEED * dt : 0.0f;
+    if (wagon_x - WAGON_SPEED * dt <= WAGON_STOP && wagon_x > WAGON_STOP) dx = WAGON_STOP - wagon_x;
+    if (dx == 0.0f) wagon_wait -= dt;
     wagon_x += dx;
     enemy_ride(wagon_x - 200.0f, wagon_x + 200.0f, WAGON_Z - 100.0f, WAGON_Z + 100.0f, dx, WAGON_DECK);
     if (enemy_alive_count() == 0) { wagon_live = 0; ++wagon; wagon_gap = 1.5f; return; }
