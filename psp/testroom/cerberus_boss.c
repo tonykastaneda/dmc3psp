@@ -377,10 +377,78 @@ static const Transform *part_transforms(int part, int head) {
     (void)head;
     return body_pose;
 }
+/* The skin on the VFPU (most of the boss's frame on the FPU: 6.5 ms for ~9250 vertices). Each bone's matrix is
+ * made once per part, columns x y z and its translation less the rotated rest (p' = M (v - rest) + t = M v + t'),
+ * so a vertex is one vtfm4 (position) and one vtfm3 (normal); a one-weight vertex (79% of them) uses its bone's
+ * matrix as loaded, kept while the bone repeats; the others blend theirs first. */
+#define SKIN_BONES 32
+static ScePspFMatrix4 skin_mats[SKIN_BONES] __attribute__((aligned(16)));
+static float skin_w[4] __attribute__((aligned(16)));
+static void skin_part_vfpu(const CerberusMesh *m, const Transform *bones, Vertex *out) {
+    int i, j, loaded = -1;
+    for (i = 0; i < m->bone_count && i < SKIN_BONES; ++i) {
+        const Transform *t = &bones[i];
+        ScePspFMatrix4 *s = &skin_mats[i];
+        float r[3] = {m->rest[i].x, m->rest[i].y, m->rest[i].z};
+        s->x.x = t->m[0][0]; s->x.y = t->m[1][0]; s->x.z = t->m[2][0]; s->x.w = 0.0f;
+        s->y.x = t->m[0][1]; s->y.y = t->m[1][1]; s->y.z = t->m[2][1]; s->y.w = 0.0f;
+        s->z.x = t->m[0][2]; s->z.y = t->m[1][2]; s->z.z = t->m[2][2]; s->z.w = 0.0f;
+        s->w.x = t->p[0] - (t->m[0][0] * r[0] + t->m[0][1] * r[1] + t->m[0][2] * r[2]);
+        s->w.y = t->p[1] - (t->m[1][0] * r[0] + t->m[1][1] * r[1] + t->m[1][2] * r[2]);
+        s->w.z = t->p[2] - (t->m[2][0] * r[0] + t->m[2][1] * r[1] + t->m[2][2] * r[2]);
+        s->w.w = 1.0f;
+    }
+    for (i = 0; i < m->vertices; ++i) {
+        const unsigned char *bw = m->bones[i], *ww = m->weights[i];
+        Vertex *v = &out[i];
+        int n = (ww[0] != 0) + (ww[1] != 0) + (ww[2] != 0);
+        if (n == 1) {
+            int b = ww[0] ? bw[0] : ww[1] ? bw[1] : bw[2];
+            if (b != loaded) {
+                const ScePspFMatrix4 *s = &skin_mats[b];
+                __asm__ volatile("lv.q R000, 0(%0)\n lv.q R001, 16(%0)\n lv.q R002, 32(%0)\n lv.q R003, 48(%0)\n"
+                                 : : "r"(s) : "memory");
+                loaded = b;
+            }
+        } else {
+            int first = 1;
+            for (j = 0; j < 3; ++j) {
+                const ScePspFMatrix4 *s;
+                if (!ww[j]) continue;
+                s = &skin_mats[bw[j]];
+                skin_w[0] = (float)ww[j] / 31.0f;
+                if (first) {
+                    __asm__ volatile("lv.s S300, 0(%1)\n"
+                                     "lv.q R000, 0(%0)\n lv.q R001, 16(%0)\n lv.q R002, 32(%0)\n lv.q R003, 48(%0)\n"
+                                     "vmscl.q M000, M000, S300\n" : : "r"(s), "r"(skin_w) : "memory");
+                    first = 0;
+                } else {
+                    __asm__ volatile("lv.s S300, 0(%1)\n"
+                                     "lv.q R200, 0(%0)\n lv.q R201, 16(%0)\n lv.q R202, 32(%0)\n lv.q R203, 48(%0)\n"
+                                     "vmscl.q M200, M200, S300\n"
+                                     "vadd.q R000, R000, R200\n vadd.q R001, R001, R201\n"
+                                     "vadd.q R002, R002, R202\n vadd.q R003, R003, R203\n"
+                                     : : "r"(s), "r"(skin_w) : "memory");
+                }
+            }
+            loaded = -1;
+        }
+        __asm__ volatile(
+            "lv.s S100, 0(%0)\n lv.s S101, 4(%0)\n lv.s S102, 8(%0)\n vone.s S103\n"
+            "lv.s S120, 0(%1)\n lv.s S121, 4(%1)\n lv.s S122, 8(%1)\n"
+            "vtfm4.q C110, M000, C100\n"
+            "vtfm3.t C130, M000, C120\n"
+            "sv.s S110, 20(%2)\n sv.s S111, 24(%2)\n sv.s S112, 28(%2)\n"
+            "sv.s S130, 8(%2)\n sv.s S131, 12(%2)\n sv.s S132, 16(%2)\n"
+            : : "r"(&m->positions[i]), "r"(&m->normals[i]), "r"(v) : "memory");
+    }
+    sceKernelDcacheWritebackRange(out, sizeof(Vertex) * m->vertices);
+}
 static void skin_part(int part) {
     const CerberusMesh *m = &cerberus_parts[part];
     const Transform *bones = part_transforms(part, 0);
     int i, j, k;
+    if (m->bone_count <= SKIN_BONES) { skin_part_vfpu(m, bones, vertices[part]); return; }
     for (i = 0; i < m->vertices; ++i) {
         Vertex *v = &vertices[part][i];
         float p[3] = {0.0f, 0.0f, 0.0f}, n[3] = {0.0f, 0.0f, 0.0f};
