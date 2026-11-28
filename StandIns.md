@@ -138,7 +138,7 @@ one goes in, add it here as well as in the code. Collected 2026-11-17 from every
 - **Geryon**: gallop count now consumes 40 decoded script windows (GERYON_SPEC.md); its high-contact history uses the existing push footprint instead of the native cap record; other body actions play motion n for action n [inferred]; the cart's missiles'
   path; the shockwave's trigger (within 500 for 90 frames) [inferred]; his caps' record [inferred]; the order of his
   runs; the cart's bone layout [inferred]. `geryon_boss.c`, GERYON_SPEC.md.
-- **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority); which dark sixth he comes up in [inferred]; his coat's
+- **Doppelganger**: the seven-disc region selector is decoded (550 middle / 600 outer, reverse priority), and so is where he rises when lit (3c4c40); the underground travel is a jump; his coat's
   chain (em031_01.clt) gets Dante's body capsules [inferred]; his sword's offset [inferred]; the crests' lighting is a glow.
   `doppelganger_boss.c`, DOPPELGANGER_SPEC.md.
 - **Arkham**: one fight runs both rounds; Vergil joins the second as Dante's partner (Dante's input a frame late, as the

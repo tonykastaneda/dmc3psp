@@ -194,23 +194,22 @@ static void move_forward(float speed, float f) {
     db.pos[0] += sinf(db.yaw) * speed * f;
     db.pos[2] += cosf(db.yaw) * speed * f;
 }
-/* A dark place to come up in: the sixth behind Dante if it's dark, else any dark one [inferred: FUN_003c4dd0 picks
- * the nearest dark region]. */
-static int dark_region_near(float x, float z) {
-    int i, best = -1;
-    float bd = 1e9f;
-    for (i = 0; i < 6; ++i) {
-        float dx = crest_pos[i][0] - x, dz = crest_pos[i][1] - z, d = dx * dx + dz * dz;
-        if (!db.lit[i] && d < bd) { bd = d; best = i; }
-    }
-    return best;
+/* The dark region to go to (FUN_003c4c40, from FUN_003c4dd0): the shorts of table 0x5b7a40 read from entry
+ * region*6+6 down to region*6+1, the first that's a region (not -1) and dark. As the game reads it, that's region
+ * r's own entry and then the middle (6) and one neighbour, and from the middle 0, 5, 4, 3, 2, 1. -1: none, and he
+ * doesn't sink. */
+static int dark_region_from(int mine) {
+    static const signed char table[48] = {1, 5, 6, -1, -1, -1, 0, 2, 6, -1, -1, -1, 1, 3, 6, -1, -1, -1, 2, 4, 6, -1, -1, -1,
+                                          3, 5, 6, -1, -1, -1, 4, 0, 6, -1, -1, -1, 0, 1, 2, 3, 4, 5, 0, 0, 0, 0, 0, 0};
+    int k;
+    if (mine < 0 || mine > 6) return -1;
+    for (k = mine * 6 + 6; k > mine * 6; --k) if (table[k] >= 0 && !region_lit(table[k])) return table[k];
+    return -1;
 }
+/* He heads for the region's centre (0x5b7950, by FUN_003c4840's distance and FUN_003c48f0's angle). */
 static void point_in_region(int r, float out[3]) {
-    if (r < 0 || r > 5) { out[0] = CENTRE_X; out[2] = CENTRE_Z; }
-    else {
-        out[0] = CENTRE_X + (crest_pos[r][0] - CENTRE_X) * 0.6f;
-        out[2] = CENTRE_Z + (crest_pos[r][1] - CENTRE_Z) * 0.6f;
-    }
+    if (r < 0 || r > 6) { out[0] = CENTRE_X; out[2] = CENTRE_Z; }
+    else { out[0] = doppel_regions[r][0]; out[2] = doppel_regions[r][1]; }
     out[1] = db.floor_y;
 }
 
@@ -223,7 +222,9 @@ static void think(void) {
     float d = dist2(db.pos, db.dante);
     int mine = region(db.pos[0], db.pos[2]), his = region(db.dante[0], db.dante[2]), i;
     if (db.lit[6]) { set_state(S_ALL_LIT); return; }
-    if (region_lit(mine) && db.stagger_cool <= 0.0f) { set_state(S_SINK); db.flee_to = dark_region_near(db.pos[0], db.pos[2]); return; }
+    if (region_lit(mine) && db.stagger_cool <= 0.0f && dark_region_from(mine) >= 0) {
+        set_state(S_SINK); db.flee_to = dark_region_from(mine); return;
+    }
     if (!region_lit(his) && d > 700.0f) { set_state(S_EMERGE); return; }
     for (i = 0; i < 6; ++i) if (db.lit[i] && !db.lit[opposite[i]] && unit_random() < 0.35f) {
         db.flee_to = i;
