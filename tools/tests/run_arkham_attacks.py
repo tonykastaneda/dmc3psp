@@ -29,7 +29,7 @@ def main():
     subprocess.run([compiler, '-O1', '-Wno-deprecated-non-prototype',
         '-I', str(folder), '-I', str(ROOT / 'build/testroom/generated'),
         '-I', str(ROOT / 'psp/testroom'), str(ROOT / 'tools/tests/arkham_attacks.c'),
-        str(ROOT / 'psp/testroom/motion.c'), str(folder / 'render_stubs.c'),
+        str(ROOT / 'psp/testroom/motion.c'), str(ROOT / 'psp/testroom/cloth.c'), str(folder / 'render_stubs.c'),
         '-lm', '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True, cwd=ROOT)
 
